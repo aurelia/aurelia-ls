@@ -18,6 +18,10 @@ execution edges, so resource files reached through `import './resource'` should 
 no value is imported. When static evaluation links additional local source
 modules or assets, the project-level pass threads those linked admissions back into resource recognition so imported
 HTML templates can keep precise template-file provenance instead of falling back to the component TypeScript span.
+External conventional/imported template text is read through the shared kernel `AuthoredSourceTextCache`, not through
+resource-local filesystem helpers. Resource convergence needs decoded template metadata plus the original authored file
+length/source address; later template diagnostics, overlays, and cursor inquiries should spend the same authored-text
+boundary when they need raw source slices or offset conversion.
 `resource-source-address.ts` owns resource convergence source spans and inline-template decoded-to-authored offset
 mapping; keep that provenance substrate reusable instead of burying escaped-string coordinate logic inside a specific
 definition field reader.

@@ -2,7 +2,6 @@ import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import type { ProvenanceHandle } from '../kernel/handles.js';
 import {
   BindingIdentity,
-  CompilerIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
@@ -13,10 +12,9 @@ import type {
   KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import { runtimeObservedDependencyIdentityLocalName } from '../observation/runtime-observed-dependency-draft.js';
+import { runtimeObservedDependencyRecords } from '../observation/runtime-observed-dependency-publication.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import type { RuntimeWatcher } from './runtime-watcher.js';
-import { sourceAddressRecordsForRuntimeExpressionBounds } from './runtime-expression-source-address.js';
 
 export function runtimeWatcherClaimsForController(
   store: KernelStore,
@@ -82,46 +80,25 @@ function runtimeWatcherObservedDependencyRecords(
   watcher: RuntimeWatcher,
   provenanceHandle: ProvenanceHandle,
 ): readonly KernelStoreRecord[] {
-  return watcher.observedDependencies.flatMap((dependency, index): readonly KernelStoreRecord[] => {
+  return watcher.observedDependencies.flatMap((dependency, index) => {
     const dependencyLocal = `${local}:observed-dependency:${index}`;
-    const dependencySource = sourceAddressRecordsForRuntimeExpressionBounds(
+    return runtimeObservedDependencyRecords({
       store,
-      dependency.sourceAddressHandle,
-      watcher.sourceAddressHandle,
-      dependency.spanStart,
-      dependency.spanEnd,
-    );
-    const claim = new SemanticClaim(
-      store.handles.claim(`${dependencyLocal}:runtime-watcher-uses-observed-dependency`),
-      watcher.productHandle,
-      KernelVocabulary.Binding.RuntimeWatcherUsesObservedDependency.key,
-      dependency.productHandle,
+      local: dependencyLocal,
+      owner: {
+        identityHandle: watcher.identityHandle,
+        sourceAddressHandle: watcher.sourceAddressHandle,
+      },
+      dependency,
+      index,
       provenanceHandle,
-    );
-    return [
-      ...dependencySource.records,
-      new CompilerIdentity(
-        dependency.identityHandle,
-        KernelVocabulary.Binding.ObservedDependency.key,
-        watcher.identityHandle,
-        dependencySource.handle,
-        runtimeObservedDependencyIdentityLocalName(dependency, index),
-      ),
-      new MaterializedProduct(
-        dependency.productHandle,
-        KernelVocabulary.Binding.ObservedDependency.key,
-        dependency.identityHandle,
-        dependencySource.handle,
-        provenanceHandle,
-      ),
-      claim,
-      new MaterializationRecord(
-        store.handles.materialization(dependencyLocal),
-        dependency.identityHandle,
-        [dependency.productHandle],
-        [claim.handle],
-        [],
-      ),
-    ];
+      claims: [
+        {
+          localName: 'runtime-watcher-uses-observed-dependency',
+          subjectProductHandle: watcher.productHandle,
+          predicateKey: KernelVocabulary.Binding.RuntimeWatcherUsesObservedDependency.key,
+        },
+      ],
+    });
   });
 }

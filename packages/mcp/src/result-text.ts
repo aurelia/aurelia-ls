@@ -39,14 +39,88 @@ function semanticAnswerDisplayText(value: unknown): string | null {
   if (!isRecord(value)) {
     return null;
   }
+  const lines: string[] = [];
   if (isRecord(value.value) && typeof value.value.displayText === 'string') {
-    return value.value.displayText;
+    lines.push(value.value.displayText);
+  } else {
+    const displayText = topLevelDisplayText(value);
+    if (displayText != null) {
+      lines.push(displayText);
+    }
   }
-  return topLevelDisplayText(value);
+  const continuations = semanticAnswerContinuationText(value);
+  if (continuations != null) {
+    lines.push(continuations);
+  }
+  const nestedContinuations = nestedSemanticAnswerContinuationText(value.value);
+  if (nestedContinuations != null) {
+    lines.push(nestedContinuations);
+  }
+  return lines.length === 0 ? null : lines.join('\n');
 }
 
 function topLevelDisplayText(value: unknown): string | null {
   return isRecord(value) && typeof value.displayText === 'string'
     ? value.displayText
     : null;
+}
+
+function semanticAnswerContinuationText(value: Record<string, unknown>): string | null {
+  if (!Array.isArray(value.continuations) || value.continuations.length === 0) {
+    return null;
+  }
+  const rows = value.continuations
+    .filter(isRecord)
+    .slice(0, 4)
+    .map(compactContinuationText);
+  const remaining = value.continuations.length - rows.length;
+  return `Continuations: ${rows.join('; ')}${remaining > 0 ? `; +${remaining} more` : ''}.`;
+}
+
+function nestedSemanticAnswerContinuationText(value: unknown): string | null {
+  if (!isRecord(value) || !Array.isArray(value.rows)) {
+    return null;
+  }
+  const rows: string[] = [];
+  for (const child of value.rows) {
+    if (!isRecord(child) || !isRecord(child.answer)) {
+      continue;
+    }
+    const continuations = child.answer.continuations;
+    if (!Array.isArray(continuations) || continuations.length === 0) {
+      continue;
+    }
+    const label = typeof child.queryKind === 'string'
+      ? child.queryKind
+      : typeof child.index === 'number'
+        ? `#${child.index}`
+        : 'child';
+    for (const continuation of continuations.filter(isRecord).slice(0, 2)) {
+      rows.push(`${label} -> ${compactContinuationText(continuation)}`);
+      if (rows.length >= 4) {
+        return `Child continuations: ${rows.join('; ')}; +more.`;
+      }
+    }
+  }
+  return rows.length === 0 ? null : `Child continuations: ${rows.join('; ')}.`;
+}
+
+function compactContinuationText(row: Record<string, unknown>): string {
+  const target = typeof row.targetQueryKind === 'string'
+    ? row.targetQueryKind
+    : typeof row.kind === 'string'
+      ? row.kind
+      : 'unknown';
+  const intents = Array.isArray(row.intents)
+    ? row.intents.filter((value): value is string => typeof value === 'string').join(',')
+    : '';
+  const evidence = isRecord(row.evidence)
+    ? [row.evidence.evidenceState, row.evidence.coverage, row.evidence.sourcePrecision]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .join('/')
+    : '';
+  const blockers = Array.isArray(row.blockers) && row.blockers.length > 0
+    ? ` blocked=${row.blockers.length}`
+    : '';
+  return `${target}${intents.length > 0 ? ` [${intents}]` : ''}${evidence.length > 0 ? ` (${evidence})` : ''}${blockers}`;
 }

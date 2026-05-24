@@ -4,6 +4,7 @@ import {
   SemanticRuntimeAnswerOutcome,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimeContinuationRow,
   type SemanticRuntimePageInput,
   type SemanticRuntimePageResult,
 } from './contracts.js';
@@ -17,6 +18,7 @@ export function answer<TValue>(
   summary: string,
   value: TValue,
   page: SemanticRuntimePageResult | null = null,
+  continuations: readonly SemanticRuntimeContinuationRow[] = [],
 ): SemanticRuntimeAnswer<TValue> {
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
@@ -24,6 +26,7 @@ export function answer<TValue>(
     summary,
     value,
     page,
+    ...(continuations.length === 0 ? {} : { continuations }),
   };
 }
 

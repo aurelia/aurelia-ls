@@ -108,6 +108,7 @@
       "rationale": "Semantic-runtime memory work is a CPU/memory/inquiry-algebra trade-off. The profiler must keep construction phases, public query cost, TypeScript Program composition, query-claim storage, and depth/profile groupings visible before a cache, compression pass, or materialization split is chosen.",
       "guidance": [
         "Run this lane before adding cache policy, changing app-opening defaults, trimming product details, or moving work between app construction and public query answers.",
+        "Use Work Router route `semantic-runtime.app-telemetry` for app-world construction, routed-query payload, continuation-envelope, and query-claim profiler work; avoid entering telemetry only through a neighboring query-claim or memory route when the profiler itself is the question.",
         "Prefer aggregate output for broad pressure, but read the grouped root/depth/profile rows before interpreting global totals. Global totals reveal total load; grouped rows reveal which analysis depth or inquiry profile introduced it.",
         "Use grouped timing leaders when one aggregate run spans multiple depths or profiles. They keep the leading phase costs attached to the root/depth/profile group so a profile comparison does not require immediate narrower reruns. TypeSystem inner phases are part of the aggregate timing lane so Program/checker cost stays visible beside the outer app-world phase.",
         "Use the project compiler-options cache row to separate repeated boot/input wiring from TypeScript Program construction. Hits there show shared tsconfig/path-mapping shape reuse; they do not mean dependency SourceFiles or app-world products were retained.",
@@ -115,6 +116,8 @@
         "App-world-free static-evaluation work may surface through answer-envelope telemetry. Interpret `appWorldFreeProfile` as runtime-boundary cost attribution, not as evidence that an app epoch was opened.",
         "Use query-claim telemetry to separate retained answer DTOs, answer-local kernel products, routed app disposal, and TypeScript dependency cache cleanup. The claim graph is the layer immediately before API answers, not another durable semantic model.",
         "Use `SEMANTIC_RUNTIME_TELEMETRY_QUERY_REPEAT` when checking whether the claim graph actually reuses retained answers or whether a public query still rematerializes inside one runtime/app session. `SEMANTIC_RUNTIME_TELEMETRY_REPEAT` repeats whole sessions and answers a different question.",
+        "Read query value bytes, full answer-envelope bytes, and continuation count/bytes together before changing continuation presentation or MCP guidance. A low-value payload can still have meaningful envelope/token pressure when continuations are rich.",
+        "Use direct `--fixture` and `--root` CLI narrowing for focused app telemetry; environment variables remain useful for scripted sweeps, but CLI loci are easier to audit in captured command lines.",
         "When a product-detail row dominates, pair detail-density with phase/grouped telemetry before changing the representation. Some handle mass is topology or source precision; some is envelope echo that can be normalized away."
       ],
       "anchors": [
@@ -173,7 +176,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-24"
     }
   ]
 }

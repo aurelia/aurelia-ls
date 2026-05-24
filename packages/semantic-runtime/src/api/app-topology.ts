@@ -1937,7 +1937,10 @@ function stateCompositionTarget(
   context: StateCompositionReadContext,
   member: ts.PropertyDeclaration,
 ): StateCompositionTarget | null {
-  const type = context.emission.typeSystem.checker.getTypeAtLocation(member.name);
+  const type = context.emission.typeSystem.readProgramTypeAtLocation(member.name);
+  if (type == null) {
+    return null;
+  }
   const symbol = type.aliasSymbol ?? type.getSymbol() ?? null;
   const valueDeclaration = symbol?.declarations?.[0] ?? null;
   if (valueDeclaration == null || !ts.isClassDeclaration(valueDeclaration)) {

@@ -34,13 +34,16 @@ import {
   CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
+import {
+  checkerPrimitiveLiteralType,
+  checkerPrimitiveType,
+  type CheckerPrimitiveName,
+} from './checker-primitive-types.js';
 
 export type CheckerLookupCarrier = {
   readonly checker: ts.TypeChecker;
   readonly location: ts.Node | null;
 };
-
-export type CheckerPrimitiveName = 'string' | 'number' | 'boolean' | 'undefined';
 
 export interface CheckerExpressionTypeProjectionOptions {
   /**
@@ -255,7 +258,7 @@ export class CheckerExpressionTypeSupport {
         `Primitive ${primitive} projection needs a TypeChecker from the current binding scope.`,
       );
     }
-    const type = primitiveTypeByName(checker, primitive);
+    const type = checkerPrimitiveType(checker, primitive);
     return this.projectType(expression, checker, type, localKey, sourceAddressHandle);
   }
 
@@ -275,8 +278,8 @@ export class CheckerExpressionTypeSupport {
       );
     }
 
-    const type = primitiveType(checker, value);
-    return this.projectType(expression, checker, type, `${localKey}:primitive:${typeof value}`, sourceAddressHandle);
+    const type = checkerPrimitiveLiteralType(checker, value);
+    return this.projectType(expression, checker, type, `${localKey}:literal:${typeof value}`, sourceAddressHandle);
   }
 
   projectType(
@@ -325,39 +328,5 @@ export class CheckerExpressionTypeSupport {
     typeReference: CheckerTypeReference | null = null,
   ): CheckerExpressionTypeOpenSubject {
     return new CheckerExpressionTypeOpenSubject(subjectKind, name, sourceAddressHandle, typeReference);
-  }
-}
-
-function primitiveType(
-  checker: ts.TypeChecker,
-  value: null | undefined | number | boolean | string,
-): ts.Type {
-  switch (typeof value) {
-    case 'string':
-      return checker.getStringType();
-    case 'number':
-      return checker.getNumberType();
-    case 'boolean':
-      return checker.getBooleanType();
-    case 'undefined':
-      return checker.getUndefinedType();
-    default:
-      return checker.getNullType();
-  }
-}
-
-function primitiveTypeByName(
-  checker: ts.TypeChecker,
-  primitive: CheckerPrimitiveName,
-): ts.Type {
-  switch (primitive) {
-    case 'string':
-      return checker.getStringType();
-    case 'number':
-      return checker.getNumberType();
-    case 'boolean':
-      return checker.getBooleanType();
-    case 'undefined':
-      return checker.getUndefinedType();
   }
 }

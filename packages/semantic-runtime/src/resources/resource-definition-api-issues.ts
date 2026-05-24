@@ -25,6 +25,7 @@ import {
   normalizeTypeSystemSourceFileName,
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
+import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { ResourceProductDetails } from './product-details.js';
 import type { FullResourceDefinition } from './resource-definition.js';
@@ -268,10 +269,7 @@ function runtimeHtmlApiOwnerName(
   checker: ts.TypeChecker,
   expression: ts.Expression,
 ): string | null {
-  const symbol = checker.getSymbolAtLocation(expression);
-  const target = symbol != null && (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
+  const target = symbolForExpression(checker, expression);
   if (target == null) {
     return null;
   }
@@ -353,11 +351,7 @@ function sourceDeclarationReferenceForExpression(
   if (ts.isClassExpression(current)) {
     return sourceDeclarationReferenceForDeclaration(current, sourcePathByFileName);
   }
-  const symbol = checker.getSymbolAtLocation(current);
-  const target = symbol != null && (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  const declaration = target?.declarations?.find(ts.isClassDeclaration) ?? null;
+  const declaration = symbolForExpression(checker, current)?.declarations?.find(ts.isClassDeclaration) ?? null;
   return declaration == null
     ? null
     : sourceDeclarationReferenceForDeclaration(declaration, sourcePathByFileName);

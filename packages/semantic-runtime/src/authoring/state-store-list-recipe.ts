@@ -289,7 +289,7 @@ function stateStoreTemplateBindingExpectedEffects(domain: StateStoreListDomainNa
       new ExpectedSemanticEffectFilter('bindingKind', 'state-dispatch'),
       new ExpectedSemanticEffectFilter('targetProperty', 'input'),
       new ExpectedSemanticEffectFilter('sourceOperationKind', 'state-dispatch-action'),
-      new ExpectedSemanticEffectFilter('runtimeValueType', '{ type: string; value: string }'),
+      new ExpectedSemanticEffectFilter('runtimeValueType', `{ type: ${JSON.stringify(domain.setDraftActionType)}; value: string }`),
     ]),
     ExpectedSemanticEffect.signatureFact('Input dispatch payload should observe $event.target.value from the authored input.', 'binding-observed-dependency', 'template', 'template-binding', 'present', null, [
       new ExpectedSemanticEffectFilter('bindingKind', 'state-dispatch'),

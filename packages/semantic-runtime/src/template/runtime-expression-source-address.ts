@@ -25,6 +25,14 @@ export interface RuntimeExpressionSourceAddress {
   readonly records: readonly KernelStoreRecord[];
 }
 
+/** Read the kernel source-file address handle carried by semantic-runtime-created parser spans. */
+export function sourceAddressHandleForRuntimeExpressionSpan(
+  span: SourceSpan | null | undefined,
+): AddressHandle | null {
+  const id = span?.file?.id;
+  return id == null ? null : id as AddressHandle;
+}
+
 export function runtimeExpressionParseContextForAddress(
   store: KernelStore,
   carrierAddressHandle: AddressHandle | null,

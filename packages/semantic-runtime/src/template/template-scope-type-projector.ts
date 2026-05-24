@@ -26,6 +26,10 @@ import {
   checkerCollectionSymbolName,
   checkerNumberIndexValueType,
 } from '../type-system/checker-related-types.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from '../type-system/checker-node-helpers.js';
 import { checkerUnionType } from '../type-system/checker-type-union.js';
 import {
   CheckerBindingPatternLocalProjection,
@@ -66,6 +70,7 @@ import {
   globalDeclaredType,
   resolveCheckerDomNodeType,
 } from '../type-system/dom-node-type.js';
+import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
 
 interface TemplateEventScopeInstruction {
   readonly node: HtmlNodeReference;
@@ -505,7 +510,7 @@ export class TemplateScopeTypeProjector {
       return null;
     }
     const checker = input.typeSystem.checker;
-    const type = checkerLiteralType(checker, value);
+    const type = checkerPrimitiveLiteralType(checker, value);
     return this.typeProjector.ensureProjection({
       localKey,
       checker,
@@ -644,11 +649,10 @@ function eventMapPropertyType(
 ): ts.Type | null {
   const checker = typeSystem.checker;
   const mapType = globalDeclaredType(typeSystem, mapName, location);
-  const property = mapType == null ? null : checker.getPropertyOfType(mapType, eventName);
-  const declaration = property?.valueDeclaration ?? property?.declarations?.[0] ?? location ?? null;
-  return property == null || declaration == null
+  const property = mapType == null ? null : checkerPropertySymbol(checker, mapType, eventName);
+  return property == null
     ? null
-    : checker.getTypeOfSymbolAtLocation(property, declaration);
+    : checkerSymbolValueType(checker, property, location);
 }
 
 function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
@@ -659,24 +663,6 @@ function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
       return true;
     default:
       return false;
-  }
-}
-
-function checkerLiteralType(
-  checker: ts.TypeChecker,
-  value: null | undefined | number | boolean | string,
-): ts.Type {
-  switch (typeof value) {
-    case 'string':
-      return checker.getStringLiteralType(value);
-    case 'number':
-      return checker.getNumberLiteralType(value);
-    case 'boolean':
-      return value ? checker.getTrueType() : checker.getFalseType();
-    case 'undefined':
-      return checker.getUndefinedType();
-    default:
-      return checker.getNullType();
   }
 }
 

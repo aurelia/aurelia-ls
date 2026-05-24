@@ -160,7 +160,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       includeAppProfile: input.includeAppProfile ?? undefined,
       includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
       inquiryProfile: 'mcp-orientation',
-      queries: input.queries,
+      queries: continuationFilteredQueries(input.queries, input.continuationIntents),
     });
     return toolResponse(aureliaMcpToolNames.appQueryBatch, input, answer);
   }
@@ -262,11 +262,25 @@ export class AureliaMcpSemanticRuntimeAdapter {
       includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
       authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
+      continuationIntents: query.continuationIntents ?? input.continuationIntents ?? undefined,
       inquiryProfile: 'mcp-orientation',
       appRetention: input.appRetention ?? 'dispose-app',
     });
     return toolResponse(toolName, input, answer);
   }
+}
+
+function continuationFilteredQueries(
+  queries: readonly SemanticAppQuery[],
+  continuationIntents: SemanticRuntimeAppQueryRequest['continuationIntents'],
+): readonly SemanticAppQuery[] {
+  if (continuationIntents == null || continuationIntents.length === 0) {
+    return queries;
+  }
+  return queries.map((query) => ({
+    ...query,
+    continuationIntents: query.continuationIntents ?? continuationIntents,
+  }));
 }
 
 interface RuntimeOptionsInput extends Partial<Omit<SemanticRuntimeOptions, 'workspaceRoot'>> {

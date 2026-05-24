@@ -69,6 +69,8 @@ import {
   FrameworkSemanticRouteBuilder,
   nextPageContinuation,
   projectionContinuation,
+  sourceRowContinuations,
+  sourceRowContinuationsForPage,
 } from "./framework-continuation-core.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 import { queryMatches, stringFilter } from "./lens-filter-utils.js";
@@ -330,7 +332,12 @@ const OBSERVATION_BINDING_SETUP_ROW_FAMILY =
     id: "framework.observation:binding-setups",
     rowLabel: "framework binding observation setup row(s)",
     evidenceForRow: evidenceForObservationBindingSetup,
-    continuationsForPage: observationBindingSetupContinuations,
+    continuationsForPage: sourceRowContinuationsForPage({
+      idPrefix: "framework.observation:binding-setups",
+      nextPageRationale: "Continue binding observation setup rows.",
+      sourceRationale: "Inspect binding observation setup source.",
+      sourceRouteSummary: "Source for observation row.",
+    }),
   });
 
 const OBSERVATION_SURFACE_METHOD_ROW_FAMILY =
@@ -338,7 +345,12 @@ const OBSERVATION_SURFACE_METHOD_ROW_FAMILY =
     id: "framework.observation:surface-methods",
     rowLabel: "framework observation surface method row(s)",
     evidenceForRow: evidenceForObservationTypeFactRow,
-    continuationsForPage: surfaceMethodContinuations,
+    continuationsForPage: sourceRowContinuationsForPage({
+      idPrefix: "framework.observation:surface-methods",
+      nextPageRationale: "Continue observation surface method rows.",
+      sourceRationale: "Inspect observation surface method source.",
+      sourceRouteSummary: "Source for observation row.",
+    }),
   });
 
 const OBSERVATION_FLOW_SITE_ROW_FAMILY =
@@ -386,7 +398,12 @@ const OBSERVATION_RELATIONSHIP_ROW_FAMILY =
     id: "framework.observation:relationships",
     rowLabel: "framework observation relationship row(s)",
     evidenceForRow: evidenceForObservationTypeFactRow,
-    continuationsForPage: observationRelationshipContinuations,
+    continuationsForPage: sourceRowContinuationsForPage({
+      idPrefix: "framework.observation:relationships",
+      nextPageRationale: "Continue observation relationship rows.",
+      sourceRationale: "Inspect observation relationship source.",
+      sourceRouteSummary: "Source for observation row.",
+    }),
   });
 
 /** Answer framework.observation inquiries from observer entities and binding observer rows. */
@@ -1901,7 +1918,7 @@ function bindingLookupContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -1909,6 +1926,7 @@ function bindingLookupContinuations(
       "framework.observation:binding-lookups",
       "Continue binding observer lookup rows.",
       "Inspect binding observer lookup source.",
+      "Source for observation row.",
     ),
     ...rows.slice(0, 3).map((row, index) =>
       observerCapabilityContinuation(
@@ -1934,40 +1952,6 @@ function bindingLookupContinuations(
   ];
 }
 
-function observationBindingSetupContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkBindingSetupRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return sourceContinuations(
-    inquiry,
-    rows,
-    nextOffset,
-    limit,
-    "framework.observation:binding-setups",
-    "Continue binding observation setup rows.",
-    "Inspect binding observation setup source.",
-  );
-}
-
-function surfaceMethodContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkObservationSurfaceMethodRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return sourceContinuations(
-    inquiry,
-    rows,
-    nextOffset,
-    limit,
-    "framework.observation:surface-methods",
-    "Continue observation surface method rows.",
-    "Inspect observation surface method source.",
-  );
-}
-
 function flowSiteContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkObservationFlowSiteRow[],
@@ -1975,7 +1959,7 @@ function flowSiteContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -1983,6 +1967,7 @@ function flowSiteContinuations(
       "framework.observation:flow-sites",
       "Continue observation flow site rows.",
       "Inspect observation flow site source.",
+      "Source for observation row.",
     ),
     projectionContinuation(
       inquiry,
@@ -2029,7 +2014,7 @@ function dependencyCircuitContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2037,6 +2022,7 @@ function dependencyCircuitContinuations(
       "framework.observation:dependency-circuit",
       "Continue observation dependency-circuit rows.",
       "Inspect dependency-circuit source flow site.",
+      "Source for observation row.",
     ),
     projectionContinuation(
       inquiry,
@@ -2055,7 +2041,7 @@ function collectionMethodContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2063,6 +2049,7 @@ function collectionMethodContinuations(
       "framework.observation:collection-methods",
       "Continue collection observation method rows.",
       "Inspect collection observation method source.",
+      "Source for observation row.",
     ),
     projectionContinuation(
       inquiry,
@@ -2081,7 +2068,7 @@ function observerLocatorDecisionContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2089,6 +2076,7 @@ function observerLocatorDecisionContinuations(
       "framework.observation:observer-locator-decisions",
       "Continue ObserverLocator decision rows.",
       "Inspect the source flow site behind this ObserverLocator decision.",
+      "Source for observation row.",
     ),
     projectionContinuation(
       inquiry,
@@ -2107,7 +2095,7 @@ function flowEntityLinkContinuations(
   limit: number,
 ): readonly Continuation[] {
   const continuations: Continuation[] = [
-    ...sourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2115,6 +2103,7 @@ function flowEntityLinkContinuations(
       "framework.observation:flow-entity-links",
       "Continue observation flow-to-entity link rows.",
       "Inspect observation flow site source.",
+      "Source for observation row.",
     ),
   ];
   for (const [index, row] of rows.slice(0, 3).entries()) {
@@ -2158,23 +2147,6 @@ function flowEntityLinkContinuations(
     );
   }
   return continuations;
-}
-
-function observationRelationshipContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkObservationRelationshipRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return sourceContinuations(
-    inquiry,
-    rows,
-    nextOffset,
-    limit,
-    "framework.observation:relationships",
-    "Continue observation relationship rows.",
-    "Inspect observation relationship source.",
-  );
 }
 
 function observerCapabilityContinuation(
@@ -2388,44 +2360,4 @@ function compareObserverLocatorDecisions(
     left.methodName.localeCompare(right.methodName) ||
     sourceRangeKey(left.source).localeCompare(sourceRangeKey(right.source))
   );
-}
-
-function sourceContinuations<TRow extends { readonly source: SourceRange }>(
-  inquiry: Inquiry,
-  rows: readonly TRow[],
-  nextOffset: number | undefined,
-  limit: number,
-  idPrefix: string,
-  nextPageRationale: string,
-  sourceRationale: string,
-): readonly Continuation[] {
-  const continuations: Continuation[] = [];
-  if (nextOffset !== undefined) {
-    continuations.push(
-      nextPageContinuation(
-        inquiry,
-        `${idPrefix}:next-page`,
-        nextPageRationale,
-        nextOffset,
-        limit,
-        { priority: ContinuationPriority.Secondary },
-      ),
-    );
-  }
-  for (const [index, row] of rows.slice(0, 3).entries()) {
-    const builder = new FrameworkRowContinuationBuilder(
-      inquiry,
-      idPrefix,
-      index,
-    );
-    continuations.push(
-      builder.source(
-        "source",
-        row.source,
-        sourceRationale,
-        "Source for observation row.",
-      ),
-    );
-  }
-  return continuations;
 }

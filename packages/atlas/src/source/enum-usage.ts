@@ -27,7 +27,7 @@ import {
 
 /** Schema marker for the TypeScript enum usage source index. */
 export const TYPESCRIPT_ENUM_USAGE_INDEX_VERSION =
-  "typescript-enum-usage-v1";
+  "typescript-enum-usage-v2";
 
 export type TypeScriptEnumValueKind = "computed" | "number" | "string";
 
@@ -54,6 +54,39 @@ export type TypeScriptEnumTranslationCarrier =
 export type TypeScriptEnumTranslationEvidence = "member-reference";
 
 export type TypeScriptEnumTranslationRelation = "translation";
+
+export type TypeScriptEnumControlFlowKind =
+  | "conditional-expression-test"
+  | "do-while-condition"
+  | "for-condition"
+  | "if-condition"
+  | "switch-case-label"
+  | "switch-discriminant"
+  | "while-condition";
+
+export type TypeScriptEnumCouplingRelation =
+  | "control-flow-cooccurrence"
+  | "shared-value-space"
+  | "type-surface-cooccurrence"
+  | "translation";
+
+export type TypeScriptEnumCouplingCarrier =
+  | TypeScriptEnumControlFlowKind
+  | TypeScriptEnumTranslationCarrier
+  | "class-declaration"
+  | "function-signature"
+  | "interface-declaration"
+  | "type-alias"
+  | "value-space";
+
+/** Control-flow carrier that makes an enum member usage branch, switch, or loop significant. */
+export interface TypeScriptEnumControlFlowContext {
+  readonly key: string;
+  readonly kind: TypeScriptEnumControlFlowKind;
+  readonly expressionText: string;
+  readonly file: SourceFileIdentity;
+  readonly span: SourceSpan;
+}
 
 /** One enum member declaration with source-level usage counts. */
 export interface TypeScriptEnumMemberRow {
@@ -103,8 +136,30 @@ export interface TypeScriptEnumMemberReferenceRow {
   readonly expressionText: string;
   readonly containingFunction: string | null;
   readonly containingClass: string | null;
+  readonly controlFlow: TypeScriptEnumControlFlowContext | null;
   readonly file: SourceFileIdentity;
   readonly span: SourceSpan;
+}
+
+/** Aggregate member spend across references, owning functions, control-flow carriers, and enum couplings. */
+export interface TypeScriptEnumMemberUsageSummaryRow {
+  readonly memberKey: string;
+  readonly packageId: string;
+  readonly enumName: string;
+  readonly memberName: string;
+  readonly value: string | number | null;
+  readonly referenceCount: number;
+  readonly roleCounts: Readonly<Record<string, number>>;
+  readonly controlFlowKindCounts: Readonly<Record<string, number>>;
+  readonly containingFunctions: readonly string[];
+  readonly containingClasses: readonly string[];
+  readonly translationInCount: number;
+  readonly translationOutCount: number;
+  readonly coupledEnumNames: readonly string[];
+  readonly couplingCount: number;
+  readonly file: SourceFileIdentity;
+  readonly span: SourceSpan;
+  readonly summary: string;
 }
 
 /** Raw literal occurrence whose value overlaps at least one enum member value. */
@@ -116,6 +171,7 @@ export interface TypeScriptEnumValueOccurrenceRow {
   readonly valueKey: string;
   readonly role: TypeScriptEnumUseRole;
   readonly text: string;
+  readonly controlFlow: TypeScriptEnumControlFlowContext | null;
   /** All enum members with this raw value, before contextual narrowing. */
   readonly memberKeys: readonly string[];
   /** Enum members whose declaring enum appears in the TypeChecker contextual type. */
@@ -137,6 +193,23 @@ export interface TypeScriptEnumValueSpaceRow {
   readonly rawValueOccurrenceCount: number;
   readonly sourceFiles: readonly string[];
   readonly firstOccurrence?: TypeScriptEnumValueOccurrenceRow;
+  readonly summary: string;
+}
+
+/** Enum-to-enum coupling discovered through translations, branch carriers, declared type surfaces, or shared values. */
+export interface TypeScriptEnumCouplingEdgeRow {
+  readonly id: string;
+  readonly packageId: string;
+  readonly relation: TypeScriptEnumCouplingRelation;
+  readonly carrier: TypeScriptEnumCouplingCarrier;
+  readonly leftEnumName: string;
+  readonly rightEnumName: string;
+  readonly leftMemberNames: readonly string[];
+  readonly rightMemberNames: readonly string[];
+  readonly occurrenceCount: number;
+  readonly expressionText: string;
+  readonly file: SourceFileIdentity;
+  readonly span: SourceSpan;
   readonly summary: string;
 }
 
@@ -167,10 +240,12 @@ export interface TypeScriptEnumUsageIndex {
   readonly version: typeof TYPESCRIPT_ENUM_USAGE_INDEX_VERSION;
   readonly packageIds: readonly string[];
   readonly enumDeclarations: readonly TypeScriptEnumDeclarationRow[];
+  readonly memberUsageSummaries: readonly TypeScriptEnumMemberUsageSummaryRow[];
   readonly memberReferences: readonly TypeScriptEnumMemberReferenceRow[];
   readonly valueOccurrences: readonly TypeScriptEnumValueOccurrenceRow[];
   readonly valueSpaces: readonly TypeScriptEnumValueSpaceRow[];
   readonly translationEdges: readonly TypeScriptEnumTranslationEdgeRow[];
+  readonly couplingEdges: readonly TypeScriptEnumCouplingEdgeRow[];
   readonly profile: readonly TypeScriptEnumUsageIndexPhaseProfileRow[];
 }
 
@@ -215,6 +290,23 @@ interface SourceFileContext {
   readonly packageName: string;
 }
 
+type TypeScriptEnumCouplingInput = Omit<
+  TypeScriptEnumCouplingEdgeRow,
+  "id" | "summary"
+>;
+
+interface TypeSurfaceContext {
+  readonly carrier: Extract<
+    TypeScriptEnumCouplingCarrier,
+    | "class-declaration"
+    | "function-signature"
+    | "interface-declaration"
+    | "type-alias"
+  >;
+  readonly label: string;
+  readonly typeNodes: readonly ts.TypeNode[];
+}
+
 const enumUsageMemo = new SourceProjectKeyedMemo<
   string,
   TypeScriptEnumUsageIndex
@@ -253,9 +345,11 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #enumNames = new Set<string>();
   readonly #memberNames = new Set<string>();
   readonly #rootEnumNamesByType = new WeakMap<ts.Type, ReadonlySet<string>>();
+  readonly #enumNamesByTypeNode = new WeakMap<ts.TypeNode, ReadonlySet<string>>();
   readonly #references: TypeScriptEnumMemberReferenceRow[] = [];
   readonly #valueOccurrences: TypeScriptEnumValueOccurrenceRow[] = [];
   readonly #translationEdges = new Map<string, TypeScriptEnumTranslationEdgeRow>();
+  readonly #typeSurfaceCouplingInputs: TypeScriptEnumCouplingInput[] = [];
 
   constructor(
     sourceProject: SourceProject,
@@ -474,6 +568,7 @@ class TypeScriptEnumUsageIndexBuilder {
       ) {
         this.#addAssignmentTranslations(context, node);
       }
+      this.#addTypeSurfaceCouplings(context, node);
 
       ts.forEachChild(node, (child) =>
         visit(child, nextFunction, nextClass),
@@ -501,6 +596,7 @@ class TypeScriptEnumUsageIndexBuilder {
       expressionText: node.getText(context.sourceFile),
       containingFunction,
       containingClass,
+      controlFlow: controlFlowContextForNode(context, node),
       file: context.file,
       span,
     };
@@ -532,6 +628,7 @@ class TypeScriptEnumUsageIndexBuilder {
       valueKey,
       role,
       text: node.getText(context.sourceFile),
+      controlFlow: controlFlowContextForNode(context, node),
       memberKeys: uniqueSortedStrings(members.map((member) => member.key)),
       contextualMemberKeys,
       file: context.file,
@@ -635,6 +732,109 @@ class TypeScriptEnumUsageIndexBuilder {
       return names;
     }
     return this.#enumNamesForTypeUncached(type, depth);
+  }
+
+  #enumNamesForTypeNode(
+    node: ts.TypeNode,
+    depth = 0,
+    seenDeclarations = new Set<ts.Declaration>(),
+  ): ReadonlySet<string> {
+    const cached = this.#enumNamesByTypeNode.get(node);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const names = this.#enumNamesForTypeNodeUncached(
+      node,
+      depth,
+      seenDeclarations,
+    );
+    this.#enumNamesByTypeNode.set(node, names);
+    return names;
+  }
+
+  #enumNamesForTypeNodeUncached(
+    node: ts.TypeNode,
+    depth: number,
+    seenDeclarations: Set<ts.Declaration>,
+  ): ReadonlySet<string> {
+    const names = new Set<string>();
+    if (depth > 4) {
+      return names;
+    }
+    if (ts.isTypeReferenceNode(node)) {
+      const syntacticName = entityNameRightText(node.typeName);
+      if (this.#enumNames.has(syntacticName)) {
+        names.add(syntacticName);
+      }
+      for (const typeArgument of node.typeArguments ?? []) {
+        addAll(names, this.#enumNamesForTypeNode(typeArgument, depth + 1, seenDeclarations));
+      }
+      this.#addEnumNamesForReferencedTypeAlias(
+        names,
+        node.typeName,
+        depth,
+        seenDeclarations,
+      );
+      return names;
+    }
+    if (ts.isImportTypeNode(node)) {
+      if (node.qualifier !== undefined) {
+        const qualifierName = entityNameRightText(node.qualifier);
+        if (this.#enumNames.has(qualifierName)) {
+          names.add(qualifierName);
+        }
+      }
+      for (const typeArgument of node.typeArguments ?? []) {
+        addAll(names, this.#enumNamesForTypeNode(typeArgument, depth + 1, seenDeclarations));
+      }
+      return names;
+    }
+    ts.forEachChild(node, (child) => {
+      if (ts.isTypeNode(child)) {
+        addAll(names, this.#enumNamesForTypeNode(child, depth + 1, seenDeclarations));
+      }
+    });
+    if (names.size === 0 && isCheckerUsefulTypeNode(node)) {
+      const type = this.#profiler.measureRepeated(
+        "checker.getTypeFromTypeNode.enum-usage",
+        "TypeChecker type lookup for enum names inside declared type surfaces.",
+        () => this.#checker.getTypeFromTypeNode(node),
+      );
+      addAll(names, this.#enumNamesForType(type));
+    }
+    return names;
+  }
+
+  #addEnumNamesForReferencedTypeAlias(
+    target: Set<string>,
+    typeName: ts.EntityName,
+    depth: number,
+    seenDeclarations: Set<ts.Declaration>,
+  ): void {
+    const symbol = this.#profiler.measureRepeated(
+      "checker.getSymbolAtLocation.type-reference",
+      "TypeChecker symbol lookup for type references that may alias enum value spaces.",
+      () => this.#checker.getSymbolAtLocation(entityNameLeaf(typeName)),
+    );
+    if (symbol === undefined) {
+      return;
+    }
+    const declarations = aliasResolvedDeclarations(this.#checker, symbol, this.#profiler);
+    for (const declaration of declarations) {
+      if (seenDeclarations.has(declaration)) {
+        continue;
+      }
+      seenDeclarations.add(declaration);
+      if (ts.isEnumDeclaration(declaration)) {
+        target.add(declaration.name.text);
+      } else if (ts.isTypeAliasDeclaration(declaration)) {
+        addAll(target, this.#enumNamesForTypeNode(
+          declaration.type,
+          depth + 1,
+          seenDeclarations,
+        ));
+      }
+    }
   }
 
   #enumNamesForTypeUncached(
@@ -752,6 +952,42 @@ class TypeScriptEnumUsageIndexBuilder {
       this.#translationTargetsInExpression(node.left, context.sourceFile),
       node,
     );
+  }
+
+  #addTypeSurfaceCouplings(
+    context: SourceFileContext,
+    node: ts.Node,
+  ): void {
+    const surface = typeSurfaceForNode(node, context.sourceFile);
+    if (surface === null) {
+      return;
+    }
+    const enumNames = uniqueSortedStrings(
+      surface.typeNodes.flatMap((typeNode) => [
+        ...this.#enumNamesForTypeNode(typeNode),
+      ]),
+    );
+    if (enumNames.length < 2) {
+      return;
+    }
+    const span = sourceSpanForNode(context.sourceFile, node);
+    for (let leftIndex = 0; leftIndex < enumNames.length - 1; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < enumNames.length; rightIndex += 1) {
+        this.#typeSurfaceCouplingInputs.push({
+          packageId: context.file.packageId!,
+          relation: "type-surface-cooccurrence",
+          carrier: surface.carrier,
+          leftEnumName: enumNames[leftIndex]!,
+          rightEnumName: enumNames[rightIndex]!,
+          leftMemberNames: [],
+          rightMemberNames: [],
+          occurrenceCount: 1,
+          expressionText: surface.label,
+          file: context.file,
+          span,
+        });
+      }
+    }
   }
 
   #addTranslationEdges(
@@ -1011,16 +1247,33 @@ class TypeScriptEnumUsageIndexBuilder {
       })
       .sort(compareEnumDeclarations);
 
+    const valueSpaces = [...this.#valueSpaces(members)].sort(compareValueSpaces);
+    const translationEdges = [...this.#translationEdges.values()].sort(
+      compareTranslationEdges,
+    );
+    const couplingEdges = enumCouplingEdges(
+      this.#references,
+      this.#valueOccurrences,
+      valueSpaces,
+      translationEdges,
+      this.#typeSurfaceCouplingInputs,
+      members,
+    );
     return {
       version: TYPESCRIPT_ENUM_USAGE_INDEX_VERSION,
       packageIds: uniqueSortedStrings(declarations.map((row) => row.packageId)),
       enumDeclarations: declarations,
+      memberUsageSummaries: enumMemberUsageSummaries(
+        members,
+        this.#references,
+        translationEdges,
+        couplingEdges,
+      ),
       memberReferences: this.#references.sort(compareMemberReferences),
       valueOccurrences: this.#valueOccurrences.sort(compareValueOccurrences),
-      valueSpaces: [...this.#valueSpaces(members)].sort(compareValueSpaces),
-      translationEdges: [...this.#translationEdges.values()].sort(
-        compareTranslationEdges,
-      ),
+      valueSpaces,
+      translationEdges,
+      couplingEdges,
       profile: this.#profiler.rows(),
     };
   }
@@ -1174,6 +1427,62 @@ function useRoleForNode(node: ts.Node): TypeScriptEnumUseRole {
   return "expression";
 }
 
+function controlFlowContextForNode(
+  context: SourceFileContext,
+  node: ts.Node,
+): TypeScriptEnumControlFlowContext | null {
+  let current: ts.Node = node;
+  while (current.parent !== undefined) {
+    const parent = current.parent;
+    if (ts.isIfStatement(parent) && parent.expression === current) {
+      return controlFlowContext(context, "if-condition", parent.expression);
+    }
+    if (ts.isConditionalExpression(parent) && parent.condition === current) {
+      return controlFlowContext(
+        context,
+        "conditional-expression-test",
+        parent.condition,
+      );
+    }
+    if (ts.isSwitchStatement(parent) && parent.expression === current) {
+      return controlFlowContext(
+        context,
+        "switch-discriminant",
+        parent.expression,
+      );
+    }
+    if (ts.isCaseClause(parent) && parent.expression === current) {
+      return controlFlowContext(context, "switch-case-label", parent.expression);
+    }
+    if (ts.isWhileStatement(parent) && parent.expression === current) {
+      return controlFlowContext(context, "while-condition", parent.expression);
+    }
+    if (ts.isDoStatement(parent) && parent.expression === current) {
+      return controlFlowContext(context, "do-while-condition", parent.expression);
+    }
+    if (ts.isForStatement(parent) && parent.condition === current) {
+      return controlFlowContext(context, "for-condition", parent.condition);
+    }
+    current = parent;
+  }
+  return null;
+}
+
+function controlFlowContext(
+  context: SourceFileContext,
+  kind: TypeScriptEnumControlFlowKind,
+  expression: ts.Expression,
+): TypeScriptEnumControlFlowContext {
+  const span = sourceSpanForNode(context.sourceFile, expression);
+  return {
+    key: `typescript-enum-control-flow:${kind}:${context.file.repoPath}:${span.start}:${span.end}`,
+    kind,
+    expressionText: expression.getText(context.sourceFile),
+    file: context.file,
+    span,
+  };
+}
+
 function memberReferenceQualifierText(
   node: ts.PropertyAccessExpression | ts.QualifiedName,
   sourceFile: ts.SourceFile,
@@ -1256,6 +1565,166 @@ function functionLikeName(
   return null;
 }
 
+function typeSurfaceForNode(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): TypeSurfaceContext | null {
+  if (ts.isInterfaceDeclaration(node)) {
+    return {
+      carrier: "interface-declaration",
+      label: `interface ${node.name.text}`,
+      typeNodes: node.members.flatMap(typeNodesForTypeElement),
+    };
+  }
+  if (ts.isTypeAliasDeclaration(node)) {
+    return {
+      carrier: "type-alias",
+      label: `type ${node.name.text}`,
+      typeNodes: [node.type],
+    };
+  }
+  if (ts.isClassDeclaration(node)) {
+    return {
+      carrier: "class-declaration",
+      label: `class ${node.name?.text ?? "<anonymous>"}`,
+      typeNodes: node.members.flatMap(typeNodesForClassElement),
+    };
+  }
+  if (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isArrowFunction(node)
+  ) {
+    const name = functionLikeName(node, sourceFile) ?? "<anonymous>";
+    return {
+      carrier: "function-signature",
+      label: `function ${name}`,
+      typeNodes: typeNodesForSignatureLike(node),
+    };
+  }
+  return null;
+}
+
+function typeNodesForClassElement(
+  node: ts.ClassElement,
+): readonly ts.TypeNode[] {
+  if (ts.isPropertyDeclaration(node)) {
+    return optionalTypeNode(node.type);
+  }
+  if (
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isConstructorDeclaration(node)
+  ) {
+    return typeNodesForSignatureLike(node);
+  }
+  return [];
+}
+
+function typeNodesForTypeElement(
+  node: ts.TypeElement,
+): readonly ts.TypeNode[] {
+  if (ts.isPropertySignature(node)) {
+    return optionalTypeNode(node.type);
+  }
+  if (
+    ts.isMethodSignature(node) ||
+    ts.isCallSignatureDeclaration(node) ||
+    ts.isConstructSignatureDeclaration(node) ||
+    ts.isIndexSignatureDeclaration(node)
+  ) {
+    return typeNodesForSignatureLike(node);
+  }
+  return [];
+}
+
+function typeNodesForSignatureLike(
+  node:
+    | ts.ArrowFunction
+    | ts.CallSignatureDeclaration
+    | ts.ConstructSignatureDeclaration
+    | ts.ConstructorDeclaration
+    | ts.FunctionDeclaration
+    | ts.FunctionExpression
+    | ts.GetAccessorDeclaration
+    | ts.IndexSignatureDeclaration
+    | ts.MethodDeclaration
+    | ts.MethodSignature
+    | ts.SetAccessorDeclaration,
+): readonly ts.TypeNode[] {
+  const returnTypeNodes = "type" in node
+    ? optionalTypeNode(node.type)
+    : [];
+  const typeParameterNodes = "typeParameters" in node
+    ? typeParameterTypeNodes(node.typeParameters)
+    : [];
+  return [
+    ...node.parameters.flatMap((parameter) => optionalTypeNode(parameter.type)),
+    ...returnTypeNodes,
+    ...typeParameterNodes,
+  ];
+}
+
+function typeParameterTypeNodes(
+  nodes: ts.NodeArray<ts.TypeParameterDeclaration> | undefined,
+): readonly ts.TypeNode[] {
+  return (nodes ?? []).flatMap((node) => [
+    ...optionalTypeNode(node.constraint),
+    ...optionalTypeNode(node.default),
+  ]);
+}
+
+function optionalTypeNode(
+  node: ts.TypeNode | undefined,
+): readonly ts.TypeNode[] {
+  return node === undefined ? [] : [node];
+}
+
+interface EnumUsageSymbolProfiler {
+  measureRepeated<T>(
+    phase: string,
+    summary: string,
+    read: () => T,
+  ): T;
+}
+
+function aliasResolvedDeclarations(
+  checker: ts.TypeChecker,
+  symbol: ts.Symbol,
+  profiler: EnumUsageSymbolProfiler,
+): readonly ts.Declaration[] {
+  const resolved =
+    (symbol.flags & ts.SymbolFlags.Alias) !== 0
+      ? profiler.measureRepeated(
+        "checker.getAliasedSymbol.type-reference",
+        "TypeChecker alias resolution for type references that may carry enum value spaces.",
+        () => checker.getAliasedSymbol(symbol),
+      )
+      : symbol;
+  return resolved.declarations ?? [];
+}
+
+function entityNameLeaf(name: ts.EntityName): ts.Identifier {
+  return ts.isIdentifier(name) ? name : name.right;
+}
+
+function entityNameRightText(name: ts.EntityName): string {
+  return entityNameLeaf(name).text;
+}
+
+function isCheckerUsefulTypeNode(node: ts.TypeNode): boolean {
+  return (
+    ts.isIndexedAccessTypeNode(node) ||
+    ts.isTypeOperatorNode(node) ||
+    ts.isTypeQueryNode(node)
+  );
+}
+
 function nearestEnumMemberDeclaration(node: ts.Declaration): ts.EnumMember | null {
   let current: ts.Node | undefined = node;
   while (current !== undefined) {
@@ -1286,6 +1755,289 @@ function countContextualRawValueOccurrences(
     }
   }
   return counts;
+}
+
+function enumCouplingEdges(
+  references: readonly TypeScriptEnumMemberReferenceRow[],
+  valueOccurrences: readonly TypeScriptEnumValueOccurrenceRow[],
+  valueSpaces: readonly TypeScriptEnumValueSpaceRow[],
+  translationEdges: readonly TypeScriptEnumTranslationEdgeRow[],
+  typeSurfaceCouplingInputs: readonly TypeScriptEnumCouplingInput[],
+  members: readonly TypeScriptEnumMemberRow[],
+): readonly TypeScriptEnumCouplingEdgeRow[] {
+  const membersByKey = new Map(members.map((member) => [member.key, member]));
+  const rows = new Map<string, TypeScriptEnumCouplingEdgeRow>();
+
+  for (const edge of translationEdges) {
+    addEnumCoupling(rows, {
+      packageId: edge.packageId,
+      relation: "translation",
+      carrier: edge.carrier,
+      leftEnumName: edge.fromEnumName,
+      rightEnumName: edge.toEnumName,
+      leftMemberNames: [edge.fromMemberName],
+      rightMemberNames: [edge.toMemberName],
+      occurrenceCount: 1,
+      expressionText: edge.expressionText,
+      file: edge.file,
+      span: edge.span,
+    });
+  }
+
+  for (const input of typeSurfaceCouplingInputs) {
+    addEnumCoupling(rows, input);
+  }
+
+  const valueOccurrencesByValueKey = groupBy(
+    valueOccurrences.filter((row) => row.contextualMemberKeys.length > 1),
+    (row) => row.valueKey,
+  );
+  for (const valueSpace of valueSpaces) {
+    if (valueSpace.enumNames.length < 2) {
+      continue;
+    }
+    for (const occurrence of valueOccurrencesByValueKey.get(valueSpace.valueKey) ?? []) {
+      const enumNames = uniqueSortedStrings(
+        occurrence.contextualMemberKeys
+          .map((key) => membersByKey.get(key)?.enumName)
+          .filter((name): name is string => name !== undefined),
+      );
+      if (enumNames.length < 2) {
+        continue;
+      }
+      for (let leftIndex = 0; leftIndex < enumNames.length - 1; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < enumNames.length; rightIndex += 1) {
+          const leftEnumName = enumNames[leftIndex]!;
+          const rightEnumName = enumNames[rightIndex]!;
+          addEnumCoupling(rows, {
+            packageId: occurrence.packageId,
+            relation: "shared-value-space",
+            carrier: "value-space",
+            leftEnumName,
+            rightEnumName,
+            leftMemberNames: memberNamesForEnum(
+              occurrence.contextualMemberKeys,
+              membersByKey,
+              leftEnumName,
+            ),
+            rightMemberNames: memberNamesForEnum(
+              occurrence.contextualMemberKeys,
+              membersByKey,
+              rightEnumName,
+            ),
+            occurrenceCount: 1,
+            expressionText: occurrence.text,
+            file: occurrence.file,
+            span: occurrence.span,
+          });
+        }
+      }
+    }
+  }
+
+  for (const group of groupBy(
+    references.filter((row) => row.controlFlow !== null),
+    (row) => row.controlFlow!.key,
+  ).values()) {
+    const controlFlow = group[0]?.controlFlow;
+    if (controlFlow === undefined || controlFlow === null) {
+      continue;
+    }
+    const enumNames = uniqueSortedStrings(group.map((row) => row.enumName));
+    if (enumNames.length < 2) {
+      continue;
+    }
+    for (let leftIndex = 0; leftIndex < enumNames.length - 1; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < enumNames.length; rightIndex += 1) {
+        const leftEnumName = enumNames[leftIndex]!;
+        const rightEnumName = enumNames[rightIndex]!;
+        addEnumCoupling(rows, {
+          packageId: commonPackageId(group.map((row) => row.packageId)),
+          relation: "control-flow-cooccurrence",
+          carrier: controlFlow.kind,
+          leftEnumName,
+          rightEnumName,
+          leftMemberNames: uniqueSortedStrings(
+            group
+              .filter((row) => row.enumName === leftEnumName)
+              .map((row) => row.memberName),
+          ),
+          rightMemberNames: uniqueSortedStrings(
+            group
+              .filter((row) => row.enumName === rightEnumName)
+              .map((row) => row.memberName),
+          ),
+          occurrenceCount: group.length,
+          expressionText: controlFlow.expressionText,
+          file: controlFlow.file,
+          span: controlFlow.span,
+        });
+      }
+    }
+  }
+
+  return [...rows.values()].sort(compareCouplingEdges);
+}
+
+function enumMemberUsageSummaries(
+  members: readonly TypeScriptEnumMemberRow[],
+  references: readonly TypeScriptEnumMemberReferenceRow[],
+  translationEdges: readonly TypeScriptEnumTranslationEdgeRow[],
+  couplingEdges: readonly TypeScriptEnumCouplingEdgeRow[],
+): readonly TypeScriptEnumMemberUsageSummaryRow[] {
+  const referencesByMember = groupBy(references, (row) => row.memberKey);
+  const translationIn = groupBy(translationEdges, (row) => row.toMemberKey);
+  const translationOut = groupBy(translationEdges, (row) => row.fromMemberKey);
+  return members.map((member) => {
+    const memberReferences = referencesByMember.get(member.key) ?? [];
+    const memberCouplings = couplingEdgesForMember(member, couplingEdges);
+    const roleCounts = countObject(memberReferences.map((row) => row.role));
+    const controlFlowKindCounts = countObject(
+      memberReferences
+        .map((row) => row.controlFlow?.kind)
+        .filter((kind): kind is TypeScriptEnumControlFlowKind => kind !== undefined),
+    );
+    const containingFunctions = uniqueSortedStrings(
+      memberReferences.map((row) => row.containingFunction ?? "<module>"),
+    );
+    const containingClasses = uniqueSortedStrings(
+      memberReferences
+        .map((row) => row.containingClass)
+        .filter((name): name is string => name !== null),
+    );
+    const coupledEnumNames = uniqueSortedStrings(
+      memberCouplings.map((row) =>
+        row.leftEnumName === member.enumName
+          ? row.rightEnumName
+          : row.leftEnumName,
+      ),
+    );
+    const translationInCount = translationIn.get(member.key)?.length ?? 0;
+    const translationOutCount = translationOut.get(member.key)?.length ?? 0;
+    const controlFlowCount = Object.values(controlFlowKindCounts).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+    return {
+      memberKey: member.key,
+      packageId: member.packageId,
+      enumName: member.enumName,
+      memberName: member.memberName,
+      value: member.value,
+      referenceCount: memberReferences.length,
+      roleCounts,
+      controlFlowKindCounts,
+      containingFunctions,
+      containingClasses,
+      translationInCount,
+      translationOutCount,
+      coupledEnumNames,
+      couplingCount: memberCouplings.reduce(
+        (sum, coupling) => sum + coupling.occurrenceCount,
+        0,
+      ),
+      file: member.file,
+      span: member.span,
+      summary: `${member.enumName}.${member.memberName} has ${memberReferences.length} reference(s), ${controlFlowCount} control-flow reference(s), ${translationInCount} translation-in edge(s), ${translationOutCount} translation-out edge(s), and ${coupledEnumNames.length} coupled enum(s).`,
+    };
+  }).sort(compareMemberUsageSummaries);
+}
+
+function couplingEdgesForMember(
+  member: TypeScriptEnumMemberRow,
+  edges: readonly TypeScriptEnumCouplingEdgeRow[],
+): readonly TypeScriptEnumCouplingEdgeRow[] {
+  return edges.filter((edge) =>
+    (edge.leftEnumName === member.enumName &&
+      edge.leftMemberNames.includes(member.memberName)) ||
+    (edge.rightEnumName === member.enumName &&
+      edge.rightMemberNames.includes(member.memberName))
+  );
+}
+
+function countObject(values: readonly string[]): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return Object.fromEntries(
+    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function addEnumCoupling(
+  rows: Map<string, TypeScriptEnumCouplingEdgeRow>,
+  input: Omit<TypeScriptEnumCouplingEdgeRow, "id" | "summary">,
+): void {
+  if (input.leftEnumName === input.rightEnumName) {
+    return;
+  }
+  const ordered = orderedEnumPair(input);
+  const id = `typescript-enum-coupling:${input.packageId}:${input.relation}:${input.carrier}:${ordered.leftEnumName}:${ordered.rightEnumName}`;
+  const existing = rows.get(id);
+  if (existing === undefined) {
+    rows.set(id, {
+      id,
+      ...ordered,
+      summary: enumCouplingSummary(ordered),
+    });
+    return;
+  }
+  const merged = {
+    ...existing,
+    leftMemberNames: uniqueSortedStrings([
+      ...existing.leftMemberNames,
+      ...ordered.leftMemberNames,
+    ]),
+    rightMemberNames: uniqueSortedStrings([
+      ...existing.rightMemberNames,
+      ...ordered.rightMemberNames,
+    ]),
+    occurrenceCount: existing.occurrenceCount + ordered.occurrenceCount,
+  };
+  rows.set(id, {
+    ...merged,
+    summary: enumCouplingSummary(merged),
+  });
+}
+
+function orderedEnumPair(
+  input: Omit<TypeScriptEnumCouplingEdgeRow, "id" | "summary">,
+): Omit<TypeScriptEnumCouplingEdgeRow, "id" | "summary"> {
+  if (input.leftEnumName.localeCompare(input.rightEnumName) <= 0) {
+    return input;
+  }
+  return {
+    ...input,
+    leftEnumName: input.rightEnumName,
+    rightEnumName: input.leftEnumName,
+    leftMemberNames: input.rightMemberNames,
+    rightMemberNames: input.leftMemberNames,
+  };
+}
+
+function enumCouplingSummary(
+  row: Omit<TypeScriptEnumCouplingEdgeRow, "id" | "summary">,
+): string {
+  return `${row.leftEnumName} and ${row.rightEnumName} are coupled by ${row.relation} through ${row.carrier} (${row.occurrenceCount} occurrence(s)).`;
+}
+
+function memberNamesForEnum(
+  memberKeys: readonly string[],
+  membersByKey: ReadonlyMap<string, TypeScriptEnumMemberRow>,
+  enumName: string,
+): readonly string[] {
+  return uniqueSortedStrings(
+    memberKeys
+      .map((key) => membersByKey.get(key))
+      .filter((member): member is TypeScriptEnumMemberRow => member?.enumName === enumName)
+      .map((member) => member.memberName),
+  );
+}
+
+function commonPackageId(packageIds: readonly string[]): string {
+  const ids = uniqueSortedStrings(packageIds);
+  return ids.length === 1 ? ids[0]! : "multiple";
 }
 
 function addAll(target: Set<string>, source: Iterable<string>): void {
@@ -1344,6 +2096,18 @@ function compareMemberReferences(
   );
 }
 
+function compareMemberUsageSummaries(
+  left: TypeScriptEnumMemberUsageSummaryRow,
+  right: TypeScriptEnumMemberUsageSummaryRow,
+): number {
+  return (
+    left.enumName.localeCompare(right.enumName) ||
+    left.memberName.localeCompare(right.memberName) ||
+    left.file.repoPath.localeCompare(right.file.repoPath) ||
+    left.span.start - right.span.start
+  );
+}
+
 function compareValueOccurrences(
   left: TypeScriptEnumValueOccurrenceRow,
   right: TypeScriptEnumValueOccurrenceRow,
@@ -1373,6 +2137,21 @@ function compareTranslationEdges(
   return (
     left.fromEnumName.localeCompare(right.fromEnumName) ||
     left.toEnumName.localeCompare(right.toEnumName) ||
+    left.file.repoPath.localeCompare(right.file.repoPath) ||
+    left.span.start - right.span.start
+  );
+}
+
+function compareCouplingEdges(
+  left: TypeScriptEnumCouplingEdgeRow,
+  right: TypeScriptEnumCouplingEdgeRow,
+): number {
+  return (
+    left.leftEnumName.localeCompare(right.leftEnumName) ||
+    left.rightEnumName.localeCompare(right.rightEnumName) ||
+    left.relation.localeCompare(right.relation) ||
+    left.carrier.localeCompare(right.carrier) ||
+    right.occurrenceCount - left.occurrenceCount ||
     left.file.repoPath.localeCompare(right.file.repoPath) ||
     left.span.start - right.span.start
   );

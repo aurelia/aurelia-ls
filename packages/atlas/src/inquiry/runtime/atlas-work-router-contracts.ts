@@ -42,6 +42,54 @@ export interface AtlasWorkRouteQueryCanary {
   readonly summary: string;
 }
 
+/** Cross-cutting route completeness dimension that should be discoverable from adjacent topics. */
+export const enum AtlasWorkRouteCoverageDimension {
+  /** Source-bearing routes should reuse shared authored-text and line/offset boundaries instead of local file reads. */
+  AuthoredSourceTextBoundary = "authored-source-text-boundary",
+  /** Checker-bearing routes should reuse TypeSystemProject/checker helpers instead of feature-local TypeChecker forks. */
+  CheckerValueAccess = "checker-value-access",
+  /** Public answer families still need intent-aware typed continuations threaded through route-local APIs. */
+  IntentAwareContinuations = "intent-aware-continuations",
+  /** Public answer families that materialize through query-claim retention, reuse, disposal, or telemetry policy. */
+  QueryClaimGraph = "query-claim-graph",
+}
+
+/** Route-local state for a cross-cutting coverage dimension. */
+export const enum AtlasWorkRouteCoverageState {
+  /** Route-local obligation is implemented and should have a witness when possible. */
+  Covered = "covered",
+  /** Route-local obligation exists but still has known gaps. */
+  Partial = "partial",
+  /** Route-local obligation is relevant and not implemented yet. */
+  Missing = "missing",
+  /** Dimension has been considered and does not apply to this route. */
+  NotApplicable = "not-applicable",
+}
+
+/** Evidence depth for a route-local coverage row; prevents structural wiring from masquerading as semantic verification. */
+export const enum AtlasWorkRouteCoverageDepth {
+  /** Public surfaces can carry the dimension, but route-specific semantics have not been checked deeply. */
+  Wired = "wired",
+  /** Route-specific products, evidence, or framework semantics are reflected in the dimension. */
+  Semantic = "semantic",
+  /** A contract, fixture canary, concrete query, or source-level proof witnesses the route-specific behavior. */
+  Verified = "verified",
+}
+
+/** Route-local coverage for cross-cutting product dimensions that should surface from adjacent topics. */
+export interface AtlasWorkRouteCoverage {
+  /** Cross-cutting dimension being covered or explicitly not applicable. */
+  readonly dimension: AtlasWorkRouteCoverageDimension;
+  /** Current route-local state for this dimension. */
+  readonly state: AtlasWorkRouteCoverageState;
+  /** Depth of evidence behind the current state, when this route has any implemented coverage. */
+  readonly depth?: AtlasWorkRouteCoverageDepth;
+  /** Route that owns the dimension's substrate, when this route is only a consumer or pressure lane. */
+  readonly ownerRouteId?: string;
+  /** Grounded explanation of what is covered, missing, or intentionally out of scope. */
+  readonly summary: string;
+}
+
 /** Anchor role inside one work route. */
 export type AtlasWorkRouteAnchorRole =
   | "primary"
@@ -209,6 +257,8 @@ export interface AtlasWorkRoute {
   readonly terms: readonly string[];
   /** Human-language route canaries checked by route-health; these do not replace ontology terms or anchors. */
   readonly queryCanaries?: readonly AtlasWorkRouteQueryCanary[];
+  /** Explicit cross-cutting coverage rows, used when a topic should rediscover broader incomplete dimensions. */
+  readonly coverage?: readonly AtlasWorkRouteCoverage[];
   /** Concrete source, lens, memory, corpus, script, doc, or auLink anchors. */
   readonly anchors: readonly AtlasWorkRouteAnchor[];
   /** Ordered authority lanes to consult before making changes through this route. */

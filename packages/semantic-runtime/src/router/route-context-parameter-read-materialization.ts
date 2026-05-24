@@ -30,6 +30,11 @@ import type { FullResourceDefinition } from '../resources/resource-definition.js
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from '../type-system/checker-node-helpers.js';
+import { checkerStringIndexValueType } from '../type-system/checker-related-types.js';
+import {
   normalizeTypeSystemSourceFileName,
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
@@ -154,7 +159,7 @@ function readRouteContextParameterReadSites(
           sourceFileAddressHandle: source.addressHandle,
           sourceFile,
         },
-        typeSystem.checker,
+        typeSystem,
         sourcePathByFileName,
       );
   });
@@ -162,9 +167,10 @@ function readRouteContextParameterReadSites(
 
 function readSourceFileRouteContextParameterReadSites(
   context: TypeScriptSourceSiteContext,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly RouteContextParameterReadSite[] {
+  const checker = typeSystem.checker;
   const routeContextBindings = readSourceImportBindings(context.sourceFile, ROUTE_CONTEXT_MODULES, ROUTE_CONTEXT_EXPORTS);
   const sites: RouteContextParameterReadSite[] = [];
   const visit = (
@@ -184,7 +190,7 @@ function readSourceFileRouteContextParameterReadSites(
     recordRouteContextParameterReadSite(
       sites,
       context,
-      checker,
+      typeSystem,
       sourcePathByFileName,
       routeContextBindings,
       node,
@@ -200,7 +206,7 @@ function readSourceFileRouteContextParameterReadSites(
 function recordRouteContextParameterReadSite(
   sites: RouteContextParameterReadSite[],
   context: TypeScriptSourceSiteContext,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
   routeContextBindings: ReturnType<typeof readSourceImportBindings>,
   node: ts.Node,
@@ -213,11 +219,12 @@ function recordRouteContextParameterReadSite(
   const access = unwrapExpression(node.expression) as ts.PropertyAccessExpression;
   if (
     access.name.text !== 'getRouteParameters'
-    || !isAureliaRouteContextGetRouteParameters(checker, access, sourcePathByFileName, routeContextBindings)
+    || !isAureliaRouteContextGetRouteParameters(typeSystem, access, sourcePathByFileName, routeContextBindings)
   ) {
     return;
   }
-  const declared = declaredRouteParameterKeys(checker, node);
+  const checker = typeSystem.checker;
+  const declared = declaredRouteParameterKeys(typeSystem, node);
   sites.push({
     ...sourceSiteForNode(context, node, {
       sourceFile: context.sourceFile,
@@ -226,14 +233,14 @@ function recordRouteContextParameterReadSite(
       enclosingMemberName,
       declaredKeys: declared.keys,
       declaredOpenKeySpace: declared.openKeySpace,
-      mergeStrategy: routeContextParameterMergeStrategy(node, context.sourceFile, checker),
+      mergeStrategy: routeContextParameterMergeStrategy(node, context.sourceFile, typeSystem),
       includeQueryParams: routeContextParameterIncludeQueryParams(node, context.sourceFile, checker),
     }),
   });
 }
 
 function isAureliaRouteContextGetRouteParameters(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   access: ts.PropertyAccessExpression,
   sourcePathByFileName: ReadonlyMap<string, string>,
   routeContextBindings: ReturnType<typeof readSourceImportBindings>,
@@ -241,8 +248,10 @@ function isAureliaRouteContextGetRouteParameters(
   if (isImportedRouteContextResolveReceiver(access.expression, routeContextBindings)) {
     return true;
   }
-  const symbol = checker.getSymbolAtLocation(access.name)
-    ?? checker.getPropertyOfType(checker.getTypeAtLocation(access.expression), 'getRouteParameters')
+  const checker = typeSystem.checker;
+  const receiverType = typeSystem.readProgramTypeAtLocation(access.expression);
+  const symbol = typeSystem.readProgramSymbolAtLocation(access.name)
+    ?? (receiverType == null ? null : checkerPropertySymbol(checker, receiverType, 'getRouteParameters'))
     ?? null;
   const declarations = symbol?.declarations ?? [];
   return declarations.some((declaration) => isFrameworkRouteContextDeclaration(declaration, sourcePathByFileName));
@@ -291,39 +300,47 @@ function isFrameworkRouteContextDeclaration(
 }
 
 function declaredRouteParameterKeys(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   call: ts.CallExpression,
 ): { readonly keys: readonly RouteContextParameterKey[]; readonly openKeySpace: boolean } {
   const typeNode = call.typeArguments?.[0] ?? null;
   if (typeNode == null) {
     return { keys: [], openKeySpace: true };
   }
-  const type = checker.getTypeFromTypeNode(typeNode);
+  const checker = typeSystem.checker;
+  const type = typeSystem.readProgramTypeFromTypeNode(typeNode);
+  if (type == null) {
+    return { keys: [], openKeySpace: true };
+  }
   const keys = checker.getPropertiesOfType(type)
-    .map((symbol) => ({
-      name: symbol.getName(),
-      optional: (symbol.getFlags() & ts.SymbolFlags.Optional) !== 0,
-      valueType: checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, typeNode)),
-    }))
+    .map((symbol) => {
+      const valueType = checkerSymbolValueType(checker, symbol, typeNode);
+      return {
+        name: symbol.getName(),
+        optional: (symbol.getFlags() & ts.SymbolFlags.Optional) !== 0,
+        valueType: valueType == null ? 'unknown' : checker.typeToString(valueType),
+      };
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
   return {
     keys,
-    openKeySpace: checker.getIndexTypeOfType(type, ts.IndexKind.String) != null,
+    openKeySpace: checkerStringIndexValueType(checker, type) != null,
   };
 }
 
 function routeContextParameterMergeStrategy(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): RouteContextParameterMergeStrategy {
+  const checker = typeSystem.checker;
   const optionStrategy = routeContextParameterStringOption(call, sourceFile, checker, 'mergeStrategy');
   if (isRouteContextParameterMergeStrategy(optionStrategy)) {
     return optionStrategy;
   }
   const typeStrategy = call.typeArguments?.[1] == null
     ? null
-    : routeContextParameterStrategyFromTypeNode(checker, call.typeArguments[1]!);
+    : routeContextParameterStrategyFromTypeNode(typeSystem, call.typeArguments[1]!);
   if (isRouteContextParameterMergeStrategy(typeStrategy)) {
     return typeStrategy;
   }
@@ -331,13 +348,16 @@ function routeContextParameterMergeStrategy(
 }
 
 function routeContextParameterStrategyFromTypeNode(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   typeNode: ts.TypeNode,
 ): string | null {
   if (ts.isLiteralTypeNode(typeNode) && ts.isStringLiteral(typeNode.literal)) {
     return typeNode.literal.text;
   }
-  const type = checker.getTypeFromTypeNode(typeNode);
+  const type = typeSystem.readProgramTypeFromTypeNode(typeNode);
+  if (type == null) {
+    return null;
+  }
   return stringLiteralUnionValues(type).length === 1
     ? stringLiteralUnionValues(type)[0]!
     : null;

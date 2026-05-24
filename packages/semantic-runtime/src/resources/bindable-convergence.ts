@@ -17,6 +17,7 @@ import {
   type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { bindableAttributeNameForProperty } from './bindable-attribute.js';
 import {
   BindableBindingMode,
@@ -524,12 +525,11 @@ function readCheckerBindableSetter(
   if (context.typeSystem == null) {
     return null;
   }
-  const programExpression = context.typeSystem.readProgramExpression(expression);
-  if (programExpression == null) {
+  const type = context.typeSystem.readProgramTypeAtLocation(expression);
+  if (type == null) {
     return null;
   }
-  const type = context.typeSystem.checker.getTypeAtLocation(programExpression);
-  return context.typeSystem.checker.getPropertyOfType(type, 'set') == null
+  return checkerPropertySymbol(context.typeSystem.checker, type, 'set') == null
     ? null
     : new BindableSetterDefinition(BindableSetterKind.Open);
 }

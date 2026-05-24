@@ -1,9 +1,6 @@
-import {
-  existsSync,
-  readFileSync,
-} from 'node:fs';
 import path from 'node:path';
 import type ts from 'typescript';
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 
 const JSON_ASSET_PREFIX = 'export default ';
 const JSON_ASSET_SUFFIX = ';';
@@ -28,12 +25,14 @@ export function assetModuleText(fileName: string, text: string): string | null {
 export function authoredAssetModuleSpanForNode(
   sourceFile: ts.SourceFile,
   node: ts.Node,
+  sourceTextCache = new AuthoredSourceTextCache(''),
 ): AssetModuleSourceSpan | null {
   return authoredJsonAssetSpan(
     sourceFile.fileName,
     sourceFile.text,
     node.getStart(sourceFile),
     node.end,
+    sourceTextCache,
   );
 }
 
@@ -42,6 +41,7 @@ function authoredJsonAssetSpan(
   generatedText: string,
   generatedStart: number,
   generatedEnd: number,
+  sourceTextCache: AuthoredSourceTextCache,
 ): AssetModuleSourceSpan | null {
   if (path.extname(fileName).toLowerCase() !== '.json') {
     return null;
@@ -49,11 +49,10 @@ function authoredJsonAssetSpan(
   if (!generatedText.startsWith(JSON_ASSET_PREFIX) || !generatedText.endsWith(JSON_ASSET_SUFFIX)) {
     return null;
   }
-  if (!existsSync(fileName)) {
+  const authoredText = sourceTextCache.read(fileName)?.text ?? null;
+  if (authoredText == null) {
     return null;
   }
-
-  const authoredText = readFileSync(fileName, 'utf8');
   const trimStart = authoredText.length - authoredText.trimStart().length;
   const generatedContentStart = JSON_ASSET_PREFIX.length;
   const generatedContentEnd = generatedText.length - JSON_ASSET_SUFFIX.length;

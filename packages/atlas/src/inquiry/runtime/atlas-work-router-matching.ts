@@ -2,6 +2,9 @@ import type { Inquiry } from "../inquiry.js";
 import type {
   AtlasWorkRoute,
   AtlasWorkRouteAnchor,
+  AtlasWorkRouteCoverage,
+  AtlasWorkRouteCoverageDepth,
+  AtlasWorkRouteCoverageState,
   AtlasWorkRouteMatchStrength,
   AtlasWorkRouteRole,
 } from "./atlas-work-router-contracts.js";
@@ -29,6 +32,9 @@ export interface AtlasWorkRouterFilters {
   readonly effectKind?: string;
   readonly recipeKey?: string;
   readonly seedUse?: string;
+  readonly coverageDimension?: string;
+  readonly coverageState?: string;
+  readonly coverageDepth?: string;
 }
 
 export interface ScoredRoute {
@@ -56,6 +62,9 @@ export function atlasWorkRouterFilters(inquiry: Inquiry): AtlasWorkRouterFilters
     effectKind: inquiryStringFilter(inquiry, "effectKind"),
     recipeKey: inquiryStringFilter(inquiry, "recipeKey"),
     seedUse: inquiryStringFilter(inquiry, "seedUse"),
+    coverageDimension: inquiryStringFilter(inquiry, "coverageDimension"),
+    coverageState: inquiryStringFilter(inquiry, "coverageState"),
+    coverageDepth: inquiryStringFilter(inquiry, "coverageDepth"),
   };
 }
 
@@ -175,6 +184,12 @@ function routeMatchesFilters(
   ) {
     return false;
   }
+  if (
+    hasCoverageFilters(filters) &&
+    !route.coverage?.some((coverage) => coverageMatchesFilters(coverage, filters))
+  ) {
+    return false;
+  }
   if (filters.query !== undefined) {
     return (
       structuralQueryScore(route, filters.query) > 0 ||
@@ -233,6 +248,11 @@ function scoredRoute(
     exact = true;
     matchedBy.push(anchorMatch);
   }
+  for (const coverageMatch of exactCoverageMatches(route, filters)) {
+    score += 1_050;
+    declared = true;
+    matchedBy.push(coverageMatch);
+  }
   if (filters.query !== undefined) {
     const structural = structuralQueryScore(route, filters.query);
     const weakText = weakTextQueryScore(route, filters.query);
@@ -271,6 +291,7 @@ function scoredRoute(
       matchedBy: matchedBy.length === 0 ? ["catalog orientation order"] : matchedBy,
       anchorCounts: anchorCounts(route),
       relatedRouteIds: route.relatedRouteIds,
+      coverage: route.coverage ?? [],
       cautions: route.cautions,
     },
   };
@@ -367,6 +388,42 @@ function exactAnchorMatches(
   return matches;
 }
 
+function exactCoverageMatches(
+  route: AtlasWorkRoute,
+  filters: AtlasWorkRouterFilters,
+): readonly string[] {
+  const matches: string[] = [];
+  const coverage = route.coverage?.find((candidate) => coverageMatchesFilters(candidate, filters));
+  if (coverage == null) {
+    return matches;
+  }
+  if (filters.coverageDimension !== undefined) {
+    matches.push(`coverage dimension ${filters.coverageDimension}`);
+  }
+  if (filters.coverageState !== undefined) {
+    matches.push(`coverage state ${filters.coverageState}`);
+  }
+  if (filters.coverageDepth !== undefined) {
+    matches.push(`coverage depth ${filters.coverageDepth}`);
+  }
+  return matches;
+}
+
+function hasCoverageFilters(filters: AtlasWorkRouterFilters): boolean {
+  return filters.coverageDimension !== undefined ||
+    filters.coverageState !== undefined ||
+    filters.coverageDepth !== undefined;
+}
+
+function coverageMatchesFilters(
+  coverage: AtlasWorkRouteCoverage,
+  filters: AtlasWorkRouterFilters,
+): boolean {
+  return (filters.coverageDimension === undefined || coverage.dimension === filters.coverageDimension)
+    && (filters.coverageState === undefined || coverage.state === filters.coverageState as AtlasWorkRouteCoverageState)
+    && (filters.coverageDepth === undefined || coverage.depth === filters.coverageDepth as AtlasWorkRouteCoverageDepth);
+}
+
 function routeMatchesDomain(route: AtlasWorkRoute, domain: string): boolean {
   return routeDomainMatchKind(route, domain) !== undefined;
 }
@@ -400,6 +457,12 @@ function structuralQueryScore(route: AtlasWorkRoute, query: string): number {
         ...route.domains,
         ...route.roles,
         ...route.terms,
+        ...(route.coverage ?? []).flatMap((coverage) => [
+          coverage.dimension,
+          coverage.state,
+          coverage.ownerRouteId ?? "",
+          coverage.summary,
+        ]),
       ],
     },
     {
@@ -444,6 +507,7 @@ function weakTextQueryScore(route: AtlasWorkRoute, query: string): number {
         ...route.authority,
         ...route.cautions,
         ...route.nextQuestions,
+        ...(route.coverage ?? []).map((coverage) => coverage.summary),
         ...route.anchors.map((anchor) => anchor.summary),
       ],
     },

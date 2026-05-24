@@ -391,6 +391,11 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
+    if (key === '--continuationIntent' || key === '--continuationIntents') {
+      addStringListValues(input, 'continuationIntents', requireValue(rest, index, key));
+      index += 1;
+      continue;
+    }
     if (key === '--appRetention') {
       input.appRetention = requireValue(rest, index, key);
       index += 1;
@@ -552,7 +557,7 @@ function usage(): string {
     'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, authoring-catalog, app-building-guidance, authoring-recipe-plan, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, authoring-orientation, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_building_guidance and aurelia_authoring_recipe_plan are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeText [true|false], --includeAuthoringTemplates [true|false], --includeAuthoringOrientation [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --focus, --featureGoal, --recipeLimit, --principleLimit, --decisionLimit, --group, --queryKind, --sourceFile, --sourceFilePath, --recipeSourceFile, --sourceFilePaths <comma-separated paths>, --sourceTextRequestHintKey <hint>, --sourceParameterValue key=value, --sourceParameterValues <json-array or semicolon-separated key=value list>, --cursor file:line:character[:offset], --diagnosticProjection, --appRetention, --effectDetail, --usage, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeText [true|false], --includeAuthoringTemplates [true|false], --includeAuthoringOrientation [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --focus, --featureGoal, --recipeLimit, --principleLimit, --decisionLimit, --group, --queryKind, --sourceFile, --sourceFilePath, --recipeSourceFile, --sourceFilePaths <comma-separated paths>, --sourceTextRequestHintKey <hint>, --sourceParameterValue key=value, --sourceParameterValues <json-array or semicolon-separated key=value list>, --cursor file:line:character[:offset], --diagnosticProjection, --continuationIntent, --appRetention, --effectDetail, --usage, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 

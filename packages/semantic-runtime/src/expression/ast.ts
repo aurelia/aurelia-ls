@@ -30,6 +30,41 @@ abstract class ExpressionNodeBase {
   ) {}
 }
 
+/** Primitive literal value carried by Aurelia expression AST nodes before runtime/evaluator-specific wrapping. */
+export type ExpressionPrimitiveLiteralValue = null | undefined | number | boolean | string;
+
+export interface ExpressionPrimitiveLiteralValueMapper<TValue> {
+  /** Map a string literal value. */
+  readonly string: (value: string) => TValue;
+  /** Map a number literal value. */
+  readonly number: (value: number) => TValue;
+  /** Map a boolean literal value. */
+  readonly boolean: (value: boolean) => TValue;
+  /** Map the null literal value. */
+  readonly null: () => TValue;
+  /** Map the undefined literal value. */
+  readonly undefined: () => TValue;
+}
+
+/** Dispatch one parser-level primitive literal value to a substrate-specific wrapper or projection. */
+export function mapExpressionPrimitiveLiteralValue<TValue>(
+  value: ExpressionPrimitiveLiteralValue,
+  mapper: ExpressionPrimitiveLiteralValueMapper<TValue>,
+): TValue {
+  switch (typeof value) {
+    case 'string':
+      return mapper.string(value);
+    case 'number':
+      return mapper.number(value);
+    case 'boolean':
+      return mapper.boolean(value);
+    case 'undefined':
+      return mapper.undefined();
+    default:
+      return mapper.null();
+  }
+}
+
 export class Identifier extends ExpressionNodeBase {
   readonly $kind = 'Identifier' as const;
 
@@ -295,7 +330,7 @@ export class PrimitiveLiteralExpression extends ExpressionNodeBase {
 
   constructor(
     span: SourceSpan,
-    readonly value: null | undefined | number | boolean | string,
+    readonly value: ExpressionPrimitiveLiteralValue,
   ) {
     super(span);
   }

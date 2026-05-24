@@ -330,8 +330,9 @@ export class CheckerExpressionTypeEvaluator {
     contextualType: CheckerTypeReference | null = null,
   ): CheckerExpressionTypeEvaluation {
     const effectiveContextualType = contextualTypeForEvaluation(expression, contextualType);
+    const projectionLocalKey = expressionEvaluationProjectionLocalKey(localKey, expression);
     const cacheKey = expressionEvaluationCacheKey(
-      localKey,
+      projectionLocalKey,
       expression,
       scope,
       this.resourceScope,
@@ -340,7 +341,7 @@ export class CheckerExpressionTypeEvaluator {
       effectiveContextualType,
     );
     return this.cache.readOrEvaluate(cacheKey, () =>
-      this.evaluateNodeUncached(expression, scope, localKey, sourceAddressHandle, effectiveContextualType)
+      this.evaluateNodeUncached(expression, scope, projectionLocalKey, sourceAddressHandle, effectiveContextualType)
     );
   }
 
@@ -1067,9 +1068,19 @@ function expressionEvaluationCacheKey(
     contextualEvaluationLocalKey(localKey, contextualType),
     runtimeContext,
   );
-  const source = sourceAddressHandle ?? expressionSourceSpanKey(expression);
+  const source = sourceAddressHandle == null
+    ? expressionSourceSpanKey(expression)
+    : `${sourceAddressHandle}:${expressionSourceSpanKey(expression)}`;
   const resource = resourceScope?.productHandle ?? 'no-resource-scope';
   return `${scopedLocalKey}:scope:${scope.productHandle}:resource:${resource}:expr:${expression.$kind}:${source}`;
+}
+
+/** Return the projection-site key that keeps TypeChecker products aligned with expression-cache source isolation. */
+function expressionEvaluationProjectionLocalKey(
+  localKey: string,
+  expression: ExpressionAstNode,
+): string {
+  return `${localKey}:expr:${expression.$kind}:${expressionSourceSpanKey(expression)}`;
 }
 
 function runtimeContextualEvaluationLocalKey(

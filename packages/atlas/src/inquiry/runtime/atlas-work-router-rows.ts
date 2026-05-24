@@ -1,5 +1,9 @@
 import type {
   AtlasWorkRoute,
+  AtlasWorkRouteCoverage,
+  AtlasWorkRouteCoverageDepth,
+  AtlasWorkRouteCoverageDimension,
+  AtlasWorkRouteCoverageState,
   AtlasWorkRouteDocAnchor,
   AtlasWorkRouteLensAnchor,
   AtlasWorkRouteMatchStrength,
@@ -45,6 +49,8 @@ export interface AtlasWorkRouterValue {
   readonly workset?: readonly AtlasWorkRouteWorksetRow[];
   /** Atlas memory next-action rows joined back to owning work routes. */
   readonly memoryCoverage?: readonly AtlasWorkRouteMemoryCoverageRow[];
+  /** Cross-cutting coverage rows for route-local implementation dimensions. */
+  readonly routeCoverage?: readonly AtlasWorkRouteCoverageRow[];
   /** Route catalog definitions, returned by the schema projection. */
   readonly catalog?: readonly AtlasWorkRoute[];
 }
@@ -91,6 +97,8 @@ export interface AtlasWorkRouteRow {
   readonly anchorCounts: Readonly<Record<string, number>>;
   /** Explicit neighboring route ids. */
   readonly relatedRouteIds: readonly string[];
+  /** Cross-cutting dimensions declared by this route. */
+  readonly coverage: readonly AtlasWorkRouteCoverage[];
   /** Warnings or boundaries that should steer follow-up work. */
   readonly cautions: readonly string[];
 }
@@ -129,11 +137,35 @@ export interface AtlasWorkRoutePlanRow {
   readonly expectedEffects: readonly FrameworkCorpusExpectedEffectDescriptorRow[];
   /** Query canaries that should keep routing to this route through structural ontology. */
   readonly queryCanaries: readonly AtlasWorkRouteQueryCanaryRow[];
+  /** Cross-cutting coverage rows declared by this route. */
+  readonly coverage: readonly AtlasWorkRouteCoverage[];
   /** Exact AUR label extracted from a diagnostic route query, when present. */
   readonly frameworkErrorCodeLabel?: string;
   /** Explicit route cautions. */
   readonly cautions: readonly string[];
   /** Compact route-plan summary. */
+  readonly summary: string;
+}
+
+/** Route-local coverage row for a cross-cutting dimension. */
+export interface AtlasWorkRouteCoverageRow {
+  /** Route that owns this coverage reading. */
+  readonly routeId: string;
+  /** Route title. */
+  readonly title: string;
+  /** Cross-cutting dimension being covered. */
+  readonly dimension: AtlasWorkRouteCoverageDimension;
+  /** Current coverage state for this route. */
+  readonly state: AtlasWorkRouteCoverageState;
+  /** Evidence depth behind the current route-local coverage state. */
+  readonly depth?: AtlasWorkRouteCoverageDepth;
+  /** Route that owns the dimension's substrate, when this row is a consumer/pressure lane. */
+  readonly ownerRouteId?: string;
+  /** Domains copied from the owning route so callers can group coverage by topic. */
+  readonly domains: readonly string[];
+  /** Route adjacency copied from the owning route. */
+  readonly relatedRouteIds: readonly string[];
+  /** Grounded coverage explanation. */
   readonly summary: string;
 }
 

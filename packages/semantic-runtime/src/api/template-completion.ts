@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import {
   answerTemplateCompletion,
   TemplateCompletionSiteKind,
@@ -21,6 +19,13 @@ import {
 import type { SourceSpanAddress } from '../kernel/address.js';
 import { sourceSpanContainsOffset } from '../kernel/address.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import {
+  AuthoredSourceTextCache,
+  authoredSourceHostPathCandidates,
+  authoredSourceOffsetForLineCharacter,
+  authoredSourcePositionForOffset,
+  type AuthoredSourceText,
+} from '../kernel/authored-source-text.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -188,7 +193,7 @@ interface TemplateDiagnosticsScanContext {
   readonly routeConfigProductHandles: readonly ProductHandle[];
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly expressionWorld: CheckerExpressionTypeWorld;
-  readonly sourceTextCache: Map<string, TemplateSourceText | null>;
+  readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
   readonly semanticAgreementRows: Set<string>;
 }
@@ -743,7 +748,7 @@ export function readTemplateDiagnosticRows(
   diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): readonly SemanticTemplateDiagnosticRow[] {
   const projectionPolicy = normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection);
-  const context = templateDiagnosticsScanContext(store, emission, includeHandles);
+  const context = templateDiagnosticsScanContext(store, workspaceRootDir, emission, includeHandles);
   const selections = templateResourceSelections(store, emission)
     .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
   const rows = [
@@ -1026,6 +1031,7 @@ function normalizeSemanticDiagnosticProjectionPolicy(
 
 function templateDiagnosticsScanContext(
   store: KernelStore,
+  workspaceRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   includeHandles: boolean,
 ): TemplateDiagnosticsScanContext {
@@ -1038,7 +1044,7 @@ function templateDiagnosticsScanContext(
     // query catalog materialization policy; lower analysis depths keep parse/compiler/runtime diagnostics without
     // paying this query type-projection lane.
     expressionWorld: new CheckerExpressionTypeWorld(store),
-    sourceTextCache: new Map(),
+    sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir),
     seenRows: new Set(),
     semanticAgreementRows: new Set(),
   };
@@ -1062,7 +1068,7 @@ function templateDiagnosticRowsForSelection(
   selection: TemplateCompletionResourceSelection,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  const source = templateSourceText(workspaceRootDir, store, selection.resource, context.sourceTextCache);
+  const source = templateSourceText(store, selection.resource, context.sourceTextCache);
   if (source == null) {
     return [];
   }
@@ -1073,7 +1079,7 @@ function templateDiagnosticRowsForSelection(
 function templateDiagnosticRowsForMemberSpan(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
-  source: TemplateSourceText,
+  source: AuthoredSourceText,
   span: SourceSpan,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
@@ -1949,19 +1955,11 @@ function expressionMemberNameSpans(
   return spans.sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
-interface TemplateSourceText {
-  readonly sourcePath: string;
-  readonly hostPath: string;
-  readonly text: string;
-  readonly lineStarts: readonly number[];
-}
-
 function templateSourceText(
-  workspaceRootDir: string,
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
-  cache: Map<string, TemplateSourceText | null>,
-): TemplateSourceText | null {
+  cache: AuthoredSourceTextCache,
+): AuthoredSourceText | null {
   const span = templateSourceSpan(store, resource);
   if (span == null) {
     return null;
@@ -1970,82 +1968,14 @@ function templateSourceText(
   if (file == null || !isSourceFileAddress(file)) {
     return null;
   }
-  const sourcePath = file.path;
-  const hostPath = sourceFileHostPath(workspaceRootDir, sourcePath);
-  let source = cache.get(hostPath);
-  if (source === undefined) {
-    try {
-      const text = readFileSync(hostPath, 'utf8');
-      source = {
-        sourcePath,
-        hostPath,
-        text,
-        lineStarts: lineStartsForText(text),
-      };
-    } catch {
-      source = null;
-    }
-    cache.set(hostPath, source);
-  }
-  return source;
-}
-
-function sourceFileHostPath(
-  workspaceRootDir: string,
-  filePath: string,
-): string {
-  return path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(workspaceRootDir, filePath);
+  return cache.read(file.path);
 }
 
 function positionForOffset(
-  source: TemplateSourceText,
+  source: AuthoredSourceText,
   offset: number,
 ): { readonly line: number; readonly character: number } {
-  const line = lineIndexForOffset(source.lineStarts, offset);
-  const lineStart = source.lineStarts[line] ?? 0;
-  return {
-    line,
-    character: offset - lineStart,
-  };
-}
-
-function lineStartsForText(text: string): readonly number[] {
-  const starts = [0];
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text.charCodeAt(index);
-    if (char === 13) {
-      const next = text.charCodeAt(index + 1);
-      if (next === 10) {
-        index += 1;
-      }
-      starts.push(index + 1);
-      continue;
-    }
-    if (char === 10) {
-      starts.push(index + 1);
-    }
-  }
-  return starts;
-}
-
-function lineIndexForOffset(
-  lineStarts: readonly number[],
-  offset: number,
-): number {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const lineStart = lineStarts[mid] ?? 0;
-    if (lineStart <= offset) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return Math.max(0, high);
+  return authoredSourcePositionForOffset(source, offset);
 }
 
 function sourceReferenceForSpan(
@@ -2590,49 +2520,14 @@ function offsetForCursor(
   projectRootDir: string,
   cursor: SemanticRuntimeSourceCursorInput,
 ): number | null {
-  for (const filePath of cursorInputHostPathCandidates(workspaceRootDir, projectRootDir, cursor.filePath)) {
-    try {
-      return offsetForLineCharacter(readFileSync(filePath, 'utf8'), cursor.line, cursor.character);
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-function cursorInputHostPathCandidates(
-  workspaceRootDir: string,
-  projectRootDir: string,
-  filePath: string,
-): readonly string[] {
-  if (path.isAbsolute(filePath)) {
-    return [filePath];
-  }
-  return [...new Set([
-    path.resolve(projectRootDir, filePath),
-    path.resolve(workspaceRootDir, filePath),
-  ])];
-}
-
-function offsetForLineCharacter(
-  text: string,
-  line: number,
-  character: number,
-): number | null {
-  if (line < 0 || character < 0) {
-    return null;
-  }
-  let offset = 0;
-  let currentLine = 0;
-  while (currentLine < line) {
-    const newline = text.indexOf('\n', offset);
-    if (newline < 0) {
-      return null;
-    }
-    offset = newline + 1;
-    currentLine++;
-  }
-  return offset + character <= text.length ? offset + character : null;
+  const source = new AuthoredSourceTextCache('').readFirst(authoredSourceHostPathCandidates(
+    workspaceRootDir,
+    projectRootDir,
+    cursor.filePath,
+  ));
+  return source === null
+    ? null
+    : authoredSourceOffsetForLineCharacter(source, cursor.line, cursor.character);
 }
 
 function templateCompletionCandidateRow(

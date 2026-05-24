@@ -18,6 +18,10 @@ import {
   WorkspaceInquiryLocus,
   type InquiryLocus,
 } from './locus.js';
+import {
+  SOURCE_INVENTORY_CONTINUATION,
+  SOURCE_SELECTION_CONTINUATION,
+} from './continuation-intent.js';
 export const enum InquirySelectorKind {
   Workspace = 'workspace',
   Project = 'project',
@@ -114,6 +118,7 @@ function resolveSourceFileSelector(
         InquiryContinuationKind.SelectSourceFile,
         `Narrow to admitted source file ${match.path}.`,
         new SourceFileSelector(match.path),
+        SOURCE_SELECTION_CONTINUATION,
       )
     );
     return new InquiryAnswer(
@@ -237,6 +242,7 @@ function miss(
         InquiryContinuationKind.ListAdmittedSources,
         'Inspect admitted source files before selecting a source locus.',
         selector,
+        SOURCE_INVENTORY_CONTINUATION,
       ),
     ],
     null,

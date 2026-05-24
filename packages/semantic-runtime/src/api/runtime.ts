@@ -69,8 +69,13 @@ import {
 } from './app-overview.js';
 import {
   readSemanticAppQueryCatalog,
+  semanticAppQueryCatalogShape,
   semanticAppQueryCatalogRow,
 } from './app-query-catalog.js';
+import {
+  filterSemanticAppQueryContinuations,
+  withSemanticAppQueryContinuations,
+} from './app-query-continuations.js';
 import {
   semanticAppQueryEpochKeys,
   semanticAppQueryKey,
@@ -683,12 +688,21 @@ export class SemanticRuntime {
       request.inquiryProfile ?? defaultInquiryProfileForRoutedAppQuery(request),
     );
     if (catalogRow.runtimeBoundary === 'runtime-static') {
-      return this.answerRuntimeStaticAppQuery(request, catalogRow, inquiryProfile);
+      return filterSemanticAppQueryContinuations(
+        request,
+        this.answerRuntimeStaticAppQuery(request, catalogRow, inquiryProfile),
+      );
     }
     if (isAppWorldFreeAppQuery(request)) {
-      return this.answerAppWorldFreeQuery(request, catalogRow, inquiryProfile);
+      return filterSemanticAppQueryContinuations(
+        request,
+        this.answerAppWorldFreeQuery(request, catalogRow, inquiryProfile),
+      );
     }
-    return this.answerAppWorldQuery(request, catalogRow, inquiryProfile);
+    return filterSemanticAppQueryContinuations(
+      request,
+      this.answerAppWorldQuery(request, catalogRow, inquiryProfile),
+    );
   }
 
   private answerRuntimeStaticAppQuery(
@@ -706,7 +720,11 @@ export class SemanticRuntime {
         materializationPolicy: semanticAppQueryMaterializationPolicy(request, catalogRow.materializationPolicy),
         kernelBoundary: 'observe-only',
       },
-      () => answerRuntimeStaticAppQueryValue(request),
+      () => withSemanticAppQueryContinuations(
+        request,
+        answerRuntimeStaticAppQueryValue(request),
+        catalogRow,
+      ),
     );
   }
 
@@ -744,10 +762,14 @@ export class SemanticRuntime {
         materializationPolicy: semanticAppQueryMaterializationPolicy(canonicalRequest, catalogRow.materializationPolicy),
         kernelBoundary: 'observe-only',
       },
-      () => answerAppWorldFreeQuery(
-        plan.project,
+      () => withSemanticAppQueryContinuations(
         canonicalRequest,
-        readEvaluation,
+        answerAppWorldFreeQuery(
+          plan.project,
+          canonicalRequest,
+          readEvaluation,
+        ),
+        catalogRow,
       ),
     );
     return withAppWorldFreeEvaluationProfile(result, evaluation, request.telemetry);
@@ -929,17 +951,24 @@ export class SemanticRuntime {
       index,
       queryKind: childQuery.kind,
       materializationPolicy,
-      answer: this.answerRuntimeQuery(
-        {
-          inquiryProfile: childInquiryProfile,
-          queryKind: childQuery.kind,
-          queryKey: semanticRuntimeStaticAppQueryKey(childQuery),
-          locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
-          epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
-          materializationPolicy,
-          kernelBoundary: 'observe-only',
-        },
-        () => answerRuntimeStaticAppQueryValue(childQuery),
+      answer: filterSemanticAppQueryContinuations(
+        childQuery,
+        this.answerRuntimeQuery(
+          {
+            inquiryProfile: childInquiryProfile,
+            queryKind: childQuery.kind,
+            queryKey: semanticRuntimeStaticAppQueryKey(childQuery),
+            locusKey: semanticRuntimeWorkspaceLocusKey(this.workspace.workspaceKey),
+            epochKeys: [semanticRuntimeWorkspaceEpochKey(this.workspace.workspaceKey)],
+            materializationPolicy,
+            kernelBoundary: 'observe-only',
+          },
+          () => withSemanticAppQueryContinuations(
+            childQuery,
+            answerRuntimeStaticAppQueryValue(childQuery),
+            catalogRow,
+          ),
+        ),
       ),
     };
   }
@@ -1022,21 +1051,28 @@ export class SemanticRuntime {
       index,
       queryKind: childQuery.kind,
       materializationPolicy,
-      answer: this.answerRuntimeQuery(
-        {
-          inquiryProfile: childInquiryProfile,
-          queryKind: childQuery.kind,
-          queryKey: semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, childQuery),
-          locusKey: semanticAppQueryLocusKey(plan.project.projectKey, childQuery),
-          epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
-            this.workspace.workspaceKey,
-            plan.project.projectKey,
+      answer: filterSemanticAppQueryContinuations(
+        childQuery,
+        this.answerRuntimeQuery(
+          {
+            inquiryProfile: childInquiryProfile,
+            queryKind: childQuery.kind,
+            queryKey: semanticRuntimeAppWorldFreeQueryKey(plan.project.projectKey, childQuery),
+            locusKey: semanticAppQueryLocusKey(plan.project.projectKey, childQuery),
+            epochKeys: semanticRuntimeRoutedAppQueryEpochKeys(
+              this.workspace.workspaceKey,
+              plan.project.projectKey,
+              childQuery,
+            ),
+            materializationPolicy,
+            kernelBoundary: 'observe-only',
+          },
+          () => withSemanticAppQueryContinuations(
             childQuery,
+            answerAppWorldFreeQuery(plan.project, childQuery, readEvaluation),
+            catalogRow,
           ),
-          materializationPolicy,
-          kernelBoundary: 'observe-only',
-        },
-        () => answerAppWorldFreeQuery(plan.project, childQuery, readEvaluation),
+        ),
       ),
     };
   }
@@ -1064,7 +1100,9 @@ export class SemanticRuntime {
         materializationPolicy: semanticAppQueryBatchMaterializationPolicy(canonicalQueries),
         kernelBoundary: 'observe-only',
         shouldReuseRetainedAnswer: () =>
-          shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null,
+          request.includeAppProfile !== true
+          && request.includeAppQueryClaimProfiles !== true
+          && (shouldDisposeAppAfterRoutedQuery(request, inquiryProfile) || cachedBefore != null),
         disposeAnswerSideEffects: () => {
           const forceCachedAppDisposal = cachedBefore != null && request.appRetention === 'dispose-app';
           return this.disposeRoutedAppAnswerSideEffects(
@@ -2098,8 +2136,13 @@ export class SemanticApp {
   }
 
   ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
+    const continuationQuery = query;
+    query = semanticAppQueryCatalogShape(query);
+    const answerCurrentQuery = <TValue>(
+      materialize: () => SemanticRuntimeAnswer<TValue>,
+    ): SemanticRuntimeAnswer<TValue> => this.answerQuery(query, materialize, continuationQuery);
     if (semanticRouteQueryDescriptorFor(query.kind) != null) {
-      return this.answerQuery(query, () => {
+      return answerCurrentQuery(() => {
         const routeAnswer = this.routeQueries.answer(query.kind, query.page, query.detail);
         if (routeAnswer == null) {
           throw new Error(`Route query '${query.kind}' was admitted but produced no answer.`);
@@ -2109,123 +2152,123 @@ export class SemanticApp {
     }
     switch (query.kind) {
       case SemanticAppQueryKind.Summary:
-        return this.answerQuery(query, () => this.summary());
+        return answerCurrentQuery(() => this.summary());
       case SemanticAppQueryKind.AppOverview:
-        return this.answerQuery(query, () => this.overview({
+        return answerCurrentQuery(() => this.overview({
           diagnosticPageSize: query.diagnosticPageSize,
           openSeamPageSize: query.openSeamPageSize,
           includeAuthoringOrientation: query.includeAuthoringOrientation,
         }));
       case SemanticAppQueryKind.AuthoringCatalog:
-        return this.answerQuery(query, () => this.authoringCatalog());
+        return answerCurrentQuery(() => this.authoringCatalog());
       case SemanticAppQueryKind.AuthoringOrientation:
-        return this.answerQuery(query, () => this.authoringOrientation(
+        return answerCurrentQuery(() => this.authoringOrientation(
           query.page,
           query.detail ?? SemanticRuntimeDetail.Compact,
         ));
       case SemanticAppQueryKind.SourceFiles:
-        return this.answerQuery(query, () => this.sourceFiles(query.page, query.detail));
+        return answerCurrentQuery(() => this.sourceFiles(query.page, query.detail));
       case SemanticAppQueryKind.UnresolvedModules:
-        return this.answerQuery(query, () => this.unresolvedModules(query.page));
+        return answerCurrentQuery(() => this.unresolvedModules(query.page));
       case SemanticAppQueryKind.OpenSeams:
-        return this.answerQuery(query, () => this.openSeams(query.page, query.detail));
+        return answerCurrentQuery(() => this.openSeams(query.page, query.detail));
       case SemanticAppQueryKind.OpenSeamSummary:
-        return this.answerQuery(query, () => this.openSeamSummary(query.page, query.detail));
+        return answerCurrentQuery(() => this.openSeamSummary(query.page, query.detail));
       case SemanticAppQueryKind.AppDiagnostics:
-        return this.answerQuery(query, () => this.appDiagnostics(query));
+        return answerCurrentQuery(() => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
-        return this.answerQuery(query, () => this.appDiagnosticSummary(query));
+        return answerCurrentQuery(() => this.appDiagnosticSummary(query));
       case SemanticAppQueryKind.TypeScriptDiagnostics:
-        return this.answerQuery(query, () => this.typeScriptDiagnostics(query.page, query.sourceFile));
+        return answerCurrentQuery(() => this.typeScriptDiagnostics(query.page, query.sourceFile));
       case SemanticAppQueryKind.TypeScriptDiagnosticSummary:
-        return this.answerQuery(query, () => this.typeScriptDiagnosticSummary(query.page, query.sourceFile));
+        return answerCurrentQuery(() => this.typeScriptDiagnosticSummary(query.page, query.sourceFile));
       case SemanticAppQueryKind.EvaluationIssues:
-        return this.answerQuery(query, () => this.evaluationIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.evaluationIssues(query.page, query.detail));
       case SemanticAppQueryKind.ConfigurationIssues:
-        return this.answerQuery(query, () => this.configurationIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.configurationIssues(query.page, query.detail));
       case SemanticAppQueryKind.DiIssues:
-        return this.answerQuery(query, () => this.diIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.diIssues(query.page, query.detail));
       case SemanticAppQueryKind.ObservationIssues:
-        return this.answerQuery(query, () => this.observationIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.observationIssues(query.page, query.detail));
       case SemanticAppQueryKind.ComputedObservationDefinitions:
-        return this.answerQuery(query, () => this.computedObservationDefinitions(query.page, query.detail));
+        return answerCurrentQuery(() => this.computedObservationDefinitions(query.page, query.detail));
       case SemanticAppQueryKind.ComputedObserverSources:
-        return this.answerQuery(query, () => this.computedObserverSources(query.page, query.detail));
+        return answerCurrentQuery(() => this.computedObserverSources(query.page, query.detail));
       case SemanticAppQueryKind.ComputedObserverObservedDependencies:
-        return this.answerQuery(query, () => this.computedObserverObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.computedObserverObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeEffects:
-        return this.answerQuery(query, () => this.runtimeEffects(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeEffects(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeEffectObservedDependencies:
-        return this.answerQuery(query, () => this.runtimeEffectObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeEffectObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.ProxyObservableEscapes:
-        return this.answerQuery(query, () => this.proxyObservableEscapes(query.page, query.detail));
+        return answerCurrentQuery(() => this.proxyObservableEscapes(query.page, query.detail));
       case SemanticAppQueryKind.AppTopology:
-        return this.answerQuery(query, () => this.appTopology(query.detail, query.includeTypeSurfaces));
+        return answerCurrentQuery(() => this.appTopology(query.detail, query.includeTypeSurfaces));
       case SemanticAppQueryKind.StateStores:
-        return this.answerQuery(query, () => this.stateStores(query.page, query.detail));
+        return answerCurrentQuery(() => this.stateStores(query.page, query.detail));
       case SemanticAppQueryKind.StateIssues:
-        return this.answerQuery(query, () => this.stateIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.stateIssues(query.page, query.detail));
       case SemanticAppQueryKind.I18nTranslationKeys:
-        return this.answerQuery(query, () => this.i18nTranslationKeys(query.page, query.detail));
+        return answerCurrentQuery(() => this.i18nTranslationKeys(query.page, query.detail));
       case SemanticAppQueryKind.I18nTranslationBindings:
-        return this.answerQuery(query, () => this.i18nTranslationBindings(query.page, query.detail));
+        return answerCurrentQuery(() => this.i18nTranslationBindings(query.page, query.detail));
       case SemanticAppQueryKind.ValidationIssues:
-        return this.answerQuery(query, () => this.validationIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.validationIssues(query.page, query.detail));
       case SemanticAppQueryKind.FetchClientIssues:
-        return this.answerQuery(query, () => this.fetchClientIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.fetchClientIssues(query.page, query.detail));
       case SemanticAppQueryKind.DialogIssues:
-        return this.answerQuery(query, () => this.dialogIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.dialogIssues(query.page, query.detail));
       case SemanticAppQueryKind.RouterOverview:
-        return this.answerQuery(query, () => this.routerOverview({
+        return answerCurrentQuery(() => this.routerOverview({
           rowPageSize: query.rowPageSize ?? query.page?.size,
           detail: query.detail,
         }));
       case SemanticAppQueryKind.ResourceDefinitions:
-        return this.answerQuery(query, () => this.resourceDefinitions(query.page, query.detail));
+        return answerCurrentQuery(() => this.resourceDefinitions(query.page, query.detail));
       case SemanticAppQueryKind.ResourceIssues:
-        return this.answerQuery(query, () => this.resourceIssues(query.page, query.detail));
+        return answerCurrentQuery(() => this.resourceIssues(query.page, query.detail));
       case SemanticAppQueryKind.ResourceVisibility:
-        return this.answerQuery(query, () => this.resourceVisibility(query.page, query.detail));
+        return answerCurrentQuery(() => this.resourceVisibility(query.page, query.detail));
       case SemanticAppQueryKind.TemplateCompilations:
-        return this.answerQuery(query, () => this.templateQueries.templateCompilations(query.page, query.detail));
+        return answerCurrentQuery(() => this.templateQueries.templateCompilations(query.page, query.detail));
       case SemanticAppQueryKind.TemplateCompletions:
-        return this.answerQuery(query, () => this.templateQueries.templateCompletions(query));
+        return answerCurrentQuery(() => this.templateQueries.templateCompletions(query));
       case SemanticAppQueryKind.TemplateCursorInfo:
-        return this.answerQuery(query, () => this.templateQueries.templateCursorInfo(query));
+        return answerCurrentQuery(() => this.templateQueries.templateCursorInfo(query));
       case SemanticAppQueryKind.TemplateDiagnostics:
-        return this.answerQuery(query, () => this.templateQueries.templateDiagnostics(query));
+        return answerCurrentQuery(() => this.templateQueries.templateDiagnostics(query));
       case SemanticAppQueryKind.RuntimeControllers:
-        return this.answerQuery(query, () => this.runtimeControllers(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeControllers(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeWatchers:
-        return this.answerQuery(query, () => this.runtimeWatchers(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeWatchers(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeWatcherObservedDependencies:
-        return this.answerQuery(query, () => this.runtimeWatcherObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeWatcherObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeCompositions:
-        return this.answerQuery(query, () => this.runtimeCompositions(query.page, query.detail));
+        return answerCurrentQuery(() => this.runtimeCompositions(query.page, query.detail));
       case SemanticAppQueryKind.BindingTargetAccesses:
-        return this.answerQuery(query, () => this.bindingTargetAccesses(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingTargetAccesses(query.page, query.detail));
       case SemanticAppQueryKind.TargetOperations:
-        return this.answerQuery(query, () => this.targetOperations(query.page, query.detail));
+        return answerCurrentQuery(() => this.targetOperations(query.page, query.detail));
       case SemanticAppQueryKind.BindingTargetOperations:
-        return this.answerQuery(query, () => this.targetOperations(query.page, query.detail));
+        return answerCurrentQuery(() => this.targetOperations(query.page, query.detail));
       case SemanticAppQueryKind.BindingSourceOperations:
-        return this.answerQuery(query, () => this.bindingSourceOperations(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingSourceOperations(query.page, query.detail));
       case SemanticAppQueryKind.BindingBehaviorApplications:
-        return this.answerQuery(query, () => this.bindingBehaviorApplications(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingBehaviorApplications(query.page, query.detail));
       case SemanticAppQueryKind.BindingValueChannels:
-        return this.answerQuery(query, () => this.bindingValueChannels(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingValueChannels(query.page, query.detail));
       case SemanticAppQueryKind.BindingValueChannelSummary:
-        return this.answerQuery(query, () => this.bindingValueChannelSummary(query.page));
+        return answerCurrentQuery(() => this.bindingValueChannelSummary(query.page));
       case SemanticAppQueryKind.BindingDataFlows:
-        return this.answerQuery(query, () => this.bindingDataFlows(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingDataFlows(query.page, query.detail));
       case SemanticAppQueryKind.BindingDataFlowSummary:
-        return this.answerQuery(query, () => this.bindingDataFlowSummary(query.page));
+        return answerCurrentQuery(() => this.bindingDataFlowSummary(query.page));
       case SemanticAppQueryKind.BindingObservedDependencySummary:
-        return this.answerQuery(query, () => this.bindingObservedDependencySummary(query.page));
+        return answerCurrentQuery(() => this.bindingObservedDependencySummary(query.page));
       case SemanticAppQueryKind.BindingObservedDependencies:
-        return this.answerQuery(query, () => this.bindingObservedDependencies(query.page, query.detail));
+        return answerCurrentQuery(() => this.bindingObservedDependencies(query.page, query.detail));
       default:
-        return this.answerQuery(query, () => answer(
+        return answerCurrentQuery(() => answer(
           SemanticRuntimeAnswerOutcome.Unsupported,
           `Semantic app query '${query.kind}' is not supported by the operational API surface.`,
           { query },
@@ -2236,28 +2279,36 @@ export class SemanticApp {
   private answerQuery<TValue>(
     query: SemanticAppQuery,
     materialize: () => SemanticRuntimeAnswer<TValue>,
+    continuationQuery: SemanticAppQuery = query,
   ): SemanticRuntimeAnswer<TValue> {
     const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
     const inquiryProfile = this.inquiryProfileForQuery(query);
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
-    return queryClaims.answer({
-      queryKind: query.kind,
-      queryKey: semanticAppQueryKey(query),
-      locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
-      epochKeys: semanticAppQueryEpochKeys(this.project.projectKey, query),
-      materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
-    }, () => {
-      this.activeInquiryProfileStack.push(inquiryProfile);
-      try {
-        return materialize();
-      } finally {
-        this.activeInquiryProfileStack.pop();
-      }
-    }, {
-      readKernelMarker: () => this.runtime.workspace.store.mark(),
-      readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
-      disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
-    });
+    return filterSemanticAppQueryContinuations(
+      continuationQuery,
+      queryClaims.answer({
+        queryKind: query.kind,
+        queryKey: semanticAppQueryKey(query),
+        locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
+        epochKeys: semanticAppQueryEpochKeys(this.project.projectKey, query),
+        materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
+      }, () => {
+        this.activeInquiryProfileStack.push(inquiryProfile);
+        try {
+          return withSemanticAppQueryContinuations(
+            continuationQuery,
+            materialize(),
+            catalogRow,
+          );
+        } finally {
+          this.activeInquiryProfileStack.pop();
+        }
+      }, {
+        readKernelMarker: () => this.runtime.workspace.store.mark(),
+        readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
+        disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
+      }),
+    );
   }
 
   private answerPublicQueryIfNeeded<TValue>(

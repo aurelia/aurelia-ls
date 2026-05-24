@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { checkerNumberIndexValueType } from '../type-system/checker-related-types.js';
 
 /** Return every string literal value in a string-literal union, or null for non-literal members. */
 export function stringLiteralValuesForType(type: ts.Type): readonly string[] | null {
@@ -84,7 +85,7 @@ export function arrayElementTypeFor(
 ): ts.Type | null {
   const elementTypes = typeParts(type).flatMap((part) =>
     checker.isArrayType(part) || checker.isTupleType(part)
-      ? [checker.getIndexTypeOfType(part, ts.IndexKind.Number) ?? null]
+      ? [checkerNumberIndexValueType(checker, part)]
       : []
   ).filter((part): part is ts.Type => part != null);
   if (elementTypes.length > 0) {
@@ -104,7 +105,7 @@ export function mutableArrayElementTypeFor(
       return [];
     }
     return checker.isArrayType(part) || checker.isTupleType(part)
-      ? [checker.getIndexTypeOfType(part, ts.IndexKind.Number) ?? null]
+      ? [checkerNumberIndexValueType(checker, part)]
       : [];
   }).filter((part): part is ts.Type => part != null);
   if (elementTypes.length > 0) {

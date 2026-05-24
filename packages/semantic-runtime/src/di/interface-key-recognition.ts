@@ -4,6 +4,7 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 
 export interface DiInterfaceKeyDeclarationInfo {
@@ -85,14 +86,7 @@ export function isAureliaCreateInterfaceCallee(
   if (name == null || name.text !== 'createInterface') {
     return false;
   }
-  const symbol = checker.getSymbolAtLocation(name);
-  if (symbol == null) {
-    return false;
-  }
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  return (target.declarations ?? []).some(isAureliaCreateInterfaceDeclaration);
+  return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaCreateInterfaceDeclaration);
 }
 
 function isAureliaCreateInterfaceDeclaration(

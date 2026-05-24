@@ -430,11 +430,13 @@
         "Semantic-runtime now publishes controller-owned ComputedWatcher and ExpressionWatcher products from resource definition.watches. Use runtime-watchers when authoring, diagnostics, or fixture pressure needs the runtime controller admission lane for @watch/static watches.",
         "ExpressionWatcher products now publish runtime-watcher-observed-dependencies by reusing the binding-owned astEvaluate connectable dependency collector. Use those rows when @watch/static watch guidance needs concrete AccessScope/AccessMember/AccessKeyed or collection-call dependency facts.",
         "ComputedWatcher products now publish runtime-watcher-observed-dependencies for ProxyObservable property, dynamic keyed property, collection, iterator, ownKeys, destructuring, wrapped method-result, and trackable-method reads rooted in dependency collection function bodies. Collection method rows are TypeChecker-discriminated when receiver types are visible, so string/object methods keep property-read facts without becoming array/map/set proxy collection rows; weak or unavailable checker facts stay permissive. Callback roots must mirror framework wrapper positions and `ProxyObservable.canWrap(...)`: array reduce/reduceRight observes the current item, not the accumulator, map/set forEach can observe both value and key, array sort comparator values execute while the connectable is active but are raw and do not become proxy roots, and primitive callback values, primitive map keys, primitive aliases, and function values do not become downstream proxy roots. Generic function/arrow arguments are not traversed as executed callback bodies unless a framework wrapper, trackable method, or future evaluator-proven call site owns that execution boundary. For-of/spread over arrays/maps/sets observes the iterator collection path, explicit keys()/values()/entries() calls keep their method names, array destructuring treats proxy-wrappable yielded values as wrapped roots, array for-in observes the implicit length read from arrayHandler.ownKeys, wrapped collection method results stay visible for downstream reads such as map.get(key).name, map.set(...).get(...), set.add(...).has(...), items.flat(...).some(...), items.flatMap(...).includes(...), or items.slice(...).map(...).join(...), and dynamic element access keeps the authored keyExpression while letting proxy-wrappable keyed results become the next wrapped carrier. The proxy-observation contract now pins array every/findIndex/indexOf/lastIndexOf/flat/flatMap/reduceRight/sort/slice, map has/keys/set-result chains, set add-result chains, explicit array/map/set iterator methods, and wrapped result chains against the framework surface. Ordinary object method calls spend the object-handler method-property read and can continue through body reads when invoked with the proxied receiver, while intercepted array/map/set wrapper methods do not spend method-property reads; proxy-observed @computed/@astTrack method calls use that same method-property read plus omitted/nullish-deps body proxy reads or explicit dependency declarations. Use those rows for valid @watch dependency-function pressure before adding source-local watcher shortcuts.",
+        "Proxy-observation TypeChecker reads must route through the Program-node remap helper before collection policy asks for a receiver or carrier type. Parsed dependency-function nodes are not always checker-owned nodes, so local direct `checker.getTypeAtLocation(...)` calls can create false weak-type pressure; keep the remap centralized instead of adding per-branch fallback logic.",
         "Framework `@nowrap` is a real ProxyObservable escape hatch, not an authoring heuristic: class-level nowrap makes `wrap(value)` return the raw object, so semantic-runtime should observe the owning proxied property but stop downstream proxy property/collection rows under that raw value; field-level nowrap makes the proxied owner `get` trap return the raw property without calling `connectable.observe(...)`, so the field itself and later reads below it must stay absent. Use TypeChecker-backed decorator recognition for the static approximation and keep weak/unavailable checker facts permissive.",
         "Framework `ProxyObservable.canWrap(...)` is brand-based at runtime. Semantic-runtime approximates this statically by rejecting TypeScript default-library non-plain object brands such as Date, Error, URL, and RegExp as downstream proxy carriers while still observing the owning proxied property read. Do not maintain short hard-coded deny lists for host objects; keep the rule as a default-library brand approximation, and keep user/external class instances proxy-wrappable unless @nowrap, function, primitive, or collection rules say otherwise.",
         "RuntimeWatcherObservedDependency rows preserve observedMemberKind and observedMemberSource like binding observed-dependency rows. Use runtime-watcher-observed-dependencies when hover/diagnostic/authoring work needs to explain a watcher read against the authored member or TypeScript/library member that would be observed.",
         "Binding and watcher observed-dependency rows now publish per-dependency SourceSpanAddress records when their carrier can be narrowed to an admitted source file. Template bindings parse against the ValueSite source context; property-key ExpressionWatcher strings parse against the string-body source context; ProxyObservable watcher dependencies use the dependency function carrier. If a future row exposes `spanStart` / `spanEnd` but the public `source` regresses to an unexpanded or broader carrier, fix the runtime-expression source publication boundary rather than adding API-local span math.",
         "Observed-dependency rows are semantic dependency products, not raw read-event counters. Use the shared runtime observed-dependency draft helper to dedupe repeated reads by dependency identity rather than by parser span, while keeping distinct lanes for template reads, proxy reads, collection methods, and trackable call evidence.",
+        "Binding-owned and watcher-owned observed dependencies share `runtime-observed-dependency-publication.ts` for the concrete ObservedDependency product/source/claim envelope. Add new owner-specific usage predicates there by parameter, not by copying the same CompilerIdentity/MaterializedProduct/MaterializationRecord ceremony into each materializer.",
         "Keep observed-dependency publication attached to the product that owns the semantic question. Binding data-flow owns concrete binding reads; ComputedObservationDefinition owns source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeWatcher owns controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns ProxyObservable dependency reads; binding and proxy execution both reuse the shared @computed/@astTrack method dependency recognizer.",
         "Treat object binding versus ID binding as an authoring/domain-modeling decision, not a universal correctness rule. Direct object binding can be appropriate when the domain model and view model are intentionally close; ID handoff can be better when routeability, lazy loading, component independence, or stale-object avoidance matters.",
         "Nullable object component inputs should preserve both sides of the type story: declared surface such as `Product | null` for target assignability, and effective non-nullable `Product` shape for component-interface taste. Use `contract:component-object-boundary` before changing object-input classification or bindable type-surface projection.",
@@ -580,6 +582,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "proxyTypeAtNode",
+          "summary": "Module-local Program-node remap primitive for TypeChecker type reads used by ProxyObservable dependency collection policy."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/proxy-observable-escape.ts",
           "symbolName": "ProxyObservableEscape",
           "summary": "Source-level product for direct ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) calls."
@@ -619,6 +627,12 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
           "symbolName": "distinctRuntimeObservedDependencyDrafts",
           "summary": "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+          "symbolName": "runtimeObservedDependencyRecords",
+          "summary": "Shared product/source/claim publication envelope for binding-owned and watcher-owned runtime observed-dependency rows."
         },
         {
           "kind": "source",
@@ -1097,7 +1111,7 @@
         "Start here when a binding needs runtime intake type, observer-specific value domain, source-type reads, model/value sibling lookup, or value-channel open reasons.",
         "Keep draft/type-domain helpers separate from product publication; publication should not rediscover template/node/value-site facts.",
         "RuntimeBindingValueChannelDraftFrame is the per-binding read epoch: it caches the lazy source-type reader and owns source-operation, direct target-operation, target-access, rejected-target-access, and observer-specific handoff decisions before select/checked/direct collaborators take over.",
-        "Use runtime-binding-primitive-value.ts for primitive option/model/value facts: expression literal extraction, DOM value coercion, public row display, TypeScript literal display, uniqueness, and checker assignability should not grow local switch walkers.",
+        "Use runtime-binding-primitive-value.ts for primitive option/model/value facts: expression literal extraction through transparent parens, DOM value coercion, public row display, TypeScript literal display, uniqueness, and checker assignability should not grow local switch walkers. Parser-level primitive values should remain `ExpressionPrimitiveLiteralValue`, and checker assignability should spend `checkerPrimitiveLiteralType(...)`.",
         "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary."
       ],
       "anchors": [
@@ -1129,8 +1143,14 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
-          "symbolName": "runtimeBindingPrimitiveValueFromExpressionValue",
+          "symbolName": "runtimeBindingPrimitiveValueForExpression",
           "summary": "Shared primitive binding-value substrate for value-channel drafts, data-flow assignability, and public row display."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-primitive-types.ts",
+          "symbolName": "checkerPrimitiveLiteralType",
+          "summary": "Shared TypeChecker literal type helper used by primitive value-channel assignability."
         },
         {
           "kind": "source",
@@ -1184,6 +1204,11 @@
           "symbolName": "runtimeBindingPrimitiveValueFromExpressionValue"
         },
         {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
+          "symbolName": "runtimeBindingPrimitiveValueForExpression"
+        },
+        {
           "kind": "product-large-class",
           "className": "DirectBindingValueChannelDrafts",
           "filePath": "packages/semantic-runtime/src/observation/direct-binding-value-channel-drafts.ts",
@@ -1192,7 +1217,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "frontier:binding-data-flow-materializer",
@@ -1219,6 +1244,7 @@
         "For member-expression writes, consume CheckerTypeShapeAccess.memberWriteAccess and map that lower-level result into Aurelia astAssign policy; do not duplicate checker/apparent-property or string-index lookup in observation.",
         "Access-scope writes should use the same binding-context TypeChecker fallback as expression reads when no explicit Scope slot exists; ordinary getter/setter view-model properties should not require eager slot materialization just to prove target-to-source assignment.",
         "When source writeability resolves through a TypeChecker-backed scope/context member, preserve that member's declaration address as sourceAssignmentTargetSource so diagnostics and repair planning target the authored accessor/member rather than only the template binding span.",
+        "String-index member writes should keep CheckerTypeShapeAccess as the write-policy authority but use the evaluated owner-expression source as sourceAssignmentTargetSource when no concrete member declaration exists.",
         "Keyed source writes should preserve the evaluated owner route as sourceAssignmentTargetSource when the owner is TypeChecker-backed. Valid array, record, and nested dynamic-keyed writes may be runtime-assignable, but future mismatch repairs still need an app-source target instead of only the template expression.",
         "Diagnostic action targets are edit targets, not raw TypeScript provenance dumps: if an owner type's declaration source is default-library or dependency code, keep that provenance on the type surface but target the app expression/member source that introduced the owner.",
         "Assignment strictness wording should stay value-channel aware. Select/radio mismatches should explain `model.bind` versus DOM `value` string channels; checked collection/map mismatches should explain element/key alignment; raw native value mismatches should call out native string writeback when relevant.",
@@ -1322,7 +1348,7 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:keyed-form-source-bindings",
-          "summary": "Focused contract for keyed checked/select source writes and value-converter fromView writeback."
+          "summary": "Focused contract for keyed checked/select source writes, string-index member source routes, and value-converter fromView writeback."
         },
         {
           "kind": "script",
@@ -1423,7 +1449,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "reuse:forms-observation-value-channels",

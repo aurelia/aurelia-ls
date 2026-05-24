@@ -4,6 +4,10 @@ import type { KernelStore } from '../kernel/store.js';
 import {
   checkerSymbolMemberSourceProjection,
 } from '../type-system/checker-type-member-source.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from '../type-system/checker-node-helpers.js';
 import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
 
 export interface RuntimeObservedMemberSourceProjection {
@@ -71,16 +75,11 @@ export function observedMemberSourceForCheckerPath(
     if (current == null) {
       return null;
     }
-    currentSymbol = checker.getPropertyOfType(current, segment)
-      ?? checker.getPropertyOfType(checker.getApparentType(current), segment)
-      ?? null;
+    currentSymbol = checkerPropertySymbol(checker, current, segment);
     if (currentSymbol == null) {
       return null;
     }
-    const declaration: ts.Declaration | null = currentSymbol.valueDeclaration ?? currentSymbol.declarations?.[0] ?? null;
-    current = declaration == null
-      ? null
-      : checker.getTypeOfSymbolAtLocation(currentSymbol, declaration);
+    current = checkerSymbolValueType(checker, currentSymbol);
   }
   return observedMemberSourceForCheckerSymbol(store, currentSymbol);
 }

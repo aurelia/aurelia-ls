@@ -8,6 +8,7 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -43,13 +44,15 @@ export class I18nTranslationCatalogProjectResult {
 
 /** Read static i18n resource object values into translation-key products for authoring. */
 export class I18nTranslationCatalogMaterializationProjectPass {
+  private readonly sourceTextCache = new AuthoredSourceTextCache('');
+
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
   ): I18nTranslationCatalogProjectResult {
     const seeds = uniqueTranslationKeySeeds(readTranslationKeySeeds(configuration));
     const emissions = seeds.map((seed, index) =>
-      i18nTranslationKeyProductEmission(store, configuration.project.projectKey, seed, index)
+      i18nTranslationKeyProductEmission(store, configuration.project.projectKey, seed, index, this.sourceTextCache)
     );
     const records = emissions.flatMap((emission) => emission.records);
     if (records.length > 0) {

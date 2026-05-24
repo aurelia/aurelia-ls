@@ -26,6 +26,8 @@ import {
 } from '../kernel/store.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { symbolForExpression } from '../type-system/checker-node-helpers.js';
+import { checkerTypeHasAnyName } from '../type-system/checker-related-types.js';
 import { ValidationFrameworkErrorCode } from './framework-error-code.js';
 import { ValidationProductDetails } from './product-details.js';
 import {
@@ -747,7 +749,8 @@ function isValidationRulesLikeExpression(
   if (root != null && root !== unwrapExpression(expression) && expressionIsValidationRulesRoot(context, root)) {
     return true;
   }
-  return typeHasAnyName(context.checker.getTypeAtLocation(expression), context.checker, ['IValidationRules', 'ValidationRules']);
+  const type = context.typeSystem.readProgramTypeAtLocation(expression);
+  return type != null && checkerTypeHasAnyName(context.checker, type, ['IValidationRules', 'ValidationRules']);
 }
 
 function isPropertyRuleLikeExpression(
@@ -758,7 +761,8 @@ function isPropertyRuleLikeExpression(
   if (root != null && expressionIsValidationRulesRoot(context, root)) {
     return true;
   }
-  return typeHasAnyName(context.checker.getTypeAtLocation(expression), context.checker, ['PropertyRule']);
+  const type = context.typeSystem.readProgramTypeAtLocation(expression);
+  return type != null && checkerTypeHasAnyName(context.checker, type, ['PropertyRule']);
 }
 
 function validationCallChainRoot(
@@ -789,28 +793,6 @@ function expressionIsValidationRulesRoot(
     && current.expression.kind === ts.SyntaxKind.ThisKeyword;
 }
 
-function typeHasAnyName(
-  type: ts.Type,
-  checker: ts.TypeChecker,
-  names: readonly string[],
-): boolean {
-  if (type.isUnionOrIntersection()) {
-    return type.types.some((part) => typeHasAnyName(part, checker, names));
-  }
-  const apparent = checker.getApparentType(type);
-  const candidates = [
-    type.symbol?.getName(),
-    type.aliasSymbol?.getName(),
-    apparent.symbol?.getName(),
-    apparent.aliasSymbol?.getName(),
-    checker.typeToString(type),
-    checker.typeToString(apparent),
-  ];
-  return candidates.some((candidate) =>
-    candidate != null && names.some((name) => candidate === name || candidate.startsWith(`${name}<`))
-  );
-}
-
 function resolveFunctionLikeExpression(
   checker: ts.TypeChecker,
   expression: ts.Expression,
@@ -822,7 +804,7 @@ function resolveFunctionLikeExpression(
   if (!ts.isIdentifier(current)) {
     return null;
   }
-  const symbol = checker.getSymbolAtLocation(current);
+  const symbol = symbolForExpression(checker, current);
   const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
   if (declaration == null) {
     return null;

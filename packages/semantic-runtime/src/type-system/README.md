@@ -19,6 +19,10 @@ source, value, expression, or template-local slot.
 - Preserve locus cost: project-wide diagnostic inquiries can spend and cache all project Program diagnostics, but a
   source-file inquiry should read only that Program source or owning config file instead of paying for every app file.
 - Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
+- Use `TypeSystemProject.readProgramTypeAtLocation(...)`, `readProgramTypeFromTypeNode(...)`,
+  `readProgramSymbolAtLocation(...)`, `readProgramAliasedSymbolAtLocation(...)`, or
+  `readProgramTypeOfSymbolAtLocation(...)` when a caller needs TypeChecker facts for a node that may have come from
+  evaluation, source discovery, or semantic materialization rather than the Program AST.
 - Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
   Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
 - Materialize type-shape product envelopes with identities, claims, provenance, and typed details.
@@ -66,12 +70,22 @@ source, value, expression, or template-local slot.
 - Keep projected type-shape access reusable. Ordinary expression member reads, cursor member-owner projection, repeat
   binding-pattern destructuring, and observation source-write classification should share the same member/index/reference
   resolver instead of each growing a local TypeChecker access path.
+- Route checker index-signature reads through `checkerStringIndexValueType(...)` and `checkerNumberIndexValueType(...)`.
+  `checker-related-types.ts` owns the union-aware `getIndexTypeOfType(...)` call so router, observation, binding, and
+  template consumers do not reopen feature-local index-access helpers.
+- Use `checkerTypeHasAnyName(...)` when a feature needs a generic exported/interface-style checker type-name match.
+  Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a
+  domain-specific runtime rule such as proxy-observation wrapping.
 - Preserve the key kind for projected indexed access. A type can be indexable by number without supporting arbitrary
   dot-member fallback; string-index signature semantics, numeric keyed access, and finite literal-key access must stay
   separate so diagnostics do not invent synthetic members for primitive or array-like owners.
 - Spend compiler resource scope when expression semantics need resource lookup. Value-converter projection resolves
   the visible `ValueConverterDefinition`, projects the converter instance type, and reads the `toView` return surface
   without collapsing that lookup into static evaluation.
+- Preserve TypeScript literal precision for Aurelia primitive literal AST nodes. `checker-primitive-types.ts` owns the
+  split between broad runtime primitive result lanes such as interpolation/arithmetic and literal expression lanes such
+  as `'open'`, `42`, and `true`; `contract:expression-primitive-literals` keeps expression evaluation and
+  template-controller match typing on the same helper.
 
 ## Non-Responsibilities
 
@@ -100,7 +114,8 @@ matching product handles, matching checker keys, or a deliberately synthetic/pri
 The projector keeps an epoch-local checker-key/source index for convergence, but it must verify that the indexed
 product detail still exists before reuse. Query-local projections can now be reclaimed by `QueryClaimGraph` through the
 kernel mark/dispose boundary, so a stale index entry should be evicted and reprojected rather than returning a dead
-product handle.
+product handle. `contract:type-projection-lifetime` locks this down by projecting a checker type after a store marker,
+disposing the marker, and proving the sidecar index prunes before the same local key can reproject a fresh detail.
 
 This layer is also the named split between evaluation-backed world construction and checker-backed authoring help.
 DI/configuration/resource materializers should prefer evaluation when they are deciding what the app constructed. Template
@@ -159,6 +174,11 @@ Program sources. Local ambient module declarations are checker roots in that fal
 files can satisfy imports without being static-evaluation entrypoints. External static-evaluation dependencies still
 enter the source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them
 through imports, but external dependency modules are dependencies rather than semantic root files.
+`TypeSystemProject.readProgramSourceFileRole(...)` is the shared diagnostic/repair role classifier for Program-owned
+sources. It uses boot-admitted source roles for authored project/config files, then falls back to checker-owned Program
+source buckets: generated overlays, TypeScript/default-library declarations, external declarations, and non-declaration
+external source. Public TypeScript diagnostic rows should call this boundary instead of reimplementing file-name role
+heuristics in API code.
 `overlay.ts` owns Program-owned virtual TypeScript sources for semantic-runtime framework/app representations. The
 first overlay is the `*.html` module declaration; richer overlays should use the same lane for template/controller,
 route, i18n, or bindable surfaces when checker participation is valuable. Overlay sources are hidden from ordinary
@@ -262,11 +282,13 @@ Checker-facing code should not assume every AST node that reaches semantic-runti
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
 different AST identity from the Program epoch. Prefer `TypeSystemProject.readProgramSourceFileByPath(...)` or
 `readProgramSourceFileByModuleKey(...)` when scanning source for checker-backed materialization. Use
-`TypeSystemProject.readProgramNode(...)` or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
-checker about a node that originated outside the Program SourceFile. Returning unknown/open is better than asking the
-checker about an alien node and crashing the public API. Do not manufacture empty SourceFiles as fallback checker
-locations; a checker location must be a Program-owned source, a checker-owned declaration, or a missing overlay/source
-admission signal.
+`TypeSystemProject.readProgramNode(...)`, `readProgramTypeAtLocation(...)`, `readProgramSymbolAtLocation(...)`,
+`readProgramTypeFromTypeNode(...)`, `readProgramAliasedSymbolAtLocation(...)`,
+`readProgramTypeOfSymbolAtLocation(...)`, or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
+checker about a node that originated outside the Program SourceFile.
+Returning unknown/open is better than asking the checker about an alien node and crashing the public API. Do not
+manufacture empty SourceFiles as fallback checker locations; a checker location must be a Program-owned source, a
+checker-owned declaration, or a missing overlay/source admission signal.
 Source addresses may carry host-facing workspace-relative paths, while project admissions carry project-relative paths.
 `TypeSystemProject.readProgramSourceFileByPath(...)` accepts absolute, project-relative, and workspace-relative paths so
 a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics beside the checker epoch.
@@ -491,7 +513,9 @@ callback parameter typing, object-option typing, and nested literal context do n
   `CheckerTypeShapeAccess.memberWriteAccess(...)` falls back to a raw checker/apparent-property symbol, it materializes
   the member's value/declaration source before returning. Binding data-flow spends that source as
   `sourceAssignmentTargetSource`, so `from-view`/`two-way` repair targets can navigate to the authored member even when
-  the member surface was lazy before the writeability check.
+  the member surface was lazy before the writeability check. String-index member writes are slightly different: the
+  type-system access result proves the index-signature write policy, while observation supplies the evaluated
+  owner-expression source route when no concrete member declaration exists.
 - The expression type evaluator is deliberately member-surface-oriented, not runtime-value-oriented. Value converters
   can close over checker-visible `toView`/`fromView` return types because the compiler resource scope supplies a
   runtime definition; the call projector treats the converter's input value as the first method argument, inserts a
@@ -549,6 +573,11 @@ callback parameter typing, object-option typing, and nested literal context do n
   visible `TemplateResourceScope`, expression kind/span or source address, runtime evaluation mode, and contextual type
   before reading the world cache. Caller local keys still name the semantic role and projection handles, but callers do
   not need to manually encode every scope dimension to avoid cross-template or cross-resource cache reuse.
+- Expression projection handles must spend the same expression source-span lane as the cache key. `CheckerTypeProjector`
+  can legitimately reuse type shapes by local projection key before deeper TypeChecker identity checks, so
+  `CheckerExpressionTypeEvaluator` appends the expression kind/span to the projection local key before evaluating a
+  node. Do not move source-span uniqueness into individual expression-kind helpers or the cache and projected product
+  identities can split again.
 - Unsupported expression-call results should preserve their `CheckerExpressionTypeOpenKind` when crossing into
   observation/data-flow. Diagnostics can map the modeled callable subset to runtime `astEvaluate` framework codes, but
   the evaluator should not collapse every open call/construct expression into a generic weak-owner or assignment
@@ -564,6 +593,25 @@ callback parameter typing, object-option typing, and nested literal context do n
 - `CheckerExpressionAccessProjector` owns expression-level member/keyed access policy. If a feature needs to classify
   missing members, index signatures, finite literal-key unions, or nullish member/keyed reads, route it through this
   projector and `CheckerTypeShapeAccess` instead of adding another local checker/member walk.
+- `checker-node-helpers.ts` owns low-level TypeChecker node/symbol utilities that are intentionally below projected
+  type shapes. Use `checkerPropertySymbol(...)` for the recurring declared-type plus apparent-type property lookup and
+  `checkerSymbolValueType(...)` for first-declaration value reads; do not reopen that helper pattern in observation,
+  composition, diagnostics, resource convergence, router, or shape-access code unless the framework semantics require a
+  narrower lookup. Product-architecture checker-call pressure is the canary for this: direct `getPropertyOfType` calls
+  should stay inside the type-system substrate unless a new caller has an explicitly documented narrower lookup.
+- `contract:checker-value-access` is the executable canary for that ownership rule. It allows TypeChecker value-access
+  calls inside `type-system/` and the proxy-observation collector's documented local function-body context; any other
+  feature-side checker call should first prove that TypeSystemProject, checker helpers, or shape access cannot own it.
+- `TypeSystemProject` owns ordinary Program-node remaps before `getTypeAtLocation(...)`. Feature code that receives
+  nodes from evaluation, resource convergence, diagnostics, or template materialization should call
+  `readProgramTypeAtLocation(...)` instead of reading directly from `typeSystem.checker`; the only expected non-owner
+  direct call is the proxy-observation collector's module-local remap, because it walks dependency-function body nodes
+  inside a local type context before asking the checker.
+- `symbolForExpression(...)` owns the recurring `getSymbolAtLocation` plus alias-resolution idiom. DI wrapper
+  recognition, resource API diagnostics, validation source scanning, and configuration recognition should consume that
+  helper when they are already holding checker-owned expressions; Program-remap consumers should use
+  `TypeSystemProject.readProgramSymbolAtLocation(...)` instead. Direct `getSymbolAtLocation(...)` rows should stay in
+  TypeSystemProject, checker-node helpers, or the proxy-observation local type context.
 - `CheckerExpressionScopeProjector` owns expression-level `Scope` lookup and context/slot/global projection. If a
   feature needs `$this`, ancestor lookup, `$host`, boundary lookup, scope-slot open subjects, or global reads, route it
   through this projector instead of duplicating runtime name lookup beside the evaluator.

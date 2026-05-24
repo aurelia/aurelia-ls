@@ -28,6 +28,7 @@
     "memory:next": "pnpm build && node dist/scripts/atlas-memory.js --projection=next --detail",
     "memory:write": "pnpm build && node dist/scripts/atlas-memory-write.js",
     "self": "pnpm build && node dist/scripts/atlas-self.js",
+    "enum:usage": "pnpm build && node dist/scripts/enum-usage.js",
     "work:router": "pnpm build && node dist/scripts/atlas-work-router.js",
     "work:router:json": "pnpm build && node dist/scripts/atlas-work-router.js --json",
     "bridge:aulink": "pnpm build && node dist/scripts/bridge-aulink.js",

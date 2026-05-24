@@ -15,6 +15,7 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { ResourceFrameworkErrorCode } from './framework-error-code.js';
 import {
   ResourceIssue,
@@ -589,7 +590,7 @@ function readInstanceMemberSymbol(
     return null;
   }
   const checker = context.typeSystem.checker;
-  return checker.getPropertyOfType(instanceType, propertyName) ?? null;
+  return checkerPropertySymbol(checker, instanceType, propertyName);
 }
 
 function hasPrototypeMemberDeclaration(symbol: ts.Symbol): boolean {
@@ -609,11 +610,10 @@ function readMemberCallableState(
   if (context.typeSystem == null) {
     return WatchCallbackResolution.Unknown;
   }
-  const checkerTargetClass = context.typeSystem.readProgramNode(targetClass);
-  if (checkerTargetClass == null) {
+  const type = context.typeSystem.readProgramTypeOfSymbolAtLocation(symbol, targetClass);
+  if (type == null) {
     return WatchCallbackResolution.Unknown;
   }
-  const type = context.typeSystem.checker.getTypeOfSymbolAtLocation(symbol, checkerTargetClass);
   if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
     return WatchCallbackResolution.Unknown;
   }

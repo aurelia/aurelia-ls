@@ -220,7 +220,8 @@ with `& state`: runtime-html binds each interpolation part through `Interpolatio
 bind-time scope handoffs are an interpolation-part feature as well as a bind-command feature. Its contracts also verify
 observed dependencies for store-scope reads such as `title`, `label`, collection rows, and `$event.target.value`, plus readable
 binary expression display for predicates such as `draft === ""`. The generated input dispatch expression verifies that
-`$event.target.value` refines through the authored native input element.
+`$event.target.value` refines through the authored native input element and keeps the dispatch action `type` literal in
+the value-channel payload type.
 `recipe.ts` also exposes `expectedSemanticEffectsForPlan(...)` and recipe expected-effect coverage by building the plan
 from stable seed inputs and compressing duplicate semantic targets across step-local and final verification effects.
 Use that API and

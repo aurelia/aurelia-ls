@@ -13,7 +13,8 @@ import {
   checkerCollectionSymbolName,
 } from '../type-system/checker-related-types.js';
 import {
-  firstSymbolDeclaration,
+  checkerPropertySymbol,
+  checkerSymbolValueType,
 } from '../type-system/checker-node-helpers.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -1056,7 +1057,7 @@ export class ObserverLocator {
     input: ObserverLocatorLookupRequest,
     target: TypeResolution,
   ): PropertyResolution {
-    const symbol = target.checker.getPropertyOfType(target.type, input.targetProperty) ?? null;
+    const symbol = checkerPropertySymbol(target.checker, target.type, input.targetProperty);
     if (symbol == null) {
       return {
         symbol: null,
@@ -1068,10 +1069,7 @@ export class ObserverLocator {
       };
     }
     const propertyType = input.projectPropertyType
-      ? target.checker.getTypeOfSymbolAtLocation(
-        symbol,
-        firstSymbolDeclaration(symbol) ?? target.location,
-      )
+      ? checkerSymbolValueType(target.checker, symbol, target.location)
       : null;
     return {
       symbol,

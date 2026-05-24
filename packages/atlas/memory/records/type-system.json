@@ -20,8 +20,8 @@
         "Keep evaluator source admission and TypeChecker Program construction threaded through this epoch instead of rebuilding local programs.",
         "Keep ordinary TypeScript and tsconfig diagnostics on this Program/tsconfig epoch. MCP and public API calls should use semantic-runtime's typescript-diagnostics surfaces instead of shelling out to tsc or rebuilding a separate Program.",
         "Do not conflate Program/tsconfig correctness diagnostics with Atlas's LanguageService suggestion/code-action lane. Semantic-runtime's current TypeScript diagnostic surface is tsc/noEmit-shaped repair pressure; suggestions, quick fixes, refactors, and organize-imports belong in a later LSP/code-action surface over the same epoch.",
-        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should thread the boot-admitted SourceFileRole when the file belongs to the project so MCP/LSP callers can distinguish app-source, test-source, tooling-config, declaration, and other loci without filename heuristics.",
-        "Keep checker-observed dependency sources distinct from opened-app source roles. Public SemanticSourceReference rows expose sourceWorkspaceKey and sourceFileRole; non-declaration implementation files under node_modules classify as external-source so unified diagnostics and repair planning do not route dependency/plugin template overlay errors as editable app source.",
+        "Keep TypeScript diagnostic source roles separate from TypeScript's optional diagnostic `source` label. Diagnostic rows should ask TypeSystemProject.readProgramSourceFileRole so boot-admitted project/config files keep their SourceFileRole and checker-owned dependency or overlay files classify through Program source buckets rather than API-local filename heuristics.",
+        "Keep checker-observed dependency sources distinct from opened-app source roles. Program-owned default-library and external declaration files classify as declaration, generated overlays classify as generated, and non-declaration implementation files under node_modules classify as external-source so unified diagnostics and repair planning do not route dependency/plugin template overlay errors as editable app source.",
         "Preserve diagnostic inquiry cost by locus. Project-wide diagnostics may spend and cache the full Program diagnostic set, but source-file diagnostics should use readTypeSystemProjectSourceDiagnostics so one file or tsconfig inquiry does not force every app source diagnostic.",
         "If app loading is slow, inspect TypeSystemProject phase timings and phase item counts before guessing at semantic-runtime bulk cost.",
         "Treat a large `type-system:program` item count as a substrate/admission/inquiry-depth question, not as evidence that a downstream template, authoring, or diagnostics materializer is inherently expensive.",
@@ -75,7 +75,7 @@
         "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should be a semantic Program root even when it is not eligible for ordinary tsconfig diagnostics; external/dependency misses need a separate admission policy.",
         "Use the compiler-host source-file cache for node_modules files and external declaration files before adding a second checker host path. App pressure reports host source-cache hits, misses, writes, bypasses, cacheable-read lanes, bypass lanes, Program source-file composition, and source-text density by dependency class; current-project authored files should continue to bypass or come from evaluated sources so edits do not get hidden behind global cache state.",
         "Use TypeSystemProject.readProgramSourceFileByPath or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
-        "Use TypeSystemProject.readProgramNode or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
+        "Use TypeSystemProject.readProgramNode, readProgramTypeAtLocation, readProgramTypeFromTypeNode, readProgramSymbolAtLocation, readProgramAliasedSymbolAtLocation, readProgramTypeOfSymbolAtLocation, or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
         "Do not manufacture empty fallback SourceFiles as TypeChecker lookup locations. If a lookup needs a location, use a real Program-owned source, a checker-owned declaration, or return an open/null result that points back to missing source admission or overlay generation.",
         "Keep Program-node remap counters in app telemetry. A correctness guard that remaps by file/span/kind should stay visible as requests, cache hits, same-source hits, span hits, and misses so larger apps reveal unexpected remap volume. The current remap path uses a lazy per-Program-source span index instead of a DFS per miss.",
         "Use `pnpm --filter @aurelia-ls/atlas pressure:product-architecture` to see grouped TypeScript checker API call pressure before auditing checker ownership by hand. The compact lane groups getTypeAtLocation, getSymbolAtLocation, getTypeOfSymbolAtLocation, getPropertyOfType, getTypeFromTypeNode, getApparentType, getIndexTypeOfType, and getResolvedSignature calls by count, file, and owner samples. Detail mode opts into page-scoped first-argument origin rows so checker ownership audits can distinguish local Program-node remaps, checker-result carriers, parameters, and property-access arguments without making compact call-site analysis pay that cost.",
@@ -99,6 +99,8 @@
         "Checker type members are hot details, not durable kernel products. Use their hot product handle for in-process follow-up only; value-type projections and binding-scope slots should parent to the declaration identity when present, otherwise the owning type-shape identity.",
         "Do not store direct member source addresses when a TypeScriptDeclarationIdentity already owns the declaration span. Use checkerTypeMemberSourceAddressHandle to derive the source for API rows, completion candidates, and value-type projections.",
         "Use CheckerTypeProjectionRequest.memberProjection deliberately: resource target types should publish lazy member surfaces and checker carriers during app construction, while cursor/completion or explicit member-surface answers should spend the richer projection when they need enumeration.",
+        "Route checker index-signature reads through checkerStringIndexValueType and checkerNumberIndexValueType. checker-related-types.ts owns the union-aware getIndexTypeOfType call; router, observation, binding, and template consumers should not grow feature-local index-access helpers.",
+        "Use checkerTypeHasAnyName when a feature needs generic exported/interface-style checker type-name matching. Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a domain-specific runtime rule such as proxy-observation wrapping.",
         "Runtime binding-scope construction is an intentional enumeration consumer. If a lazy context type must support Aurelia name lookup, project the member surface through BindingScopeSlotProjector/readOrProjectCheckerTypeMembers instead of adding feature-local fallbacks in router, observation, completion, or diagnostics code."
       ],
       "anchors": [
@@ -108,6 +110,36 @@
           "symbolName": "TypeSystemProject",
           "line": 134,
           "summary": "Current app-local TypeScript Program/checker epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
+          "summary": "Shared role classifier for Program-owned diagnostic and repair sources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramTypeAtLocation",
+          "summary": "Epoch-owned Program-node remap plus TypeChecker type read for evaluator/source-discovery nodes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramSymbolAtLocation",
+          "summary": "Epoch-owned Program-node remap plus TypeChecker symbol read for evaluator/source-discovery nodes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramAliasedSymbolAtLocation",
+          "summary": "Alias-resolved Program symbol read for checker-backed value references."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramTypeOfSymbolAtLocation",
+          "summary": "Epoch-owned Program-node remap plus TypeChecker symbol value-type read."
         },
         {
           "kind": "source",
@@ -348,8 +380,14 @@
         "Do not collapse index-signature, finite-key, numeric-key, and dot-member semantics into one fuzzy member lookup.",
         "Use memberValueAccess when diagnostics, expression reads, or repairs need to distinguish missing members from checker-visible members whose value type could not be projected.",
         "Use memberWriteAccess when observation or a future policy layer needs TypeChecker writability; downstream code should map the result into framework policy instead of reopening checker symbols locally.",
+        "Use checker-node-helpers.ts for low-level TypeChecker property-symbol and symbol-value reads that are intentionally below projected type-shape products. Repeated `getPropertyOfType(type, name) ?? getPropertyOfType(getApparentType(type), name)`, single declared-property probes in feature code, or first-declaration `getTypeOfSymbolAtLocation(...)` patterns are split-brain canaries unless a framework lookup deliberately needs a narrower path.",
+        "Recent checker-helper reuse moved observer-locator, template diagnostics, resource bindable/watch convergence, router route-parameter reads, controller creation, and configuration registry-shape property probes through `checkerPropertySymbol(...)`; remaining direct `getPropertyOfType` rows are intentionally concentrated in type-system internals.",
+        "Recent symbol-helper reuse moved DI container/interface/resolver recognition, resource definition API diagnostics, validation callback resolution, and configuration registry source reads through `symbolForExpression(...)`; remaining direct `getSymbolAtLocation` rows should be TypeSystemProject owner calls, checker-node helpers, or proxy-observation's documented local type context.",
+        "Recent Program-node remap cleanup moved DI container and framework EventAggregator receiver checks through `TypeSystemProject.readProgramTypeAtLocation(...)`; remaining direct `getTypeAtLocation` rows should be TypeSystemProject owner calls or the proxy-observation collector's documented local function-body remap.",
+        "`contract:checker-value-access` is the executable guard for checker access ownership. If it fails, inspect whether the caller should use TypeSystemProject remap APIs, checker-node/checker-related helpers, CheckerTypeShapeAccess, or a newly documented local type-context boundary before adding another allowed location.",
         "memberWriteAccess is also the source-route handoff for writes. When it falls back to a raw checker/apparent-property symbol, materialize the member value/declaration source in the access result so binding data-flow can publish sourceAssignmentTargetSource for from-view/two-way repair targets.",
-        "If QueryClaimGraph disposes answer-local type projections, CheckerTypeProjector must evict stale checker-key index rows before reuse so CheckerTypeShapeAccess never receives a dead product handle.",
+        "String-index write access proves writeability through TypeChecker index-signature policy, but the app-owned owner-expression route may still be supplied by observation when no concrete member declaration exists.",
+        "If QueryClaimGraph disposes answer-local type projections, CheckerTypeProjector must evict stale checker-key index rows before reuse so CheckerTypeShapeAccess never receives a dead product handle. `contract:type-projection-lifetime` is the focused proof for this lifetime rule.",
         "If a missing member looks like a weak-typing diagnostic, preserve the open reason rather than synthesizing a misleading member."
       ],
       "anchors": [
@@ -362,8 +400,30 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-node-helpers.ts",
+          "symbolName": "checkerPropertySymbol",
+          "summary": "Low-level declared/apparent TypeChecker property lookup shared by shape access, observation, and composition code."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-node-helpers.ts",
+          "symbolName": "checkerSymbolValueType",
+          "summary": "Low-level first-declaration symbol value-type lookup shared by observation, routing, and composition code."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/README.md",
           "summary": "Watchpoints about finite keyed access and projected type-shape access."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
+          "summary": "Contract proving CheckerTypeShapeAccess cannot receive stale projected type handles from the projector sidecar index after marker disposal."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:checker-value-access",
+          "summary": "Contract proving direct TypeChecker value-access calls stay inside type-system owners or documented local type-context boundaries."
         }
       ],
       "liveChecks": [
@@ -376,7 +436,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "reuse:checker-backed-union-projection",

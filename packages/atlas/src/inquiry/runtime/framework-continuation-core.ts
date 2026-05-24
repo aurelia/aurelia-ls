@@ -28,6 +28,17 @@ export interface NextPageContinuationOptions {
   readonly summary?: string;
 }
 
+export interface SourceRowContinuationPageOptions {
+  /** Stable row-family id used as the continuation id prefix. */
+  readonly idPrefix: string;
+  /** Why the caller should continue to the next page. */
+  readonly nextPageRationale: string;
+  /** Why the caller should inspect the source for a representative row. */
+  readonly sourceRationale: string;
+  /** Route summary for the row source continuation. */
+  readonly sourceRouteSummary: string;
+}
+
 export interface RowContinuationRouteOptions {
   readonly priority?: ContinuationPriority;
   readonly basis?: readonly BasisKind[];
@@ -443,4 +454,68 @@ export function nextPageContinuation(
       options.summary ?? rationale,
     ),
   };
+}
+
+/** Build the common next-page plus source-inspection continuations for source-backed framework row families. */
+export function sourceRowContinuations<TRow extends { readonly source: SourceRange }>(
+  inquiry: Inquiry,
+  rows: readonly TRow[],
+  nextOffset: number | undefined,
+  limit: number,
+  idPrefix: string,
+  nextPageRationale: string,
+  sourceRationale: string,
+  sourceRouteSummary: string,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        `${idPrefix}:next-page`,
+        nextPageRationale,
+        nextOffset,
+        limit,
+        { priority: ContinuationPriority.Secondary },
+      ),
+    );
+  }
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      idPrefix,
+      index,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        sourceRationale,
+        sourceRouteSummary,
+      ),
+    );
+  }
+  return continuations;
+}
+
+/** Bind source-row continuation copy once at row-family declaration time instead of with one-off wrappers. */
+export function sourceRowContinuationsForPage<TRow extends { readonly source: SourceRange }>(
+  options: SourceRowContinuationPageOptions,
+): (
+  inquiry: Inquiry,
+  rows: readonly TRow[],
+  nextOffset: number | undefined,
+  limit: number,
+) => readonly Continuation[] {
+  return (inquiry, rows, nextOffset, limit) =>
+    sourceRowContinuations(
+      inquiry,
+      rows,
+      nextOffset,
+      limit,
+      options.idPrefix,
+      options.nextPageRationale,
+      options.sourceRationale,
+      options.sourceRouteSummary,
+    );
 }

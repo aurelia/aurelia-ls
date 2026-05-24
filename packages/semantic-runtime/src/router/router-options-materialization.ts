@@ -327,6 +327,7 @@ function routerOptionsFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   configuredFields: ReadonlySet<RouterOptionsField>,
 ): readonly FieldProvenance<RouterOptionsField>[] {
+  // These same-handle field rows encode configured-field presence; option-object source precision is the owner record.
   return fieldProvenanceEntries<RouterOptionsField>([
     ...configuredFields,
     'source',

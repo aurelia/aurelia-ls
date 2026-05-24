@@ -105,10 +105,13 @@ export interface QueryClaimTypeSystemDependencyCacheDisposalSummary {
 }
 
 export interface QueryClaimAnswerShape {
+  readonly schemaVersion?: unknown;
   readonly outcome: string;
   readonly summary: string;
   readonly value: unknown;
   readonly page?: unknown;
+  readonly continuations?: unknown;
+  readonly profile?: unknown;
 }
 
 export interface QueryClaimRecord {
@@ -1475,9 +1478,13 @@ class QueryClaimGraphCounters {
 }
 
 export function approximateQueryAnswerPayloadBytes(answer: QueryClaimAnswerShape): number {
-  return approximateScalarBytes(answer.summary)
+  return approximateScalarBytes(answer.schemaVersion)
+    + approximateScalarBytes(answer.outcome)
+    + approximateScalarBytes(answer.summary)
     + approximatePayloadValueBytes(answer.value, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES)
-    + (answer.page == null ? 0 : approximatePayloadValueBytes(answer.page, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES));
+    + (answer.page == null ? 0 : approximatePayloadValueBytes(answer.page, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES))
+    + (answer.continuations == null ? 0 : approximatePayloadValueBytes(answer.continuations, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES))
+    + (answer.profile == null ? 0 : approximatePayloadValueBytes(answer.profile, MAX_QUERY_ANSWER_PAYLOAD_ESTIMATE_BYTES));
 }
 
 export function queryAnswerRowCount(value: unknown): number {

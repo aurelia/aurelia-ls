@@ -4,10 +4,12 @@ import {
   SEMANTIC_APP_QUERY_KINDS,
   SemanticAppQueryKind,
   SemanticRuntimeAnswerOutcome,
+  type SemanticAppQuery,
   type SemanticAppQueryCatalogRequest,
   type SemanticAppQueryCatalogResult,
   type SemanticAppQueryCatalogRow,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimeSourceFileInput,
 } from './contracts.js';
 import { answer } from './answer-helpers.js';
 
@@ -129,6 +131,9 @@ function appQueryCatalogDisplayText(
   if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
     lines.push('Type/cursor projection: cursor-locus and diagnostic projection queries may do answer-time TypeChecker work; request them only when the locus needs it.');
   }
+  if (rows.some((row) => row.supportsContinuationIntentFilter)) {
+    lines.push('Continuations: pass continuationIntents to narrow returned next moves without changing query materialization.');
+  }
   lines.push('Next: use aurelia_app_query_batch when several related app query rows are needed from one opened app world.');
   return lines.join('\n');
 }
@@ -143,6 +148,42 @@ export function semanticAppQueryCatalogRow(
   return row;
 }
 
+/** Drop query envelope fields that the target catalog row cannot consume. */
+export function semanticAppQueryCatalogShape(
+  query: SemanticAppQuery,
+): SemanticAppQuery {
+  const row = semanticAppQueryCatalogRow(query.kind);
+  const sourceFile = row.supportsSourceFile ? semanticAppQuerySourceFileLocus(query) : null;
+  return {
+    kind: query.kind,
+    ...(query.inquiryProfile == null ? {} : { inquiryProfile: query.inquiryProfile }),
+    ...(query.continuationIntents == null ? {} : { continuationIntents: query.continuationIntents }),
+    ...(query.page == null || !row.supportsPaging ? {} : { page: query.page }),
+    ...(query.detail == null || !row.supportsDetail ? {} : { detail: query.detail }),
+    ...(query.diagnosticProjection == null || !row.supportsDiagnosticProjection ? {} : { diagnosticProjection: query.diagnosticProjection }),
+    ...(query.kind !== SemanticAppQueryKind.AppTopology || query.includeTypeSurfaces == null ? {} : { includeTypeSurfaces: query.includeTypeSurfaces }),
+    ...(query.kind !== SemanticAppQueryKind.AppOverview || query.diagnosticPageSize == null ? {} : { diagnosticPageSize: query.diagnosticPageSize }),
+    ...(query.kind !== SemanticAppQueryKind.AppOverview || query.openSeamPageSize == null ? {} : { openSeamPageSize: query.openSeamPageSize }),
+    ...(query.kind !== SemanticAppQueryKind.AppOverview || query.includeAuthoringOrientation == null ? {} : { includeAuthoringOrientation: query.includeAuthoringOrientation }),
+    ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
+    ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
+    ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
+  };
+}
+
+/** Derive the source-file locus a source-capable app query can consume from sourceFile or cursor input. */
+export function semanticAppQuerySourceFileLocus(
+  query: Pick<SemanticAppQuery, 'cursor' | 'sourceFile'>,
+): SemanticRuntimeSourceFileInput | null {
+  if (query.sourceFile != null) {
+    return query.sourceFile;
+  }
+  if (query.cursor != null) {
+    return { filePath: query.cursor.filePath };
+  }
+  return null;
+}
+
 function queryRow(
   queryKind: SemanticAppQueryKind,
   group: string,
@@ -150,26 +191,35 @@ function queryRow(
   resultRole: SemanticAppQueryCatalogRow['resultRole'],
   options: Partial<Pick<
     SemanticAppQueryCatalogRow,
-    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'supportsDiagnosticProjection' | 'requiresCursor' | 'routeProductKind'
+    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'supportsDiagnosticProjection' | 'supportsContinuationIntentFilter' | 'requiresCursor' | 'routeProductKind'
   >> = {},
 ): SemanticAppQueryCatalogRow {
   const pagingKind = options.pagingKind ?? 'none';
+  const materializationPolicy = options.materializationPolicy ?? 'projection-only';
+  const requiresCursor = options.requiresCursor ?? false;
+  const supportsSourceFile = options.supportsSourceFile ?? false;
   return {
     queryKind,
     group,
     summary,
     resultRole,
     runtimeBoundary: options.runtimeBoundary ?? 'app-world',
-    materializationPolicy: options.materializationPolicy ?? 'projection-only',
+    materializationPolicy,
     pagingKind,
     minimumAnalysisDepth: options.minimumAnalysisDepth ?? SemanticAppAnalysisDepth.RuntimeTopology,
     supportsPaging: pagingKind !== 'none',
     supportsDetail: options.supportsDetail ?? false,
-    supportsSourceFile: options.supportsSourceFile ?? false,
+    supportsSourceFile,
     supportsDiagnosticProjection: options.supportsDiagnosticProjection ?? false,
-    requiresCursor: options.requiresCursor ?? false,
+    supportsContinuationIntentFilter: options.supportsContinuationIntentFilter ?? supportsContinuationIntentFilter(queryKind),
+    requiresCursor,
     ...(options.routeProductKind == null ? {} : { routeProductKind: options.routeProductKind }),
   };
+}
+
+function supportsContinuationIntentFilter(queryKind: SemanticAppQueryKind): boolean {
+  return queryKind !== SemanticAppQueryKind.AuthoringCatalog
+    && queryKind !== SemanticAppQueryKind.AuthoringOrientation;
 }
 
 function groupRows(rows: readonly SemanticAppQueryCatalogRow[]): SemanticAppQueryCatalogResult['groups'] {

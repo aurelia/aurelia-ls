@@ -1,54 +1,52 @@
 import ts from 'typescript';
-import type { ExpressionAstNode } from '../expression/ast.js';
+import {
+  mapExpressionPrimitiveLiteralValue,
+  type ExpressionAstNode,
+  type ExpressionPrimitiveLiteralValue,
+} from '../expression/ast.js';
 import {
   RuntimeBindingPrimitiveValueKind,
   type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
-import {
-  booleanLiteralValuesForType,
-} from './checker-type-helpers.js';
+import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
 
 export function runtimeBindingPrimitiveValueFromExpressionValue(
-  value: null | undefined | number | boolean | string,
+  value: ExpressionPrimitiveLiteralValue,
 ): RuntimeBindingPrimitiveValue {
-  switch (typeof value) {
-    case 'string':
-      return { kind: RuntimeBindingPrimitiveValueKind.String, value };
-    case 'number':
-      return { kind: RuntimeBindingPrimitiveValueKind.Number, value };
-    case 'boolean':
-      return { kind: RuntimeBindingPrimitiveValueKind.Boolean, value };
-    case 'undefined':
-      return { kind: RuntimeBindingPrimitiveValueKind.Undefined };
-    default:
-      return { kind: RuntimeBindingPrimitiveValueKind.Null };
-  }
+  return mapExpressionPrimitiveLiteralValue<RuntimeBindingPrimitiveValue>(value, {
+    string: (stringValue) => ({ kind: RuntimeBindingPrimitiveValueKind.String, value: stringValue }),
+    number: (numberValue) => ({ kind: RuntimeBindingPrimitiveValueKind.Number, value: numberValue }),
+    boolean: (booleanValue) => ({ kind: RuntimeBindingPrimitiveValueKind.Boolean, value: booleanValue }),
+    null: () => ({ kind: RuntimeBindingPrimitiveValueKind.Null }),
+    undefined: () => ({ kind: RuntimeBindingPrimitiveValueKind.Undefined }),
+  });
 }
 
 export function runtimeBindingPrimitiveValueDomainForExpression(
   expression: ExpressionAstNode,
 ): readonly RuntimeBindingPrimitiveValue[] {
+  const value = runtimeBindingPrimitiveValueForExpression(expression);
+  return value == null ? [] : [value];
+}
+
+export function runtimeBindingPrimitiveValueForExpression(
+  expression: ExpressionAstNode,
+): RuntimeBindingPrimitiveValue | null {
   switch (expression.$kind) {
     case 'PrimitiveLiteral':
-      return [runtimeBindingPrimitiveValueFromExpressionValue(expression.value)];
+      return runtimeBindingPrimitiveValueFromExpressionValue(expression.value);
     case 'Paren':
-      return runtimeBindingPrimitiveValueDomainForExpression(expression.expression);
+      return runtimeBindingPrimitiveValueForExpression(expression.expression);
     default:
-      return [];
+      return null;
   }
 }
 
 export function runtimeBindingBooleanLiteralForExpression(
   expression: ExpressionAstNode,
 ): boolean | null {
-  switch (expression.$kind) {
-    case 'PrimitiveLiteral':
-      return typeof expression.value === 'boolean' ? expression.value : null;
-    case 'Paren':
-      return runtimeBindingBooleanLiteralForExpression(expression.expression);
-    default:
-      return null;
-  }
+  const value = runtimeBindingPrimitiveValueForExpression(expression);
+  return value?.kind === RuntimeBindingPrimitiveValueKind.Boolean ? value.value : null;
 }
 
 export function runtimeBindingStringDomainForPrimitiveValues(
@@ -77,49 +75,55 @@ export function runtimeBindingPrimitiveValueDomainKinds(
 export function runtimeBindingPrimitiveValueApiDisplay(
   value: RuntimeBindingPrimitiveValue,
 ): string {
-  switch (value.kind) {
-    case RuntimeBindingPrimitiveValueKind.String:
-      return JSON.stringify(value.value);
-    case RuntimeBindingPrimitiveValueKind.Number:
-    case RuntimeBindingPrimitiveValueKind.Boolean:
-      return String(value.value);
-    case RuntimeBindingPrimitiveValueKind.Null:
-      return 'null';
-    case RuntimeBindingPrimitiveValueKind.Undefined:
-      return 'undefined';
-  }
+  return runtimeBindingPrimitiveValueDisplay(value, {
+    string: (stringValue) => JSON.stringify(stringValue),
+    null: 'null',
+    undefined: 'undefined',
+  });
 }
 
 export function runtimeBindingPrimitiveValueTypeDisplay(
   value: RuntimeBindingPrimitiveValue,
 ): string {
-  switch (value.kind) {
-    case RuntimeBindingPrimitiveValueKind.String:
-      return runtimeBindingStringLiteralTypeDisplay(value.value);
-    case RuntimeBindingPrimitiveValueKind.Number:
-    case RuntimeBindingPrimitiveValueKind.Boolean:
-      return String(value.value);
-    case RuntimeBindingPrimitiveValueKind.Null:
-      return 'null';
-    case RuntimeBindingPrimitiveValueKind.Undefined:
-      return 'undefined';
-  }
+  return runtimeBindingPrimitiveValueDisplay(value, {
+    string: runtimeBindingStringLiteralTypeDisplay,
+    null: 'null',
+    undefined: 'undefined',
+  });
 }
 
 export function runtimeBindingPrimitiveValueDomString(
   value: RuntimeBindingPrimitiveValue,
   nullishDefault: string | null,
 ): string {
+  return runtimeBindingPrimitiveValueDisplay(value, {
+    string: (stringValue) => stringValue,
+    null: nullishDefault ?? 'null',
+    undefined: nullishDefault ?? 'undefined',
+  });
+}
+
+interface RuntimeBindingPrimitiveValueDisplayPolicy {
+  readonly string: (value: string) => string;
+  readonly null: string;
+  readonly undefined: string;
+}
+
+/** Format one primitive value-domain entry while keeping API, type, and DOM policies explicit at the call site. */
+function runtimeBindingPrimitiveValueDisplay(
+  value: RuntimeBindingPrimitiveValue,
+  policy: RuntimeBindingPrimitiveValueDisplayPolicy,
+): string {
   switch (value.kind) {
     case RuntimeBindingPrimitiveValueKind.String:
-      return value.value;
+      return policy.string(value.value);
     case RuntimeBindingPrimitiveValueKind.Number:
     case RuntimeBindingPrimitiveValueKind.Boolean:
       return String(value.value);
     case RuntimeBindingPrimitiveValueKind.Null:
-      return nullishDefault ?? 'null';
+      return policy.null;
     case RuntimeBindingPrimitiveValueKind.Undefined:
-      return nullishDefault ?? 'undefined';
+      return policy.undefined;
   }
 }
 
@@ -153,42 +157,31 @@ export function runtimeBindingPrimitiveValueKey(
   }
 }
 
+/** Convert a runtime binding primitive value back to its parser-level primitive value for shared TypeChecker helpers. */
+export function runtimeBindingPrimitiveValueExpressionValue(
+  value: RuntimeBindingPrimitiveValue,
+): ExpressionPrimitiveLiteralValue {
+  switch (value.kind) {
+    case RuntimeBindingPrimitiveValueKind.String:
+    case RuntimeBindingPrimitiveValueKind.Number:
+    case RuntimeBindingPrimitiveValueKind.Boolean:
+      return value.value;
+    case RuntimeBindingPrimitiveValueKind.Null:
+      return null;
+    case RuntimeBindingPrimitiveValueKind.Undefined:
+      return undefined;
+  }
+}
+
 export function runtimeBindingPrimitiveValueAssignableToType(
   value: RuntimeBindingPrimitiveValue,
   checker: ts.TypeChecker,
   to: ts.Type,
 ): boolean {
-  switch (value.kind) {
-    case RuntimeBindingPrimitiveValueKind.String:
-      return checker.isTypeAssignableTo(checker.getStringLiteralType(value.value), to);
-    case RuntimeBindingPrimitiveValueKind.Number:
-      return checker.isTypeAssignableTo(numberLiteralType(checker, value.value), to);
-    case RuntimeBindingPrimitiveValueKind.Boolean:
-      return booleanLiteralAssignableToType(value.value, checker, to);
-    case RuntimeBindingPrimitiveValueKind.Null:
-      return checker.isTypeAssignableTo(checker.getNullType(), to);
-    case RuntimeBindingPrimitiveValueKind.Undefined:
-      return checker.isTypeAssignableTo(checker.getUndefinedType(), to);
-  }
-}
-
-function numberLiteralType(checker: ts.TypeChecker, value: number): ts.Type {
-  const typedChecker = checker as ts.TypeChecker & {
-    readonly getNumberLiteralType?: (value: number) => ts.Type;
-  };
-  return typedChecker.getNumberLiteralType?.(value) ?? checker.getNumberType();
-}
-
-function booleanLiteralAssignableToType(
-  value: boolean,
-  checker: ts.TypeChecker,
-  to: ts.Type,
-): boolean {
-  const literalValues = booleanLiteralValuesForType(to);
-  if (literalValues != null) {
-    return literalValues.includes(value);
-  }
-  return checker.isTypeAssignableTo(checker.getBooleanType(), to);
+  return checker.isTypeAssignableTo(
+    checkerPrimitiveLiteralType(checker, runtimeBindingPrimitiveValueExpressionValue(value)),
+    to,
+  );
 }
 
 export function runtimeBindingStringLiteralTypeDisplay(value: string): string {

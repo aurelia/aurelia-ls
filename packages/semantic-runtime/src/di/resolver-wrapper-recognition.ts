@@ -3,6 +3,7 @@ import ts from 'typescript';
 import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 
 export const AURELIA_RESOLVER_WRAPPER_KINDS = [
   'all',
@@ -57,14 +58,7 @@ function aureliaResolverWrapperKindForCallee(
   if (name == null || !isAureliaResolverWrapperKind(name.text)) {
     return null;
   }
-  const symbol = checker.getSymbolAtLocation(name);
-  if (symbol == null) {
-    return null;
-  }
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  return (target.declarations ?? []).some(isAureliaResolverWrapperDeclaration)
+  return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaResolverWrapperDeclaration)
     ? name.text
     : null;
 }

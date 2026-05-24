@@ -110,6 +110,7 @@ import {
   InquiryPageInfo,
   InquiryPageRequest,
 } from './page.js';
+import { PAGED_INQUIRY_CONTINUATION } from './continuation-intent.js';
 
 export const enum TemplateCompletionSiteKind {
   /** Completion is inside an element/tag name. */
@@ -778,6 +779,7 @@ function completionContinuations(
         InquiryContinuationKind.NextPage,
         'Read the next page of completion candidates.',
         query.withPage(new InquiryPageRequest(page.size, page.nextCursor)),
+        PAGED_INQUIRY_CONTINUATION,
       ),
     ];
 }

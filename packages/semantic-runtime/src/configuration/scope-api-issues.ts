@@ -31,6 +31,7 @@ import {
 import {
   checkerDefinitelyNullishType,
 } from '../type-system/checker-related-types.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   normalizeTypeSystemSourceFileName,
@@ -162,7 +163,7 @@ function readScopeApiCallSites(
           sourceFileAddressHandle: source.addressHandle,
           sourceFile,
         },
-        typeSystem.checker,
+        typeSystem,
         sourcePathByFileName,
       );
   });
@@ -170,13 +171,13 @@ function readScopeApiCallSites(
 
 function readSourceFileScopeApiCallSites(
   context: TypeScriptSourceSiteContext,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly ScopeApiCallSite[] {
   const bindings = readSourceImportBindings(context.sourceFile, AURELIA_SCOPE_MODULES, AURELIA_SCOPE_EXPORTS);
   const sites: ScopeApiCallSite[] = [];
   const visit = (node: ts.Node): void => {
-    recordScopeApiCallSite(sites, context, checker, sourcePathByFileName, bindings, node);
+    recordScopeApiCallSite(sites, context, typeSystem, sourcePathByFileName, bindings, node);
     ts.forEachChild(node, visit);
   };
   visit(context.sourceFile);
@@ -186,7 +187,7 @@ function readSourceFileScopeApiCallSites(
 function recordScopeApiCallSite(
   sites: ScopeApiCallSite[],
   context: TypeScriptSourceSiteContext,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
   bindings: ReturnType<typeof readSourceImportBindings>,
   node: ts.Node,
@@ -198,11 +199,11 @@ function recordScopeApiCallSite(
   const methodKind = scopeApiMethodKind(access.name.text);
   if (
     methodKind == null
-    || !isAureliaScopeReceiver(checker, access.expression, methodKind, bindings, sourcePathByFileName)
+    || !isAureliaScopeReceiver(typeSystem, access.expression, methodKind, bindings, sourcePathByFileName)
   ) {
     return;
   }
-  const nullishArgument = scopeApiNullishArgument(node, context.sourceFile, checker);
+  const nullishArgument = scopeApiNullishArgument(node, context.sourceFile, typeSystem);
   if (nullishArgument == null) {
     return;
   }
@@ -235,7 +236,7 @@ function scopeApiMethodKind(
 function scopeApiNullishArgument(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
 ): ScopeApiNullishArgument | null {
   const argumentIndex = 0;
   const argument = call.arguments[argumentIndex] ?? null;
@@ -246,13 +247,15 @@ function scopeApiNullishArgument(
   if (literalKind != null) {
     return { index: argumentIndex, kind: literalKind, text: argument.getText(sourceFile) };
   }
-  return checkerDefinitelyNullishType(checker, checker.getTypeAtLocation(argument))
+  const checker = typeSystem.checker;
+  const type = typeSystem.readProgramTypeAtLocation(argument);
+  return type != null && checkerDefinitelyNullishType(checker, type)
     ? { index: argumentIndex, kind: 'definitely-nullish-type', text: argument.getText(sourceFile) }
     : null;
 }
 
 function isAureliaScopeReceiver(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   receiver: ts.Expression,
   methodKind: ScopeApiMethodKind,
   bindings: ReturnType<typeof readSourceImportBindings>,
@@ -262,8 +265,12 @@ function isAureliaScopeReceiver(
     return true;
   }
 
-  const type = checker.getTypeAtLocation(receiver);
-  const property = checker.getPropertyOfType(type, methodKind);
+  const checker = typeSystem.checker;
+  const type = typeSystem.readProgramTypeAtLocation(receiver);
+  if (type == null) {
+    return false;
+  }
+  const property = checkerPropertySymbol(checker, type, methodKind);
   const declarations = property?.declarations ?? [];
   return declarations.some((declaration) => isAureliaScopeDeclaration(declaration, sourcePathByFileName));
 }

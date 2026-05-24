@@ -1,4 +1,8 @@
 import type ts from 'typescript';
+import {
+  mapExpressionPrimitiveLiteralValue,
+  type ExpressionPrimitiveLiteralValue,
+} from '../expression/ast.js';
 import type { EvaluationEnvironmentRecordReference } from './environment-reference.js';
 
 export const enum EvaluationValueKind {
@@ -491,24 +495,19 @@ export type EvaluationPrimitiveValue =
   | EvaluationNumberValue
   | EvaluationStringValue;
 
-export type EvaluationExpressionPrimitiveValue = null | undefined | number | boolean | string;
+export type EvaluationExpressionPrimitiveValue = ExpressionPrimitiveLiteralValue;
 
 export function evaluationPrimitiveValueFromExpressionValue(
   value: EvaluationExpressionPrimitiveValue,
   node: ts.Node | null = null,
 ): EvaluationPrimitiveValue {
-  switch (typeof value) {
-    case 'string':
-      return new EvaluationStringValue(value, node);
-    case 'number':
-      return new EvaluationNumberValue(value, node);
-    case 'boolean':
-      return new EvaluationBooleanValue(value, node);
-    case 'undefined':
-      return node == null ? EvaluationUndefined : new EvaluationUndefinedValue(node);
-    default:
-      return value === null ? new EvaluationNullValue(node) : node == null ? EvaluationUndefined : new EvaluationUndefinedValue(node);
-  }
+  return mapExpressionPrimitiveLiteralValue<EvaluationPrimitiveValue>(value, {
+    string: (stringValue) => new EvaluationStringValue(stringValue, node),
+    number: (numberValue) => new EvaluationNumberValue(numberValue, node),
+    boolean: (booleanValue) => new EvaluationBooleanValue(booleanValue, node),
+    null: () => new EvaluationNullValue(node),
+    undefined: () => node == null ? EvaluationUndefined : new EvaluationUndefinedValue(node),
+  });
 }
 
 /** Evaluator-local value union. These values are not kernel records. */

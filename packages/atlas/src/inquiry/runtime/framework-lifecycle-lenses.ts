@@ -71,10 +71,10 @@ import {
   propertyNameText,
 } from "./framework-ts-utils.js";
 import {
-  FrameworkRowContinuationBuilder,
   FrameworkSemanticRouteBuilder,
-  nextPageContinuation,
   projectionContinuation,
+  sourceRowContinuations,
+  sourceRowContinuationsForPage,
 } from "./framework-continuation-core.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 
@@ -259,7 +259,12 @@ const LIFECYCLE_CONTROLLER_METHOD_ROW_FAMILY =
     id: "framework.lifecycle:controller-methods",
     rowLabel: "framework lifecycle controller method row(s)",
     evidenceForRow: evidenceForLifecycleRow,
-    continuationsForPage: controllerMethodContinuations,
+    continuationsForPage: sourceRowContinuationsForPage({
+      idPrefix: "framework.lifecycle:controller-methods",
+      nextPageRationale: "Continue controller lifecycle method rows.",
+      sourceRationale: "Inspect the controller lifecycle method source.",
+      sourceRouteSummary: "Source for lifecycle row.",
+    }),
   });
 
 const LIFECYCLE_CONTROLLER_CALL_ROW_FAMILY =
@@ -307,7 +312,12 @@ const LIFECYCLE_RELATIONSHIP_ROW_FAMILY =
     id: "framework.lifecycle:relationships",
     rowLabel: "framework lifecycle relationship row(s)",
     evidenceForRow: evidenceForLifecycleRow,
-    continuationsForPage: lifecycleRelationshipContinuations,
+    continuationsForPage: sourceRowContinuationsForPage({
+      idPrefix: "framework.lifecycle:relationships",
+      nextPageRationale: "Continue lifecycle relationship rows.",
+      sourceRationale: "Inspect the lifecycle relationship source.",
+      sourceRouteSummary: "Source for lifecycle row.",
+    }),
   });
 
 /** Answer framework.lifecycle inquiries from controller, binding, and resource lifecycle substrates. */
@@ -1883,23 +1893,6 @@ function lifecycleSummaryContinuations(inquiry: Inquiry): readonly Continuation[
   ];
 }
 
-function controllerMethodContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkLifecycleControllerMethodRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return rowSourceContinuations(
-    inquiry,
-    rows,
-    nextOffset,
-    limit,
-    "framework.lifecycle:controller-methods",
-    "Continue controller lifecycle method rows.",
-    "Inspect the controller lifecycle method source.",
-  );
-}
-
 function controllerCallContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkLifecycleControllerCallRow[],
@@ -1907,7 +1900,7 @@ function controllerCallContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...rowSourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -1915,6 +1908,7 @@ function controllerCallContinuations(
       "framework.lifecycle:controller-calls",
       "Continue controller lifecycle call rows.",
       "Inspect the controller lifecycle call source.",
+      "Source for lifecycle row.",
     ),
     ...childControllerActivationContinuations(inquiry, rows),
   ];
@@ -1975,7 +1969,7 @@ function lifecycleBindingEffectContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...rowSourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -1983,6 +1977,7 @@ function lifecycleBindingEffectContinuations(
       "framework.lifecycle:binding-effects",
       "Continue binding lifecycle effect rows.",
       "Inspect the binding lifecycle effect source.",
+      "Source for lifecycle row.",
     ),
     projectionContinuation(
       inquiry,
@@ -2001,7 +1996,7 @@ function resourceSiteContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...rowSourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2009,6 +2004,7 @@ function resourceSiteContinuations(
       "framework.lifecycle:resource-sites",
       "Continue resource lifecycle site rows.",
       "Inspect the resource materialization site source.",
+      "Source for lifecycle row.",
     ),
     ...rows.slice(0, 3).map((row, index) =>
       new FrameworkSemanticRouteBuilder(
@@ -2041,7 +2037,7 @@ function appTaskExecutionContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...rowSourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2049,6 +2045,7 @@ function appTaskExecutionContinuations(
       "framework.lifecycle:app-tasks",
       "Continue AppTask execution rows.",
       "Inspect the AppTask execution source.",
+      "Source for lifecycle row.",
     ),
     ...rows.slice(0, 3).map((row, index) =>
       new FrameworkSemanticRouteBuilder(
@@ -2081,7 +2078,7 @@ function hookDispatchContinuations(
   limit: number,
 ): readonly Continuation[] {
   return [
-    ...rowSourceContinuations(
+    ...sourceRowContinuations(
       inquiry,
       rows,
       nextOffset,
@@ -2089,6 +2086,7 @@ function hookDispatchContinuations(
       "framework.lifecycle:hook-dispatches",
       "Continue lifecycle hook dispatch rows.",
       "Inspect the lifecycle hook dispatch source.",
+      "Source for lifecycle row.",
     ),
     ...rows.slice(0, 3).map((row, index) =>
       projectionContinuation(
@@ -2109,61 +2107,4 @@ function hookDispatchContinuations(
       ),
     ),
   ];
-}
-
-function lifecycleRelationshipContinuations(
-  inquiry: Inquiry,
-  rows: readonly FrameworkLifecycleRelationshipRow[],
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  return rowSourceContinuations(
-    inquiry,
-    rows,
-    nextOffset,
-    limit,
-    "framework.lifecycle:relationships",
-    "Continue lifecycle relationship rows.",
-    "Inspect the lifecycle relationship source.",
-  );
-}
-
-function rowSourceContinuations<TRow extends { readonly source: SourceRange }>(
-  inquiry: Inquiry,
-  rows: readonly TRow[],
-  nextOffset: number | undefined,
-  limit: number,
-  idPrefix: string,
-  nextPageRationale: string,
-  sourceRationale: string,
-): readonly Continuation[] {
-  const continuations: Continuation[] = [];
-  if (nextOffset !== undefined) {
-    continuations.push(
-      nextPageContinuation(
-        inquiry,
-        `${idPrefix}:next-page`,
-        nextPageRationale,
-        nextOffset,
-        limit,
-        { priority: ContinuationPriority.Secondary },
-      ),
-    );
-  }
-  for (const [index, row] of rows.slice(0, 3).entries()) {
-    const builder = new FrameworkRowContinuationBuilder(
-      inquiry,
-      idPrefix,
-      index,
-    );
-    continuations.push(
-      builder.source(
-        "source",
-        row.source,
-        sourceRationale,
-        "Source for lifecycle row.",
-      ),
-    );
-  }
-  return continuations;
 }

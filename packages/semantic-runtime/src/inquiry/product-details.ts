@@ -18,6 +18,7 @@ import {
 import { KernelExactBasis } from './basis.js';
 import { uniqueValues } from '../collections.js';
 import { KernelRecordInquiryLocus } from './locus.js';
+import { CLAIM_NEIGHBORHOOD_CONTINUATION } from './continuation-intent.js';
 
 export class ProductDetailQuery {
   readonly kind = 'product-detail' as const;
@@ -152,6 +153,7 @@ function productDetailContinuations(
         InquiryContinuationKind.InspectClaimNeighborhood,
         'Inspect claims adjacent to this product.',
         query,
+        CLAIM_NEIGHBORHOOD_CONTINUATION,
       ),
     ];
 }

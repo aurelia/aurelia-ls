@@ -1,5 +1,6 @@
 export * from './answer.js';
 export * from './app-query-catalog.js';
+export * from './app-query-continuations.js';
 export {
   semanticAppQueryBatchMaterializationPolicy,
   semanticAppQueryMaterializationPolicy,
@@ -19,6 +20,13 @@ export * from './source-reference.js';
 export * from './state-projections.js';
 export * from './template-completion.js';
 export * from './typescript-diagnostics.js';
+export * from '../inquiry/continuation-intent.js';
+export {
+  InquiryContinuationKind,
+} from '../inquiry/answer.js';
+export type {
+  InquiryContinuationKindValue,
+} from '../inquiry/answer.js';
 export {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SemanticAppAnalysisDepth,

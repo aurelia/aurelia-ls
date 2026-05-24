@@ -46,6 +46,19 @@ Current compaction thresholds intentionally favor hot-path memory pressure over 
 or local key becomes broad, the handle keeps only a short sanitized prefix plus a stable hash. If debugging needs more
 text, add a product/detail/source field that owns that meaning instead of widening handles globally.
 
+Source lookup follows records, not handle strings. `source-address.ts` is the shared resolver for authored source
+anchors: it follows source, template, generated, and identity links, including generated addresses anchored to semantic
+identities. Callers that need exact source spans for continuations, diagnostics, hovers, or future edits should reuse
+that resolver instead of casting identity handles to address handles or scanning identity fields locally.
+This resolver intentionally collapses generated/template carriers to the nearest authored source. Public API display
+keeps generated/template carrier identity in `source-reference.ts` and points at the authored source through `anchor`;
+do not merge those two switches unless the replacement preserves both internal source lookup and public evidence kind.
+`authored-source-text.ts` is the shared raw-file text reader for cases where a source span must be sliced or converted
+to a cursor position. Use it instead of local `readFileSync` plus line math; template markup can be decoded or mapped
+while authored spans still point at the original HTML or TypeScript host text. Resource convergence, i18n JSON asset
+span mapping, template diagnostics, cursor offset conversion, and template overlay expression projection should all
+enter through this boundary when they need authored file text.
+
 Controlled vocabulary uses stable keys, not store handles. Claim predicates, seam kinds, binding kinds,
 instruction kinds, and product kinds use centrally defined vocabulary keys with an
 explicit usage slot. New entries should be added as implementation pressure proves they are needed, with
@@ -129,7 +142,8 @@ answer-local TypeChecker products should be measured but not retained.
 Store-local sidecar indexes register through `KernelStore.registerSidecarIndex(...)`. They are not semantic storage;
 they are acceleration structures that mirror kernel/product-detail lifetime and must drop stale references during
 `disposeSince(...)`. Telemetry reports their entry counts so hidden projector/cache indexes do not become invisible heap
-owners.
+owners. `contract:type-projection-lifetime` is the current canary: it proves the TypeChecker type-shape index loses
+answer-local product-detail references when the kernel marker is disposed, then repopulates from a fresh projection.
 `KernelStore.readTelemetrySnapshot(...)` keeps its count lane cheap: record handle-character totals and sidecar sizes are
 maintained incrementally, while high-cardinality kind and handle-character breakdowns remain behind the explicit
 `includeBreakdowns` option. Do not add full-store scans to the default snapshot path; phase profiling calls it often.

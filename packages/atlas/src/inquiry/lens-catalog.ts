@@ -4647,6 +4647,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Selected routes checked for missing source anchors and empty memory/corpus joins.",
       },
       {
+        id: "coverage",
+        summary:
+          "Route-local coverage rows for cross-cutting dimensions such as intent-aware continuation threading.",
+      },
+      {
         id: "workset",
         summary:
           "Current git worktree files joined to work routes through source/doc anchors and memory shards.",
@@ -4756,6 +4761,20 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter routes and fixture seeds by corpus authority lane, such as authoring-taste or behavior-grounding.",
+      },
+      {
+        id: "coverageDimension",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes by a declared cross-cutting coverage dimension.",
+        values: ["intent-aware-continuations"],
+      },
+      {
+        id: "coverageState",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes by coverage state for the selected cross-cutting dimension.",
+        values: ["covered", "partial", "missing", "not-applicable"],
       },
     ],
     outputKinds: [

@@ -192,7 +192,8 @@ function sourceRoleForTypeSystemDiagnostic(
   if (source == null) {
     return null;
   }
-  return sourceAdmissionForDiagnosticFileName(typeSystem.project.sourceFiles, source.fileName)?.role ?? null;
+  return sourceAdmissionForDiagnosticFileName(typeSystem.project.sourceFiles, source.fileName)?.role
+    ?? typeSystem.readProgramSourceFileRole(source.fileName);
 }
 
 function sourceAdmissionForDiagnosticFileName(

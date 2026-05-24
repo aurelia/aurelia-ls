@@ -12,8 +12,8 @@ file, cursor, range, or known kernel handle and needs a truthful answer plus a n
 
 - Represent query loci such as workspace, project, source file, source cursor, source range, and kernel record.
 - Preserve outcomes such as hit, miss, ambiguous, open, partial, unsupported, and reroute.
-- Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim handles, open seams,
-  page state, and continuations.
+- Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim
+  handles, open seams, page state, and continuations.
 - Resolve host selectors into the narrowest currently known inquiry locus.
 - Share answer-assembly helpers such as source-file-address narrowing and ordered de-duplication through the inquiry
   helper modules so answer surfaces do not grow private copies of the same selector vocabulary.
@@ -64,6 +64,11 @@ the caller that created them.
 Discard-after-answer profiles still admit pending claims into the graph while the lazy answer closure is outstanding;
 the node is removed only after it resolves or fails. That keeps the graph as the actual storage owner for lazy answer
 work even when the profile intentionally retains no records after serialization.
+`contract:query-claim-graph` pins these lower-level invariants directly: lazy claim lifetime, retained-answer reuse and
+reuse vetoes, failed-claim retention and retry behavior, side-effect disposal on retained-answer hits, retained-answer
+byte budget pruning including continuation-rich answer envelopes, retained-record budget pruning around active parent
+claims, and indexed source/project epoch disposal. Use it when changing graph storage, profile policy, or public answer
+reuse before relying on broader app-query continuation contracts.
 `query-claim-policy.ts` owns the profile-to-policy mapping and disposal vocabulary; `query-claim-graph.ts` owns the
 answer-boundary graph, with retained-node storage kept inside `QueryClaimGraphStorage`. Keep new consumer trade-offs in
 the policy module so the graph does not become a bag of profile-specific cases.
@@ -123,9 +128,10 @@ The lazy claim handle itself must not become another answer cache. A resolved `Q
 when the graph retained the answer value under profile policy; otherwise it is a read-once handle over the graph-owned
 node. If invalidation or retention-budget disposal removes the node, later reads fail instead of returning a stale DTO
 from a wrapper object.
-Payload size is estimated by a bounded object walk, not by row count alone. This matters because summary-shaped DTOs can
-contain broad nested objects even when they do not expose a top-level `rows` array; retention policy must see that bulk
-before deciding whether a small-answer cache hit is honest.
+Payload size is estimated by a bounded object walk over the answer envelope, not by row count alone. This matters
+because summary-shaped DTOs can contain broad nested objects even when they do not expose a top-level `rows` array, and
+continuation rows/profile telemetry can make a small `value` payload expensive to retain; retention policy must see that
+bulk before deciding whether a small-answer cache hit is honest.
 Retained-answer hits still run answer-side disposal hooks. Reuse should avoid recomputation, not bypass explicit
 transport policy such as a later `dispose-app` routed query that must reclaim a currently cached app epoch before
 returning a previously shaped answer.
@@ -197,13 +203,35 @@ be modeled here or in answer envelopes, not smuggled into kernel claims or compi
 
 Projection lanes are intentionally consumer-neutral. A transport or presentation adapter can map LSP, Atlas, tooling, a visual
 workbench, diagnostics, AOT, or agent-facing APIs onto compact, detail, explanation, source-context, or graph
-projections outside the intent taxonomy. Those are projections over the same substrate, not separate meanings of the
-substrate.
+projections outside the app-semantic ontology. Those are projections over the same substrate, not separate meanings of
+the substrate.
 
-Inquiry does not carry a parallel intent ontology. Query shape, locus, projection, basis, and continuation kind should
-be enough for callers to understand what an answer attempted. If a relation starts carrying real app meaning across
-materializers, promote it into kernel vocabulary and signed claim predicates rather than only naming it in answer
-metadata.
+Inquiry must not carry a parallel app-semantic ontology. Relationships such as dependency, registration,
+configuration, visibility, lowering, and data flow belong in kernel vocabulary, signed claim predicates, products, and
+materializers when they are true app facts. Answer metadata should not become a shadow app graph.
+
+Inquiry does need continuation intent, but only at the continuation boundary. `continuation-intent.ts` names the
+caller's possible next move (`orient`, `inspect`, `diagnose`, `repair`, `navigate`, `author`, `verify`, or `profile`)
+so an answer with many truthful follow-ups can filter without pretending that intent changes the app fact being queried.
+Public app-query callers can pass `continuationIntents` as an answer-envelope filter; do not promote that filter into
+query identity, catalog defaults, cost policy, or app semantics.
+`InquiryContinuationKind` is the canonical action vocabulary for continuations. Public app-query rows should keep app-query
+specificity in `targetQueryKind` and the shaped `targetQuery` instead of creating a parallel target-specific kind enum.
+
+Continuations should be evidence-gated, not confidence-scored. A continuation may say which intents it serves, which
+cost boundary it crosses, what source precision or coverage is available, and which blockers prevent it from being
+actionable. Avoid numeric confidence and ranking-as-truth; expose evidence state, coverage, source precision,
+staleness, and blockers so the caller can make a task-specific judgment.
+
+Continuation `sourcePrecision` is a compact evidence summary, not a blanket editability claim. Repair-oriented
+diagnostic follow-ups must also inspect the individual source references they are based on: a related diagnostic family
+with one exact authored span and one carrier/external/generated source remains inspectable, but the repair intent must
+carry a blocker until every returned source needed by that repair lane is exact.
+
+App-query answers now share a catalog-aware continuation policy, and lower-level `InquiryContinuation` producers must
+attach `InquiryContinuationApplicability` so kernel-side follow-ups use the same intent/evidence vocabulary. Future work
+should move query-family-specific next moves onto shared intent-aware and evidence-gated continuation primitives rather
+than adding adapter-local "next query" heuristics.
 
 This layer should not encode ranking, actionability, UI copy, transport defaults, or consumer personas. Materializers
 should preserve what they observed, what they could derive, and which seams remained open. Inquiry answers expose

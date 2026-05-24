@@ -219,6 +219,29 @@ export function checkerTypeShapeIsDefinitelyNullish(
     && (typeShape.display === 'null' || typeShape.display === 'undefined' || typeShape.display === 'void');
 }
 
+/** Match a checker type or its apparent type against exported/interface-style names and generic display names. */
+export function checkerTypeHasAnyName(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  names: readonly string[],
+): boolean {
+  if (type.isUnionOrIntersection()) {
+    return type.types.some((part) => checkerTypeHasAnyName(checker, part, names));
+  }
+  const apparent = checker.getApparentType(type);
+  const candidates = [
+    type.symbol?.getName(),
+    type.aliasSymbol?.getName(),
+    apparent.symbol?.getName(),
+    apparent.aliasSymbol?.getName(),
+    checker.typeToString(type),
+    checker.typeToString(apparent),
+  ];
+  return candidates.some((candidate) =>
+    candidate != null && names.some((name) => candidate === name || candidate.startsWith(`${name}<`))
+  );
+}
+
 function checkerIndexValueType(
   checker: ts.TypeChecker,
   type: ts.Type,

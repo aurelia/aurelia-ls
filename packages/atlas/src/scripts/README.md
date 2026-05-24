@@ -48,6 +48,24 @@ helpers.
   projections skip enum/string taxonomy unless a taxonomy projection or the semantic-taxonomy flag asks for it. Function
   body fingerprints and switch topology are a separate explicit body-analysis lane; use the boolean flag or the
   shape/control-flow projections when those facts are the question.
+- [enum-usage.ts](enum-usage.ts) is the package-facing wrapper over `readTypeScriptEnumUsageIndex`. Use
+  `enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=InquiryContinuationIntent --memberName=Author --detail`
+  to inspect whether an inquiry/kernel primitive is only declared, only present in a vocabulary list, or referenced by
+  concrete code. It accepts `--packageId=...` for admitted SourceProject packages, `--packagePath=...` plus optional
+  `--tsconfigPath=...` for a one-off package, `--projection=summary|enums|members|member-usage|enum-references|enum-value-spaces|enum-value-occurrences|enum-mappings|enum-couplings|phase-profile`,
+  `--enumName=...`, `--memberName=...`, `--query=...`, `--role=...`, `--controlFlowKind=...`,
+  `--relation=...`, `--carrier=...`, `--value=...`, `--valueKind=...`, `--enumContext=all|none`,
+  `--rows=...` / `--limit=...`, `--detail`, and `--json`. Prefer this wrapper over grep when auditing whether
+  low-level enum primitives are actually spent across semantic-runtime, MCP, or external package source. Reference rows
+  include containing function/class and control-flow carriers such as `if-condition`, `switch-discriminant`, and
+  `switch-case-label`. Coupling rows are deliberately stronger than shared-string overlap: they report enum pairs joined
+  by translation, same control-flow carrier, declared type-surface co-occurrence, or checker-backed shared value-space
+  evidence. Use `--relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow` when the question is
+  whether multiple enum value spaces intentionally shape one public DTO or helper signature. `member-usage` aggregates a
+  member's roles, owning functions/classes, control-flow carriers, translation counts, and coupled enums so broad
+  primitive audits can start from one row per member. Treat this as a visibility tool, not an ontology judge: reconcile
+  declared-versus-spent shape with owning READMEs, Atlas memory, Work Router routes, and reviewed `.temp` intent docs
+  before pruning or promoting a primitive.
 - [atlas-work-router.ts](atlas-work-router.ts) prints the `atlas.work-router` lens: typed work routes joined to live
   source anchors, Atlas memory, framework corpus fixture seeds, expected-effect descriptors, scripts, docs, and
   cautions. Prefer exact `--routeId=...` / `--route=...`, `--domain=...`, `--role=...`, `--lensId=...`, `--path=...`, `--symbolName=...`,
@@ -121,6 +139,8 @@ helpers.
 - [product-architecture-pressure.ts](product-architecture-pressure.ts) prints compact current semantic-runtime
   large-module, cross-area import, large-class, zero-method `*Input` envelope, behavioral `*Input` suffix, and
   function-call pressure rows with request timing and source line anchors from `product.architecture`. It also prints
+  source-file read pressure from existing call-site rows so raw authored-file reads, source-text cache boundaries, and
+  direct filesystem probes stay visible without ad hoc grep. It also prints
   duplicate top-level helper-name pressure from the `function-duplicates` projection so small repeated helpers can be
   treated as possible split-brain before manual grep without paging every function row into the script. The duplicate
   lane uses an AST body-shape fingerprint that normalizes local bindings and folds simple equivalent control flow such

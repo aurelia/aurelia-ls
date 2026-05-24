@@ -152,9 +152,11 @@ import {
 } from './runtime-binding-expression-scope.js';
 import {
   distinctRuntimeObservedDependencyDrafts,
-  runtimeObservedDependencyIdentityLocalName,
   type RuntimeObservedDependencyDraft,
 } from './runtime-observed-dependency-draft.js';
+import {
+  runtimeObservedDependencyRecords,
+} from './runtime-observed-dependency-publication.js';
 import {
   RuntimeHtmlObservationFrameworkErrorCode,
   RuntimeObservationFrameworkErrorCode,
@@ -168,7 +170,6 @@ import type {
 } from '../template/value-site.js';
 import {
   sourceAddressForRuntimeExpressionBounds,
-  sourceAddressRecordsForRuntimeExpressionBounds,
 } from '../template/runtime-expression-source-address.js';
 import {
   runtimeAcceptedBindingExpressionAstForParse,
@@ -944,55 +945,31 @@ export class RuntimeBindingDataFlowMaterializer {
     dependencies: readonly RuntimeBindingObservedDependency[],
     source: BindingDataFlowSourceSet,
   ): readonly KernelStoreRecord[] {
-    return dependencies.flatMap((dependency, index): readonly KernelStoreRecord[] => {
+    return dependencies.flatMap((dependency, index) => {
       const dependencyLocal = `${local}:observed-dependency:${index}`;
-      const dependencySource = sourceAddressRecordsForRuntimeExpressionBounds(
-        this.store,
-        dependency.sourceAddressHandle,
-        binding.sourceAddressHandle,
-        dependency.spanStart,
-        dependency.spanEnd,
-      );
-      const bindingClaim = new SemanticClaim(
-        this.store.handles.claim(`${dependencyLocal}:runtime-binding-uses-observed-dependency`),
-        binding.productHandle,
-        KernelVocabulary.Binding.RuntimeBindingUsesObservedDependency.key,
-        dependency.productHandle,
-        source.provenanceHandle,
-      );
-      const dataFlowClaim = new SemanticClaim(
-        this.store.handles.claim(`${dependencyLocal}:data-flow-uses-observed-dependency`),
-        dataFlow.productHandle,
-        KernelVocabulary.Binding.DataFlowUsesObservedDependency.key,
-        dependency.productHandle,
-        source.provenanceHandle,
-      );
-      return [
-        ...dependencySource.records,
-        new CompilerIdentity(
-          dependency.identityHandle,
-          KernelVocabulary.Binding.ObservedDependency.key,
-          binding.identityHandle,
-          dependencySource.handle,
-          runtimeObservedDependencyIdentityLocalName(dependency, index),
-        ),
-        new MaterializedProduct(
-          dependency.productHandle,
-          KernelVocabulary.Binding.ObservedDependency.key,
-          dependency.identityHandle,
-          dependencySource.handle,
-          source.provenanceHandle,
-        ),
-        bindingClaim,
-        dataFlowClaim,
-        new MaterializationRecord(
-          this.store.handles.materialization(dependencyLocal),
-          dependency.identityHandle,
-          [dependency.productHandle],
-          [bindingClaim.handle, dataFlowClaim.handle],
-          [],
-        ),
-      ];
+      return runtimeObservedDependencyRecords({
+        store: this.store,
+        local: dependencyLocal,
+        owner: {
+          identityHandle: binding.identityHandle,
+          sourceAddressHandle: binding.sourceAddressHandle,
+        },
+        dependency,
+        index,
+        provenanceHandle: source.provenanceHandle,
+        claims: [
+          {
+            localName: 'runtime-binding-uses-observed-dependency',
+            subjectProductHandle: binding.productHandle,
+            predicateKey: KernelVocabulary.Binding.RuntimeBindingUsesObservedDependency.key,
+          },
+          {
+            localName: 'data-flow-uses-observed-dependency',
+            subjectProductHandle: dataFlow.productHandle,
+            predicateKey: KernelVocabulary.Binding.DataFlowUsesObservedDependency.key,
+          },
+        ],
+      });
     });
   }
 
@@ -1561,6 +1538,7 @@ class BindingDataFlowSourceWriteCapabilityProjector {
           this.typeAccess.memberWriteAccess(contextShape, expression.name.name),
           contextShape.display ?? contextType?.display ?? null,
           contextType,
+          contextType?.sourceAddressHandle ?? contextShape.sourceAddressHandle,
         );
       }
     }
@@ -1604,6 +1582,7 @@ class BindingDataFlowSourceWriteCapabilityProjector {
       this.typeAccess.memberWriteAccess(ownerShape, expression.name.name),
       ownerShape.display ?? ownerEvaluation.typeReference.display,
       ownerEvaluation.typeReference,
+      ownerEvaluation.sourceAddressHandle,
     );
   }
 
@@ -1659,6 +1638,7 @@ class BindingDataFlowSourceWriteCapabilityProjector {
         checkerTypeMemberWriteAccess(member, this.store),
         member.ownerType.display,
         member.ownerType,
+        member.ownerType.sourceAddressHandle,
       );
   }
 }
@@ -2622,8 +2602,9 @@ function sourceWriteCapabilityForMemberAccess(
   access: CheckerTypeShapeMemberWriteAccess,
   ownerDisplay: string | null,
   assignmentTargetType: CheckerTypeReference | null,
+  fallbackSourceAddressHandle: AddressHandle | null = null,
 ): SourceWriteCapability {
-  const sourceAddressHandle = access.sourceAddressHandle;
+  const sourceAddressHandle = access.sourceAddressHandle ?? fallbackSourceAddressHandle;
   switch (access.accessKind) {
     case CheckerTypeShapeMemberWriteAccessKind.Writable:
     case CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable:

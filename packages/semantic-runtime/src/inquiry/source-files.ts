@@ -24,6 +24,7 @@ import {
   InquiryPageInfo,
   InquiryPageRequest,
 } from './page.js';
+import { PAGED_INQUIRY_CONTINUATION } from './continuation-intent.js';
 import { uniqueValues } from '../collections.js';
 import { isSourceFileAddress } from '../kernel/source-address.js';
 
@@ -200,6 +201,7 @@ function admittedSourcesContinuations(
         InquiryContinuationKind.NextPage,
         'Continue with the next page of admitted source files.',
         query.withPage(new InquiryPageRequest(page.size, page.nextCursor)),
+        PAGED_INQUIRY_CONTINUATION,
       ),
     ];
 }

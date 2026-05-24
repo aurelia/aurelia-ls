@@ -60,6 +60,11 @@ import {
   AppTaskSlot,
 } from './app-task.js';
 import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+  symbolForExpression,
+} from '../type-system/checker-node-helpers.js';
+import {
   ConfigurationOptionContributionKind,
   ConfigurationOptionValueKind,
 } from './configuration-option.js';
@@ -1474,13 +1479,10 @@ function checkerRegistryValueSource(
   }
 
   const current = unwrapExpression(expression);
-  const programCurrent = typeSystem.readProgramExpression(current);
-  if (programCurrent == null) {
-    return null;
-  }
   const checker = typeSystem.checker;
-  const type = checker.getTypeAtLocation(programCurrent);
-  if (!checkerTypeHasCallableRegister(checker, type, programCurrent)) {
+  const type = typeSystem.readProgramTypeAtLocation(current);
+  const programCurrent = typeSystem.readProgramExpression(current);
+  if (type == null || programCurrent == null || !checkerTypeHasCallableRegister(checker, type, programCurrent)) {
     return null;
   }
 
@@ -1524,21 +1526,12 @@ function checkerTypeHasCallableRegister(
   if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
     return false;
   }
-  return checkerRegisterMemberIsCallable(checker, type, sourceNode)
-    || checkerRegisterMemberIsCallable(checker, checker.getApparentType(type), sourceNode);
-}
-
-function checkerRegisterMemberIsCallable(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-  sourceNode: ts.Node,
-): boolean {
-  const register = checker.getPropertyOfType(type, 'register');
+  const register = checkerPropertySymbol(checker, type, 'register');
   if (register == null) {
     return false;
   }
-  const declaration = register.valueDeclaration ?? register.declarations?.[0] ?? sourceNode;
-  return checker.getTypeOfSymbolAtLocation(register, declaration).getCallSignatures().length > 0;
+  const registerType = checkerSymbolValueType(checker, register, sourceNode);
+  return (registerType?.getCallSignatures().length ?? 0) > 0;
 }
 
 function checkerValueDeclaration(
@@ -1553,13 +1546,7 @@ function checkerSymbolForValue(
   checker: ts.TypeChecker,
   expression: ts.Expression,
 ): ts.Symbol | null {
-  const symbol = checker.getSymbolAtLocation(expression);
-  if (symbol == null) {
-    return null;
-  }
-  return (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
+  return symbolForExpression(checker, expression);
 }
 
 function isValueDeclaration(declaration: ts.Declaration): boolean {

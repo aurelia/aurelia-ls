@@ -28,11 +28,13 @@ export function registerAureliaSemanticRuntimePrompts(
                 ? 'If multiple app candidates are present, choose the app project from the overview before deeper calls.'
                 : `Use projectKey ${projectKey} for deeper app calls unless the overview disproves it.`,
               'Then call aurelia_app_overview with a small diagnostic/open-seam budget and summarize app shape, major diagnostics, open seams, and the next precise tool calls.',
+              'When the current task has a clear posture, pass continuationIntents such as inspect, diagnose, repair, verify, or profile so semantic-runtime narrows the typed follow-up continuations instead of making the MCP client infer next moves from prose.',
               'If you expect to call several app tools in this session, pass appRetention=retain-app on the first app call and clear or inspect the analysis cache when done; otherwise leave the default dispose-app posture.',
               'For large or dependency-heavy workspaces, start app overview with analysisDepth=runtime-topology and deepen only when binding/type details are needed.',
               'Use aurelia_authoring_orientation with analysisDepth=binding-observation when deciding code-shape taste, recipe fit, direct state/domain binding, getter observation, or forwarding-accessor pressure.',
               'For form/control explanations, use one aurelia_app_query_batch for binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary before paging raw binding rows; use page.size=0 for issue/source-state rollup first passes, leave includeAppProfile/includeAppQueryClaimProfiles unset unless profiling, and treat issue kinds such as source-type-unresolved or target-empty-array-inferred as repair-routing signals.',
               'For repair work, use aurelia_diagnostic_overview or aurelia_app_diagnostics as the unified diagnostic surface; explicit diagnostic calls include ordinary TypeScript project diagnostics as well as modeled Aurelia/template diagnostics.',
+              'For focused repair or verification loops, pass continuationIntents=repair or continuationIntents=verify on app-query, diagnostics, and batches, then follow returned targetQuery rows rather than reconstructing related diagnostic or source reads locally.',
               'Use aurelia_app_query_catalog before aurelia_app_query when the needed queryKind is not already obvious from a curated tool.',
               includeRouter === 'true'
                 ? 'Because routing is in scope, also call aurelia_router_overview with a small rowPageSize and report route, viewport, route-context, route-context-parameter-read, and router issue pressure.'
@@ -127,6 +129,7 @@ export function registerAureliaSemanticRuntimePrompts(
                 ? 'For a new app, use recipe source-plan files as the main structure and keep package/build-tool choices explicit in the host plan.'
                 : 'For an existing app, call aurelia_workspace_overview, select the app project when needed, then call aurelia_app_overview before editing.',
               'For existing-app code shape, call aurelia_authoring_orientation with analysisDepth=binding-observation before editing.',
+              'When following app-query or diagnostic answers, use returned continuations as typed next moves. Pass continuationIntents to keep those follow-ups aligned with the current task instead of using generic next-tool prose as a ranking signal.',
               'For forms/control bindings, call one aurelia_app_query_batch for binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary before raw rows; use page.size=0 for rollup-first reads and leave profiling fields off unless measuring cost.',
               includeRouter === 'true'
                 ? 'Because routing is in scope, call aurelia_router_overview with a small rowPageSize before editing route config, links, route params, or viewport layout; page route-context-parameter-reads when checking whether IRouteContext.getRouteParameters keys are route-backed or query/open.'

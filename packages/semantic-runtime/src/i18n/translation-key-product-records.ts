@@ -1,5 +1,6 @@
 import type ts from 'typescript';
 import { authoredAssetModuleSpanForNode } from '../evaluation/asset-module.js';
+import type { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import {
   SourceSpanAddress,
   SourceSpanRole,
@@ -60,12 +61,13 @@ export function i18nTranslationKeyProductEmission(
   projectKey: string,
   seed: I18nTranslationKeyProductSeed,
   index: number,
+  sourceTextCache?: AuthoredSourceTextCache,
 ): I18nTranslationKeyProductEmission {
   const handles = translationKeyProductHandles(store, projectKey, seed, index);
   const key = translationKeyModel(seed, handles);
   return {
     key,
-    records: translationKeyRecords(store, seed, handles),
+    records: translationKeyRecords(store, seed, handles, sourceTextCache),
   };
 }
 
@@ -105,9 +107,10 @@ function translationKeyRecords(
   store: KernelStore,
   seed: I18nTranslationKeyProductSeed,
   handles: I18nTranslationKeyProductHandles,
+  sourceTextCache?: AuthoredSourceTextCache,
 ): readonly KernelStoreRecord[] {
   return [
-    translationKeySourceAddress(seed, handles),
+    translationKeySourceAddress(seed, handles, sourceTextCache),
     translationKeyEvidence(handles),
     new ProvenanceRecord(handles.provenanceHandle, [handles.evidenceHandle]),
     translationKeyIdentity(seed, handles),
@@ -119,8 +122,9 @@ function translationKeyRecords(
 function translationKeySourceAddress(
   seed: I18nTranslationKeyProductSeed,
   handles: I18nTranslationKeyProductHandles,
+  sourceTextCache?: AuthoredSourceTextCache,
 ): SourceSpanAddress {
-  const sourceSpan = translationKeySourceSpan(seed);
+  const sourceSpan = translationKeySourceSpan(seed, sourceTextCache);
   return new SourceSpanAddress(
     handles.sourceAddressHandle,
     seed.sourceFileAddressHandle,
@@ -182,8 +186,9 @@ function translationKeyMaterialization(
 
 function translationKeySourceSpan(
   seed: I18nTranslationKeyProductSeed,
+  sourceTextCache?: AuthoredSourceTextCache,
 ): { readonly start: number; readonly end: number } {
-  return authoredAssetModuleSpanForNode(seed.sourceFile, seed.sourceNode) ?? {
+  return authoredAssetModuleSpanForNode(seed.sourceFile, seed.sourceNode, sourceTextCache) ?? {
     start: seed.sourceNode.getStart(seed.sourceFile),
     end: seed.sourceNode.end,
   };

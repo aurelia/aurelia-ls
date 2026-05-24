@@ -98,6 +98,17 @@ import type {
 } from '../telemetry/kernel-density.js';
 import type { SemanticRuntimeInquiryProfile } from '../telemetry/inquiry-profile.js';
 import type {
+  InquiryContinuationCostValue,
+  InquiryContinuationIntentValue,
+  InquiryEvidenceCoverageValue,
+  InquiryEvidenceStalenessValue,
+  InquiryEvidenceStateValue,
+  InquirySourcePrecisionValue,
+} from '../inquiry/continuation-intent.js';
+import type {
+  InquiryContinuationKindValue,
+} from '../inquiry/answer.js';
+import type {
   SemanticRuntimeMemoryDelta,
   SemanticRuntimeMemorySample,
 } from '../telemetry/memory.js';
@@ -557,12 +568,46 @@ export interface SemanticRouterOverviewRequest {
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` | null;
 }
 
+/** Public DTO for the evidence obligations behind a suggested continuation. */
+export interface SemanticContinuationEvidenceGate {
+  /** Evidence authority state required before trusting the continuation. */
+  readonly evidenceState?: InquiryEvidenceStateValue;
+  /** Completeness posture for the selected source/app locus. */
+  readonly coverage?: InquiryEvidenceCoverageValue;
+  /** Source precision available for navigation, explanation, or future edits. */
+  readonly sourcePrecision?: InquirySourcePrecisionValue;
+  /** Source or project epoch sensitivity for reusing the continuation. */
+  readonly staleness?: InquiryEvidenceStalenessValue;
+}
+
+/** Public continuation row for MCP/IDE callers that need typed next moves instead of prose hints. */
+export interface SemanticRuntimeContinuationRow {
+  /** Continuation action; target query and intent carry the concrete follow-up lane. */
+  readonly kind: InquiryContinuationKindValue;
+  /** Short explanation of why this continuation is useful from the current answer. */
+  readonly rationale: string;
+  /** Public app-query kind this continuation would ask, if it maps to one query family. */
+  readonly targetQueryKind?: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
+  /** Fully shaped app query the caller can follow without adapter-local guessing. */
+  readonly targetQuery?: SemanticAppQuery | null;
+  /** Next-move intents this continuation is intended to serve; empty means intent-neutral. */
+  readonly intents: readonly InquiryContinuationIntentValue[];
+  /** Coarse cost boundary for following the continuation. */
+  readonly cost: InquiryContinuationCostValue | null;
+  /** Evidence gate a caller should inspect before treating the continuation as actionable. */
+  readonly evidence: SemanticContinuationEvidenceGate | null;
+  /** Explicit reasons the continuation is informative but not currently followable/actionable. */
+  readonly blockers: readonly string[];
+}
+
 export interface SemanticAppQuery {
   readonly kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly page?: SemanticRuntimePageInput;
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`;
   /** Consumer lane behind this answer; controls query-claim retention and answer-local disposal policy. */
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+  /** Response-envelope filter for typed continuations; it does not change query materialization identity. */
+  readonly continuationIntents?: readonly InquiryContinuationIntentValue[] | null;
   /**
    * Diagnostic projection depth for app/template diagnostic query families.
    *
@@ -728,6 +773,8 @@ export interface SemanticAppQueryCatalogRow {
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
   readonly supportsDiagnosticProjection: boolean;
+  /** Whether `continuationIntents` can narrow returned continuation rows without changing query identity. */
+  readonly supportsContinuationIntentFilter: boolean;
   readonly requiresCursor: boolean;
   readonly routeProductKind?: string | null;
 }
@@ -783,6 +830,8 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly summary: string;
   readonly value: TValue;
   readonly page?: SemanticRuntimePageResult | null;
+  /** Optional typed follow-up moves. Most current answers omit this until their continuation surface is explicit. */
+  readonly continuations?: readonly SemanticRuntimeContinuationRow[];
   /** Optional answer-envelope telemetry, present only when a telemetry request asks the runtime to expose it. */
   readonly profile?: SemanticRuntimeAnswerProfile | null;
 }

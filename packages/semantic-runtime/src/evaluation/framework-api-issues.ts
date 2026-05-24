@@ -36,6 +36,7 @@ import {
   unwrapExpression,
 } from './ts-syntax.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import {
   EvaluationValueKind,
 } from './values.js';
@@ -89,7 +90,7 @@ export class FrameworkApiIssueMaterializer {
       const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
       return sourceFile == null
         ? []
-        : this.publicationsForSource(project, source.path, source.addressHandle, sourceFile, typeSystem.checker);
+        : this.publicationsForSource(project, source.path, source.addressHandle, sourceFile, typeSystem);
     });
     const records = publications.flatMap((publication) => publication.records);
     if (records.length > 0) {
@@ -104,10 +105,10 @@ export class FrameworkApiIssueMaterializer {
     sourcePath: string,
     sourceFileAddressHandle: AddressHandle,
     sourceFile: ts.SourceFile,
-    checker: ts.TypeChecker,
+    typeSystem: TypeSystemProject,
   ): readonly EvaluationIssuePublication[] {
     const bindings = readFrameworkApiImportedBindings(sourceFile);
-    return readFrameworkApiIssueSites(sourceFile, checker, bindings)
+    return readFrameworkApiIssueSites(sourceFile, typeSystem, bindings)
       .map((site, index) =>
         this.publicationForSite(project, sourcePath, sourceFileAddressHandle, sourceFile, site, index)
       );
@@ -159,13 +160,13 @@ export class FrameworkApiIssueMaterializer {
 
 function readFrameworkApiIssueSites(
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   bindings: FrameworkApiImportedBindings,
 ): readonly FrameworkApiIssueSite[] {
   const sites: FrameworkApiIssueSite[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      const site = frameworkApiIssueSiteForCall(checker, bindings, node);
+      const site = frameworkApiIssueSiteForCall(typeSystem, bindings, node);
       if (site != null) {
         sites.push(site);
       }
@@ -177,14 +178,14 @@ function readFrameworkApiIssueSites(
 }
 
 function frameworkApiIssueSiteForCall(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   bindings: FrameworkApiImportedBindings,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
   if (isFirstDefinedCall(call, bindings)) {
     return firstDefinedIssueSite(call);
   }
-  return eventAggregatorIssueSiteForCall(checker, call)
+  return eventAggregatorIssueSiteForCall(typeSystem, call)
     ?? metadataDefineIssueSiteForCall(bindings, call);
 }
 
@@ -224,7 +225,7 @@ function firstDefinedIssueSite(
 }
 
 function eventAggregatorIssueSiteForCall(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   call: ts.CallExpression,
 ): FrameworkApiIssueSite | null {
   const expression = unwrapExpression(call.expression);
@@ -235,7 +236,7 @@ function eventAggregatorIssueSiteForCall(
   if (methodName !== 'publish' && methodName !== 'subscribe') {
     return null;
   }
-  if (!isAureliaEventAggregatorMethod(checker, expression.expression, methodName)) {
+  if (!isAureliaEventAggregatorMethod(typeSystem, expression.expression, methodName)) {
     return null;
   }
   const first = call.arguments[0] ?? null;
@@ -325,12 +326,16 @@ function isMetadataObjectExpression(
 }
 
 function isAureliaEventAggregatorMethod(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   receiver: ts.Expression,
   methodName: string,
 ): boolean {
-  const type = checker.getTypeAtLocation(receiver);
-  const property = checker.getPropertyOfType(type, methodName);
+  const checker = typeSystem.checker;
+  const type = typeSystem.readProgramTypeAtLocation(receiver);
+  if (type == null) {
+    return false;
+  }
+  const property = checkerPropertySymbol(checker, type, methodName);
   return (property?.declarations ?? []).some(isAureliaEventAggregatorMethodDeclaration);
 }
 

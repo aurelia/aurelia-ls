@@ -72,6 +72,9 @@ import {
   SetPropertyInstruction,
   TemplateBindingMode,
 } from './instruction-ir.js';
+import {
+  sourceAddressHandleForRuntimeExpressionSpan,
+} from './runtime-expression-source-address.js';
 import type { TemplateExpressionParse } from './value-site.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
@@ -92,23 +95,38 @@ import {
   templateInstructionForProductHandle,
 } from './template-expression-selection.js';
 import {
+  templateRepeatScopeCurrentAliasExpression,
+  templateScopeAliasSupport,
+  templateScopeBindingContextLocalNames,
+  templateScopeCreatesCurrentBindingContextAlias,
+  templateScopeReplayChain,
+  templateScopeVisibleSlots,
+} from './template-scope-replay.js';
+import {
   appendTemplateTypeSystemOverlayPrelude,
   type TemplateTypeSystemOverlayPreludeViewModel,
 } from './template-type-system-overlay-prelude.js';
 
 export const enum TemplateTypeSystemOverlaySkippedReason {
+  /** The component resource lacks an importable view-model declaration for generated overlay code. */
   MissingViewModelIdentity = 'missing-view-model-identity',
+  /** A copied expression has no readable authored source slice in the current project epoch. */
   MissingExpressionSource = 'missing-expression-source',
+  /** Scope replay encountered a BindingScope owner that has no overlay layer contract yet. */
   UnsupportedScopeOwner = 'unsupported-scope-owner',
+  /** A repeated-item scope lacks the iterator scope effect that should have introduced it. */
   MissingRepeatScopeEffect = 'missing-repeat-scope-effect',
-  MissingRepeatExpressionSource = 'missing-repeat-expression-source',
+  /** A let scope lacks the retained let binding scope effects that should have introduced it. */
   MissingLetScopeEffect = 'missing-let-scope-effect',
-  MissingLetExpressionSource = 'missing-let-expression-source',
+  /** A let target cannot be represented as a TypeScript lexical binding. */
   UnsupportedLetTarget = 'unsupported-let-target',
-  UnsupportedLetScope = 'unsupported-let-scope',
+  /** A synthetic-view scope has no representable creator products. */
   MissingSyntheticScopeCreator = 'missing-synthetic-scope-creator',
+  /** A template-controller creator lacks the condition/value expression needed for replay. */
   MissingSyntheticScopeCondition = 'missing-synthetic-scope-condition',
+  /** A synthetic-view creator is known but does not yet have an overlay layer contract. */
   UnsupportedSyntheticScope = 'unsupported-synthetic-scope',
+  /** Expression projection found a known semantic owner that cannot yet emit overlay parts. */
   UnsupportedExpressionSyntax = 'unsupported-expression-syntax',
 }
 
@@ -152,6 +170,34 @@ type ViewModelImport = TemplateTypeSystemOverlayPreludeViewModel;
 
 interface OverlayTypeExpression {
   readonly typeExpression: string;
+}
+
+class TemplateTypeSystemOverlayAliasReplayCursor {
+  private currentBindingContextAlias: string | null = '$this';
+  private currentParentBindingContextAlias: string | null = null;
+
+  parentAlias(): TemplateTypeSystemOverlayScopeAlias | null {
+    return this.currentBindingContextAlias == null
+      ? null
+      : {
+        name: '$parent',
+        expression: this.currentBindingContextAlias,
+        parentExpression: this.currentParentBindingContextAlias,
+      };
+  }
+
+  enterBindingContextAlias(alias: string | null): void {
+    this.currentParentBindingContextAlias = this.currentBindingContextAlias == null
+      ? null
+      : '$parent';
+    this.currentBindingContextAlias = alias;
+  }
+
+  enterSyntheticView(scope: BindingScope): void {
+    if (templateScopeCreatesCurrentBindingContextAlias(scope)) {
+      this.enterBindingContextAlias('$this');
+    }
+  }
 }
 
 /**
@@ -388,19 +434,7 @@ export class TemplateTypeSystemOverlayBuilder {
   }
 
   private expressionScopeAliases(scope: BindingScope): TemplateTypeSystemOverlayExpressionScopeAliases {
-    let currentBindingContext = true;
-    let parentBindingContextDepth = 0;
-    for (const current of scopeReplayChain(scope)) {
-      if (!scopeCreatesCurrentBindingContextAlias(current)) {
-        continue;
-      }
-      parentBindingContextDepth = currentBindingContext ? parentBindingContextDepth + 1 : 0;
-      currentBindingContext = true;
-    }
-    return {
-      currentBindingContext,
-      parentBindingContextDepth,
-    };
+    return templateScopeAliasSupport(scope);
   }
 
   private resourceTargetTypeExpression(
@@ -436,9 +470,8 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
     const layers: TemplateTypeSystemOverlayScopeLayer[] = [];
-    let currentBindingContextAlias: string | null = '$this';
-    let currentParentBindingContextAlias: string | null = null;
-    for (const current of scopeReplayChain(scope)) {
+    const aliases = new TemplateTypeSystemOverlayAliasReplayCursor();
+    for (const current of templateScopeReplayChain(scope)) {
       if (current.ownerKind === BindingScopeOwnerKind.RepeatedItem) {
         const effect = repeatEffectForScope(resource, current);
         if (effect == null) {
@@ -460,23 +493,15 @@ export class TemplateTypeSystemOverlayBuilder {
           ));
           return null;
         }
+        const currentAliasExpression = templateRepeatScopeCurrentAliasExpression(current);
         layers.push({
           kind: 'repeat',
           declaration: repeat.declaration,
           iterable: repeat.iterable,
-          currentAliasExpression: repeatScopeCurrentAliasExpression(current),
-          parentAlias: currentBindingContextAlias == null
-            ? null
-            : {
-              name: '$parent',
-              expression: currentBindingContextAlias,
-              parentExpression: currentParentBindingContextAlias,
-            },
+          currentAliasExpression,
+          parentAlias: aliases.parentAlias(),
         });
-        currentParentBindingContextAlias = currentBindingContextAlias == null
-          ? null
-          : '$parent';
-        currentBindingContextAlias = repeatScopeCurrentAliasExpression(current);
+        aliases.enterBindingContextAlias(currentAliasExpression);
         const overrideLocals = overlayContextSlotLocals(current);
         if (overrideLocals.length > 0) {
           layers.push({
@@ -517,24 +542,13 @@ export class TemplateTypeSystemOverlayBuilder {
           parse,
           expressionContext,
           overlayFileName,
-          currentBindingContextAlias == null
-            ? null
-            : {
-              name: '$parent',
-              expression: currentBindingContextAlias,
-              parentExpression: currentParentBindingContextAlias,
-            },
+          aliases.parentAlias(),
         );
         if (syntheticLayers == null) {
           return null;
         }
         layers.push(...syntheticLayers);
-        if (scopeCreatesCurrentBindingContextAlias(current)) {
-          currentParentBindingContextAlias = currentBindingContextAlias == null
-            ? null
-            : '$parent';
-          currentBindingContextAlias = '$this';
-        }
+        aliases.enterSyntheticView(current);
         continue;
       }
 
@@ -886,7 +900,7 @@ export class TemplateTypeSystemOverlayBuilder {
         kind: 'repeat',
         declaration: repeat.declaration,
         iterable: repeat.iterable,
-        currentAliasExpression: repeatScopeCurrentAliasExpression(scope),
+        currentAliasExpression: templateRepeatScopeCurrentAliasExpression(scope),
         parentAlias: { name: '$parent', expression: '$this', parentExpression: null },
       }, ...contextSlotLayersForScope(scope)];
     }
@@ -938,7 +952,7 @@ export class TemplateTypeSystemOverlayBuilder {
         kind: 'binding-context',
         expression: source,
         nonNullishExpression: true,
-        locals: bindingContextScopeLocals(scope),
+        locals: templateScopeBindingContextLocalNames(scope),
         parentAlias,
       }];
     }
@@ -1116,7 +1130,7 @@ export class TemplateTypeSystemOverlayBuilder {
       kind: 'promise-result',
       promise,
       resultKind,
-      locals: bindingContextScopeLocals(scope),
+      locals: templateScopeBindingContextLocalNames(scope),
     };
   }
 
@@ -1291,7 +1305,7 @@ export class TemplateTypeSystemOverlayBuilder {
     if (slot?.targetType == null) {
       return null;
     }
-    for (const candidate of visibleScopeSlots(scope)) {
+    for (const candidate of templateScopeVisibleSlots(scope)) {
       if (
         candidate.name !== name
         && !introduced.has(candidate.name)
@@ -1370,7 +1384,7 @@ function skippedTemplateTypeSystemOverlayExpression(
     return {
       reason,
       expressionProductHandle,
-      sourceAddressHandle: source as AddressHandle,
+      sourceAddressHandle: source,
       sourceStart: null,
       sourceEnd: null,
       summary,
@@ -1379,7 +1393,7 @@ function skippedTemplateTypeSystemOverlayExpression(
   return {
     reason,
     expressionProductHandle,
-    sourceAddressHandle: (source?.file?.id as AddressHandle | undefined) ?? null,
+    sourceAddressHandle: sourceAddressHandleForRuntimeExpressionSpan(source),
     sourceStart: source?.start ?? null,
     sourceEnd: source?.end ?? null,
     summary,
@@ -1414,58 +1428,6 @@ function repeatEffectForScope(
   ) as IteratorBindingScopeEffect | undefined ?? null;
 }
 
-function scopeChain(scope: BindingScope): readonly BindingScope[] {
-  const chain: BindingScope[] = [];
-  let current: BindingScope | null = scope;
-  while (current != null) {
-    chain.unshift(current);
-    current = current.parent;
-  }
-  return chain;
-}
-
-function scopeReplayChain(scope: BindingScope): readonly BindingScope[] {
-  const chain = scopeChain(scope);
-  const first = chain[0] ?? null;
-  const start = first?.ownerKind === BindingScopeOwnerKind.CustomElementController
-    || first?.ownerKind === BindingScopeOwnerKind.CustomAttributeController
-    ? 1
-    : 0;
-  return chain.slice(start);
-}
-
-function visibleScopeSlots(scope: BindingScope): readonly BindingContextSlot[] {
-  return [
-    ...scope.bindingContext.slots,
-    ...scope.overrideContext.slots,
-  ];
-}
-
-function repeatScopeCurrentAliasExpression(scope: BindingScope): string | null {
-  const names = repeatScopeIdentifierSlotNames(scope);
-  return names.length === 0 ? null : `{ ${names.join(', ')} }`;
-}
-
-function scopeCreatesCurrentBindingContextAlias(scope: BindingScope): boolean {
-  if (scope.ownerKind === BindingScopeOwnerKind.RepeatedItem) {
-    return repeatScopeCurrentAliasExpression(scope) != null;
-  }
-  if (scope.ownerKind === BindingScopeOwnerKind.SyntheticView) {
-    return scope.scopeCreators.some((creator) =>
-      creator.creatorKind === BindingScopeCreatorKind.TemplateControllerValueScope
-    ) && !scope.scopeCreators.some((creator) =>
-      creator.creatorKind === BindingScopeCreatorKind.TemplateControllerPromiseResult
-    );
-  }
-  return scope.ownerKind === BindingScopeOwnerKind.StateBinding;
-}
-
-function repeatScopeIdentifierSlotNames(scope: BindingScope): readonly string[] {
-  return scope.bindingContext.slots
-    .map((slot) => slot.name)
-    .filter(isIdentifierName);
-}
-
 function overlayExpressionParts(
   projection: TemplateTypeSystemOverlayExpressionProjection,
 ): readonly TemplateTypeSystemOverlayExpressionPart[] | null {
@@ -1480,7 +1442,7 @@ function projectionSourceAddressHandle(
   fallback: SourceSpan,
 ): AddressHandle | null {
   return projection.source?.sourceAddressHandle
-    ?? (fallback.file?.id as AddressHandle | undefined)
+    ?? sourceAddressHandleForRuntimeExpressionSpan(fallback)
     ?? firstProjectionSource(projection)?.sourceAddressHandle
     ?? null;
 }
@@ -1523,12 +1485,6 @@ function contextSlotLayersForScope(scope: BindingScope): readonly TemplateTypeSy
   return locals.length === 0
     ? []
     : [{ kind: 'context-slots', locals }];
-}
-
-function bindingContextScopeLocals(scope: BindingScope): readonly string[] {
-  return scope.bindingContext.slots
-    .map((slot) => slot.name)
-    .filter(isIdentifierName);
 }
 
 function templateControllerInstructionOwningBinding(

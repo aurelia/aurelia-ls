@@ -50,7 +50,12 @@ const ts2322Diagnostic = diagnostics.rows.find((row) =>
   row.diagnosticKind === 'TS2322'
   && row.source?.path.endsWith('typescript-project-diagnostics-state.ts') === true
 );
+const ts2769Diagnostic = diagnostics.rows.find((row) =>
+  row.diagnosticKind === 'TS2769'
+  && row.source?.path.endsWith('typescript-project-diagnostics-state.ts') === true
+);
 const ts2322Cluster = summary.rows.find((row) => row.diagnosticKind === 'TS2322');
+const ts2769Cluster = summary.rows.find((row) => row.diagnosticKind === 'TS2769');
 const configDiagnostic = diagnostics.rows.find((row) =>
   row.phase === 'config'
   && row.message.includes('definitelyNotACompilerOption')
@@ -87,6 +92,18 @@ if (ts2322Cluster == null || ts2322Cluster.count < 1) {
 }
 if (ts2322Cluster?.sourceRoles.some((row) => row.role === 'app-source' && row.count >= 1) !== true) {
   failures.push('Expected TS2322 summary to retain app-source role counts.');
+}
+if (ts2769Diagnostic == null) {
+  failures.push('Expected TypeScript diagnostics to include TS2769 overload pressure in the project-local state source file.');
+}
+if (ts2769Diagnostic?.sourceRole !== 'app-source') {
+  failures.push(`Expected project-local TS2769 diagnostics to carry app-source role, observed ${ts2769Diagnostic?.sourceRole ?? 'missing'}.`);
+}
+if (ts2769Cluster == null || ts2769Cluster.count < 1) {
+  failures.push('Expected TypeScript diagnostic summary to cluster TS2769.');
+}
+if (ts2769Cluster?.sourceRoles.some((row) => row.role === 'app-source' && row.count >= 1) !== true) {
+  failures.push('Expected TS2769 summary to retain app-source role counts.');
 }
 if (configDiagnostic == null) {
   failures.push('Expected TypeScript diagnostics to include tsconfig option diagnostics.');
@@ -127,8 +144,13 @@ if (ts2322Diagnostic?.severity !== 'error') {
 if (ts2322Diagnostic?.phase !== 'semantic') {
   failures.push(`Expected TS2322 phase to be semantic, observed ${ts2322Diagnostic?.phase ?? 'missing'}.`);
 }
-if (sourceFileDiagnostics.rows.length !== 1 || sourceFileDiagnostics.rows[0].diagnosticKind !== 'TS2322') {
-  failures.push('Expected source-file TypeScript diagnostics filtering to return only the TS2322 row.');
+if (
+  sourceFileDiagnostics.rows.length !== 2
+  || sourceFileDiagnostics.rows.some((row) => row.source?.path.endsWith('typescript-project-diagnostics-state.ts') !== true)
+  || !sourceFileDiagnostics.rows.some((row) => row.diagnosticKind === 'TS2322')
+  || !sourceFileDiagnostics.rows.some((row) => row.diagnosticKind === 'TS2769')
+) {
+  failures.push('Expected source-file TypeScript diagnostics filtering to return only the state-file TS2322 and TS2769 rows.');
 }
 if (configFileDiagnostics.rows.length !== 1 || configFileDiagnostics.rows[0].diagnosticKind !== 'TS5023') {
   failures.push('Expected tsconfig source-file TypeScript diagnostics filtering to return only the TS5023 row.');

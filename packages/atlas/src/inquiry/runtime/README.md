@@ -117,6 +117,15 @@ This is not a compatibility layer for old readers and not the default caller sur
   `memory-coverage` reverses that join from live memory-next actions to route candidates. Exact source/path/auLink
   overlap is structural; shared generic lens anchors are not sufficient by themselves because they can connect unrelated
   routes through broad inspection tools such as `product.architecture`.
+  `coverage` is the equivalent reverse index for cross-cutting product dimensions that cut across many routes. Use
+  `coverageDimension` plus `coverageState` when a route-local topic may be missing a shared inquiry/API capability,
+  such as intent-aware continuation threading, authored source-text boundaries, or checker value-access helper reuse,
+  even though the route itself is not the substrate owner.
+  Add `coverageDepth` when completion quality matters: `wired` means the public shape is connected, `semantic` means
+  route-specific products/evidence/framework semantics are reflected, and `verified` means a contract, canary query, or
+  source-level proof witnesses that behavior. Coverage filters are row-coherent, so a combined dimension/state/depth
+  request cannot be satisfied by different coverage rows on the same route. Do not collapse these levels back into a
+  single covered/partial label.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
@@ -199,6 +208,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   row-to-lens hops so route meaning is declared once instead of rebuilt as inline object literals.
   `projectionContinuation` and `nextPageContinuation` own generic framework projection/page moves; pass basis,
   evidence, priority, and route summary through options rather than cloning local helper functions.
+  `sourceRowContinuationsForPage` binds common next-page plus row-source inspection moves at row-family declaration
+  time; use it for plain source-backed row families instead of adding one-use wrappers that only fill copy strings.
   `FrameworkRowContinuationBuilder` owns repeated row-local source, type-facts, call-site, and evaluator-effect
   inspection moves. Prefer it over hand-written `TsSource`/`TsType` continuation objects so Atlas can continue to
   inspect those moves through `atlas.self:continuations`.

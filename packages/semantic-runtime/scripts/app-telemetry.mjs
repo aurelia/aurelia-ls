@@ -25,7 +25,8 @@ const authoringFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime
 const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure');
 const queryDefaultAnalysisDepth = 'query-default';
 
-const roots = telemetryRoots();
+const cliOptions = parseTelemetryCliOptions(process.argv.slice(2));
+const roots = telemetryRoots(cliOptions);
 const depths = telemetryDepths();
 const profiles = telemetryProfiles();
 const selectedQueryKinds = telemetryQueryKinds();
@@ -859,12 +860,16 @@ function measureQuery(app, query, queryIteration = 0) {
   const kernelAfter = app.runtime.workspace.store.readTelemetrySnapshot({ includeBreakdowns: captureKernelBreakdowns });
   collectIfRequested();
   const memoryAfter = readSemanticRuntimeMemorySample();
+  const payload = queryPayloadStats(answer);
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
-    payloadBytes: jsonByteLength(answer.value),
+    payloadBytes: payload.valueBytes,
+    answerBytes: payload.answerBytes,
+    continuationCount: payload.continuationCount,
+    continuationBytes: payload.continuationBytes,
     rowCount: resultRowCount(answer.value),
     retainedAnswerHit: queryRepeatCount > 1 && app.queryClaims.snapshot().retainedAnswerHits > retainedAnswerHitsBefore,
     appWorldFreeProfile: answer.profile?.appWorldFreeProfile ?? null,
@@ -909,12 +914,16 @@ async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, 
   const kernelAfter = runtime.workspace.store.readTelemetrySnapshot({ includeBreakdowns: captureKernelBreakdowns });
   collectIfRequested();
   const memoryAfter = readSemanticRuntimeMemorySample();
+  const payload = queryPayloadStats(answer);
   return {
     label: queryLabel(query.kind, queryIteration),
     materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
-    payloadBytes: jsonByteLength(answer.value),
+    payloadBytes: payload.valueBytes,
+    answerBytes: payload.answerBytes,
+    continuationCount: payload.continuationCount,
+    continuationBytes: payload.continuationBytes,
     rowCount: resultRowCount(answer.value),
     retainedAnswerHit: queryRepeatCount > 1
       && runtimeQueryClaimRetainedAnswerHits(runtime, profile) > retainedAnswerHitsBefore,
@@ -958,12 +967,16 @@ async function measureRoutedQueryBatch(runtime, appCandidate, depth, profile, qu
   const kernelAfter = runtime.workspace.store.readTelemetrySnapshot({ includeBreakdowns: captureKernelBreakdowns });
   collectIfRequested();
   const memoryAfter = readSemanticRuntimeMemorySample();
+  const payload = queryPayloadStats(answer);
   return {
     label: queryLabel('app-query-batch', queryIteration),
     materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
-    payloadBytes: jsonByteLength(answer.value),
+    payloadBytes: payload.valueBytes,
+    answerBytes: payload.answerBytes,
+    continuationCount: payload.continuationCount,
+    continuationBytes: payload.continuationBytes,
     rowCount: resultRowCount(answer.value),
     retainedAnswerHit: queryRepeatCount > 1
       && runtimeQueryClaimRetainedAnswerHits(runtime, profile) > retainedAnswerHitsBefore,
@@ -1441,6 +1454,9 @@ function addToAggregate(aggregate, run, options = {}) {
       count: 0,
       milliseconds: 0,
       payloadBytes: 0,
+      answerBytes: 0,
+      continuationCount: 0,
+      continuationBytes: 0,
       rows: 0,
       heapUsed: 0,
       kernelRecords: 0,
@@ -1451,6 +1467,9 @@ function addToAggregate(aggregate, run, options = {}) {
     current.count += 1;
     current.milliseconds += queryResult.milliseconds;
     current.payloadBytes += queryResult.payloadBytes;
+    current.answerBytes += queryResult.answerBytes ?? queryResult.payloadBytes;
+    current.continuationCount += queryResult.continuationCount ?? 0;
+    current.continuationBytes += queryResult.continuationBytes ?? 0;
     current.rows += queryResult.rowCount;
     current.heapUsed += queryResult.memory.heapUsedBytes;
     current.kernelRecords += queryResult.kernel.totalRecords;
@@ -2457,6 +2476,9 @@ function sortedQueryAggregate(queries) {
       outcome: `${value.count} run(s)`,
       milliseconds: value.milliseconds,
       payloadBytes: value.payloadBytes,
+      answerBytes: value.answerBytes,
+      continuationCount: value.continuationCount,
+      continuationBytes: value.continuationBytes,
       rowCount: value.rows,
       memory: { heapUsedBytes: value.heapUsed },
       kernel: {
@@ -2936,7 +2958,10 @@ function printQueryRows(label, rows) {
     .map((row) =>
       `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.outcome}`
       + (row.materializationPolicy == null ? '' : `/policy ${row.materializationPolicy}`)
-      + `/rows ${row.rowCount}/json ${formatSemanticRuntimeBytes(row.payloadBytes)}/heap ${formatSemanticRuntimeBytes(row.memory.heapUsedBytes)}`
+      + `/rows ${row.rowCount}/valueJson ${formatSemanticRuntimeBytes(row.payloadBytes)}`
+      + `/answerJson ${formatSemanticRuntimeBytes(row.answerBytes ?? row.payloadBytes)}`
+      + ((row.continuationCount ?? 0) === 0 ? '' : `/continuations ${row.continuationCount}/${formatSemanticRuntimeBytes(row.continuationBytes ?? 0)}`)
+      + `/heap ${formatSemanticRuntimeBytes(row.memory.heapUsedBytes)}`
       + (row.retainedAnswerHit || row.retainedAnswerHits > 0 ? `/retainedHits ${row.retainedAnswerHits ?? 1}` : '')
       + (row.kernel == null || (row.kernel.totalRecords === 0 && row.kernel.products === 0) ? '' : `/kernel ${row.kernel.totalRecords}:${row.kernel.products}`)
       + (row.productKinds == null || row.productKinds.length === 0 ? '' : `/product-kinds ${compactCountRows(row.productKinds, 3)}`)
@@ -3047,7 +3072,41 @@ function jsonByteLength(value) {
   return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
 }
 
-function telemetryRoots() {
+function queryPayloadStats(answer) {
+  const continuations = answerContinuationRows(answer);
+  return {
+    valueBytes: jsonByteLength(answer.value),
+    answerBytes: jsonByteLength(answer),
+    continuationCount: continuations.length,
+    continuationBytes: continuations.length === 0 ? 0 : jsonByteLength(continuations),
+  };
+}
+
+function answerContinuationRows(answer) {
+  const rows = [];
+  if (Array.isArray(answer?.continuations)) {
+    rows.push(...answer.continuations);
+  }
+  const batchRows = answer?.value?.rows;
+  if (Array.isArray(batchRows)) {
+    for (const batchRow of batchRows) {
+      const childContinuations = batchRow?.answer?.continuations;
+      if (Array.isArray(childContinuations)) {
+        rows.push(...childContinuations);
+      }
+    }
+  }
+  return rows;
+}
+
+function telemetryRoots(options) {
+  const cliRoots = [
+    ...options.roots,
+    ...options.fixtures.flatMap((fixture) => telemetryFixtureRoots(fixture)),
+  ];
+  if (cliRoots.length > 0) {
+    return uniqueResolvedRoots(cliRoots);
+  }
   const raw = process.env.SEMANTIC_RUNTIME_TELEMETRY_ROOTS;
   if (raw != null && raw.trim().length > 0) {
     return uniqueResolvedRoots(raw.split(path.delimiter));
@@ -3058,6 +3117,80 @@ function telemetryRoots() {
     path.join(pressureFixtureRoot, 'mixed-form-surfaces'),
     path.join(pressureFixtureRoot, 'router-viewport-resolution-errors'),
   ].filter((root) => existsSync(root));
+}
+
+function parseTelemetryCliOptions(args) {
+  const options = {
+    roots: [],
+    fixtures: [],
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--root') {
+      options.roots.push(requiredCliValue(args, index, '--root'));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--root=')) {
+      options.roots.push(arg.slice('--root='.length));
+      continue;
+    }
+    if (arg === '--fixture') {
+      options.fixtures.push(requiredCliValue(args, index, '--fixture'));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--fixture=')) {
+      options.fixtures.push(arg.slice('--fixture='.length));
+      continue;
+    }
+    throw new Error(`Unsupported app telemetry argument '${arg}'. Use --fixture <name> or --root <path>.`);
+  }
+  return options;
+}
+
+function requiredCliValue(args, index, optionName) {
+  const value = args[index + 1];
+  if (value == null || value.startsWith('--')) {
+    throw new Error(`Missing value for ${optionName}.`);
+  }
+  return value;
+}
+
+function telemetryFixtureRoots(rawFixture) {
+  const separator = rawFixture.indexOf(':');
+  if (separator > 0) {
+    const lane = rawFixture.slice(0, separator);
+    const fixtureName = rawFixture.slice(separator + 1);
+    return [telemetryFixtureRoot(lane, fixtureName)];
+  }
+
+  const candidates = ['pressure', 'authoring']
+    .map((lane) => telemetryFixtureRoot(lane, rawFixture, false))
+    .filter((root) => root != null);
+  if (candidates.length === 0) {
+    throw new Error(`Unknown app telemetry fixture '${rawFixture}'.`);
+  }
+  return candidates;
+}
+
+function telemetryFixtureRoot(lane, fixtureName, failOnMissing = true) {
+  const baseRoot = lane === 'pressure'
+    ? pressureFixtureRoot
+    : lane === 'authoring'
+      ? authoringFixtureRoot
+      : null;
+  if (baseRoot == null) {
+    throw new Error(`Unsupported app telemetry fixture lane '${lane}'. Use pressure:<name> or authoring:<name>.`);
+  }
+  const root = path.join(baseRoot, fixtureName);
+  if (!existsSync(root)) {
+    if (failOnMissing) {
+      throw new Error(`Unknown ${lane} app telemetry fixture '${fixtureName}'.`);
+    }
+    return null;
+  }
+  return root;
 }
 
 function uniqueResolvedRoots(rawRoots) {

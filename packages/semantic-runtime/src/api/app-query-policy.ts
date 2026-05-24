@@ -22,6 +22,7 @@ import {
   SemanticAppQueryKind,
 } from './contracts.js';
 import {
+  semanticAppQueryCatalogShape,
   semanticAppQueryCatalogRow,
 } from './app-query-catalog.js';
 import type {
@@ -85,13 +86,14 @@ export function semanticAppQueryMaterializationPolicy(
   query: SemanticAppQuery,
   catalogPolicy: SemanticQueryMaterializationPolicy,
 ): SemanticQueryMaterializationPolicy {
-  return diagnosticProjectionControlsMaterialization(query)
-    && query.diagnosticProjection === 'available-products'
+  const shapedQuery = semanticAppQueryCatalogShape(query);
+  return diagnosticProjectionControlsMaterialization(shapedQuery)
+    && shapedQuery.diagnosticProjection === 'available-products'
     && catalogPolicy === 'query-type-projection'
     ? 'projection-only'
-    : query.includeTypeSurfaces === true
+    : shapedQuery.kind === SemanticAppQueryKind.AppTopology && shapedQuery.includeTypeSurfaces === true
       ? 'query-type-projection'
-    : catalogPolicy;
+      : catalogPolicy;
 }
 
 function diagnosticProjectionControlsMaterialization(query: SemanticAppQuery): boolean {
@@ -133,9 +135,10 @@ export function appQuerySourceFilePath(
 }
 
 export function appQueryNeedsAuthoringTemplates(
-  request: Pick<SemanticAppQuery, 'cursor' | 'sourceFile'>,
+  request: SemanticAppQuery,
 ): boolean {
-  return request.cursor != null || request.sourceFile != null;
+  const shapedQuery = semanticAppQueryCatalogShape(request);
+  return shapedQuery.cursor != null || shapedQuery.sourceFile != null;
 }
 
 export function appQueryBatchSourceFilePath(
@@ -152,7 +155,10 @@ export function appQueryBatchAuthoringTemplateSourceFiles(
   queries: readonly SemanticAppQuery[],
 ): readonly string[] {
   return [...new Set(queries
-    .map((query) => query.cursor?.filePath ?? query.sourceFile?.filePath ?? null)
+    .map((query) => {
+      const shapedQuery = semanticAppQueryCatalogShape(query);
+      return shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
+    })
     .filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0))]
     .sort();
 }
@@ -193,15 +199,16 @@ export function routedAppQueryBatchAnalysisDepth(
 export function defaultInquiryProfileForRoutedAppQuery(
   request: SemanticRuntimeAppQueryRequest,
 ): SemanticRuntimeInquiryProfile {
-  if (request.cursor != null) {
+  const shapedQuery = semanticAppQueryCatalogShape(request);
+  if (shapedQuery.cursor != null) {
     return 'lsp-cursor';
   }
-  if (request.sourceFile != null) {
-    return request.kind === SemanticAppQueryKind.TemplateDiagnostics
-      || request.kind === SemanticAppQueryKind.AppDiagnostics
-      || request.kind === SemanticAppQueryKind.AppDiagnosticSummary
-      || request.kind === SemanticAppQueryKind.TypeScriptDiagnostics
-      || request.kind === SemanticAppQueryKind.TypeScriptDiagnosticSummary
+  if (shapedQuery.sourceFile != null) {
+    return shapedQuery.kind === SemanticAppQueryKind.TemplateDiagnostics
+      || shapedQuery.kind === SemanticAppQueryKind.AppDiagnostics
+      || shapedQuery.kind === SemanticAppQueryKind.AppDiagnosticSummary
+      || shapedQuery.kind === SemanticAppQueryKind.TypeScriptDiagnostics
+      || shapedQuery.kind === SemanticAppQueryKind.TypeScriptDiagnosticSummary
       ? 'lsp-diagnostics'
       : 'mcp-orientation';
   }
@@ -211,10 +218,11 @@ export function defaultInquiryProfileForRoutedAppQuery(
 export function defaultInquiryProfileForRoutedAppQueryBatch(
   queries: readonly SemanticAppQuery[],
 ): SemanticRuntimeInquiryProfile {
-  if (queries.some((query) => query.cursor != null)) {
+  const shapedQueries = queries.map(semanticAppQueryCatalogShape);
+  if (shapedQueries.some((query) => query.cursor != null)) {
     return 'lsp-cursor';
   }
-  if (queries.some((query) =>
+  if (shapedQueries.some((query) =>
     query.sourceFile != null
     && (
       query.kind === SemanticAppQueryKind.TemplateDiagnostics

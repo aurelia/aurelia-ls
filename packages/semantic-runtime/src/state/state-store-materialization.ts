@@ -306,7 +306,10 @@ function stateStoreInitialStateType(
     return null;
   }
   const checker = typeSystem.checker;
-  const type = checker.getTypeAtLocation(node);
+  const type = typeSystem.readProgramTypeAtLocation(node);
+  if (type == null) {
+    return null;
+  }
   return new CheckerTypeProjector(store).ensureProjection({
     localKey: `${localKey}:initial-state-type`,
     checker,

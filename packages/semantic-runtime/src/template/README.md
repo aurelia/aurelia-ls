@@ -147,7 +147,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   Runtime watchers are controller-owned binding products with their own lane:
   `runtime-watcher.ts` mirrors `ComputedWatcher` and `ExpressionWatcher`,
   `runtime-watcher-factory.ts` materializes them from `definition.watches` during controller creation, and
-  `runtime-watcher-publication.ts` records the controller ownership and binding identity. This mirrors Aurelia's
+  `runtime-watcher-publication.ts` records the controller ownership and binding identity. Watcher-owned observed
+  dependencies use observation's shared runtime observed-dependency publication helper so watcher and binding rows keep
+  the same `ObservedDependency` product shape while preserving different owner/claim predicates. This mirrors Aurelia's
   `createWatchers(...)` phase, where watchers are added to the controller before ordinary renderer-created bindings,
   while keeping watcher source metadata distinct from property/listener/ref binding instructions.
   `SpreadBinding` is the deliberate exception to direct controller admission: it can own dynamically compiled inner
@@ -600,12 +602,17 @@ own the missing-resource issue. The same generated expression parts feed repeat 
 promise, and state-binding layers, so Aurelia-specific expression projection is not duplicated between standalone
 probes and controller/scope setup. `template-type-system-overlay-plan.ts`
 owns the intermediate overlay layer and emitter shape; keep construct planning from semantic products separate from
-generated TypeScript text emission as the supported Aurelia surface widens. Keep this builder downstream of scope materialization: if a future overlay needs a new local,
+generated TypeScript text emission as the supported Aurelia surface widens. Parent alias capture/replay is an emitter
+primitive there because repeat and value-scope blocks must both snapshot the parent binding context before the generated
+block changes scope. Keep this builder downstream of scope materialization: if a future overlay needs a new local,
 route parameter, `$event`, or plugin scope fact, add that fact to the owning semantic materializer first instead of
 teaching the overlay builder to rediscover it from raw template text. `template-expression-selection.ts` owns shared
 template expression/value-site selection plus expression-parse to runtime-scope lookup; cursor inquiries, diagnostics,
 and overlays should reuse that selector so they agree on the semantic product locus before TypeScript projection
-starts. `BindingScope.scopeCreators` is the hot-object mirror for framework-semantic products that
+starts. `template-scope-replay.ts` owns the shared scope-chain replay and `$this`/`$parent` alias reachability policy
+that generated overlays, cursor explanations, diagnostics, and future continuation/edit surfaces should reuse before
+adding local scope ancestry logic. The overlay builder keeps a small alias replay cursor for the generated layer list so
+repeat and synthetic-view scopes advance the same `$this`/`$parent` state machine. `BindingScope.scopeCreators` is the hot-object mirror for framework-semantic products that
 create or narrow a scope: runtime scope effects, listener events, state binding scopes, runtime assignments, and
 template-controller branch/value facts. Use it for consumers that need to replay scope causes in order, rather than
 searching by source address or trying to recover them from rendered instructions. Same-level synthetic scopes preserve
@@ -640,9 +647,14 @@ binding-context slots; listener-event scopes nested under that value scope retai
 promise-result scope declarations, not standalone expression probes. Promise `then` locals use the awaited parent
 promise type, promise `catch` locals use `unknown`, and state binding scopes use the modeled state context member
 expressions from `StateBindingScope` rather than searching by raw local names.
+`runtime-expression-source-address.ts` is the bridge between parser-local `SourceSpan` values and kernel source
+addresses. Semantic-runtime-created parse contexts put the kernel source-file address handle in `SourceFileRef.id`;
+overlay, scope, and bound-controller consumers should use `sourceAddressHandleForRuntimeExpressionSpan(...)` instead
+of casting `span.file.id` at each call site.
 `app-api-pressure.mjs` prints non-extractive overlay skip summary buckets so larger app-shaped probes can distinguish
 remaining ancestor-alias pressure from value-converter, binding-behavior, or custom-expression pressure without
-promoting source details.
+promoting source details. `TemplateTypeSystemOverlaySkippedReason` is an emitted-fact vocabulary, not a planning
+wishlist: add a skip reason only when the builder can actually emit it and the owner/substrate gap is understood.
 Binding behaviors are value-transparent for overlay expression checking: framework `astEvaluate` returns the wrapped
 expression, while bind-time behavior effects and diagnostics are owned by `runtime-binding-behavior-materializer.ts`.
 `template-type-system-overlay-prelude.ts` contains only emitted helper declarations, each with an owner and emitted-name

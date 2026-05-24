@@ -404,7 +404,7 @@ function expressionCreatesObservationRoot(
   return ts.isPropertyAccessExpression(callee)
     && callee.name.text === 'get'
     && isAureliaContainerReceiver(
-      typeSystem.checker,
+      typeSystem,
       callee.expression,
       DiContainerApiMethodKind.Get,
       sourcePathByFileName,
@@ -601,11 +601,7 @@ function collectRunEffectObservedDependencyDrafts(
     expression: ts.PropertyAccessExpression,
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
-    const programExpression = typeSystem.readProgramNode(expression);
-    if (programExpression == null) {
-      return null;
-    }
-    const symbol = typeSystem.checker.getSymbolAtLocation(programExpression.name);
+    const symbol = typeSystem.readProgramSymbolAtLocation(expression.name);
     if (!symbolHasObservableGetterDecorator(symbol)) {
       return null;
     }

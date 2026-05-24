@@ -10,6 +10,7 @@ import {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SEMANTIC_APP_QUERY_KINDS,
   SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES,
+  INQUIRY_CONTINUATION_INTENTS,
   SEMANTIC_PROJECT_DISCOVERY_MODES,
   SEMANTIC_RUNTIME_DETAIL_VALUES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
@@ -52,6 +53,10 @@ const appRetentionShape = {
   appRetention: z.enum(SEMANTIC_APP_RETENTION_POLICIES).nullable().optional(),
 } as const;
 
+const continuationIntentShape = {
+  continuationIntents: z.array(z.enum(INQUIRY_CONTINUATION_INTENTS)).nullable().optional(),
+} as const;
+
 const openAppShape = {
   ...workspaceShape,
   projectKey: z.string().nullable().optional(),
@@ -61,6 +66,7 @@ const openAppShape = {
   authoringTemplateSourceFiles: z.array(z.string()).nullable().optional(),
   authoringTemplateLimit: z.number().int().nonnegative().nullable().optional(),
   ...appRetentionShape,
+  ...continuationIntentShape,
 } as const;
 
 const pagedShape = {
@@ -91,6 +97,7 @@ const semanticAppQuerySchema = z.object({
   kind: z.enum(SEMANTIC_APP_QUERY_KINDS),
   ...pagedShape,
   ...diagnosticProjectionShape,
+  ...continuationIntentShape,
   includeTypeSurfaces: z.boolean().nullable().optional(),
   diagnosticPageSize: z.number().int().positive().nullable().optional(),
   openSeamPageSize: z.number().int().positive().nullable().optional(),
@@ -154,6 +161,7 @@ export const appQueryInputSchema = {
   ...openAppShape,
   ...pagedShape,
   ...diagnosticProjectionShape,
+  ...continuationIntentShape,
   queryKind: z.enum(SEMANTIC_APP_QUERY_KINDS),
   cursor: cursorSchema.nullable().optional(),
   sourceFile: sourceFileSchema.nullable().optional(),
@@ -161,6 +169,7 @@ export const appQueryInputSchema = {
 
 export const appQueryBatchInputSchema = {
   ...openAppShape,
+  ...continuationIntentShape,
   queries: z.array(semanticAppQuerySchema).min(1),
   includeAppProfile: z.boolean().nullable().optional(),
   includeAppQueryClaimProfiles: z.boolean().nullable().optional(),
@@ -194,6 +203,7 @@ export const appDiagnosticsInputSchema = {
   ...openAppShape,
   ...pagedShape,
   ...diagnosticProjectionShape,
+  ...continuationIntentShape,
   sourceFile: sourceFileSchema.nullable().optional(),
 } as const;
 
@@ -202,6 +212,7 @@ export const diagnosticOverviewInputSchema = appDiagnosticsInputSchema;
 export const templateCursorInputSchema = {
   ...workspaceShape,
   ...pagedShape,
+  ...continuationIntentShape,
   ...appRetentionShape,
   cursor: cursorSchema,
   projectKey: z.string().nullable().optional(),
@@ -215,6 +226,7 @@ export const templateDiagnosticsInputSchema = {
   ...workspaceShape,
   ...pagedShape,
   ...diagnosticProjectionShape,
+  ...continuationIntentShape,
   ...appRetentionShape,
   sourceFile: sourceFileSchema.nullable().optional(),
   projectKey: z.string().nullable().optional(),

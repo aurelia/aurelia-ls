@@ -40,6 +40,7 @@ import {
   type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import {
   RuntimeAstFrameworkErrorCode,
   RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodes,
@@ -150,7 +151,7 @@ function missingMemberIsNullishUnionAccess(
       continue;
     }
     hasNonNullishConstituent = true;
-    if (carrier.checker.getPropertyOfType(constituent, selectedMemberName) == null) {
+    if (checkerPropertySymbol(carrier.checker, constituent, selectedMemberName) == null) {
       return false;
     }
   }

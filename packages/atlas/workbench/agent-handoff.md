@@ -91,7 +91,14 @@ pnpm --filter @aurelia-ls/atlas self-check
   overlaps are required so generic carriers such as `semantic-runtime`,
   `template`, `memory`, and `inquiry` do not route by themselves. Memory-domain
   anchors support explicit domain filters and memory-coverage joins, not free
-  query vocabulary. Unfiltered `route-plan --detail` ranks from both memory-next and live product/source
+  query vocabulary. Use
+  `--projection=coverage --coverageDimension=intent-aware-continuations`
+  to find route-local query families whose public answer surfaces still need the
+  shared intent-aware continuation dimension; `--coverageState=missing` or
+  `partial` narrows the list when a broad topic might otherwise hide the gap.
+  Combined coverage filters are row-coherent: dimension, state, and depth must
+  match one coverage row rather than independent rows on the same route.
+  Unfiltered `route-plan --detail` ranks from both memory-next and live product/source
   pressure; `product-structural` matches mean a large module, class, function,
   or named declaration matched a route-owned source anchor. Symbol-qualified
   anchors do not inherit whole-file/module pressure, and Atlas catalog/contract/barrel

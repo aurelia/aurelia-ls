@@ -19,6 +19,10 @@ import {
   checkerCollectionSymbolName,
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
+import {
+  checkerPropertySymbol,
+  symbolForExpression,
+} from '../type-system/checker-node-helpers.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   type RuntimeObservedDependencyDraft,
@@ -735,10 +739,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
   private checkerTypeForExpression(
     expression: ts.Expression,
   ): ts.Type | null {
-    const programExpression = this.typeContext?.readProgramNode(expression) ?? null;
-    return programExpression == null
-      ? null
-      : this.typeContext?.checker.getTypeAtLocation(programExpression) ?? null;
+    return proxyTypeAtNode(this.typeContext, expression);
   }
 
   private methodDeclarationForCallee(
@@ -748,7 +749,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (programCallee == null) {
       return null;
     }
-    const symbol = this.typeContext?.checker.getSymbolAtLocation(programCallee.name) ?? null;
+    const symbol = this.typeContext == null ? null : symbolForExpression(this.typeContext.checker, programCallee.name);
     const declaration = symbol?.declarations?.find(ts.isMethodDeclaration) ?? null;
     return declaration;
   }
@@ -760,11 +761,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return true;
     }
-    const programReceiver = this.typeContext.readProgramNode(receiver);
-    if (programReceiver == null) {
+    const type = proxyTypeAtNode(this.typeContext, receiver);
+    if (type == null) {
       return true;
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programReceiver);
     return checkerTypeCanUseProxyObservedCollectionMethod(this.typeContext.checker, type, methodName);
   }
 
@@ -775,11 +775,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return proxyInterceptedCollectionMethods.has(methodName);
     }
-    const programReceiver = this.typeContext.readProgramNode(receiver);
-    if (programReceiver == null) {
+    const type = proxyTypeAtNode(this.typeContext, receiver);
+    if (type == null) {
       return proxyInterceptedCollectionMethods.has(methodName);
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programReceiver);
     return checkerTypeCanUseProxyInterceptedCollectionMethod(this.typeContext.checker, type, methodName);
   }
 
@@ -819,11 +818,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return 'unknown';
     }
-    const programReceiver = this.typeContext.readProgramNode(receiver);
-    if (programReceiver == null) {
+    const type = proxyTypeAtNode(this.typeContext, receiver);
+    if (type == null) {
       return 'unknown';
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programReceiver);
     return checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type);
   }
 
@@ -889,11 +887,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return true;
     }
-    const programReceiver = this.typeContext.readProgramNode(receiver);
-    if (programReceiver == null) {
+    const type = proxyTypeAtNode(this.typeContext, receiver);
+    if (type == null) {
       return true;
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programReceiver);
     return checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type) !== 'none';
   }
 
@@ -903,11 +900,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return true;
     }
-    const programReceiver = this.typeContext.readProgramNode(receiver);
-    if (programReceiver == null) {
+    const type = proxyTypeAtNode(this.typeContext, receiver);
+    if (type == null) {
       return true;
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programReceiver);
     const kind = checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type);
     return kind === 'array' || kind === 'unknown';
   }
@@ -924,11 +920,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null) {
       return true;
     }
-    const programName = this.typeContext.readProgramNode(name);
-    if (programName == null) {
+    const type = proxyTypeAtNode(this.typeContext, name);
+    if (type == null) {
       return true;
     }
-    const type = this.typeContext.checker.getTypeAtLocation(programName);
     return checkerTypeCanBeProxyWrapped(this.typeContext.checker, type);
   }
 
@@ -1139,8 +1134,20 @@ function observedMemberSourceForPropertyAccess(
   if (programExpression == null) {
     return null;
   }
-  const symbol = typeContext.checker.getSymbolAtLocation(programExpression.name);
+  const symbol = symbolForExpression(typeContext.checker, programExpression.name);
   return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
+}
+
+/** Reads a TypeChecker type through the admitted Program node before proxy-observation policy uses it. */
+function proxyTypeAtNode(
+  typeContext: RuntimeProxyObservedDependencyTypeContext | null,
+  node: ts.Node,
+): ts.Type | null {
+  if (typeContext == null) {
+    return null;
+  }
+  const programNode = typeContext.readProgramNode(node);
+  return programNode == null ? null : typeContext.checker.getTypeAtLocation(programNode);
 }
 
 function observedMemberSourceForElementAccess(
@@ -1151,14 +1158,11 @@ function observedMemberSourceForElementAccess(
   if (typeContext?.store == null) {
     return null;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression);
-  if (programOwner == null) {
+  const ownerType = proxyTypeAtNode(typeContext, expression.expression);
+  if (ownerType == null) {
     return null;
   }
-  const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
-  const symbol = typeContext.checker.getPropertyOfType(ownerType, key)
-    ?? typeContext.checker.getPropertyOfType(typeContext.checker.getApparentType(ownerType), key)
-    ?? null;
+  const symbol = checkerPropertySymbol(typeContext.checker, ownerType, key);
   return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
 }
 
@@ -1195,11 +1199,10 @@ function expressionCanBeProxyWrapped(
   if (typeContext == null) {
     return true;
   }
-  const programExpression = typeContext.readProgramNode(expression);
-  if (programExpression == null) {
+  const type = proxyTypeAtNode(typeContext, expression);
+  if (type == null) {
     return true;
   }
-  const type = typeContext.checker.getTypeAtLocation(programExpression);
   return checkerTypeCanBeProxyWrapped(typeContext.checker, type);
 }
 
@@ -1213,15 +1216,14 @@ function propertyAccessHasNowrapDecorator(
   const programExpression = typeContext.readProgramNode(expression);
   const symbol = programExpression == null
     ? null
-    : typeContext.checker.getSymbolAtLocation(programExpression.name);
+    : symbolForExpression(typeContext.checker, programExpression.name);
   if (declarationsHaveNowrapDecorator(symbol?.declarations)) {
     return true;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression);
-  if (programOwner == null) {
+  const ownerType = proxyTypeAtNode(typeContext, expression.expression);
+  if (ownerType == null) {
     return false;
   }
-  const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, expression.name.text);
 }
 
@@ -1233,11 +1235,10 @@ function elementAccessHasNowrapProperty(
   if (typeContext == null) {
     return false;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression);
-  if (programOwner == null) {
+  const ownerType = proxyTypeAtNode(typeContext, expression.expression);
+  if (ownerType == null) {
     return false;
   }
-  const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, key);
 }
 
@@ -1249,11 +1250,10 @@ function propertyExpressionHasNowrapDecorator(
   if (typeContext == null) {
     return false;
   }
-  const programOwner = typeContext.readProgramNode(ownerExpression);
-  if (programOwner == null) {
+  const ownerType = proxyTypeAtNode(typeContext, ownerExpression);
+  if (ownerType == null) {
     return false;
   }
-  const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, propertyName);
 }
 
@@ -1265,14 +1265,11 @@ function observedMemberSourceForImplicitPropertyRead(
   if (typeContext?.store == null) {
     return null;
   }
-  const programReceiver = typeContext.readProgramNode(receiver);
-  if (programReceiver == null) {
+  const receiverType = proxyTypeAtNode(typeContext, receiver);
+  if (receiverType == null) {
     return null;
   }
-  const receiverType = typeContext.checker.getTypeAtLocation(programReceiver);
-  const symbol = typeContext.checker.getPropertyOfType(receiverType, key)
-    ?? typeContext.checker.getPropertyOfType(typeContext.checker.getApparentType(receiverType), key)
-    ?? null;
+  const symbol = checkerPropertySymbol(typeContext.checker, receiverType, key);
   return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
 }
 
@@ -1358,11 +1355,10 @@ function receiverCanUseProxyWrappedCallResultMethod(
   if (typeContext == null) {
     return true;
   }
-  const programReceiver = typeContext.readProgramNode(receiver);
-  if (programReceiver == null) {
+  const type = proxyTypeAtNode(typeContext, receiver);
+  if (type == null) {
     return true;
   }
-  const type = typeContext.checker.getTypeAtLocation(programReceiver);
   return checkerTypeCanUseProxyCollectionMethod(
     typeContext.checker,
     type,
@@ -1379,11 +1375,10 @@ function callResultCanBeProxyWrapped(
   if (typeContext == null) {
     return true;
   }
-  const programExpression = typeContext.readProgramNode(expression);
-  if (programExpression == null) {
+  const type = proxyTypeAtNode(typeContext, expression);
+  if (type == null) {
     return true;
   }
-  const type = typeContext.checker.getTypeAtLocation(programExpression);
   return checkerTypeCanBeProxyWrapped(typeContext.checker, type);
 }
 
@@ -1615,10 +1610,7 @@ function checkerTypePropertyHasNowrapDecorator(
     return false;
   }
   seen.add(type);
-  const apparentType = checker.getApparentType(type);
-  const property = checker.getPropertyOfType(type, propertyName)
-    ?? checker.getPropertyOfType(apparentType, propertyName)
-    ?? null;
+  const property = checkerPropertySymbol(checker, type, propertyName);
   if (declarationsHaveNowrapDecorator(property?.declarations)) {
     return true;
   }

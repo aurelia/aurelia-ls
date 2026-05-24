@@ -75,6 +75,17 @@ and `inquiry` do not route by themselves. Memory-domain anchors are for explicit
 domain filters and memory coverage joins; route queries should still match
 declared route terms, source symbols, query canaries, auLink ids, corpus lanes,
 or exact anchors rather than inheriting memory domains as fuzzy vocabulary.
+Use `work:router -- --projection=coverage --coverageDimension=intent-aware-continuations`
+when a shared inquiry/API capability may be missing from several adjacent
+routes. Coverage rows are route-local obligations for cross-cutting dimensions,
+so a query about authoring, diagnostics, MCP, overlays, or edit affordances can
+still surface the intent-aware continuation gap without pretending those
+routes own the substrate.
+Use `--coverageDepth=wired`, `semantic`, or `verified` when a route needs to
+distinguish structural API wiring from route-specific semantics or concrete
+contract/query witnesses. Coverage filters are row-coherent: when dimension,
+state, and depth are supplied together, one route coverage row must satisfy all
+of them.
 With no explicit filters, `work:router -- --projection=route-plan` ranks from
 both live memory-next actions and live product/source pressure. Product-pressure
 matches are structural source-anchor matches, so a large module, class, or
@@ -87,7 +98,7 @@ and pressure anchors can drive route selection, while supporting catalog/context
 anchors stay visible without drowning the owning substrate just because they are
 large.
 Work Router projection ids are exact (`route-plan`, `next-questions`,
-`route-health`, `workset`, `memory-coverage`, and `schema`); unsupported
+`route-health`, `coverage`, `workset`, `memory-coverage`, and `schema`); unsupported
 projection requests print the reroute answer, the supported projection list, and
 typed continuations instead of a stack trace.
 In detail mode, record-backed next rows print anchors before guidance and the
@@ -186,7 +197,9 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `native-checked-binding`, `option-model-binding`, or `validation-binding-behavior`; the CLI also accepts the printed
   reason spelling in `classificationKey`, such as `surface:option-model-binding`. Surface reasons are local to doc code
   fences and test `createFixture(...)` call snippets; broader `describe`/`it` carrier rows can still carry effect,
-  recipe, or contrast pressure, but they should not satisfy exact surface filters.
+  recipe, or contrast pressure, but they should not satisfy exact surface filters. Surface reason generation lives in a
+  named rule table inside the corpus analysis, while filtering/matching lives in `framework-corpus-classification.ts`;
+  keep those sides separate so new fixture seed surfaces do not become another long ad hoc classifier.
   Interpolation and bare `else` classification is context-aware: markup snippets can count Aurelia template syntax,
   while ordinary TypeScript template strings and JavaScript branches should not.
   Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `recipeKey` as structural filters and `query` for

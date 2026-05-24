@@ -26,7 +26,11 @@ import {
   checkerCollectionSymbolName,
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
-import { firstSymbolDeclaration } from '../type-system/checker-node-helpers.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+  firstSymbolDeclaration,
+} from '../type-system/checker-node-helpers.js';
 import {
   collectRuntimeConnectableObservedDependencyDrafts,
   type RuntimeConnectableObservedDependencyDraft,
@@ -370,7 +374,10 @@ function controlledComputedDeepObservedDependencyDrafts(
     return [];
   }
   const checker = typeSystem.checker;
-  const classType = checker.getTypeAtLocation(classNode);
+  const classType = typeSystem.readProgramTypeAtLocation(classNode);
+  if (classType == null) {
+    return [];
+  }
   const rows: RuntimeControlledComputedDeepObservedDependencyDraft[] = [];
   for (const dependency of site.dependency.dependencyKeyReads) {
     const path = simpleComputedDependencyPath(dependency.key);
@@ -415,12 +422,11 @@ function typeForComputedDependencyPath(
     if (current == null) {
       return null;
     }
-    const property = checker.getPropertyOfType(current, segment);
+    const property = checkerPropertySymbol(checker, current, segment);
     if (property == null) {
       return null;
     }
-    const declaration = firstSymbolDeclaration(property) ?? location;
-    current = checker.getTypeOfSymbolAtLocation(property, declaration);
+    current = checkerSymbolValueType(checker, property, location);
   }
   return current;
 }
@@ -472,10 +478,7 @@ function collectControlledComputedDeepTypeDrafts(
         continue;
       }
       const propertyName = property.getName();
-      const declaration = firstSymbolDeclaration(property);
-      const propertyType = declaration == null
-        ? null
-        : checker.getTypeOfSymbolAtLocation(property, declaration);
+      const propertyType = checkerSymbolValueType(checker, property);
       const sourceName = `${base.sourceName}.${propertyName}`;
       rows.push({
         dependencyKind: RuntimeObservedDependencyKind.DeepPropertyRead,

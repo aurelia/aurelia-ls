@@ -31,8 +31,13 @@ import {
 } from './type-shape.js';
 import {
   checkerIndexKindForKeyType,
+  checkerNumberIndexValueType,
   checkerNullishType,
 } from './checker-related-types.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from './checker-node-helpers.js';
 import {
   checkerDeclarationsAreReadonly,
   checkerSymbolMemberKind,
@@ -248,7 +253,7 @@ export class CheckerTypeShapeAccess {
         memberName,
         memberKind: CheckerTypeMemberKind.IndexSignature,
         declarations: [],
-        sourceAddressHandle: null,
+        sourceAddressHandle: ownerType.sourceAddressHandle,
         checkerWritable: stringIndexInfo.isReadonly ? false : true,
       };
     }
@@ -285,13 +290,11 @@ export class CheckerTypeShapeAccess {
     const type = ownerType.carrier?.type ?? null;
     const property = checker == null || type == null
       ? null
-      : checker.getPropertyOfType(type, String(index));
-    const propertyDeclaration = property?.valueDeclaration ?? property?.declarations?.[0] ?? null;
+      : checkerPropertySymbol(checker, type, String(index));
     const indexType = checker == null || type == null
       ? null
-      : property != null && propertyDeclaration != null
-        ? checker.getTypeOfSymbolAtLocation(property, propertyDeclaration)
-        : checker.getIndexTypeOfType(type, ts.IndexKind.Number);
+      : (property == null ? null : checkerSymbolValueType(checker, property))
+        ?? checkerNumberIndexValueType(checker, type);
     if (checker == null || indexType == null) {
       return null;
     }
@@ -627,8 +630,7 @@ function checkerMemberForOwnerType(
   if (carrier == null) {
     return null;
   }
-  const symbol = carrier.checker.getPropertyOfType(carrier.type, memberName)
-    ?? carrier.checker.getPropertyOfType(carrier.checker.getApparentType(carrier.type), memberName);
+  const symbol = checkerPropertySymbol(carrier.checker, carrier.type, memberName);
   if (symbol == null) {
     return null;
   }

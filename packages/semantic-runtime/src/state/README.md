@@ -42,8 +42,8 @@ Current closed raw authority rows:
   channels for the payload expression.
 - Dispatch payload scopes reuse the template listener event model. `$event.currentTarget` is refined from the authored
   host element, and `$event.target` is refined for native value-bearing form controls (`input`, `select`, `textarea`) so
-  payloads such as `{ value: $event.target.value }` close through the same DOM tag-name-map substrate as observer
-  lookup.
+  payloads such as `{ type: "setDraft", value: $event.target.value }` close through the same DOM tag-name-map substrate
+  as observer lookup while preserving the action type literal when the payload object is statically known.
 
 Open state frontiers:
 

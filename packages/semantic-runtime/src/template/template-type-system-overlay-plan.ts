@@ -1,4 +1,5 @@
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import { isJavaScriptIdentifierName } from '../javascript/identifier.js';
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
 
 export interface TemplateTypeSystemOverlaySourceSlice {
@@ -48,6 +49,12 @@ export interface TemplateTypeSystemOverlayScopeAlias {
   readonly name: string;
   readonly expression: string;
   readonly parentExpression: string | null;
+}
+
+interface TemplateTypeSystemOverlayCapturedScopeAlias {
+  readonly alias: TemplateTypeSystemOverlayScopeAlias;
+  readonly expressionLocal: string;
+  readonly parentExpressionLocal: string | null;
 }
 
 export interface TemplateTypeSystemOverlayBindingContextLayer {
@@ -200,29 +207,13 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
 
   private appendRepeatLayer(layer: TemplateTypeSystemOverlayRepeatLayer): void {
     const indent = this.indent;
-    const parentAlias = layer.parentAlias;
-    const parentAliasTemp = layer.parentAlias == null
-      ? null
-      : `__au_parent_${this.depth}`;
-    const parentAliasParentTemp = parentAlias?.parentExpression == null
-      ? null
-      : `__au_parent_${this.depth}_parent`;
-    if (parentAliasTemp != null && parentAlias != null) {
-      this.builder.appendLine(`${indent}const ${parentAliasTemp} = ${parentAlias.expression};`);
-    }
-    if (parentAliasParentTemp != null && parentAlias?.parentExpression != null) {
-      this.builder.appendLine(`${indent}const ${parentAliasParentTemp} = ${parentAlias.parentExpression};`);
-    }
+    const capturedParent = this.captureParentAlias(layer.parentAlias, indent);
     this.builder.append(`${indent}for (const ${layer.declaration.text} of __au_repeat(`);
     appendTemplateTypeSystemOverlayExpressionParts(this.builder, layer.iterable, `repeat source for ${layer.declaration.text}`);
     this.builder.append(')) {\n');
     this.depth += 1;
     const nestedIndent = this.indent;
-    if (parentAliasTemp != null && parentAlias != null) {
-      this.builder.appendLine(parentAliasParentTemp == null
-        ? `${nestedIndent}const ${parentAlias.name} = ${parentAliasTemp};`
-        : `${nestedIndent}const ${parentAlias.name} = ${parentAliasTemp} as typeof ${parentAliasTemp} & { readonly $parent: typeof ${parentAliasParentTemp} };`);
-    }
+    this.appendCapturedParentAlias(capturedParent, nestedIndent);
     if (layer.currentAliasExpression != null) {
       this.builder.appendLine(`${nestedIndent}const $this = ${layer.currentAliasExpression};`);
     }
@@ -230,19 +221,7 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
 
   private appendBindingContextLayer(layer: TemplateTypeSystemOverlayBindingContextLayer): void {
     const indent = this.indent;
-    const parentAlias = layer.parentAlias;
-    const parentAliasTemp = parentAlias == null
-      ? null
-      : `__au_parent_${this.depth}`;
-    const parentAliasParentTemp = parentAlias?.parentExpression == null
-      ? null
-      : `__au_parent_${this.depth}_parent`;
-    if (parentAliasTemp != null && parentAlias != null) {
-      this.builder.appendLine(`${indent}const ${parentAliasTemp} = ${parentAlias.expression};`);
-    }
-    if (parentAliasParentTemp != null && parentAlias?.parentExpression != null) {
-      this.builder.appendLine(`${indent}const ${parentAliasParentTemp} = ${parentAlias.parentExpression};`);
-    }
+    const capturedParent = this.captureParentAlias(layer.parentAlias, indent);
     this.builder.append(`${indent}{\n`);
     this.depth += 1;
     const nestedIndent = this.indent;
@@ -260,15 +239,45 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
       appendTemplateTypeSystemOverlayExpressionParts(this.builder, layer.expression, 'binding context source');
       this.builder.append(';\n');
     }
-    if (parentAliasTemp != null && parentAlias != null) {
-      this.builder.appendLine(parentAliasParentTemp == null
-        ? `${nestedIndent}const ${parentAlias.name} = ${parentAliasTemp};`
-        : `${nestedIndent}const ${parentAlias.name} = ${parentAliasTemp} as typeof ${parentAliasTemp} & { readonly $parent: typeof ${parentAliasParentTemp} };`);
-    }
+    this.appendCapturedParentAlias(capturedParent, nestedIndent);
     this.builder.appendLine(`${nestedIndent}const $this = ${contextLocal};`);
     for (const local of layer.locals) {
       this.builder.appendLine(`${nestedIndent}const ${local} = ${contextLocal}.${local};`);
     }
+  }
+
+  private captureParentAlias(
+    alias: TemplateTypeSystemOverlayScopeAlias | null,
+    indent: string,
+  ): TemplateTypeSystemOverlayCapturedScopeAlias | null {
+    if (alias == null) {
+      return null;
+    }
+    const expressionLocal = `__au_parent_${this.depth}`;
+    const parentExpressionLocal = alias.parentExpression == null
+      ? null
+      : `__au_parent_${this.depth}_parent`;
+    this.builder.appendLine(`${indent}const ${expressionLocal} = ${alias.expression};`);
+    if (parentExpressionLocal != null && alias.parentExpression != null) {
+      this.builder.appendLine(`${indent}const ${parentExpressionLocal} = ${alias.parentExpression};`);
+    }
+    return {
+      alias,
+      expressionLocal,
+      parentExpressionLocal,
+    };
+  }
+
+  private appendCapturedParentAlias(
+    captured: TemplateTypeSystemOverlayCapturedScopeAlias | null,
+    indent: string,
+  ): void {
+    if (captured == null) {
+      return;
+    }
+    this.builder.appendLine(captured.parentExpressionLocal == null
+      ? `${indent}const ${captured.alias.name} = ${captured.expressionLocal};`
+      : `${indent}const ${captured.alias.name} = ${captured.expressionLocal} as typeof ${captured.expressionLocal} & { readonly $parent: typeof ${captured.parentExpressionLocal} };`);
   }
 
   private appendTypedBindingContextLayer(layer: TemplateTypeSystemOverlayTypedBindingContextLayer): void {
@@ -450,7 +459,7 @@ export function appendTemplateTypeSystemOverlayExpressionParts(
 }
 
 export function templateTypeSystemOverlayIdentifierName(value: string): boolean {
-  return /^[$A-Z_a-z][$\w]*$/u.test(value);
+  return isJavaScriptIdentifierName(value);
 }
 
 export function templateTypeSystemOverlayQuotedStringLiteral(value: string): string {

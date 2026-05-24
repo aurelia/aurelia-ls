@@ -25,12 +25,56 @@ template completion, cursor-info, and diagnostic query handoff, while the runtim
 app-level dispatch, and direct cursor-locus convenience methods.
 App-query identity, locus, and invalidation epoch keys live in `app-query-identity.ts`. Keep reuse/invalidation keys
 there rather than rebuilding private string keys in the MCP adapter, scripts, or individual answerers.
+`semanticAppQueryCatalogShape(...)` is the shared boundary that drops unsupported envelope fields before app dispatch,
+claim identity, materialization policy, authoring-template opt-in, default inquiry-profile selection, and continuation
+target-query shaping. Use it when a new query option is added so unsupported cursor/source/detail knobs do not fragment
+caches, epoch keys, or pre-open policy. Continuation builders may still inherit explicit target-policy hints from the
+caller, such as diagnostic projection, but the final `targetQuery` must be shaped against the target catalog row.
+`SemanticApp.ask(...)` therefore dispatches and records claims with the shaped query while passing the original caller
+query to continuation generation, so follow-up target policy survives without changing current-query materialization.
+`semanticAppQuerySourceFileLocus(...)` owns the cursor-to-source-file bridge used by catalog shaping and continuation
+source-locus evidence; do not recreate a local `sourceFile ?? cursor.filePath` helper in query answerers.
+Public source-locus DTOs, bounded row source-reference traversal, and source-precision classification live in
+`source-reference.ts`. Use those helpers when an answer policy needs to discover source precision from returned rows;
+do not add another recursive DTO walker or authored/generated/external ranking in a diagnostic, continuation, hover, or
+future edit surface.
+`PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS` is intentionally contract-checked against public row DTOs whose nested fields
+contain `SemanticSourceReference`, and the contract also synthesizes those DTO paths to prove the runtime collector can
+actually reach them. Add a carrier key when a row nests source-bearing objects instead of widening the collector to
+arbitrary object recursion or adding depth-based special cases.
+Generated addresses may be anchored to either source addresses or semantic identities. Public source descriptions must
+follow the shared kernel source-address resolver so identity-backed generated products can still point back to authored
+TypeScript or template spans instead of dropping to broad generated carriers.
+Continuation source-precision policy also follows `SemanticSourceReference.anchor` for authored template/source carriers;
+generated-address rows intentionally remain `generated-anchor` even when they carry an authored anchor.
+`describeStoredAddress(...)` intentionally mirrors the address-kind switch in the kernel source resolver without sharing
+its result type: the API layer must preserve visible carriers such as `generated-address` and `template-node-address`,
+while `kernel/source-address.ts` collapses those carriers to their nearest authored source for internal source lookup.
 Routed app-query defaults and retention choices live in `app-query-policy.ts`: default inquiry profile, source-file
 selection, authoring-template opt-in, minimum analysis depth upgrades, materialization-policy overrides, and
 `appRetention` disposal decisions are API policy, not transport adapter behavior.
+Typed app-query follow-ups live in `app-query-continuations.ts`. That module is the public continuation policy point:
+it maps answered query families to compact `targetQuery` shapes plus intent, cost, evidence, staleness, and blocker
+metadata. Keep it catalog-aware and lazy; do not rebuild app facts or adapter-specific ranking there.
+Continuation target queries should carry only modifiers the target catalog row can consume. Cursor and source-file loci
+are first normalized through the source query's catalog shape so unsupported loci do not leak into follow-ups; detail,
+diagnostic projection, and overview/router sample knobs may be inherited only when the target query family can consume
+them. The target-shape and public evidence-vocabulary contracts should catch unsupported envelope fields or malformed
+continuation evidence.
+Continuation cost uses the same query-specific materialization policy as the app-query answer path. For example,
+`diagnosticProjection: 'available-products'` removes answer-time TypeChecker projection cost, but it does not pretend an
+app-world diagnostic family is project-frame cheap.
+Even cheap `next-page` continuations should inherit target query staleness, because a cursor over project or source rows
+is not current-epoch stable merely because following it is inexpensive. Source-capable catalog rows are still
+project-epoch sensitive until the shaped `targetQuery` carries a cursor or `sourceFile` locus.
 The app-query catalog also exposes `runtimeBoundary`: `runtime-static`, `project-frame`, `static-evaluation`, or
 `app-world`. Keep that boundary honest whenever adding a query kind. It is the public signal that lets MCP/LSP-style
 adapters ask cheap static/project/evaluation questions without accidentally paying for full app construction.
+`continuationIntents` is a response-envelope filter over those typed rows. It is deliberately not part of app-query
+identity, locus, materialization policy, or query-claim invalidation because it does not change the semantic facts being
+answered; it only narrows which follow-up moves are returned and inherited by their `targetQuery` payloads.
+Query cost still belongs to `runtimeBoundary`, `minimumAnalysisDepth`, `materializationPolicy`, `inquiryProfile`,
+paging, and query-claim retention. Intent should not become a shadow query policy.
 
 ## Shape
 
@@ -60,7 +104,9 @@ a lazy answer ledger without adding an adapter-local cache or repeatedly opening
 The batch result keeps app construction profiles and app-owned query-claim profile snapshots opt-in. Low-token MCP/LSP
 orientation should leave `includeAppProfile` and `includeAppQueryClaimProfiles` unset, then use
 `analysisCacheOverview(...)` for deliberate cache inspection. Profiling scripts should pass those flags when they need
-one-off app-open cost after disposal: the compact profile includes app-level phases, nested
+one-off app-open cost after disposal. Batches that include those live profile snapshots bypass retained-answer replay
+so the returned profile reflects the current claim graph; ordinary compact batches can still reuse retained values. The
+compact profile includes app-level phases, nested
 static-evaluation/type-system/resource/template phase summaries, static-evaluation source-host/source-composition
 counters, TypeSystem compiler-option shape, Program root/source-file composition, compiler-host cache counters,
 aggregate template expression type-cache counters, and opt-in phase memory deltas because those are memory/CPU
@@ -68,6 +114,18 @@ attribution facts rather than ordinary app-building guidance.
 The batch value owns compact `displayText` too. It lists each child query kind, materialization policy, and child answer
 summary, and explicitly reminds callers that profiling fields are opt-in. Public transports should forward that text so
 one batch can be both the low-token human orientation and the structured query result.
+App-query answers may also carry typed `continuations`. A continuation is a followable next move, not a diagnostic or
+ranking score: `kind` is the canonical `InquiryContinuationKind` action, `targetQueryKind` is the compact app-query
+family label, `targetQuery` is the app-query payload a caller can pass back to `answerAppQuery(...)` or a child query
+batch, and the applicability metadata declares which next-move intents it serves and what evidence/cost boundary it
+crosses. Public app-query ownership lives in `targetQueryKind` and the shaped target query rather than target-specific
+continuation kind members.
+Pass `continuationIntents` when a caller only wants moves for a
+current task such as `diagnose` or `repair`; leave it unset for the full menu. Current authoring answers intentionally
+omit this surface until the app-builder algebra replaces fixture-like recipes with a cleaner authoring ontology.
+Continuation evidence `coverage` is a proof posture, not a confidence score. Paged row tables, overviews, and summary
+tables report `partial-known-gaps`; exact cursor-locus follow-ups can report `complete-for-locus`; future or
+insufficiently modeled families should stay `unknown` instead of implying completeness.
 When phase-kernel telemetry is enabled, those same phase rows also carry compact kernel deltas and optional product/detail
 breakdown rows, so disposed-app answers can explain which template or runtime phase created the answer-local products
 that the claim graph later reclaimed.
@@ -301,8 +359,8 @@ instead of a cursor-bearing page when samples are needed. Use the specific route
 clients can see the route/runtime-tree counts, issue state, and row-sampling policy before opening raw router rows.
 `readSemanticAppQueryCatalog()` and `runtime.appQueryCatalog()` expose the supported app query vocabulary with group,
 result-role, paging/detail, source-file, cursor, router-product, and minimum analysis-depth metadata. `pagingKind`
-distinguishes ordinary offset row cursors from router row-sample sizing and cursor-locus continuations. Public adapters
-such as MCP should use `minimumAnalysisDepth` for default generic-query opening so first reads can stay at
+distinguishes ordinary offset row cursors from router row-sample sizing and cursor-locus
+continuations. Public adapters such as MCP should use `minimumAnalysisDepth` for default generic-query opening so first reads can stay at
 `runtime-topology` while binding-owned rows still request their required substrate. The catalog accepts `group` and
 `queryKind` filters for compact adapter answers. Public adapters should use that catalog for generic query tooling
 instead of maintaining their own query-kind list. The catalog result also owns compact `displayText` so public clients

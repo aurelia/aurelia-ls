@@ -51,6 +51,15 @@ expectDataFlow('Record-keyed checkbox should bind through the repeat local key e
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
 });
+expectDataFlow('String-index member checkbox should preserve the owner source route for repair planning.', {
+  sourceName: 'state.selectedByTagId.expedite',
+  sourceKind: 'member',
+  valueChannelKind: 'checked-boolean',
+  targetValueType: 'boolean',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+});
 expectDataFlow('Value converter fromView should make string input writeback assignable to a numeric source.', {
   sourceName: 'state.quantity',
   sourceKind: 'member',
@@ -121,8 +130,8 @@ const keyedValueChannelRows = valueChannels.filter((row) =>
     || row.channelKind === 'select-single-option-value'
   )
 );
-if (keyedValueChannelRows.length !== 3) {
-  failures.push(`Expected 3 keyed form value-channel rows; observed ${keyedValueChannelRows.length}.`);
+if (keyedValueChannelRows.length !== 4) {
+  failures.push(`Expected 4 keyed form value-channel rows; observed ${keyedValueChannelRows.length}.`);
 }
 
 const summary = {
@@ -159,6 +168,17 @@ const summary = {
       targetToSourceAssignable: row.targetToSourceAssignable,
       sourceAssignmentKind: row.sourceAssignmentKind,
       sourceAssignmentReason: row.sourceAssignmentReason,
+    })),
+  stringIndexMemberFlows: dataFlows
+    .filter((row) => row.sourceName === 'state.selectedByTagId.expedite')
+    .map((row) => ({
+      sourceName: row.sourceName,
+      sourceKind: row.sourceKind,
+      sourceType: row.sourceType,
+      sourceAssignmentTargetType: row.sourceAssignmentTargetType,
+      sourceAssignmentTargetSource: row.sourceAssignmentTargetSource?.label ?? null,
+      sourceWritable: row.sourceWritable,
+      sourceAssignmentKind: row.sourceAssignmentKind,
     })),
   keyedValueChannelRows: keyedValueChannelRows.map((row) => ({
     channelKind: row.channelKind,

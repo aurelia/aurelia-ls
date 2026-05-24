@@ -129,6 +129,13 @@ export interface FrameworkCorpusFixtureSeedClassificationReason {
   readonly summary: string;
 }
 
+/** Source-surface rule that explains why a corpus snippet can seed fixture or expected-effect work. */
+interface FixtureSeedSurfaceClassificationRule {
+  readonly key: string;
+  readonly summary: string;
+  readonly applies: (snippetText: string) => boolean;
+}
+
 export interface FrameworkCorpusSourceState {
   readonly docsRoot: string;
   readonly testsRoot: string;
@@ -2050,6 +2057,197 @@ function recipeHintsForConcepts(
   return [...set].sort();
 }
 
+const localFixtureSeedSurfaceClassificationRules: readonly FixtureSeedSurfaceClassificationRule[] = [
+  {
+    key: "value-channel-binding",
+    summary: "Snippet contains an observer-backed binding value channel such as value/model/checked/class/style.",
+    applies: hasValueChannelBindingSurface,
+  },
+  {
+    key: "computed-decorator",
+    summary: "Snippet declares @computed metadata for getter or trackable method observation.",
+    applies: hasComputedDecoratorSurface,
+  },
+  {
+    key: "computed-getter",
+    summary: "Snippet declares a getter surface that can enter ObserverLocator computed observation.",
+    applies: hasComputedGetterSurface,
+  },
+  {
+    key: "class-token-binding",
+    summary: "Snippet contains a whole-class binding channel such as class.bind or class interpolation.",
+    applies: (snippetText) => hasBindingSurfaceChannel(snippetText, "class-attribute-tokens"),
+  },
+  {
+    key: "class-toggle-binding",
+    summary: "Snippet contains a per-token class binding surface such as name.class.",
+    applies: (snippetText) => hasBindingSurfaceChannel(snippetText, "class-toggle"),
+  },
+  {
+    key: "style-rule-binding",
+    summary: "Snippet contains a whole-style binding channel such as style.bind or style interpolation.",
+    applies: (snippetText) => hasBindingSurfaceChannel(snippetText, "style-attribute-rules"),
+  },
+  {
+    key: "style-property-binding",
+    summary: "Snippet contains a per-property style binding surface such as width.style.",
+    applies: (snippetText) => hasBindingSurfaceChannel(snippetText, "style-property-value"),
+  },
+  {
+    key: "native-form-control",
+    summary: "Snippet contains native form-control markup such as input, select, option, textarea, or form.",
+    applies: hasNativeFormControlSurface,
+  },
+  {
+    key: "native-value-binding",
+    summary: "Snippet binds the native value property on an input, select, or textarea control.",
+    applies: hasNativeValueBindingSurface,
+  },
+  {
+    key: "native-select-binding",
+    summary: "Snippet binds the native select value observer channel.",
+    applies: hasNativeSelectBindingSurface,
+  },
+  {
+    key: "native-checked-binding",
+    summary: "Snippet binds the native checked property on an input control.",
+    applies: hasNativeCheckedBindingSurface,
+  },
+  {
+    key: "checked-collection-binding",
+    summary: "Snippet combines checked binding with array or Set collection membership semantics.",
+    applies: hasCheckedCollectionBindingSurface,
+  },
+  {
+    key: "checked-map-binding",
+    summary: "Snippet combines checked binding with Map key/boolean-value semantics.",
+    applies: hasCheckedMapBindingSurface,
+  },
+  {
+    key: "custom-matcher-binding",
+    summary: "Snippet binds matcher for checked or select value identity.",
+    applies: hasCustomMatcherBindingSurface,
+  },
+  {
+    key: "select-multiple-binding",
+    summary: "Snippet binds a multiple select value channel.",
+    applies: hasSelectMultipleBindingSurface,
+  },
+  {
+    key: "option-model-binding",
+    summary: "Snippet binds option.model for select option value identity.",
+    applies: hasOptionModelBindingSurface,
+  },
+  {
+    key: "binding-behavior-application",
+    summary: "Snippet applies a binding behavior in an Aurelia binding expression.",
+    applies: hasBindingBehaviorApplicationSurface,
+  },
+  {
+    key: "direct-target-operation",
+    summary: "Snippet contains direct class/style/css target-operation syntax inside an HTML-like tag.",
+    applies: hasTargetOperationSurface,
+  },
+  {
+    key: "validation-binding-behavior",
+    summary: "Snippet contains validation binding-behavior syntax or validation-behavior prose.",
+    applies: hasValidationBindingBehaviorSurface,
+  },
+  {
+    key: "multi-step-form",
+    summary: "Snippet contains wizard, step, or progress-shaped form flow surface.",
+    applies: hasMultiStepFormSurface,
+  },
+  {
+    key: "router-authoring",
+    summary: "Snippet contains concrete Aurelia router API, route config, route decorator, viewport, or router package syntax.",
+    applies: hasRouterAuthoringSurface,
+  },
+  {
+    key: "au-compose",
+    summary: "Snippet contains concrete Aurelia dynamic composition syntax or AuCompose API usage.",
+    applies: hasAuComposeSurface,
+  },
+  {
+    key: "au-compose-component-input",
+    summary: "Snippet supplies an AuCompose component input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "component.bind")
+      || hasAuComposeAttributeSurface(snippetText, "component"),
+  },
+  {
+    key: "au-compose-model-input",
+    summary: "Snippet supplies an AuCompose model input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "model.bind")
+      || hasAuComposeAttributeSurface(snippetText, "model"),
+  },
+  {
+    key: "au-compose-template-input",
+    summary: "Snippet supplies an AuCompose template input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "template.bind")
+      || hasAuComposeAttributeSurface(snippetText, "template"),
+  },
+  {
+    key: "au-compose-scope-behavior",
+    summary: "Snippet supplies AuCompose scope-behavior input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "scope-behavior"),
+  },
+  {
+    key: "au-compose-flush-mode",
+    summary: "Snippet supplies AuCompose flush-mode input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "flush-mode"),
+  },
+  {
+    key: "au-compose-tag",
+    summary: "Snippet supplies AuCompose host tag input.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "tag"),
+  },
+  {
+    key: "au-compose-composition-binding",
+    summary: "Snippet binds AuCompose composition from-view output.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "composition.bind"),
+  },
+  {
+    key: "au-compose-composing-binding",
+    summary: "Snippet binds AuCompose composing from-view output.",
+    applies: (snippetText) => hasAuComposeAttributeSurface(snippetText, "composing.bind"),
+  },
+  {
+    key: "au-compose-object-component",
+    summary: "Snippet supplies an object-shaped or non-resource component value to AuCompose.",
+    applies: hasAuComposeObjectComponentSurface,
+  },
+  {
+    key: "service",
+    summary: "Snippet contains a service-shaped type, import/path, or DI resolution surface.",
+    applies: hasServiceSurface,
+  },
+  {
+    key: "state-store",
+    summary: "Snippet contains a concrete state/store type, path, API, or DI resolution surface.",
+    applies: hasStateSurface,
+  },
+  {
+    key: "catalog-storefront",
+    summary: "Snippet contains product/catalog/cart/checkout vocabulary with list, state, or template surface evidence.",
+    applies: hasCatalogStorefrontSurface,
+  },
+  {
+    key: "searchable-data-table",
+    summary: "Snippet contains table/list management plus search, filter, sort, pagination, or selection surface evidence.",
+    applies: hasSearchableDataTableSurface,
+  },
+  {
+    key: "aurelia-state-store",
+    summary: "Snippet contains @aurelia/state store configuration, state binding behavior, or dispatch command syntax.",
+    applies: hasAureliaStateStoreSurface,
+  },
+  {
+    key: "convention-resource",
+    summary: "Snippet contains convention-shaped Aurelia custom element/template resource evidence without requiring decorator syntax.",
+    applies: hasConventionMinimalAppSurface,
+  },
+];
+
 function fixtureSeedClassificationReasons(
   concepts: readonly FrameworkCorpusConcept[],
   snippetText: string,
@@ -2068,116 +2266,10 @@ function fixtureSeedClassificationReasons(
     add("concept", concept, `Snippet was classified with the ${concept} corpus concept.`);
   }
   if (localSurfaceSource) {
-    if (hasValueChannelBindingSurface(snippetText)) {
-      add("surface", "value-channel-binding", "Snippet contains an observer-backed binding value channel such as value/model/checked/class/style.");
-    }
-    if (hasComputedDecoratorSurface(snippetText)) {
-      add("surface", "computed-decorator", "Snippet declares @computed metadata for getter or trackable method observation.");
-    }
-    if (hasComputedGetterSurface(snippetText)) {
-      add("surface", "computed-getter", "Snippet declares a getter surface that can enter ObserverLocator computed observation.");
-    }
-    if (hasBindingSurfaceChannel(snippetText, "class-attribute-tokens")) {
-      add("surface", "class-token-binding", "Snippet contains a whole-class binding channel such as class.bind or class interpolation.");
-    }
-    if (hasBindingSurfaceChannel(snippetText, "class-toggle")) {
-      add("surface", "class-toggle-binding", "Snippet contains a per-token class binding surface such as name.class.");
-    }
-    if (hasBindingSurfaceChannel(snippetText, "style-attribute-rules")) {
-      add("surface", "style-rule-binding", "Snippet contains a whole-style binding channel such as style.bind or style interpolation.");
-    }
-    if (hasBindingSurfaceChannel(snippetText, "style-property-value")) {
-      add("surface", "style-property-binding", "Snippet contains a per-property style binding surface such as width.style.");
-    }
-    if (hasNativeFormControlSurface(snippetText)) {
-      add("surface", "native-form-control", "Snippet contains native form-control markup such as input, select, option, textarea, or form.");
-    }
-    if (hasNativeValueBindingSurface(snippetText)) {
-      add("surface", "native-value-binding", "Snippet binds the native value property on an input, select, or textarea control.");
-    }
-    if (hasNativeSelectBindingSurface(snippetText)) {
-      add("surface", "native-select-binding", "Snippet binds the native select value observer channel.");
-    }
-    if (hasNativeCheckedBindingSurface(snippetText)) {
-      add("surface", "native-checked-binding", "Snippet binds the native checked property on an input control.");
-    }
-    if (hasCheckedCollectionBindingSurface(snippetText)) {
-      add("surface", "checked-collection-binding", "Snippet combines checked binding with array or Set collection membership semantics.");
-    }
-    if (hasCheckedMapBindingSurface(snippetText)) {
-      add("surface", "checked-map-binding", "Snippet combines checked binding with Map key/boolean-value semantics.");
-    }
-    if (hasCustomMatcherBindingSurface(snippetText)) {
-      add("surface", "custom-matcher-binding", "Snippet binds matcher for checked or select value identity.");
-    }
-    if (hasSelectMultipleBindingSurface(snippetText)) {
-      add("surface", "select-multiple-binding", "Snippet binds a multiple select value channel.");
-    }
-    if (hasOptionModelBindingSurface(snippetText)) {
-      add("surface", "option-model-binding", "Snippet binds option.model for select option value identity.");
-    }
-    if (hasBindingBehaviorApplicationSurface(snippetText)) {
-      add("surface", "binding-behavior-application", "Snippet applies a binding behavior in an Aurelia binding expression.");
-    }
-    if (hasTargetOperationSurface(snippetText)) {
-      add("surface", "direct-target-operation", "Snippet contains direct class/style/css target-operation syntax inside an HTML-like tag.");
-    }
-    if (hasValidationBindingBehaviorSurface(snippetText)) {
-      add("surface", "validation-binding-behavior", "Snippet contains validation binding-behavior syntax or validation-behavior prose.");
-    }
-    if (hasMultiStepFormSurface(snippetText)) {
-      add("surface", "multi-step-form", "Snippet contains wizard, step, or progress-shaped form flow surface.");
-    }
-    if (hasRouterAuthoringSurface(snippetText)) {
-      add("surface", "router-authoring", "Snippet contains concrete Aurelia router API, route config, route decorator, viewport, or router package syntax.");
-    }
-    if (hasAuComposeSurface(snippetText)) {
-      add("surface", "au-compose", "Snippet contains concrete Aurelia dynamic composition syntax or AuCompose API usage.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "component.bind") || hasAuComposeAttributeSurface(snippetText, "component")) {
-      add("surface", "au-compose-component-input", "Snippet supplies an AuCompose component input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "model.bind") || hasAuComposeAttributeSurface(snippetText, "model")) {
-      add("surface", "au-compose-model-input", "Snippet supplies an AuCompose model input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "template.bind") || hasAuComposeAttributeSurface(snippetText, "template")) {
-      add("surface", "au-compose-template-input", "Snippet supplies an AuCompose template input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "scope-behavior")) {
-      add("surface", "au-compose-scope-behavior", "Snippet supplies AuCompose scope-behavior input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "flush-mode")) {
-      add("surface", "au-compose-flush-mode", "Snippet supplies AuCompose flush-mode input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "tag")) {
-      add("surface", "au-compose-tag", "Snippet supplies AuCompose host tag input.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "composition.bind")) {
-      add("surface", "au-compose-composition-binding", "Snippet binds AuCompose composition from-view output.");
-    }
-    if (hasAuComposeAttributeSurface(snippetText, "composing.bind")) {
-      add("surface", "au-compose-composing-binding", "Snippet binds AuCompose composing from-view output.");
-    }
-    if (hasAuComposeObjectComponentSurface(snippetText)) {
-      add("surface", "au-compose-object-component", "Snippet supplies an object-shaped or non-resource component value to AuCompose.");
-    }
-    if (hasServiceSurface(snippetText)) {
-      add("surface", "service", "Snippet contains a service-shaped type, import/path, or DI resolution surface.");
-    }
-    if (hasStateSurface(snippetText)) {
-      add("surface", "state-store", "Snippet contains a concrete state/store type, path, API, or DI resolution surface.");
-    }
-    if (hasCatalogStorefrontSurface(snippetText)) {
-      add("surface", "catalog-storefront", "Snippet contains product/catalog/cart/checkout vocabulary with list, state, or template surface evidence.");
-    }
-    if (hasSearchableDataTableSurface(snippetText)) {
-      add("surface", "searchable-data-table", "Snippet contains table/list management plus search, filter, sort, pagination, or selection surface evidence.");
-    }
-    if (hasAureliaStateStoreSurface(snippetText)) {
-      add("surface", "aurelia-state-store", "Snippet contains @aurelia/state store configuration, state binding behavior, or dispatch command syntax.");
-    }
-    if (hasConventionMinimalAppSurface(snippetText)) {
-      add("surface", "convention-resource", "Snippet contains convention-shaped Aurelia custom element/template resource evidence without requiring decorator syntax.");
+    for (const rule of localFixtureSeedSurfaceClassificationRules) {
+      if (rule.applies(snippetText)) {
+        add("surface", rule.key, rule.summary);
+      }
     }
   }
   if (hasObserverLocatorDescriptorMatrixSurface(snippetText)) {

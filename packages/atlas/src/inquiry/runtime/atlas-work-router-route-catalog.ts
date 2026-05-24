@@ -1,5 +1,10 @@
 import { LensId } from "../lens.js";
-import type { AtlasWorkRoute } from "./atlas-work-router-contracts.js";
+import {
+  AtlasWorkRouteCoverageDepth,
+  AtlasWorkRouteCoverageDimension,
+  AtlasWorkRouteCoverageState,
+  type AtlasWorkRoute,
+} from "./atlas-work-router-contracts.js";
 
 /** Static work-route catalog used by the atlas.work-router lens. */
 export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
@@ -870,6 +875,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Recipe/fixture separation and caller-domain adaptation slots should route through the authoring fixture substrate loop before any public-shell packaging concern.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Partial,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "Authoring guidance, recipe plans, and fixture orientation already expose compact next-step policy, but public authoring answers still need typed intent-aware continuations for source-plan, fixture, repair, and verification follow-up choices.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -1281,6 +1295,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Public authoring output should route through source-parameter and pattern-composition policy.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Missing,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "The app-builder ontology is durable direction for future authoring intent, but it has no public continuation contract yet for choosing pattern composition, fixture generation, or verification follow-up.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -1445,6 +1468,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Diagnostics-to-edit pressure should route through the IDE fixture flywheel before local repair payloads are invented.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Missing,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "Generated IDE/MCP fixture work needs intent-aware continuations to choose between reference inspection, edit feasibility, repair planning, and fixture generation; public app-query answers can now carry follow-ups, but edit/reference fixtures remain deferred.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -1585,6 +1617,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "auLink remains framework grounding, while behavior regression pressure belongs in semantic contracts.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "A fast semantic contract now verifies catalog-wide public continuation coverage plus fixture-backed canaries across diagnostics, TypeScript diagnostics, template, open seams, source/evaluation, resources, DI, observation, binding, rendering, state, i18n, validation, fetch-client, dialog, router, app-diagnostic related-family coverage, repair-intent narrowing, same-target related-diagnostic continuations, template repair-pressure source precision, bounded public-row source-reference carrier discovery, external-source precision, query-claim followability, and authoring-deferred behavior. Deeper source/provenance precision witnesses remain a separate route-specific frontier.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -1609,6 +1651,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Inquiry-profile retention and materialization policy should be contractable for public query surfaces.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-continuations",
+        role: "supporting",
+        summary:
+          "Fast public continuation contract for catalog-wide query coverage and representative diagnostic/template/router follow-ups.",
       },
       {
         kind: "lens",
@@ -1916,6 +1965,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Checkpoint-style app-building follow-up questions should route to MCP guidance and adjacent semantic-runtime authoring/observation routes instead of missing because they ask for next work.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "MCP receives semantic-runtime answers as pass-through data, and a focused contract verifies single and batch app-query continuation pass-through plus compact continuation target text. Broader hand-tested low-token presentation remains future work, and MCP must avoid adapter-local next-query hints.",
+      },
+    ],
     anchors: [
       {
         kind: "path",
@@ -1931,6 +1990,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Adapter boundary that forwards MCP requests to semantic-runtime without becoming a second product model.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
+        role: "supporting",
+        summary:
+          "Focused contract proving MCP app-query single and batch surfaces retain semantic-runtime continuation rows.",
       },
       {
         kind: "source",
@@ -2100,6 +2166,383 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
+    id: "semantic-runtime.intent-aware-continuations",
+    aliases: ["intent-aware-continuations", "evidence-gated-continuations"],
+    title: "Semantic Runtime Intent-Aware Continuations",
+    summary:
+      "Route work on AI/IDE next-move intent and evidence-gated continuations without creating a shadow app-query cost policy or app-semantic ontology.",
+    domains: [
+      "semantic-runtime",
+      "inquiry",
+      "api",
+      "mcp",
+      "lsp",
+      "continuations",
+      "kernel",
+      "provenance",
+      "typescript",
+      "evaluation",
+    ],
+    roles: ["orient", "analyze", "refactor", "verify", "document", "improve-atlas"],
+    terms: [
+      "InquiryContinuationIntent",
+      "continuation intent",
+      "intent-aware continuation",
+      "caller intent",
+      "operational intent",
+      "inquiry intent",
+      "AI intent",
+      "intent dimension",
+      "continuation",
+      "continuations",
+      "evidence-gated continuation",
+      "evidence gated continuations",
+      "what next",
+      "next query",
+      "next move",
+      "continuation explosion",
+      "semantic-runtime API algebra",
+      "inquiry algebra",
+      "MCP low token",
+      "IDE for AI",
+      "orient inspect diagnose repair navigate author verify profile",
+      "authoring continuations deferred",
+      "Author intent reserved",
+      "InquiryContinuationIntent.Author reserved",
+      "InquiryContinuationIntent.Verify parked",
+      "InquiryContinuationIntent.Profile parked",
+      "InquiryContinuationCost.Deep parked",
+      "InquiryContinuationKind canonical action vocabulary",
+      "InquiryContinuationKind public app-query action",
+      "targetQueryKind continuation ownership",
+      "SemanticRuntimeContinuationRow enum protocol",
+      "continuation enum coupling",
+      "type-surface-cooccurrence continuation",
+      "source precision",
+      "evidence state",
+      "coverage",
+      "proof obligation",
+      "not confidence",
+      "confidence heuristic",
+      "continuation intents",
+      "continuation applicability",
+      "typed continuation rows",
+      "kernel provenance",
+      "source identity",
+      "source address",
+      "kernel identity",
+      "field provenance",
+      "defensive fallback",
+      "defensive programming",
+      "surprising input dimensions",
+      "typescript helper reuse",
+      "duplicate TypeScript helper",
+      "local evaluator",
+      "contextual evaluator",
+      "ModuleEnvironmentRecord",
+      "Aurelia-specific evaluation environment",
+      "runtime expression source address",
+      "sourceAddressHandleForRuntimeExpressionSpan",
+      "PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS",
+      "source reference carrier",
+    ],
+    queryCanaries: [
+      {
+        query: "continuations need intent to avoid hundreds of suggestions",
+        summary:
+          "Continuation explosion should route to continuation intent and evidence gates, not fuzzy ranking or adapter-local filtering.",
+      },
+      {
+        query: "semantic-runtime API algebra intent dimension confidence evidence",
+        summary:
+          "API-algebra work should distinguish operational intent from app-semantic ontology and expose evidence instead of numeric confidence.",
+      },
+      {
+        query: "MCP should ask what next without fuzzy heuristic routing",
+        summary:
+          "MCP next-move design should use semantic-runtime intent-aware typed continuations before transport-specific hints.",
+      },
+      {
+        query:
+          "continuation provenance fallback local evaluator duplicate TypeScript helper",
+        summary:
+          "Continuation work should route through existing kernel/source/evaluator/type-system substrates before adding local evidence wrappers or ad hoc helpers.",
+      },
+      {
+        query:
+          "identity anchored generated address continuation source precision",
+        summary:
+          "Generated-address source precision should route through the kernel source-address resolver when the anchor is a semantic identity.",
+      },
+      {
+        query:
+          "InquiryContinuationIntent.Author reserved authoring continuations deferred app-builder",
+        summary:
+          "The author intent is vocabulary-level/reserved until app-builder owns authoring continuations; enum usage alone should not decide deletion.",
+      },
+      {
+        query:
+          "InquiryContinuationIntent.Verify Profile vocabulary-only semantic contract telemetry continuations",
+        summary:
+          "Verify/profile continuation intents are parked contract/telemetry pressure until concrete public continuation rows spend them.",
+      },
+      {
+        query:
+          "InquiryContinuationCost.Deep unspent broad semantic substrate continuation cost",
+        summary:
+          "Deep continuation cost is parked vocabulary; current app-query costs are derived from runtime boundary and query-type-projection policy.",
+      },
+      {
+        query:
+          "InquiryContinuationKind canonical action vocabulary targetQueryKind continuation ownership",
+        summary:
+          "Lower-level InquiryAnswer continuations and public app-query continuation rows share the canonical action vocabulary; concrete app-query ownership belongs in targetQueryKind and the shaped target query.",
+      },
+      {
+        query:
+          "SemanticRuntimeContinuationRow enum protocol type-surface-cooccurrence",
+        summary:
+          "Continuation enum audits should inspect the DTO type surface that couples kind, app-query target, intent, cost, and evidence vocabulary.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "This route owns the intent-aware and evidence-gated continuation substrate. Public app-query answers now share a catalog-aware continuation projector with catalog-shaped query identity, source/cursor locus normalization, target-query shaping, response-envelope intent filtering, canonical continuation action kinds, target-owned app-query specificity, evidence metadata, authoring deferral, and a fast semantic contract that verifies family-specific continuation targets across the large existing analysis query families. Kernel-side inquiry continuations now carry shared applicability metadata and have an AST contract guarding that requirement. Source precision also routes through the shared address-or-identity source resolver and source-reference evidence helper, with contracts proving generated addresses anchored to semantic identities resolve to authored source anchors, nested public row DTO source paths are runtime-reachable through the bounded carrier vocabulary, and continuation precision follows source-reference anchors without hiding generated-address evidence.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.QueryClaimGraph,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.inquiry-query-claim-graph",
+        summary:
+          "Continuation target queries are verified through the ordinary routed app-query path and query-claim graph. The continuation contract checks that live app query-claim profile snapshots bypass retained-answer replay while compact continuation targets still reuse retained semantic payloads when policy allows, and the query-claim graph contract pins the lower-level lazy/reuse/budget/disposal invariants those follows depend on.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
+        symbolName: "InquiryContinuationIntent",
+        role: "primary",
+        summary:
+          "Next-move intent primitive for filtering typed continuations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
+        symbolName: "InquiryContinuationApplicability",
+        role: "primary",
+        summary:
+          "Continuation applicability envelope for intent, cost, evidence gates, and blockers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/answer.ts",
+        symbolName: "InquiryContinuation",
+        role: "supporting",
+        summary:
+          "Internal typed continuation can now carry intent-aware and evidence applicability.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/answer.ts",
+        symbolName: "InquiryContinuationKind",
+        role: "supporting",
+        summary:
+          "Lower-level inquiry continuation-kind vocabulary that must stay reconciled with public app-query continuation rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/source-address.ts",
+        symbolName: "authoredSourceAddressForAnchorHandle",
+        role: "primary",
+        summary:
+          "Shared source resolver for generated/source/template anchors that may point at semantic identities.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/source-address.ts",
+        symbolName: "readSourceAnchorRecord",
+        role: "supporting",
+        summary:
+          "Record-index bridge that validates source-anchor handles as address or identity records.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/runtime-expression-source-address.ts",
+        symbolName: "sourceAddressHandleForRuntimeExpressionSpan",
+        role: "supporting",
+        summary:
+          "Parser-span-to-kernel-address bridge used by overlays and bound-controller evaluation.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/source-reference.ts",
+        symbolName: "PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS",
+        role: "supporting",
+        summary:
+          "Bounded source-reference carrier vocabulary for runtime-reachable public row DTO traversal.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/source-reference.ts",
+        symbolName: "semanticSourcePrecisionForReferences",
+        role: "supporting",
+        summary:
+          "Shared authored/generated/external source-precision classifier for continuation, diagnostic, hover, and future edit evidence.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-catalog.ts",
+        symbolName: "semanticAppQueryCatalogShape",
+        role: "primary",
+        summary:
+          "Shared catalog-shaped query boundary for dispatch, query identity, pre-open policy, materialization policy, source/cursor locus normalization, and continuation targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-catalog.ts",
+        symbolName: "semanticAppQuerySourceFileLocus",
+        role: "supporting",
+        summary:
+          "Single source-file locus bridge shared by catalog shaping and continuation source/cursor evidence.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-continuations.ts",
+        symbolName: "withSemanticAppQueryContinuations",
+        role: "primary",
+        summary:
+          "Catalog-aware public continuation policy for app-query answer envelopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/contracts.ts",
+        symbolName: "SemanticRuntimeContinuationRow",
+        role: "primary",
+        summary:
+          "Public continuation DTO that carries the canonical action kind beside target query, intent, cost, and evidence gates.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/inquiry/README.md",
+        heading: "Design Pressure",
+        role: "grounding",
+        summary:
+          "Inquiry docs distinguish continuation intent from query cost policy and app-semantic ontology.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/intent-aware-continuations-scope-map-2026-05-23.md",
+        role: "grounding",
+        summary:
+          "Reviewed scope map explicitly excludes authoring continuations until app-builder replaces the current recipe/fixture gravity.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.AtlasMemory,
+        projection: "next",
+        filters: {
+          domain: "continuations",
+        },
+        role: "supporting",
+        summary:
+          "Durable memory records for remaining intent-aware and continuation threading work.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=member-usage --query=InquiryContinuation --detail",
+        role: "supporting",
+        summary:
+          "Enum usage audit for continuation intent, cost, and lower-level continuation-kind spend.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow --detail",
+        role: "supporting",
+        summary:
+          "Enum coupling audit for public continuation DTO protocols rather than isolated enum-member spend.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:source-reference-carriers",
+        role: "supporting",
+        summary:
+          "AST/runtime reachability and source-precision contract guarding public row DTO carrier paths and authored/generated/external evidence classification.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-continuations",
+        role: "supporting",
+        summary:
+          "Fast public app-query continuation contract for catalog coverage and representative followability.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:source-anchor-identity",
+        role: "supporting",
+        summary:
+          "Fast contract proving identity-backed generated addresses preserve authored source precision.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:inquiry-continuations",
+        role: "supporting",
+        summary:
+          "Fast AST contract guarding kernel inquiry continuation applicability.",
+      },
+    ],
+    authority: [
+      "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
+      "packages/semantic-runtime/src/inquiry/README.md",
+      "packages/semantic-runtime/src/api/app-query-continuations.ts",
+      "packages/semantic-runtime/src/api/app-query-catalog.ts",
+      "packages/semantic-runtime/src/api/source-reference.ts",
+      "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+      "packages/semantic-runtime/src/kernel/source-address.ts",
+      "packages/semantic-runtime/src/kernel/source-open-seam.ts",
+      "packages/semantic-runtime/src/template/runtime-expression-source-address.ts",
+      "packages/semantic-runtime/src/type-system/checker-type-member-source.ts",
+      "packages/semantic-runtime/src/evaluation/evaluator.ts",
+      "packages/semantic-runtime/src/evaluation/environment.ts",
+      "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+      "packages/atlas/memory/records/inquiry.json",
+    ],
+    cautions: [
+      "Do not let continuation intent become a parallel app-semantic ontology; app facts still belong in kernel claims, products, materializers, and source provenance.",
+      "Do not delete or promote continuation intent members from usage counts alone; reconcile usage with reviewed intent docs and parked app-builder/authoring scope.",
+      "Do not present verify/profile continuation intents as implemented lanes until contract or telemetry query families actually emit them.",
+      "Do not emit deep continuation cost by hand; add it only when a concrete continuation intentionally crosses a broad semantic-substrate boundary beyond app-world/query-type-projection policy.",
+      "Do not treat continuation-related enums as isolated islands; check type-surface co-occurrence before deciding whether a value space belongs to a shared protocol.",
+      "Do not mint target-specific continuation kind values when targetQueryKind and the shaped target query already own the concrete app-query lane.",
+      "Do not use numeric confidence as the primary continuation contract; expose evidence state, coverage, source precision, staleness, and blockers.",
+      "Do not mark continuations complete just because a central projector exists; representative query families still need evidence precision, source/provenance reuse, and followability pressure tests.",
+      "Do not add MCP-local next-query heuristics when a semantic-runtime intent-aware or continuation primitive should own the policy.",
+      "Do not invent local provenance/address/identity wrappers without first checking whether an existing compressed kernel primitive is nearby and only needs to be made accessible.",
+      "Treat defensive fallbacks, surprising input axes, duplicated TypeScript helpers, and ad hoc local evaluators as canaries for split-brain from earlier substrate-maturity passes.",
+    ],
+    nextQuestions: [
+      "Is the caller trying to orient, inspect, diagnose, repair, navigate, author, verify, or profile?",
+      "Which evidence gate makes this continuation safe or merely informative: source precision, coverage, staleness, or blockers?",
+      "Should this next move be a public continuation row, a query catalog hint, a query-claim policy, or a durable semantic product?",
+      "Does the requested intent imply a different materialization policy or analysis depth, or only a different continuation presentation?",
+      "Which query families still need more precise continuation evidence than the catalog-aware projector can infer?",
+      "Which existing kernel/source/type-system/evaluator primitive already owns the provenance or context this continuation wants to expose?",
+      "Is a fallback branch evidence of a real external boundary, or is it compensating for information that is already threaded somewhere else?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.inquiry-query-claim-graph",
+      "semantic-runtime.lsp-edit-affordance-substrate",
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.authoring-fixture-substrate-loop",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
     id: "semantic-runtime.inquiry-query-claim-graph",
     title: "Semantic Runtime Query Claim Graph",
     summary:
@@ -2114,6 +2557,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "query outcome storage",
       "query outcome claim",
       "lazy answer",
+      "lazy claim lifetime",
+      "failed claim retry",
+      "failed query claim retention",
       "answer boundary",
       "query-local products",
       "answer-local products",
@@ -2130,10 +2576,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "projection-only",
       "static-catalog",
       "retained answer",
+      "retained answer reuse",
+      "retained answer byte budget",
+      "retained record budget",
       "analysis cache overview",
       "answerAppQuery",
       "routed app query",
       "query claim telemetry",
+      "contract:query-claim-graph",
       "MCP orientation retention",
       "LSP cursor retention",
       "inquiry performance",
@@ -2153,6 +2603,28 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "MCP orientation routed app query claim graph",
         summary:
           "Thin MCP adapters should depend on semantic-runtime routed queries and profile-shaped claim retention.",
+      },
+      {
+        query: "query claim graph retained answer byte budget lazy claim lifetime",
+        summary:
+          "Graph-level lifetime and answer-envelope budget regressions should route to the focused query-claim contract before app-query surface debugging.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "Continuation target queries now follow the normal public app-query path and are contract-verified as ordinary runtime/app query claims with profile retention and epoch policy. Future follow-by-id or recommendation-edge storage remains intentionally deferred until continuation ids become a public contract.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.QueryClaimGraph,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "QueryClaimGraph owns answer-boundary retention, value reuse, source/project epoch disposal, query-type projection disposal, nested claim telemetry, and live-profile replay policy. Focused contracts now verify lazy claim lifetime, retained-answer reuse/veto, failed-claim retry and retention, answer-side disposal on retained hits and failures, answer-envelope byte budgets including continuation rows, active-parent record budget safety, and indexed source/project epoch disposal, while app-query continuation contracts verify followability through graph records and live app query-claim profile snapshots.",
       },
     ],
     anchors: [
@@ -2230,6 +2702,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:query-claim-graph",
+        role: "primary",
+        summary:
+          "Focused graph-level contract for lazy claims, retained-answer reuse/veto, failed-claim retry, budgets, and indexed epoch disposal.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-continuations",
+        role: "supporting",
+        summary:
+          "Verifies continuation targetQuery followability through the normal public app-query path and query-claim graph records.",
+      },
+      {
+        kind: "script",
         command: "pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry",
         role: "pressure",
         summary:
@@ -2289,12 +2775,181 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Should answer-local products be retained, disposed after serialization, or moved into durable kernel products?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.intent-aware-continuations",
+      "semantic-runtime.app-telemetry",
       "mcp.developer-preview-shell",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.proxy-observation-domain-modeling",
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.evaluator.world-construction",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.app-telemetry",
+    aliases: [
+      "semantic-runtime-app-telemetry",
+      "frontier:semantic-runtime-app-telemetry",
+      "app telemetry profiler",
+    ],
+    title: "Semantic Runtime App Telemetry",
+    summary:
+      "Route app-world construction, routed-query payload, continuation-envelope, query-claim, and analysis-depth cost questions through the profiler before changing caches or answer shape.",
+    domains: ["semantic-runtime", "telemetry", "performance", "inquiry", "analysis-depth", "kernel"],
+    roles: ["orient", "analyze", "verify", "document", "refactor"],
+    terms: [
+      "app telemetry",
+      "app telemetry profiler",
+      "profile app telemetry",
+      "profile:app-telemetry",
+      "SEMANTIC_RUNTIME_TELEMETRY",
+      "analysis depth cost",
+      "query profile cost",
+      "routed query telemetry",
+      "query repeat",
+      "answer envelope bytes",
+      "answerJson",
+      "valueJson",
+      "continuation bytes",
+      "continuation payload",
+      "query claim profile",
+      "query claim telemetry",
+      "retained answer bytes",
+      "phase telemetry",
+      "phase memory",
+      "phase kernel",
+      "detail density",
+      "compiler host cache",
+      "TypeSystem inner phases",
+      "app-world-free query",
+      "fixture telemetry",
+      "external app telemetry",
+    ],
+    queryCanaries: [
+      {
+        query: "app telemetry answer envelope continuation bytes",
+        summary:
+          "Continuation presentation and MCP/token pressure should be measured through full answer-envelope and continuation-byte telemetry before public answer shape changes.",
+      },
+      {
+        query: "analysis depth query repeat query claim retained answer bytes",
+        summary:
+          "Depth/profile trade-offs should compare query-repeat claim reuse, retained-answer budget, and app-world construction cost in one profiler lane.",
+      },
+      {
+        query: "large app performance app-world-free query telemetry",
+        summary:
+          "Catalog/source/orientation queries that do not need an app world should stay visible as app-world-free profiler rows instead of being hidden by broader app-open totals.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/scripts/app-telemetry.mjs",
+        role: "primary",
+        summary:
+          "CLI profiler for app-world construction, routed query answers, phase memory/kernel deltas, grouped aggregates, query repeats, and query-claim retention.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/contracts.ts",
+        symbolName: "SemanticRuntimeAnswerProfile",
+        role: "primary",
+        summary:
+          "Answer-envelope profile payload that carries runtime-boundary telemetry without changing answer values.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-catalog.ts",
+        symbolName: "readSemanticAppQueryCatalog",
+        role: "grounding",
+        summary:
+          "Catalog boundary declaring query analysis depth and app-world policy used by routed telemetry runs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimGraph",
+        role: "grounding",
+        summary:
+          "Answer-boundary store whose retention, disposal, and payload budgets are measured by app telemetry.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/telemetry/phase.ts",
+        symbolName: "measureSemanticRuntimePhase",
+        role: "supporting",
+        summary:
+          "Phase profiler for construction and query-time costs with optional marker-based kernel/detail deltas.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/telemetry/detail-density.ts",
+        symbolName: "readSemanticRuntimeDetailDensityRows",
+        role: "supporting",
+        summary:
+          "Shallow product-detail and hot-detail representation x-ray used alongside app telemetry before memory refactors.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/store.ts",
+        symbolName: "KernelStore.readTelemetrySnapshot",
+        role: "supporting",
+        summary:
+          "Kernel snapshot entry point for record/product/detail/hot-detail counts and optional density rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry",
+        role: "primary",
+        summary:
+          "Run the profiler before changing app-world construction, routed-query payload, claim retention, or detail representation.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "telemetry", "performance", "inquiry", "analysis-depth"],
+        role: "grounding",
+        summary:
+          "Durable memory records app-telemetry interpretation rules, CLI narrowing, answer-envelope bytes, and query-claim retention guidance.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/README.md",
+        role: "grounding",
+        summary:
+          "Package-level app telemetry commands and environment variable documentation.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/telemetry/README.md",
+        role: "grounding",
+        summary:
+          "Telemetry lane design notes for detail-density and phase interpretation.",
+      },
+    ],
+    authority: [
+      "Measured app telemetry before speculative cache, compression, or analysis-depth refactors.",
+      "App-query catalog depth/materialization policy and inquiry profiles for consumer-shaped cost expectations.",
+      "QueryClaimGraph retention/disposal policy for answer-local work and public payload budgets.",
+    ],
+    cautions: [
+      "Do not interpret value payload bytes alone; continuations and answer-profile metadata are part of the public envelope cost.",
+      "Do not compare whole-session repeats with query repeats as if they answer the same question.",
+      "Do not add caches because one global total is high; group by root, depth, profile, phase, and query first.",
+    ],
+    nextQuestions: [
+      "Is the pressure from app-world construction, routed query projection, answer-envelope payload, or query-claim retention?",
+      "Which analysis depth, inquiry profile, and query repeat pattern reproduces the cost?",
+      "Can the app-query catalog answer without opening an app world, or does this query truly need a fuller product set?",
+      "Does the profiler point at a representation issue, a cache lifetime issue, or an inquiry-algebra/materialization-policy issue?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.inquiry-query-claim-graph",
+      "semantic-runtime.kernel-memory.representation",
+      "semantic-runtime.intent-aware-continuations",
+      "semantic-runtime.type-system-project-epoch",
+      "semantic-runtime.template-overlay-integration",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -2388,6 +3043,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "keyed form binding",
       "array index form binding",
       "record keyed checked binding",
+      "string-index member write",
+      "sourceAssignmentTargetSource owner route",
       "directional assignability",
       "AUR0654",
       "binding behavior materializer",
@@ -2537,6 +3194,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "AccessKeyed keyed form source checked select binding data flow",
         summary:
           "Keyed checked/select source writeback belongs to binding data-flow and form observer channels.",
+      },
+      {
+        query: "string-index member write sourceAssignmentTargetSource owner route",
+        summary:
+          "String-index member writeback should use TypeChecker write-policy facts but preserve the evaluated owner expression as the repair-planning source route.",
       },
       {
         query: "runtime-expression-unassignable runtime-ast-errors binding source assignment",
@@ -2762,6 +3424,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Focused contract for select/checked value-channel domains, directional assignability, matcher rows, and AUR0654.",
       },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:keyed-form-source-bindings",
+        role: "pressure",
+        summary:
+          "Focused contract for keyed and string-index form source writeback, owner source routes, and value-converter fromView flow.",
+      },
     ],
     authority: [
       "Aurelia framework observation, rendering, binding, and attr-mapper source.",
@@ -2910,11 +3580,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "proxy observable escapes",
       "proxy-observable-escapes",
       "observed dependency product",
+      "observed dependency publication",
       "observed dependency source route",
       "member-owner projection",
       "BindingBehavior member owner",
       "ValueConverter member owner",
       "observed dependency semantic identity",
+      "runtime observed dependency publication",
+      "runtime-observed-dependency-publication",
+      "runtimeObservedDependencyRecords",
       "runtime observed dependency draft",
       "distinctRuntimeObservedDependencyDrafts",
       "runtime-observed-dependency-draft",
@@ -2962,6 +3636,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "IObservation watch source effect function getter observed dependency",
         summary:
           "Direct Observation.watch/run source effects should route to proxy observation and RuntimeEffect grounding before binding or resource-watch products.",
+      },
+      {
+        query: "runtime observed dependency publication",
+        summary:
+          "Runtime observed-dependency publication should route to the shared product/source/claim envelope before copying record construction into binding or watcher materializers.",
       },
       {
         query: "one-hop forwarding accessor direct state template binding",
@@ -3136,6 +3815,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Binding data-flow publishes observed dependency facts for source-to-target template bindings.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+        symbolName: "runtimeObservedDependencyRecords",
+        role: "primary",
+        summary:
+          "Shared runtime observed-dependency product/source/claim envelope for binding-owned and watcher-owned dependency rows.",
       },
       {
         kind: "source",
@@ -4923,7 +5610,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Program-owned node",
       "Program-owned SourceFile",
       "readProgramNode",
+      "readProgramTypeAtLocation",
+      "readProgramSymbolAtLocation",
+      "readProgramAliasedSymbolAtLocation",
+      "readProgramTypeOfSymbolAtLocation",
       "readProgramSourceFileByPath",
+      "readProgramSourceFileRole",
+      "checkerPropertySymbol",
+      "checkerSymbolValueType",
+      "checker getTypeAtLocation remap",
+      "Program-node remap",
+      "TypeScript diagnostic source role",
+      "diagnostic source role",
       "dependency declarations",
       "node_modules declarations",
       "TypeScript diagnostics",
@@ -4940,6 +5638,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "lint autofix type errors",
       "type-system telemetry",
       "program source-file composition",
+      "type projection lifetime",
+      "type-shape sidecar index",
+      "checker type-shape index",
+      "contract:type-projection-lifetime",
+      "checker value access",
+      "checker-value-access",
+      "contract:checker-value-access",
     ],
     queryCanaries: [
       {
@@ -5017,6 +5722,40 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Ordinary TypeScript diagnostic visibility should route through TypeSystemProject and app diagnostics before MCP prompt wording or local tsc shell-outs.",
       },
+      {
+        query: "TypeScript diagnostic source role external declaration generated overlay",
+        summary:
+          "Diagnostic source role classification belongs to TypeSystemProject's Program source-file role boundary, not API-local path heuristics.",
+      },
+      {
+        query: "query claim type projection checker sidecar stale product handle",
+        summary:
+          "Type projection lifetime pressure should route through CheckerTypeProjector, KernelStore sidecar indexes, and the focused type-projection lifetime contract.",
+      },
+      {
+        query: "TypeChecker property symbol apparent type duplicated helper",
+        summary:
+          "Repeated declared/apparent property lookups should route through checker-node-helpers or CheckerTypeShapeAccess before adding feature-local checker helper code.",
+      },
+      {
+        query: "getTypeAtLocation Program-node remap feature receiver checker",
+        summary:
+          "Feature-side receiver/type reads should route through TypeSystemProject remap APIs; direct calls are expected only in type-system owners or documented local type-context boundaries.",
+      },
+      {
+        query: "checker value access TypeSystemProject direct TypeChecker calls",
+        summary:
+          "Feature-side TypeChecker value-access calls should route through TypeSystemProject/checker helpers and the checker-value-access contract.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "TypeSystemProject owns Program-node remap APIs and checker-node/checker-related helper access for property/value-type/symbol/index/type-node reads. The checker-value-access contract AST-scans semantic-runtime and permits direct value-access checker calls only inside type-system owners or documented local type-context boundaries such as proxy observation.",
+      },
     ],
     anchors: [
       {
@@ -5026,6 +5765,46 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Current app-local TypeScript Program/checker epoch and source-file lookup API.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject.readProgramSourceFileRole",
+        role: "supporting",
+        summary:
+          "Program-owned source-role classifier for TypeScript diagnostics and future repair/edit planning.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject.readProgramTypeAtLocation",
+        role: "supporting",
+        summary:
+          "Epoch-owned Program-node remap plus TypeChecker type read for evaluator/source-discovery nodes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject.readProgramSymbolAtLocation",
+        role: "supporting",
+        summary:
+          "Epoch-owned Program-node remap plus TypeChecker symbol read for evaluator/source-discovery nodes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject.readProgramAliasedSymbolAtLocation",
+        role: "supporting",
+        summary:
+          "Alias-resolved Program symbol read for checker-backed value references.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject.readProgramTypeOfSymbolAtLocation",
+        role: "supporting",
+        summary:
+          "Epoch-owned Program-node remap plus TypeChecker symbol value-type read.",
       },
       {
         kind: "source",
@@ -5099,11 +5878,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayAliasReplayCursor",
+        role: "supporting",
+        summary:
+          "Overlay-local cursor for generated `$this`/`$parent` alias state while replaying materialized scope ancestry.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
         symbolName: "appendTemplateTypeSystemOverlayScopeBlock",
         role: "supporting",
         summary:
-          "Template overlay layer algebra and text-emission boundary for generated checker surfaces.",
+          "Template overlay layer algebra and text-emission boundary for generated checker surfaces, including parent alias capture/replay across generated blocks.",
       },
       {
         kind: "source",
@@ -5112,6 +5899,44 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Process-local dependency/lib source-file cache used by the compiler host.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/checker-projector.ts",
+        symbolName: "CheckerTypeProjector",
+        role: "supporting",
+        summary:
+          "TypeChecker type-shape projector with a store-local sidecar index that mirrors product-detail lifetime.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/checker-node-helpers.ts",
+        symbolName: "checkerPropertySymbol",
+        role: "supporting",
+        summary:
+          "Low-level declared/apparent TypeChecker property-symbol helper used beneath projected type-shape access.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/store.ts",
+        symbolName: "KernelStore.registerSidecarIndex",
+        role: "supporting",
+        summary:
+          "Kernel sidecar-index registration and disposal notification boundary.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
+        role: "grounding",
+        summary:
+          "Contract proving type-shape sidecar indexes prune with kernel product-detail disposal and reproject fresh details.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:checker-value-access",
+        role: "grounding",
+        summary:
+          "AST contract proving feature-side TypeChecker value-access calls stay in type-system owners or documented local contexts.",
       },
       {
         kind: "source",
@@ -5168,6 +5993,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Type-system diagnostic reader for ordinary TypeScript Program diagnostics.",
       "Type-system README and memory record for source admission and root-narrowing cautions.",
       "App telemetry for phase timing, source-file composition, and host cache stats.",
+      "CheckerTypeProjector and KernelStore sidecar-index contracts for query-local TypeChecker projection lifetime.",
       "Aurelia resource/template/type semantics for deciding whether roots are semantic inputs or type-only dependencies.",
     ],
     cautions: [
@@ -5232,6 +6058,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "TemplateTypeSystemOverlayExpressionProjector",
       "templateTypeSystemOverlayExpressionSupportMatrix",
       "templateTypeSystemOverlayPreludeHelpers",
+      "template-scope-replay",
+      "templateScopeReplayChain",
+      "templateScopeAliasSupport",
+      "template scope replay",
+      "$this $parent overlay alias",
       "unsupportedOverlayExpressionSyntax",
       "retired unsupportedOverlayExpressionSyntax",
       "unsupported overlay expression",
@@ -5299,6 +6130,31 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Rename and edit readiness should route through exact overlay/source-address mapping and the edit affordance route.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.AuthoredSourceTextBoundary,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "Template overlay expression projection now slices authored template text through the shared AuthoredSourceTextCache instead of overlay-local file reads, and the overlay contract verifies generated diagnostics map back to exact authored spans. Any future raw source slicing in overlay/cursor diagnostics should route through the same kernel boundary before adding local line/offset helpers.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.type-system-project-epoch",
+        summary:
+          "Template overlays consume TypeSystemProject and checker helpers for Program-owned evidence, but overlay work remains a high-risk split-brain lane because generated TypeScript can look correct while binding/data-flow or observer semantics disagree. Keep checker lookups routed through type-system owners before broadening overlay-local diagnostics.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "Template overlay work supplies evidence for cursor, diagnostic, and LSP-like answers. Public cursor and diagnostic answers now carry fixture-verified follow-up continuations; overlay-specific edit/reference precision remains a future Semantic IDE surface rather than a current continuation gap.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -5307,6 +6163,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Generated TypeScript overlay builder that spends materialized BindingScope ancestry and semantic products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayAliasReplayCursor",
+        role: "supporting",
+        summary:
+          "Overlay-local cursor for generated `$this`/`$parent` alias state while replaying materialized scope ancestry.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-scope-replay.ts",
+        symbolName: "templateScopeReplayChain",
+        role: "primary",
+        summary:
+          "Shared BindingScope ancestry replay and alias reachability policy used before overlay, cursor, diagnostic, and future edit surfaces interpret `$this`/`$parent`.",
       },
       {
         kind: "source",
@@ -5386,6 +6258,46 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "pressure",
         summary:
           "Focused contract for overlay sources, support matrix, generated-child splicing, diagnostics, and public overlay rows.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/implicit-binding-expression-inference",
+        role: "pressure",
+        summary:
+          "Fixture for copied template expressions, repeated scopes, and overlay diagnostic source mapping.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/template-overlay-scope-aliases",
+        role: "pressure",
+        summary:
+          "Fixture for `$this`, `$parent`, boundary `this`, repeat locals, destructured locals, and nested scope alias replay.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/template-overlay-value-converter",
+        role: "pressure",
+        summary:
+          "Fixture for value-converter overlay lowering, generated child splicing, and authored-source diagnostic mapping.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller",
+        role: "pressure",
+        summary:
+          "Fixture for child controller overlay typing through parent-bound values.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/template-overlay-type-errors",
+        role: "pressure",
+        summary:
+          "Fixture for public overlay diagnostics and cursor diagnostic rows.",
       },
       {
         kind: "script",
@@ -5542,6 +6454,29 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Workspace-level file/resource rename should keep TypeScript and Aurelia semantic references in one transaction model.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.AuthoredSourceTextBoundary,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        summary:
+          "Existing source-reference and overlay mapping primitives can preserve exact authored loci, but future rename/edit planning still needs a stricter edit-range surface over shared authored text rather than broad carrier spans.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
+        state: AtlasWorkRouteCoverageState.Missing,
+        ownerRouteId: "semantic-runtime.type-system-project-epoch",
+        summary:
+          "The future semantic edit/reference substrate has not yet decided how TypeScript LanguageService, TypeSystemProject, checker helper access, and Aurelia semantic references share one epoch. Do not add a naive edit surface until this is designed.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Missing,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "IDE affordance answers require intent-aware continuation and evidence gates for navigation, diagnostics, and future edit previews. The edit/reference substrate is not yet wired to public intent-aware continuations.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -5643,6 +6578,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   },
   {
     id: "semantic-runtime.type-system.expression-semantics",
+    aliases: [
+      "checker-type-shape-access",
+      "frontier:checker-type-shape-access",
+    ],
     title: "TypeChecker Expression Semantics",
     summary:
       "Route TypeChecker-backed expression evaluation, speculative template contexts, member-owner projection, and binding-source-slot handoffs without creating a second local evaluator.",
@@ -5667,6 +6606,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "checker-backed expression",
       "CheckerExpressionTypeWorld",
       "expression type world",
+      "checker primitive literal",
+      "primitive literal type",
+      "checker-primitive-types",
+      "contract:expression-primitive-literals",
+      "expression cache source span",
+      "expression projection local key",
+      "expression kind span projection key",
       "speculative checker context",
       "speculative binding scope",
       "speculative binding scope overlay",
@@ -5678,6 +6624,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "template completion",
       "member owner projector",
       "CheckerExpressionMemberOwnerProjector",
+      "CheckerTypeShapeAccess",
+      "checker type shape access",
+      "checker-type-shape-access",
+      "memberValueAccess",
+      "memberWriteAccess",
+      "finite keyed access",
+      "index signature access",
       "TemplateScopeTypeProjector",
       "template scope type projector",
       "CheckerBindingPatternLocalTypeProjector",
@@ -5744,6 +6697,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Natural diagnostic prose around owner/member gaps and speculative scope should stay structurally routeable.",
       },
+      {
+        query: "primitive literal expression widened string number boolean TypeChecker",
+        summary:
+          "Primitive literal precision pressure should route to checker-primitive-types and the expression primitive literal contract before local helper duplication.",
+      },
+      {
+        query: "expression cache source span projection local key collision",
+        summary:
+          "Source-span/cache collisions should route to the evaluator projection-key boundary before changing TypeChecker projector reuse.",
+      },
     ],
     anchors: [
       {
@@ -5767,11 +6730,29 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/type-system/checker-primitive-types.ts",
+        symbolName: "checkerPrimitiveLiteralType",
+        role: "supporting",
+        summary:
+          "Shared TypeChecker primitive/literal projection split for expression evaluation and template-controller matching.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
         symbolName: "CheckerExpressionMemberOwnerProjector",
         role: "supporting",
         summary:
           "Offset-aware member-owner projector for cursor, completion, and diagnostic inquiries.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
+        symbolName: "CheckerTypeShapeAccess",
+        role: "supporting",
+        summary:
+          "Shared member/index/write access resolver over projected checker type shapes.",
       },
       {
         kind: "source",
@@ -5864,6 +6845,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "TypeScript checker facts are the authority for static owner/member/call/keyed expression surfaces.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-primitive-literals",
+        role: "grounding",
+        summary:
+          "Contract proving primitive literal AST nodes preserve TypeScript literal type display and same-local-key source-span isolation.",
       },
       {
         kind: "memory",
@@ -6006,6 +6995,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "resource open seam",
       "resource alias claim",
       "resource source address",
+      "AuthoredSourceTextCache external template",
+      "authored source text boundary",
+      "conventional html template source text",
+      "imported html template source text",
     ],
     queryCanaries: [
       {
@@ -6032,6 +7025,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "CustomElement.define nested resource definition call validation-container",
         summary:
           "Framework configuration-time resource definitions are resource convergence/admission visibility work.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.AuthoredSourceTextBoundary,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        summary:
+          "Resource convergence now reads conventional and imported external HTML template text through AuthoredSourceTextCache before metadata stripping, preserving the template-file source address and avoiding a resource-local raw filesystem reader. A dedicated external-template contract would raise this from semantic coverage to verified coverage.",
       },
     ],
     anchors: [
@@ -7362,6 +8364,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "AUR4002",
       "translation binding lifecycle",
       "translation binding diagnostics",
+      "imported JSON translation key source span",
+      "AuthoredSourceTextCache i18n JSON",
     ],
     queryCanaries: [
       {
@@ -7383,6 +8387,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "CustomExpression custom expression i18n translation binding overlay",
         summary:
           "CustomExpression pressure should route to i18n translation binding/key evaluation before generic overlay syntax skips.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.AuthoredSourceTextBoundary,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        summary:
+          "Imported JSON translation-key products now map generated asset-module nodes back through AuthoredSourceTextCache, so key source addresses point at authored JSON property spans rather than generated wrapper text. This remains semantic coverage until a focused i18n catalog/source-span contract pins the behavior.",
       },
     ],
     anchors: [
@@ -7490,6 +8503,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "store-domain-model",
       "state binding command",
       "dispatch binding command",
+      ".state",
+      ".dispatch",
+      "value.state",
+      "input.dispatch",
+      "state-dispatch",
+      "state-dispatch-action",
+      "state dispatch payload",
+      "state action payload",
+      "state action literal",
+      "dispatch payload value channel",
+      "$event.target.value",
       "state binding behavior",
       "raw Error authority",
     ],
@@ -7503,6 +8527,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "fromState state binding command missing store",
         summary:
           "State lookup diagnostics need post-template state binding products and store-registry semantics.",
+      },
+      {
+        query: "state dispatch payload action literal target value value-channel",
+        summary:
+          "State dispatch payload typing should route through state command value-channel flow before generic template repair policy.",
       },
     ],
     anchors: [
@@ -7537,6 +8566,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Public StateStores/StateIssues API projections consumed by authoring orientation and diagnostics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
+        symbolName: "RuntimeBindingValueChannelDraftSupport",
+        role: "supporting",
+        summary:
+          "Shared value-channel support that lets state-dispatch payloads reuse listener event target typing.",
       },
       {
         kind: "doc",
@@ -7799,6 +8836,23 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Missing member diagnostics should route through the same diagnostic repair policy as weak owner rows.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.AuthoredSourceTextBoundary,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "Template diagnostics and cursor diagnostics share the authored source text/cache path used for template source slicing, while template-diagnostics contracts prove weak-owner and missing-member rows preserve concrete source routes and action targets. Future repair planning should spend those source routes rather than opening another diagnostic-local text reader.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "Template diagnostics carry fixture-verified public continuation rows for app diagnostics, summaries, resources, and binding flow. Weak-owner repair-pressure diagnostics now prove exact action-target source preservation and exact-source continuation evidence without advertising direct repair intent before the authoring/edit surfaces are rebuilt.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -7926,6 +8980,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "weak typings diagnostics",
         summary:
           "Weak typings should often produce structured diagnostics instead of failed autocomplete expectations.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.intent-aware-continuations",
+        summary:
+          "App/framework diagnostic answers now carry fixture-verified typed continuations to detailed, TypeScript, template, and related issue-product lanes. Repair intent is limited to source-backed related diagnostic rows with blocker evidence, and fixture-scanned family witnesses cover TypeScript, configuration, DI, observation, evaluation, resource, template, router, route-recognizer, validation, fetch-client, and dialog issue lanes. Additional framework-code families still need incremental witnesses as new packages are modeled.",
       },
     ],
     anchors: [
@@ -8192,6 +9256,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which inquiry profiles need the expensive projection fast, and which can recompute or use available products?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.app-telemetry",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.template-recursive-rendering",
@@ -8217,6 +9282,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "route scoring",
       "route row contracts",
       "route next questions",
+      "route coverage",
+      "coverage discovery",
+      "coverage dimension",
+      "cross cutting coverage",
+      "coverage state",
+      "missing coverage",
+      "partial coverage",
       "memory next",
       "current workset",
       "dirty files",
@@ -8257,6 +9329,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "work router matching scoring row contracts next questions",
         summary:
           "The Work Router's own support modules should be routed as first-class substrate, not found by grep after compaction.",
+      },
+      {
+        query:
+          "coverage discovery primitive not threaded through all semantic-runtime routes",
+        summary:
+          "Cross-cutting substrate completeness gaps should route through Work Router coverage before future agents rediscover them as isolated feature TODOs.",
       },
     ],
     anchors: [
@@ -8347,11 +9425,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not replace understanding with lint-the-lens refactors that hide complexity behind one-off wrappers.",
       "Do not create a second accidental storage system unless its ownership differs intentionally from memory JSON and markdown docs.",
       "Every weak-text hit should be a candidate for a new route term, anchor, or ontology correction.",
+      "When a primitive is asymmetric across semantic-runtime routes, prefer adding a named coverage dimension over leaving scattered TODOs that only surface by memory or grep.",
     ],
     nextQuestions: [
       "Which route matched weakly, and what structural anchor would have made it exact?",
       "Should this fact live in memory, route catalog, markdown, or source comments?",
       "Did a pressure lens encourage a cosmetic refactor rather than a real model improvement?",
+      "Is this a local feature gap, or a cross-cutting primitive that needs a route coverage dimension and state rows?",
     ],
     relatedRouteIds: [
       "semantic-runtime.evaluator.world-construction",
@@ -8386,6 +9466,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "TypeScript enum usage index",
       "typescript enum usage",
       "enum usage index",
+      "semantic-runtime enum usage",
+      "enum member usage",
+      "enum primitive coverage",
+      "unused enum member",
+      "unspent enum member",
+      "enum coupling",
+      "enum couplings",
+      "control-flow enum usage",
+      "switch-case enum usage",
+      "InquiryContinuationIntent.Author",
+      "intent document grounding",
+      "enum purpose grounding",
       "readTypeScriptEnumUsageIndex",
       "LensCatalog",
       "lens catalog",
@@ -8406,6 +9498,31 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "typescript enum usage index",
         summary:
           "Enum usage index performance is an Atlas source-analysis substrate frontier.",
+      },
+      {
+        query: "InquiryContinuationIntent.Author enum member usage",
+        summary:
+          "Semantic-runtime inquiry primitives should be audited through package-facing enum usage, not atlas.self-only rows or grep.",
+      },
+      {
+        query: "enum usage intent document grounding",
+        summary:
+          "Enum usage counts should be interpreted through owning docs, Atlas memory, and Work Router intent rather than treated as self-defining purpose.",
+      },
+      {
+        query: "unused enum member primitive coverage",
+        summary:
+          "Designed-but-unspent enum primitives should route to the package-facing enum usage lane.",
+      },
+      {
+        query: "enum coupling control-flow usage",
+        summary:
+          "Enum member spend should include control-flow carriers and enum-to-enum coupling, not just flat reference counts.",
+      },
+      {
+        query: "enum protocol type surface cooccurrence",
+        summary:
+          "Enum coupling should reveal protocol-shaped type surfaces where multiple enums intentionally form one DTO or helper signature.",
       },
       {
         query: "lens catalog contract strings",
@@ -8434,6 +9551,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "TypeScript enum usage index is a measured source-analysis performance frontier.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/scripts/enum-usage.ts",
+        role: "primary",
+        summary:
+          "Package-facing enum usage CLI exposes the source index for semantic-runtime, MCP, and external package primitive audits.",
       },
       {
         kind: "source",
@@ -8479,6 +9603,27 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Product-architecture field-provenance pressure is an Atlas source-analysis lane as well as semantic-runtime publication guidance.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=InquiryContinuationIntent --memberName=Author --detail",
+        role: "primary",
+        summary:
+          "Canary query for whether an inquiry continuation intent member is declared, referenced, or actually spent.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --detail",
+        role: "primary",
+        summary:
+          "Enum coupling query for translation, branch co-occurrence, declared type-surface, and checker-backed shared value-space relations.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow --detail",
+        role: "primary",
+        summary:
+          "Canary query for continuation-related enum protocols carried by public DTO type surfaces.",
       },
       {
         kind: "script",

@@ -225,6 +225,11 @@ stdio hand-tests do not need JSON spelunking just to decide whether to retain or
 The generic `aurelia_app_query` tool exists so a local client can hand-test new semantic-runtime query kinds before the
 MCP shell receives a more curated tool. Curated tools should be added when the shape is stable enough to explain to app
 developers.
+App-query answers may carry `continuations`: typed semantic-runtime next moves with a followable `targetQuery`, intent
+labels, cost, evidence state, source precision, staleness, and blockers. Pass `continuationIntents` when the caller
+already knows the task posture, such as `inspect`, `diagnose`, `repair`, `verify`, or `profile`; semantic-runtime
+filters only the response envelope and leaves query materialization identity unchanged. MCP clients should follow those
+returned target queries instead of inventing adapter-local related-query heuristics from prose.
 Use `aurelia_app_query_batch` when a client needs several related app answers for one orientation move. The adapter
 forwards the batch to `runtime.answerAppQueries(...)`, so one app-open boundary can answer several child query claims
 and then apply the same app-retention policy as single routed queries. This is preferable to a transport-local cache:
@@ -233,7 +238,8 @@ semantic-runtime owns the query-outcome graph, materialization policy, and dispo
 `aurelia_analysis_cache_overview` or opt into those batch fields only when profiling construction cost or retained
 query-claim shape is the actual task. Batch text is semantic-runtime-owned and lists each child query kind, materialization
 policy, and child answer summary, so the low-token text answer remains useful even when child row pages are intentionally
-empty.
+empty. MCP result text also appends a bounded child-continuation line for batch answers so callers can see representative
+followable target queries without opening the structured rows first.
 The MCP adapter treats read-only app inquiries as recompute-friendly by default: it forwards them through
 `runtime.answerAppQuery(...)` with dispose-app retention, so large hand-tested apps do not leave app-world epochs cached
 inside the server process. Pass `appRetention=retain-app` while hand-testing when several tools should reuse one opened

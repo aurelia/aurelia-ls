@@ -1,10 +1,7 @@
-import {
-  existsSync,
-  readFileSync,
-} from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import type { SourceFileAdmission } from '../boot/frames.js';
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -306,6 +303,7 @@ class CustomElementConvergenceFrame {
     private readonly observation: ResourceRecognitionObservation,
     private readonly header: ResourceDefinitionHeaderEmission,
     private readonly provenanceHandle: ProvenanceHandle,
+    private readonly sourceTextCache: AuthoredSourceTextCache,
   ) {
     this.targetClass = classNodeForTarget(definition.target);
     this.definitionExpression = expressionNode(observation.definitionNode);
@@ -411,6 +409,7 @@ class CustomElementConvergenceFrame {
       this.targetClass,
       this.observation,
       this.local('template'),
+      this.sourceTextCache,
     );
   }
 
@@ -647,6 +646,7 @@ export class ResourceDefinitionConverger {
   constructor(
     /** Hot analysis store that receives converged resource definition records. */
     readonly store: KernelStore,
+    private readonly sourceTextCache = new AuthoredSourceTextCache(''),
   ) {}
 
   converge(
@@ -839,6 +839,7 @@ export class ResourceDefinitionConverger {
       observation,
       header,
       provenanceHandle,
+      this.sourceTextCache,
     ).read();
     if (facts == null) {
       return null;
@@ -1270,18 +1271,19 @@ function readCustomElementTemplate(
   targetClass: ts.ClassLikeDeclarationBase | null,
   observation: ResourceRecognitionObservation,
   local: string,
+  sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'template');
   const imported = read?.node == null
     ? null
-    : readImportedHtmlTemplate(store, context, read.node, local);
+    : readImportedHtmlTemplate(store, context, read.node, local, sourceTextCache);
   if (imported != null) {
     return imported;
   }
 
   const value = read?.value;
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
-    const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local);
+    const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local, sourceTextCache);
     if (conventional != null) {
       return conventional;
     }
@@ -1310,6 +1312,7 @@ function readConventionalHtmlTemplate(
   targetClass: ts.ClassLikeDeclarationBase | null,
   observation: ResourceRecognitionObservation,
   local: string,
+  sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead | null {
   if (
     targetClass == null
@@ -1326,11 +1329,10 @@ function readConventionalHtmlTemplate(
     return null;
   }
   const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
-  if (!existsSync(absolutePath)) {
+  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
+  if (rawMarkup == null) {
     return null;
   }
-
-  const rawMarkup = readFileSync(absolutePath, 'utf8');
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1350,6 +1352,7 @@ function readImportedHtmlTemplate(
   context: ResourceRecognitionContext,
   node: ts.Node,
   local: string,
+  sourceTextCache: AuthoredSourceTextCache,
 ): TemplateDefinitionRead | null {
   const carrier = templateCarrierExpression(node);
   if (carrier == null) {
@@ -1368,11 +1371,10 @@ function readImportedHtmlTemplate(
   if (admission == null) {
     return null;
   }
-  if (!existsSync(absolutePath)) {
+  const rawMarkup = sourceTextCache.read(absolutePath)?.text ?? null;
+  if (rawMarkup == null) {
     return null;
   }
-
-  const rawMarkup = readFileSync(absolutePath, 'utf8');
   const metadata = readHtmlTemplateMetadata(rawMarkup);
   const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
@@ -1844,14 +1846,12 @@ function readCheckerDependencyReference(
   if (expression == null || context.typeSystem == null) {
     return null;
   }
-  const programExpression = context.typeSystem.readProgramExpression(expression);
-  if (programExpression == null) {
+  const symbol = context.typeSystem.readProgramAliasedSymbolAtLocation(expression);
+  const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
+  const type = context.typeSystem.readProgramTypeAtLocation(expression);
+  if (type == null) {
     return null;
   }
-  const checker = context.typeSystem.checker;
-  const symbol = readAliasedValueSymbol(checker, programExpression);
-  const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
-  const type = checker.getTypeAtLocation(programExpression);
   const moduleKey = declaration == null
     ? null
     : context.typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
@@ -1864,19 +1864,6 @@ function readCheckerDependencyReference(
   }
   const localName = readDeclarationLocalName(declaration) ?? symbol?.getName() ?? null;
   return localName == null ? null : new ResourceDependencyReference(null, localName, moduleKey, localName);
-}
-
-function readAliasedValueSymbol(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Symbol | null {
-  const symbol = checker.getSymbolAtLocation(expression) ?? null;
-  if (symbol == null) {
-    return null;
-  }
-  return (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
 }
 
 function isCheckerConstructableOrCallable(type: ts.Type): boolean {

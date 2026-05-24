@@ -143,6 +143,10 @@ static type surfaces rather than hydrated runtime values.
   observed owner declaration when no static member exists. `expression-source-name.ts` is the shared display/root-name
   primitive for binding data-flow and connectable observed-dependency rows so `AccessKeyed` does not collapse to a
   second anonymous `items[]` dialect in one lane while another lane keeps `items[selectedIndex]`.
+  `runtime-observed-dependency-publication.ts` owns the shared product/source/claim publication envelope for concrete
+  runtime observed-dependency rows used by binding data-flow and runtime watcher execution. The owner still matters:
+  bindings and watchers pass different owner identities and usage predicates, but they should not each hand-roll the
+  same `ObservedDependency` product and source-span records.
   TS-side observation products use the shared `typescriptExpressionSourceRootName(...)` and
   `isNestedExecutionBoundary(...)` helpers from `evaluation/ts-syntax.ts`, while member declaration source projection
   goes through `observed-dependency-member-source.ts`; runtime effects, proxy dependency collection, proxy escape rows,
@@ -282,7 +286,9 @@ static type surfaces rather than hydrated runtime values.
   Member writes that resolve through a lazy checker/apparent-property lookup need the same source route as eagerly
   projected `CheckerTypeMember` rows. `CheckerTypeShapeAccess.memberWriteAccess(...)` materializes the member's
   value/declaration source when it finds a checker symbol; observation should consume that access result rather than
-  reopening checker symbols locally.
+  reopening checker symbols locally. When a member write only closes through a string index signature, observation uses
+  the evaluated owner-expression source as the assignment target route because the index signature proves write policy
+  while the app-owned object member still owns repair planning.
   Keyed writes preserve the evaluated owner route even when the assignment itself is ordinary runtime-writable. That
   lets array, record, and nested dynamic-keyed form bindings keep an app-source `sourceAssignmentTargetSource` for
   future repair planning instead of falling back to the template expression whenever the source is `person[field]` or
@@ -404,10 +410,11 @@ static type surfaces rather than hydrated runtime values.
   sources. String `valueDomain` is intentionally not the whole story: `model.bind="null"`, boolean radio/select
   options, and numeric option models carry a `primitiveValueDomain` alongside the existing string display domain so
   API consumers and data-flow assignability can see Aurelia's actual runtime comparison values.
-  `runtime-binding-primitive-value.ts` is the shared primitive-value substrate for expression literal extraction,
-  DOM `value` coercion, public row display, TypeScript-style literal display, uniqueness, and checker assignability;
-  value-channel drafts, select/checked observer branches, data-flow assignability, and API projections should not
-  grow local primitive switch walkers.
+  `runtime-binding-primitive-value.ts` is the shared primitive-value substrate for expression literal extraction through
+  transparent parens, DOM `value` coercion, public row display, TypeScript-style literal display, uniqueness, and checker assignability.
+  Parser-level literal values use `ExpressionPrimitiveLiteralValue`, while checker assignability reuses
+  `checkerPrimitiveLiteralType(...)`; value-channel drafts, select/checked observer branches, data-flow assignability,
+  and API projections should not grow local primitive switch walkers.
   Element values can come from static `value`/`model` attributes or from lowered sibling `model.bind`/`value.bind`
   property bindings. Dynamic `model.bind` on options and inputs is the `element-model-value` channel: select observers
   read option models as their value domain, and checked observers can subscribe to input model/value changes. It should
@@ -606,6 +613,10 @@ property can still be observed, but method/property reads below the returned hos
 library class instances remain proxy-wrappable unless the framework `@nowrap` escape hatch or function/primitive
 classification says otherwise. Dynamic key semantics, derived collection aliases, destructuring reads without a named
 wrapped root, and deeper TypeChecker-backed proxy control flow remain open.
+Proxy-observation checker reads must go through the module-local Program-node remap helper before calling
+`checker.getTypeAtLocation(...)`. The collector often walks parsed function-body nodes from a declaration carrier, while
+TypeScript checker facts belong to the admitted `Program` source file; bypassing that remap reintroduces stale-node
+false negatives and makes collection-policy branches look weaker than the project actually is.
 
 Observed-dependency products are semantic dependency rows rather than raw read-event counters. Framework
 `BindingObserverRecord` dedupes subscriptions by observer identity inside a connectable run; semantic-runtime mirrors the

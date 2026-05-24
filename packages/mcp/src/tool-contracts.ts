@@ -44,6 +44,7 @@ export interface AureliaMcpWorkspaceInput extends SemanticRuntimeOptions {
 
 export interface AureliaMcpOpenAppInput extends AureliaMcpWorkspaceInput, OpenSemanticAppOptions {
   readonly appRetention?: SemanticRuntimeAppQueryRequest['appRetention'];
+  readonly continuationIntents?: SemanticRuntimeAppQueryRequest['continuationIntents'];
 }
 
 export interface AureliaMcpPagedInput {

@@ -53,6 +53,6 @@ consumes the resulting `RuntimeBindingIssue` products through the shared templat
   the target element and parameter/key bindings that Aurelia would join through `TranslationBinding.useParameter(...)`.
 - Dynamic loaders, backend plugins, and runtime language switching should remain open seams until a framework-grounded
   product exists for them.
-- Imported JSON resource modules use the evaluator's asset-module source-span helper, so key products can point back to
-  authored JSON property spans instead of the generated `export default ...` wrapper. HTML/CSS asset string mappings
-  remain out of scope for this folder.
+- Imported JSON resource modules use the evaluator's asset-module source-span helper over the shared kernel
+  `AuthoredSourceTextCache`, so key products can point back to authored JSON property spans instead of the generated
+  `export default ...` wrapper. HTML/CSS asset string mappings remain out of scope for this folder.

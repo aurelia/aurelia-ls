@@ -86,6 +86,7 @@ import {
 } from "./product-architecture-analysis.js";
 import {
   ATLAS_WORK_ROUTER_VERSION,
+  AtlasWorkRouteCoverageState,
   type AtlasWorkRoute,
   type AtlasWorkRouteAnchor,
   type AtlasWorkRouteCorpusAnchor,
@@ -113,6 +114,7 @@ import { routeNextQuestions } from "./atlas-work-router-next-questions.js";
 import type {
   AtlasWorkRouteHealthIssue,
   AtlasWorkRouteHealthRow,
+  AtlasWorkRouteCoverageRow,
   AtlasWorkRouteMemoryCoverageRow,
   AtlasWorkRoutePlanRow,
   AtlasWorkRouteQueryCanaryRow,
@@ -131,6 +133,7 @@ type AtlasWorkRouterProjection =
   | "route-plan"
   | "next-questions"
   | "route-health"
+  | "coverage"
   | "workset"
   | "memory-coverage"
   | "schema";
@@ -169,6 +172,12 @@ export function answerAtlasWorkRouter(
         inquiry,
         selectedRoutes,
         state,
+        basis,
+      );
+    case "coverage":
+      return answerAtlasWorkRouterCoverage(
+        inquiry,
+        selectedRoutes,
         basis,
       );
     case "workset":
@@ -373,6 +382,54 @@ function answerAtlasWorkRouterRouteHealth(
       routeHealth: page.rows,
     }),
     openSeams: (page) => page.rows.flatMap(routeHealthOpenSeams),
+  });
+}
+
+function answerAtlasWorkRouterCoverage(
+  inquiry: Inquiry,
+  scoredRoutes: readonly ScoredRoute[],
+  basis: readonly Basis[],
+): Answer<AtlasWorkRouterValue> {
+  const filters = atlasWorkRouterFilters(inquiry);
+  const rows = scoredRoutes
+    .flatMap((entry) => routeCoverageRows(entry.route))
+    .filter((row) =>
+      (filters.coverageDimension === undefined || row.dimension === filters.coverageDimension) &&
+      (filters.coverageState === undefined || row.state === filters.coverageState) &&
+      (filters.coverageDepth === undefined || row.depth === filters.coverageDepth)
+    )
+    .sort(compareRouteCoverageRows);
+  const rowFamily = new PagedRowFamily<AtlasWorkRouteCoverageRow>({
+    id: "atlas.work-router:coverage",
+    rowLabel: "Atlas work route coverage row(s)",
+    evidenceForRow: routeCoverageEvidence,
+    continuationsForPage: (inquiry, pageRows, nextOffset, limit) => [
+      ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
+        priority: ContinuationPriority.Secondary,
+        rationale: "Continue the work-route coverage row family.",
+        routeSummary: "Next Atlas work-route coverage page.",
+      }),
+      ...atlasWorkRouterProjectionContinuations(inquiry, filters),
+      ...pageRows.map((row) =>
+        workRouterRoutePlanContinuation(
+          row.routeId,
+          `Inspect route plan for ${row.dimension} coverage on ${row.routeId}.`,
+        ),
+      ).slice(0, 16),
+    ],
+  });
+  return rowFamily.answer({
+    inquiry,
+    rows,
+    limit: rowLimit(inquiry),
+    offset: pageOffset(inquiry),
+    basis,
+    value: (page) => ({
+      version: ATLAS_WORK_ROUTER_VERSION,
+      rollup: routerRollup(scoredRoutes, []),
+      routes: scoredRoutes.map((entry) => entry.row),
+      routeCoverage: page.rows,
+    }),
   });
 }
 
@@ -612,6 +669,7 @@ function atlasWorkRouterProjection(
       return inquiry.projection;
     case "route-plan":
     case "route-health":
+    case "coverage":
     case "workset":
     case "memory-coverage":
     case "schema":
@@ -678,13 +736,14 @@ function routePlan(
     fixtureSeeds,
     expectedEffects,
     queryCanaries,
+    coverage: route.coverage ?? [],
     frameworkErrorCodeLabel: route.id === "diagnostics.framework-error-grounding" &&
         filters.query !== undefined
       ? firstFrameworkErrorCodeQuery(filters.query)
       : undefined,
     cautions: route.cautions,
     summary:
-      `${route.title}: ${sourceAnchors.filter((row) => row.found).length}/${sourceAnchors.length} source anchor(s) found, ${lensAnchors.length} lens anchor(s), ${scriptAnchors.length} script anchor(s), ${docAnchors.length} doc anchor(s), ${pathAnchors.length} path anchor(s), ${memoryRecords.length} memory record(s), ${memoryNextActions.length} memory next action(s), ${fixtureSeeds.length} fixture seed(s), and ${expectedEffects.length} expected-effect descriptor(s).`,
+      `${route.title}: ${sourceAnchors.filter((row) => row.found).length}/${sourceAnchors.length} source anchor(s) found, ${lensAnchors.length} lens anchor(s), ${scriptAnchors.length} script anchor(s), ${docAnchors.length} doc anchor(s), ${pathAnchors.length} path anchor(s), ${memoryRecords.length} memory record(s), ${memoryNextActions.length} memory next action(s), ${fixtureSeeds.length} fixture seed(s), ${expectedEffects.length} expected-effect descriptor(s), and ${route.coverage?.length ?? 0} coverage row(s).`,
   };
 }
 
@@ -717,7 +776,10 @@ function workRouterFiltersAreEmpty(filters: AtlasWorkRouterFilters): boolean {
     filters.concept === undefined &&
     filters.effectKind === undefined &&
     filters.recipeKey === undefined &&
-    filters.seedUse === undefined;
+    filters.seedUse === undefined &&
+    filters.coverageDimension === undefined &&
+    filters.coverageState === undefined &&
+    filters.coverageDepth === undefined;
 }
 
 interface DefaultRouteRankComponent {
@@ -1011,6 +1073,58 @@ function routeQueryCanaryRow(
       ? `${canary.query} routes to ${route.id} as ${matchedRoute.row.matchStrength}.`
       : `${canary.query} should route to ${route.id} with at least ${minimumStrength}, but ${matchedRoute === undefined ? "no route matched" : `${matchedRoute.route.id} matched as ${matchedRoute.row.matchStrength}`}. ${canary.summary}`,
   };
+}
+
+function routeCoverageRows(route: AtlasWorkRoute): readonly AtlasWorkRouteCoverageRow[] {
+  return (route.coverage ?? []).map((coverage) => ({
+    routeId: route.id,
+    title: route.title,
+    dimension: coverage.dimension,
+    state: coverage.state,
+    depth: coverage.depth,
+    ownerRouteId: coverage.ownerRouteId,
+    domains: route.domains,
+    relatedRouteIds: route.relatedRouteIds,
+    summary: coverage.summary,
+  }));
+}
+
+function compareRouteCoverageRows(
+  left: AtlasWorkRouteCoverageRow,
+  right: AtlasWorkRouteCoverageRow,
+): number {
+  return coverageStateSortOrder(left.state) - coverageStateSortOrder(right.state) ||
+    coverageDepthSortOrder(left.depth) - coverageDepthSortOrder(right.depth) ||
+    left.dimension.localeCompare(right.dimension) ||
+    left.routeId.localeCompare(right.routeId);
+}
+
+function coverageStateSortOrder(state: AtlasWorkRouteCoverageRow["state"]): number {
+  switch (state) {
+    case AtlasWorkRouteCoverageState.Missing:
+      return 0;
+    case AtlasWorkRouteCoverageState.Partial:
+      return 1;
+    case AtlasWorkRouteCoverageState.Covered:
+      return 2;
+    case AtlasWorkRouteCoverageState.NotApplicable:
+      return 3;
+  }
+  return 4;
+}
+
+function coverageDepthSortOrder(depth: AtlasWorkRouteCoverageRow["depth"]): number {
+  switch (depth) {
+    case undefined:
+      return 0;
+    case "wired":
+      return 1;
+    case "semantic":
+      return 2;
+    case "verified":
+      return 3;
+  }
+  return 4;
 }
 
 function routeHealthRow(plan: AtlasWorkRoutePlanRow): AtlasWorkRouteHealthRow {
@@ -2291,6 +2405,20 @@ function routeHealthEvidence(row: AtlasWorkRouteHealthRow): Evidence {
   };
 }
 
+function routeCoverageEvidence(row: AtlasWorkRouteCoverageRow): Evidence {
+  return {
+    id: `atlas.work-router:coverage:${row.routeId}:${row.dimension}`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: row.state === AtlasWorkRouteCoverageState.Missing ||
+        row.state === AtlasWorkRouteCoverageState.Partial
+      ? EvidenceRole.Diagnostic
+      : EvidenceRole.Support,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    data: row,
+  };
+}
+
 function routeWorksetEvidence(row: AtlasWorkRouteWorksetRow): Evidence {
   return {
     id: `atlas.work-router:workset:${row.routeId}`,
@@ -2420,6 +2548,7 @@ function atlasWorkRouterProjectionContinuations(
     workRouterProjectionContinuation(inquiry, "route-plan", "Join matched routes to live memory, source, and corpus pressure."),
     workRouterProjectionContinuation(inquiry, "workset", "Join the current git worktree to typed work routes."),
     workRouterProjectionContinuation(inquiry, "memory-coverage", "Check whether live Atlas memory next actions are structurally routeable."),
+    workRouterProjectionContinuation(inquiry, "coverage", "Inspect cross-cutting coverage dimensions declared by matched routes."),
     workRouterProjectionContinuation(inquiry, "route-health", "Inspect route catalog grounding warnings."),
     workRouterProjectionContinuation(inquiry, "schema", "Inspect typed route catalog definitions and anchor vocabulary."),
     {

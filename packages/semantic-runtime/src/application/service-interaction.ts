@@ -85,6 +85,7 @@ function readSourceFileServiceInteractionSites(
   const context: ServiceInteractionReadContext = {
     sourcePath,
     sourceFile,
+    typeSystem,
     checker: typeSystem.checker,
     sourcePathByFileName,
     targetBySourceAndClass,
@@ -98,6 +99,7 @@ function readSourceFileServiceInteractionSites(
 interface ServiceInteractionReadContext {
   readonly sourcePath: string;
   readonly sourceFile: ts.SourceFile;
+  readonly typeSystem: TypeSystemProject;
   readonly checker: ts.TypeChecker;
   readonly sourcePathByFileName: ReadonlyMap<string, string>;
   readonly targetBySourceAndClass: ReadonlyMap<string, ApplicationServiceClassTarget>;
@@ -231,7 +233,10 @@ function serviceClassForReceiver(
   if (injectedService != null) {
     return injectedService;
   }
-  const type = context.checker.getTypeAtLocation(receiver);
+  const type = context.typeSystem.readProgramTypeAtLocation(receiver);
+  if (type == null) {
+    return null;
+  }
   const symbol = type.aliasSymbol ?? type.getSymbol() ?? null;
   if (symbol == null) {
     return null;

@@ -157,6 +157,13 @@ const checkerApiCalleeNames = [
   "getIndexTypeOfType",
   "getResolvedSignature",
 ] as const;
+const sourceReadDisplayRows = detail ? 30 : 14;
+const sourceReadCalleeNames = [
+  "existsSync",
+  "readFileSync",
+  "readFile",
+  "readSourceText",
+] as const;
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 120_000 });
 
@@ -599,30 +606,48 @@ if (detail) {
   }
 }
 
-const checkerApiStarted = performance.now();
-const checkerApiAnswers = await Promise.all(checkerApiCalleeNames.map((calleeName) =>
-  api.ask({
-    lens: LensId.ProductArchitecture,
-    locus: RepoRootLocus,
-    projection: "call-sites",
-    filters: {
-      calleeName,
-      includeCallArgumentOrigins: true,
-    },
-    budget: { rows: 500, evidencePerSubject: 1 },
-  })
-));
+const callSitePressureStarted = performance.now();
+const [checkerApiAnswers, sourceReadAnswers] = await Promise.all([
+  Promise.all(checkerApiCalleeNames.map((calleeName) =>
+    api.ask({
+      lens: LensId.ProductArchitecture,
+      locus: RepoRootLocus,
+      projection: "call-sites",
+      filters: {
+        calleeName,
+        includeCallArgumentOrigins: true,
+      },
+      budget: { rows: 500, evidencePerSubject: 1 },
+    })
+  )),
+  Promise.all(sourceReadCalleeNames.map((calleeName) =>
+    api.ask({
+      lens: LensId.ProductArchitecture,
+      locus: RepoRootLocus,
+      projection: "call-sites",
+      filters: { calleeName },
+      budget: { rows: 500, evidencePerSubject: 1 },
+    })
+  )),
+]);
 for (const [index, answer] of checkerApiAnswers.entries()) {
   assertHitOrMissAnswer(`product.architecture:call-sites ${checkerApiCalleeNames[index]}`, answer);
+}
+for (const [index, answer] of sourceReadAnswers.entries()) {
+  assertHitOrMissAnswer(`product.architecture:call-sites ${sourceReadCalleeNames[index]}`, answer);
 }
 const checkerApiCallSites = checkerApiAnswers.flatMap((answer) =>
   answerValue<ProductArchitecturePressureValue>(answer)?.callSites ?? []
 );
 const checkerApiPressureRows = checkerApiCallPressureRows(checkerApiCallSites);
+const sourceReadCallSites = sourceReadAnswers.flatMap((answer) =>
+  answerValue<ProductArchitecturePressureValue>(answer)?.callSites ?? []
+);
+const sourceReadPressureRows = sourceReadCallPressureRows(sourceReadCallSites);
 
 console.log("");
 console.log("TypeScript checker API call pressure");
-console.log(`request: ${(performance.now() - checkerApiStarted).toFixed(1)}ms`);
+console.log(`request batch: ${(performance.now() - callSitePressureStarted).toFixed(1)}ms`);
 printEmptyRows(checkerApiPressureRows);
 for (const row of checkerApiPressureRows.slice(0, checkerApiDisplayRows)) {
   console.log(
@@ -642,6 +667,19 @@ if (detail) {
     console.log(
       `- ${row.calleeText}(${row.firstArgumentText ?? "..."}) in ${checkerApiCallOwner(row)} at ${sourceLabel(row)}${origin}`,
     );
+  }
+}
+
+console.log("");
+console.log("source file read pressure");
+console.log("filters: call-sites for existsSync/readFileSync/readFile/readSourceText; canary for source-text cache boundaries and raw authored-file reads");
+printEmptyRows(sourceReadPressureRows);
+for (const row of sourceReadPressureRows.slice(0, sourceReadDisplayRows)) {
+  console.log(
+    `- ${row.filePath}: ${row.count} call(s), callees ${row.callees}, owners ${row.sampleOwners}, first ${row.firstSource}`,
+  );
+  if (detail) {
+    console.log(`  call samples: ${row.samples}`);
   }
 }
 
@@ -685,6 +723,15 @@ interface CheckerApiCallPressureRow {
   readonly sampleOwners: string;
   readonly firstArgumentShapes: string;
   readonly firstArgumentOrigins: string;
+  readonly firstSource: string;
+}
+
+interface SourceReadCallPressureRow {
+  readonly filePath: string;
+  readonly count: number;
+  readonly callees: string;
+  readonly sampleOwners: string;
+  readonly samples: string;
   readonly firstSource: string;
 }
 
@@ -767,6 +814,30 @@ function checkerApiCallPressureRows(
       right.count - left.count ||
       right.fileCount - left.fileCount ||
       left.calleeName.localeCompare(right.calleeName)
+    );
+}
+
+function sourceReadCallPressureRows(
+  rows: readonly NonNullable<ProductArchitecturePressureValue["callSites"]>[number][],
+): readonly SourceReadCallPressureRow[] {
+  return [...groupBy(rows, (row) => row.fromFilePath).entries()]
+    .map(([filePath, group]) => {
+      const owners = [...new Set(group.map(checkerApiCallOwner))].sort();
+      return {
+        filePath,
+        count: group.length,
+        callees: compactCountSummary(group, (row) => row.calleeText),
+        sampleOwners: owners.slice(0, 6).join(", "),
+        samples: group
+          .slice(0, 6)
+          .map((row) => `${row.calleeText} at ${sourceLabel(row)}`)
+          .join("; "),
+        firstSource: sourceLabel(group[0]!),
+      } satisfies SourceReadCallPressureRow;
+    })
+    .sort((left, right) =>
+      right.count - left.count ||
+      left.filePath.localeCompare(right.filePath)
     );
 }
 

@@ -22,6 +22,11 @@
         "Expect enum-usage.member-reference.syntax-exact to absorb unambiguous Enum.Member rows; if checker.getSymbolAtLocation rises again, inspect alias/ambiguous-member pressure before adding broad symbol lookups.",
         "Comparison raw-value narrowing skips TypeChecker counterpart reads for syntax that cannot carry an enum value type, such as typeof expressions and literal counterparts. If comparison pressure rises again, inspect `enum-usage.checker.getTypeAtLocation.comparison-counterpart` beside `.syntax-skipped` and an `--enumContext=none` baseline before adding more checker calls.",
         "Use atlas.self projection enum-value-occurrences with valueKind, contextualOnly, and enumContext filters when auditing whether raw enum-like literal counts are real signal or broad overlap noise.",
+        "Use `pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=... --memberName=... --detail` when auditing whether semantic-runtime inquiry/kernel enum primitives are actually spent. The package-facing wrapper exposes the same source index outside atlas.self; for example `InquiryContinuationIntent.Author` currently resolves to a single vocabulary-list reference, which is different from being emitted by public continuation rows.",
+        "Use `enum:usage -- --projection=member-usage --enumName=...` for one-row-per-member spend audits. It aggregates role counts, containing functions/classes, control-flow carriers, translation edges, and coupled enums before you page exact reference rows.",
+        "Use `enum:usage -- --projection=enum-references --controlFlowKind=switch-case-label|if-condition` when the question is whether enum members drive branches or only appear in passive vocabulary. Use `--projection=enum-couplings` for enum pairs joined by translation, shared control-flow carriers, declared type surfaces, or checker-backed shared value-space evidence; broad shared raw labels remain value-space rows, not coupling rows.",
+        "Use `enum:usage -- --projection=enum-couplings --relation=type-surface-cooccurrence --query=...` when the question is whether separate enum value spaces form one typed protocol through an interface, type alias, class, or function signature. For example, `SemanticRuntimeContinuationRow` structurally couples public continuation kind, app-query kind, next-move intent, and continuation cost without requiring any enum member to appear in a branch.",
+        "Do not infer product purpose from enum usage alone. Use enum usage to reveal declared-versus-spent shape, then ground interpretation in owning README, Atlas memory, Work Router route, and reviewed `.temp` intent docs when the primitive is tied to a parked or future direction.",
         "Do not replace enum usage with text matching; symbol-backed member references and contextual raw-value counts are the point of this substrate.",
         "If more profiling helpers are needed, extend shared PhaseProfiler rather than adding local profiler classes."
       ],
@@ -45,9 +50,29 @@
           "summary": "Shared phase/repeated-call profiling helper used by enum usage and self-analysis."
         },
         {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/enum-usage.ts",
+          "summary": "Package-facing enum usage CLI for semantic-runtime, MCP, and external package primitive coverage audits."
+        },
+        {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/atlas profile:self",
           "summary": "Prints enum-usage nested phase/checker-call timings through atlas.self."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=InquiryContinuationIntent --memberName=Author --detail",
+          "summary": "Canary for semantic-runtime enum primitive spend: declared intent member, exact references, and whether usage is only vocabulary-level."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --detail",
+          "summary": "Package-facing enum coupling read for translation, branch co-occurrence, declared type-surface, and checker-backed shared value-space relations."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow --detail",
+          "summary": "Canary for enum protocols carried by public continuation DTO type surfaces."
         },
         {
           "kind": "script",
@@ -81,7 +106,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "frontier:atlas-core-analysis-pressure",
@@ -116,6 +141,7 @@
         "The atlas.self shallow-wrapper lane now resolves instance method calls through the TypeChecker only after narrowing to wrapper method names; if it becomes slow or noisy, preserve that targeted checker boundary rather than returning to broad property-call lookups or syntax-only counts.",
         "Product-architecture role classification should make semantic-runtime navigable, not merely reduce `other` rows: behavioral `*Draft`/`*Drafts` classes are phase owners, `*Support`/`*Table` classes are service surfaces, reusable `*World`/`*Cache` classes are epoch contexts, and behavioral `*Effect`/`*Evaluation`/`*ValueChannel`/`*Ontology`/`*Shape` classes are semantic models.",
         "When Atlas self/product lenses share the same row vocabulary, prefer one small shared policy/helper over parallel switch walkers or one-use wrapper functions. Shared helpers should be spent directly by the owning projections.",
+        "Framework source-backed row families should use sourceRowContinuationsForPage/sourceRowContinuations from framework-continuation-core when they only need next-page plus source-inspection moves. Do not add a named one-use wrapper just to bind row-family copy.",
         "Script CLI wrappers should reuse script-output argument/filter helpers instead of growing local optional-filter functions; repeated helper rows are a split-brain canary, not a lint score."
       ],
       "anchors": [
@@ -130,6 +156,12 @@
           "filePath": "packages/atlas/src/inquiry/runtime/self-row-projection.ts",
           "symbolName": "answerSelfRowProjection",
           "summary": "Shared atlas.self row projection paging, evidence, and source-inspection continuation helper."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-continuation-core.ts",
+          "symbolName": "sourceRowContinuationsForPage",
+          "summary": "Shared framework row-family next-page/source-inspection continuation binder."
         },
         {
           "kind": "source",
@@ -755,6 +787,8 @@
         "Generic route lens anchors are navigation hints, not memory ownership evidence. Lens anchors only join memory structurally when they carry filters that match the memory lens anchor; otherwise use source, exact memory-domain, auLink, script, or doc anchors.",
         "If `memory:next` surfaces a proactive frontier that no work route can reach structurally, add or refine a route before doing product work. The TypeChecker expression semantics route was added this way for CheckerExpressionTypeEvaluator, CheckerExpressionTypeWorld, member-owner projection, template-control-flow context, and binding source-slot checker handoff.",
         "Use `--projection=memory-coverage --detail` to reverse the join from memory-next actions back to work routes. Without a route filter, unrouted high-rank rows are route ontology pressure; with `--routeId`, coverage is scoped to rows structurally matched to that route and sorted by route-match score before generic memory rank.",
+        "Use `--projection=coverage` when a semantic-runtime primitive appears asymmetric across route families. Coverage dimensions should turn cross-cutting incompleteness into route-local states such as missing, partial, covered, or not-applicable, so future sessions can discover the gap from adjacent loci instead of by grep. Current dimensions cover intent-aware continuations, query-claim lifetime, authored source-text boundaries, and checker value-access helper reuse.",
+        "When a new primitive is not threaded through all relevant query families, add a named coverage dimension only after identifying the substrate owner route and the route-local consumer obligations. Do not use coverage as a vague todo bucket.",
         "Bare `--projection=route-plan --detail` is allowed as a fresh-checkpoint selector: with no filters it ranks route plans from live `memory:next` pressure and live product/source pressure using exact route memory/source/auLink/source-anchor overlap before catalog order. Product pressure is structural source ownership from product.architecture or atlas.self rows, not prose matching; symbol-qualified source anchors rank named declaration/class/function/variable rows instead of inheriting broad file/module pressure, and Atlas catalog/contract/barrel module shapes are damped so static catalog size stays visible without acting like implementation pressure. Source-anchor roles still weight live product/source pressure so supporting catalog/context anchors cannot dominate primary owners merely by being large. Shared generic lens anchors such as product.architecture are not enough to route memory pressure by themselves.",
         "Route memory-domain anchors need either an exact domain-set match or at least two non-generic domain overlaps. Generic carriers such as `semantic-runtime`, `atlas`, `template`, `memory`, `inquiry`, and `analysis-substrate` are not enough by themselves; if a row only routes through those, add a sharper route/source/memory anchor instead of loosening scoring. Do not let memory-anchor domains double as query terms, because that makes joins look like fuzzy route vocabulary.",
         "Use `--projection=workset` when a dirty worktree is the canary. It groups current changed files by route source/doc/path anchors, route-owned memory source/doc/fixture/live-check anchors, and memory shards so checkpoints can continue from route-shaped pressure instead of raw git status.",
@@ -767,6 +801,7 @@
         "Route-owned framework-corpus anchors can carry exact classification and expected-effect filters. Use those for precise fixture pressure such as `surface:native-checked-binding` or `surface:option-model-binding`, and keep route-plan fixture seeds diversified by specific anchors so broad concept rows do not crowd out the concrete canaries.",
         "Framework corpus fixture seeds deliberately exclude `describe(...)` suite wrappers; use `test-snippets` when a suite overview is useful, and use fixture seeds for concrete `it(...)`, `createFixture(...)`, object-test-case, or doc-fence pressure with tighter source spans.",
         "Framework corpus classification matching is shared through `framework-corpus-classification.ts`; route anchors and corpus filters must spend that helper so exact `classificationKind` / `classificationKey` behavior cannot drift.",
+        "Framework corpus surface-reason generation is table-shaped in `framework-corpus-analysis.ts`; add new local surface rules to the named rule table rather than extending the fixture seed classifier with another long sequence of hand-coded predicate branches.",
         "Use `--seedUse=authoring-taste` for docs/promoted-pattern fixture pressure and `--seedUse=behavior-grounding` for framework-test behavior pressure; keep both lanes visible instead of blending them into generic fixture examples.",
         "Framework corpus `concept=expression` is first-class route pressure for TypeChecker expression semantics. If a route can only find expression-heavy examples through generic binding/template concepts, improve corpus classification before using manual query memory.",
         "Pressure-script labels and compact bucket names are route canaries. If a phrase copied from `pressure:app-api` misses Work Router, add or refine declared route vocabulary, query canaries, or corpus anchors before treating the miss as a product-planning problem."
@@ -813,6 +848,12 @@
           "lensId": "atlas.work-router",
           "projection": "route-plan",
           "summary": "Live route plan projection for selected structural routes."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "coverage",
+          "summary": "Cross-cutting coverage projection for primitives that need route-local completeness states."
         },
         {
           "kind": "lens",
@@ -868,7 +909,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-23"
     }
   ]
 }

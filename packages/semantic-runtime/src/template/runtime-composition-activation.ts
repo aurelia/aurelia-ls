@@ -19,6 +19,10 @@ import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
 import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from '../type-system/checker-node-helpers.js';
+import {
   type CheckerTypeReference,
   type CheckerTypeShape,
   CheckerTypeProjectionOrigin,
@@ -99,7 +103,15 @@ export function activationModelHandoffForType(
     );
   }
 
-  const activateType = targetCarrier.checker.getTypeOfSymbolAtLocation(activate, location);
+  const activateType = checkerSymbolValueType(targetCarrier.checker, activate, location);
+  if (activateType == null) {
+    return openActivationHandoff(
+      CompositionActivateMethodKind.Open,
+      CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      model.sourceType,
+      'Resolved component activate member had no readable value type.',
+    );
+  }
   const signature = activateType.getCallSignatures()[0] ?? null;
   if (signature == null) {
     return openActivationHandoff(
@@ -125,7 +137,15 @@ export function activationModelHandoffForType(
   const parameterLocation = parameter.valueDeclaration
     ?? parameter.declarations?.[0]
     ?? location;
-  const parameterType = targetCarrier.checker.getTypeOfSymbolAtLocation(parameter, parameterLocation);
+  const parameterType = checkerSymbolValueType(targetCarrier.checker, parameter, parameterLocation);
+  if (parameterType == null) {
+    return openActivationHandoff(
+      CompositionActivateMethodKind.Present,
+      CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      model.sourceType,
+      'Resolved component activate parameter had no readable value type.',
+    );
+  }
   const parameterShape = new CheckerTypeProjector(store).ensureProjection({
     localKey: `${localKey}:activate-parameter`,
     checker: targetCarrier.checker,
@@ -207,9 +227,7 @@ function activationTargetForCarrier(
 }
 
 function activateSymbolForType(checker: ts.TypeChecker, type: ts.Type): ts.Symbol | null {
-  return checker.getPropertyOfType(type, 'activate')
-    ?? checker.getPropertyOfType(checker.getApparentType(type), 'activate')
-    ?? null;
+  return checkerPropertySymbol(checker, type, 'activate');
 }
 
 function openActivationHandoff(

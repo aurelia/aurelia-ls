@@ -8,6 +8,7 @@ import { LensId, LensStage } from "../inquiry/lens.js";
 import { LocusKind } from "../inquiry/locus.js";
 import { isRouterExportName } from "../inquiry/runtime/aurelia-source-imports.js";
 import type { AtlasMemoryValue } from "../inquiry/runtime/atlas-memory-lenses.js";
+import type { AtlasWorkRouterValue } from "../inquiry/runtime/atlas-work-router-rows.js";
 import type { FrameworkRouterValue } from "../inquiry/runtime/framework-router-lenses.js";
 import {
   FrameworkBundleKind,
@@ -66,6 +67,28 @@ const atlasMemorySummary = await api.ask({
   locus: { kind: LocusKind.Repo },
   projection: "summary",
   budget: { rows: 1, evidencePerSubject: 0 },
+});
+const verifiedContinuationCoverage = await api.ask({
+  lens: LensId.AtlasWorkRouter,
+  locus: { kind: LocusKind.Repo },
+  projection: "coverage",
+  filters: {
+    coverageDimension: "intent-aware-continuations",
+    coverageState: "covered",
+    coverageDepth: "verified",
+  },
+  budget: { rows: 20, evidencePerSubject: 0 },
+});
+const impossibleContinuationCoverage = await api.ask({
+  lens: LensId.AtlasWorkRouter,
+  locus: { kind: LocusKind.Repo },
+  projection: "coverage",
+  filters: {
+    coverageDimension: "intent-aware-continuations",
+    coverageState: "missing",
+    coverageDepth: "verified",
+  },
+  budget: { rows: 20, evidencePerSubject: 0 },
 });
 
 if (mapAnswer.outcome !== OutcomeKind.Hit || map === undefined) {
@@ -288,6 +311,21 @@ if (atlasMemoryValue.rollup.recordCount === 0) {
 if (atlasMemoryValue.rollup.storageIssueCount !== 0) {
   throw new Error(
     `Atlas memory store reported ${atlasMemoryValue.rollup.storageIssueCount} storage issue(s).`,
+  );
+}
+
+const verifiedContinuationCoverageValue = verifiedContinuationCoverage.value as AtlasWorkRouterValue | null | undefined;
+if (
+  verifiedContinuationCoverage.outcome !== OutcomeKind.Hit ||
+  (verifiedContinuationCoverageValue?.routeCoverage?.length ?? 0) === 0
+) {
+  throw new Error("Work Router coverage projection did not return verified intent-aware continuation rows.");
+}
+
+const impossibleContinuationCoverageValue = impossibleContinuationCoverage.value as AtlasWorkRouterValue | null | undefined;
+if ((impossibleContinuationCoverageValue?.routeCoverage?.length ?? 0) !== 0) {
+  throw new Error(
+    "Work Router coverage filters matched coverage state and depth from different rows.",
   );
 }
 

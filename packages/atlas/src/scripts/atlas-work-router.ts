@@ -18,8 +18,10 @@ import { LensCatalog } from "../inquiry/lens-catalog.js";
 import type {
   AtlasWorkRouteLensAnchor,
 } from "../inquiry/runtime/atlas-work-router-contracts.js";
+import { AtlasWorkRouteCoverageState } from "../inquiry/runtime/atlas-work-router-contracts.js";
 import type {
   AtlasWorkRouteHealthRow,
+  AtlasWorkRouteCoverageRow,
   AtlasWorkRouteMemoryCoverageRow,
   AtlasWorkRoutePlanRow,
   AtlasWorkRouteRow,
@@ -46,6 +48,9 @@ assertKnownScriptArguments("atlas.work-router", [
   "--effectKind=",
   "--recipeKey=",
   "--seedUse=",
+  "--coverageDimension=",
+  "--coverageState=",
+  "--coverageDepth=",
   "--rows=",
   "--limit=",
   "--plans",
@@ -74,6 +79,9 @@ const concept = scriptArgumentValue("--concept=");
 const effectKind = scriptArgumentValue("--effectKind=");
 const recipeKey = scriptArgumentValue("--recipeKey=");
 const seedUse = scriptArgumentValue("--seedUse=");
+const coverageDimension = scriptArgumentValue("--coverageDimension=");
+const coverageState = scriptArgumentValue("--coverageState=");
+const coverageDepth = scriptArgumentValue("--coverageDepth=");
 const rows = scriptNumberArgumentValue("--rows=");
 const rowLimit = rows ?? scriptNumberArgumentValue("--limit=");
 const displayRowLimit = rowLimit ?? (detail ? 20 : 8);
@@ -103,6 +111,9 @@ const routeFilters = {
   ...(effectKind === undefined ? {} : { effectKind }),
   ...(recipeKey === undefined ? {} : { recipeKey }),
   ...(seedUse === undefined ? {} : { seedUse }),
+  ...(coverageDimension === undefined ? {} : { coverageDimension }),
+  ...(coverageState === undefined ? {} : { coverageState }),
+  ...(coverageDepth === undefined ? {} : { coverageDepth }),
 };
 const filters = {
   ...routeFilters,
@@ -153,7 +164,7 @@ if (value?.rollup !== undefined) {
   console.log(`- routes with source matches: ${value.rollup.routeWithSourceMatchCount}`);
 }
 
-if (projection !== "memory-coverage") {
+if (projection !== "memory-coverage" && projection !== "coverage") {
   printRoutes(value?.routes ?? [], displayRowLimit);
 }
 if (shouldPrintRoutePlans()) {
@@ -161,6 +172,9 @@ if (shouldPrintRoutePlans()) {
 }
 if (projection === "route-health" || (detail && (value?.routeHealth?.length ?? 0) > 0)) {
   printRouteHealth(value?.routeHealth ?? [], displayRowLimit);
+}
+if (projection === "coverage" || (detail && (value?.routeCoverage?.length ?? 0) > 0)) {
+  printRouteCoverage(value?.routeCoverage ?? [], displayRowLimit);
 }
 if (projection === "workset" || (detail && (value?.workset?.length ?? 0) > 0)) {
   printWorkset(value?.workset ?? [], displayRowLimit, worksetFileRowLimit);
@@ -199,6 +213,7 @@ function shouldPrintRoutePlans(): boolean {
     (
       detail &&
       projection !== "route-health" &&
+      projection !== "coverage" &&
       projection !== "memory-coverage" &&
       projection !== "workset"
     );
@@ -254,6 +269,15 @@ function printRoutePlans(
       console.log(`  query canaries: ${passedCanaries}/${plan.queryCanaries.length}`);
       for (const canary of plan.queryCanaries.filter((row) => !row.passed).slice(0, 3)) {
         console.log(`    - miss: ${canary.summary}`);
+      }
+    }
+    if (detail && plan.coverage.length > 0) {
+      console.log(`  coverage: ${plan.coverage.slice(0, 5).map((coverage) => `${coverage.dimension}:${coverage.state}`).join(", ")}`);
+      for (const coverage of plan.coverage.filter((row) =>
+        row.state === AtlasWorkRouteCoverageState.Missing ||
+        row.state === AtlasWorkRouteCoverageState.Partial
+      ).slice(0, 3)) {
+        console.log(`    - ${coverage.summary}`);
       }
     }
     if (detail && plan.cautions.length > 0) {
@@ -312,6 +336,36 @@ function filterValueLabel(value: unknown): string {
       return String(value);
     default:
       return JSON.stringify(value);
+  }
+}
+
+function printRouteCoverage(
+  rows: readonly AtlasWorkRouteCoverageRow[],
+  limit: number,
+): void {
+  printRowSectionHeader("route coverage", rows, limit);
+  printEmptyRows(rows, "no route coverage rows returned");
+  if (rows.length > 0) {
+    const missing = rows.filter((row) => row.state === AtlasWorkRouteCoverageState.Missing).length;
+    const partial = rows.filter((row) => row.state === AtlasWorkRouteCoverageState.Partial).length;
+    const covered = rows.filter((row) => row.state === AtlasWorkRouteCoverageState.Covered).length;
+    const notApplicable = rows.filter((row) => row.state === AtlasWorkRouteCoverageState.NotApplicable).length;
+    console.log(`- states: missing=${missing}, partial=${partial}, covered=${covered}, not-applicable=${notApplicable}`);
+    const depthRows = rows.filter((row) => row.depth !== undefined);
+    if (depthRows.length > 0) {
+      const wired = depthRows.filter((row) => row.depth === "wired").length;
+      const semantic = depthRows.filter((row) => row.depth === "semantic").length;
+      const verified = depthRows.filter((row) => row.depth === "verified").length;
+      console.log(`- depths: wired=${wired}, semantic=${semantic}, verified=${verified}, unspecified=${rows.length - depthRows.length}`);
+    }
+  }
+  for (const row of rows.slice(0, limit)) {
+    const depthSuffix = row.depth === undefined ? "" : `, depth=${row.depth}`;
+    console.log(`- ${row.routeId}: ${row.dimension}=${row.state}${depthSuffix}`);
+    if (row.ownerRouteId !== undefined) {
+      console.log(`  owner: ${row.ownerRouteId}`);
+    }
+    console.log(`  ${row.summary}`);
   }
 }
 

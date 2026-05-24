@@ -45,6 +45,7 @@ import {
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
 import { RuntimeHtmlControllerFrameworkErrorCode } from './framework-error-code.js';
 import {
   HydrateAttributeInstruction,
@@ -1226,15 +1227,13 @@ function targetTypePropertyLookup(
   if (carrier == null) {
     return () => false;
   }
-  const apparentType = carrier.checker.getApparentType(carrier.type);
   const cache = new Map<string, boolean>();
   return (propertyName) => {
     const cached = cache.get(propertyName);
     if (cached != null) {
       return cached;
     }
-    const exists = carrier.checker.getPropertyOfType(carrier.type, propertyName) != null
-      || carrier.checker.getPropertyOfType(apparentType, propertyName) != null;
+    const exists = checkerPropertySymbol(carrier.checker, carrier.type, propertyName) != null;
     cache.set(propertyName, exists);
     return exists;
   };

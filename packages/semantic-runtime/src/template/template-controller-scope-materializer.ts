@@ -135,6 +135,9 @@ import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
 import {
   effectiveTemplateBindingMode,
 } from './runtime-binding-mode-behavior.js';
+import {
+  sourceAddressHandleForRuntimeExpressionSpan,
+} from './runtime-expression-source-address.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
@@ -739,7 +742,7 @@ export class TemplateControllerScopeMaterializer {
         expression,
         value.sourceScope,
         `${input.localKey}:bound-controller:${value.propertyName}`,
-        expression.span.file?.id as AddressHandle | undefined ?? null,
+        sourceAddressHandleForRuntimeExpressionSpan(expression.span),
       );
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? evaluation.typeReference

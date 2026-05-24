@@ -22,7 +22,7 @@
         "Template-requested checker-returned types should keep TypeChecker origin. Use SyntheticTemplateType only when the template/runtime substrate creates the shape rather than asking the TypeChecker for it.",
         "Let checker-owned union/intersection keys converge structurally only when their constituents are source-independent; anonymous authored object/function shapes should remain source-owned.",
         "Keep synthetic expression/template shapes source-owned until a structural synthetic-type identity policy proves it can preserve the lost runtime expression provenance.",
-        "If QueryClaimGraph disposal removes a query-local shape, evict stale projector index rows before returning a reused handle.",
+        "If QueryClaimGraph disposal removes a query-local shape, evict stale projector index rows before returning a reused handle. `contract:type-projection-lifetime` proves the current type-shape index prunes and reprojects after marker disposal.",
         "If type projection cost rises, treat it as inquiry-algebra or caching pressure before duplicating narrow type summaries."
       ],
       "anchors": [
@@ -48,6 +48,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
           "summary": "Reports repeated type checker keys, hot details, and phase/kernel growth."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
+          "summary": "Contract proving type-shape sidecar indexes mirror kernel product-detail disposal."
         }
       ],
       "liveChecks": [
@@ -60,7 +65,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "frontier:compiled-template-materializer",
@@ -2108,6 +2113,7 @@
         "TypeScript-shaped parents may splice generated child expression parts only when spans are source-backed and non-overlapping; preserve parent source segments for diagnostic mapping.",
         "Add named TypeScript helper declarations in template-type-system-overlay-prelude.ts rather than inlining helper declarations at expression projection sites. Each helper row should name an owner, emitted declaration names, and non-empty declaration text.",
         "Do not add empty prelude rows for concepts that emit no reusable helper. Promise result locals, $this/$parent aliases, and generated temporary locals are overlay plan/layer facts.",
+        "Keep TemplateTypeSystemOverlaySkippedReason as an emitted-fact vocabulary, not a planning wishlist. Add a skip reason only when the builder can actually emit it and the owner/substrate gap is understood.",
         "Run pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays after changing expression support, prelude helpers, value-converter lowering, scope alias replay, or overlay source segment construction."
       ],
       "anchors": [
@@ -2248,7 +2254,7 @@
       "guidance": [
         "Start here when asking whether overlays are complete for diagnostics, typechecking, rename, MCP, or LSP readiness.",
         "Use retired-symbol queries such as unsupportedOverlayExpressionSyntax as route hygiene canaries: they should point at the overlay expression support matrix and integration route, not at fresh evaluator/parser implementation work.",
-        "Keep template-controller, binding/data-flow, observer, i18n, router, resource, and evaluator work framed as overlay substrate when the overlay needs those facts; do not add TypeScript-only overlay approximations.",
+        "Keep template-controller, binding/data-flow, observer, i18n, router, resource, and evaluator work framed as overlay substrate when the overlay needs those facts; do not add TypeScript-only overlay approximations. Overlay-local `$this`/`$parent` state should stay in the alias replay cursor, while scope facts still come from materialized BindingScope products.",
         "Statement-shaped surfaces such as DestructuringAssignment need statement/block overlay emission or a lower shared primitive, not a fake standalone expression.",
         "CustomExpression should route through owner-specific products, currently i18n TranslationBinding, before generic overlay unsupported-syntax handling changes.",
         "From-view, two-way, checked/select/class/style, getter-only computed targets, nullish writeback, and other direction-sensitive channels must be checked against binding data-flow and observer products, not only generated TypeScript assignability.",
@@ -2266,6 +2272,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeReplayChain",
+          "summary": "Shared BindingScope ancestry replay and `$this`/`$parent` alias reachability policy for overlay, cursor, diagnostic, and future edit surfaces."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-expression-support.ts",
           "symbolName": "templateTypeSystemOverlayExpressionSupportMatrix",
           "summary": "Expression AST support and ownership matrix for overlay projection."
@@ -2280,7 +2292,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
           "symbolName": "appendTemplateTypeSystemOverlayScopeBlock",
-          "summary": "Overlay layer/block emission boundary for generated checker surfaces."
+          "summary": "Overlay layer/block emission boundary for generated checker surfaces, including parent alias capture/replay across generated blocks."
         },
         {
           "kind": "source",
@@ -2322,6 +2334,26 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays",
           "summary": "Focused contract for overlay source mapping, support matrix, generated-child splicing, diagnostics, and public overlay rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-scope-aliases",
+          "summary": "Pressure fixture for `$this`, `$parent`, destructured locals, and nested scope alias replay."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-value-converter",
+          "summary": "Pressure fixture for value-converter lowering, generated child splicing, and diagnostic source mapping."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller",
+          "summary": "Pressure fixture for overlay typing through parent-bound controller values."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-type-errors",
+          "summary": "Pressure fixture for public overlay diagnostics and cursor diagnostic rows."
         }
       ],
       "liveChecks": [
@@ -2336,6 +2368,11 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
           "symbolName": "TemplateTypeSystemOverlayBuilder"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeReplayChain"
         },
         {
           "kind": "source-declaration-exists",
@@ -2354,7 +2391,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-05-24"
     }
   ]
 }

@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { isImportedAureliaExpression } from '../evaluation/ts-syntax.js';
 import { SourceFileRole } from '../kernel/address.js';
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { ProjectBootFrame } from './frames.js';
 import {
   type BootPackageManifest,
@@ -316,14 +316,16 @@ function isSameOrDescendantPath(parent: string, child: string): boolean {
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {
   const counts = new Map<SemanticProjectAureliaSourceSignalKind, number>();
+  const sourceText = new AuthoredSourceTextCache(project.rootDir);
   for (const source of project.sourceFiles) {
     if (source.role !== SourceFileRole.AppSource) {
       continue;
     }
-    const text = readSourceText(project.rootDir, source.path);
-    if (text == null) {
+    const authoredSource = sourceText.read(source.path);
+    if (authoredSource == null) {
       continue;
     }
+    const text = authoredSource.text;
     if (!textCanContainAureliaFacadeSignal(text)) {
       continue;
     }
@@ -335,17 +337,6 @@ function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProje
 
 function textCanContainAureliaFacadeSignal(text: string): boolean {
   return text.includes('aurelia') || text.includes('@aurelia/');
-}
-
-function readSourceText(
-  rootDir: string,
-  sourcePath: string,
-): string | null {
-  try {
-    return readFileSync(path.join(rootDir, sourcePath), 'utf8');
-  } catch {
-    return null;
-  }
 }
 
 function countSourceFileSignals(

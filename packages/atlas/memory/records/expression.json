@@ -15,6 +15,7 @@
       "guidance": [
         "Inspect expression-type-evaluator before adding a second local TypeChecker expression evaluator.",
         "Use CheckerExpressionTypeSupport for shared checker-carrier lookup, global lookup, primitive projection, and project/open/resolve/union primitives when adding evaluator-adjacent projectors; do not create local result factories or checker lookup loops beside the evaluator.",
+        "Use checker-primitive-types.ts when projecting primitive expression values: broad runtime-result primitives and literal expression types are intentionally separate, and contract:expression-primitive-literals keeps them aligned with TypeScript checker behavior.",
         "Use CheckerExpressionMemberOwnerProjector for cursor offset/member-owner projection; do not regrow offset walks inside completion or diagnostic answer code.",
         "Use CheckerExpressionArgumentContextProjector for the AST-call-form handoff from cursor argument position to TypeChecker contextual argument type; keep signature policy in CheckerExpressionCallProjector and runtime-shaped callee evaluation in CheckerExpressionTypeEvaluator.",
         "Use CheckerExpressionContextualTypeProjector for contextual target descent into arrow scopes, array literal elements, and object literal properties; evaluator execution and member-owner cursor descent should share it instead of keeping local contextual helpers.",
@@ -25,7 +26,8 @@
         "If a feature needs lifecycle or template-control-flow context, enter through CheckerExpressionTypeWorld and look for a layered speculative context rather than duplicating global evaluator setup.",
         "Before inventing a new speculative context object, inspect CheckerExpressionBranchScopeProjector and speculativeBindingScopeOverlay; truthy/falsy/nullish/short-circuit narrowing already has an uncommitted BindingScope overlay path.",
         "Use the evaluator runtime context for framework evaluation modes such as connectable source-to-target dependency collection and proven IAstEvaluator.strict state; do not fork a second evaluator just to distinguish binding observation from listener/event evaluation.",
-        "CheckerExpressionTypeEvaluationCache is now salted by BindingScope, TemplateResourceScope, expression kind/span or source address, runtime mode, and contextual type inside CheckerExpressionTypeEvaluator. Caller local keys should describe semantic role and projection ownership, not carry hidden correctness obligations for cache isolation.",
+        "CheckerExpressionTypeEvaluationCache is now salted by BindingScope, TemplateResourceScope, expression kind/span plus optional source address, runtime mode, and contextual type inside CheckerExpressionTypeEvaluator. Caller local keys should describe semantic role and projection ownership, not carry hidden correctness obligations for cache isolation.",
+        "CheckerExpressionTypeEvaluator also appends expression kind/span to the projection local key before entering expression-kind handlers. This keeps TypeChecker product identity aligned with cache source isolation, because CheckerTypeProjector can reuse by local projection handle before deeper checker identity.",
         "TemplateCompilationProjectPass shares one CheckerExpressionTypeWorld across resource runtime-analysis frames in a project compilation; per-resource profiles use cache-marker deltas so pressure output does not double-count the shared cache.",
         "Optional and non-strict nullish member/keyed/call reads should project undefined through the evaluator. Unknown strictness should remain open so diagnostics do not claim framework runtime codes prematurely.",
         "Keyed access must check definitely-nullish owners before literal-key member projection; otherwise `foo?.['bar']` and strict nullish keyed reads degrade into missing-member pressure instead of runtime-shaped nullish semantics.",
@@ -58,6 +60,12 @@
           "filePath": "packages/semantic-runtime/src/type-system/expression-type-support.ts",
           "symbolName": "CheckerExpressionTypeSupport",
           "summary": "Shared checker-carrier, global, primitive, result, and projection support for expression evaluator-adjacent projectors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-primitive-types.ts",
+          "symbolName": "checkerPrimitiveLiteralType",
+          "summary": "Shared TypeChecker primitive/literal type lookup for expression and template-controller projections."
         },
         {
           "kind": "source",
@@ -233,7 +241,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "frontier:completed-input-companion-builder",

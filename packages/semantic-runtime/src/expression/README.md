@@ -79,7 +79,11 @@ open seams, or inquiry answers.
 ## Internal Ownership Map
 
 - `ast.ts`
-  Canonical AST carriers plus local/source span carriers.
+  Canonical AST carriers plus local/source span carriers. `ExpressionPrimitiveLiteralValue` is the parser-level
+  primitive value union shared by evaluation, TypeChecker projection, and observation value-channel domains before each
+  substrate wraps the value in its own runtime/evaluator product. `mapExpressionPrimitiveLiteralValue(...)` is the
+  shared primitive-literal dispatch point; downstream substrates provide only their wrapping policy, not a fresh
+  `typeof` switch over parser literals.
 - `expression-scanner.ts`
   Tokenization, token flags, and scanner hot path. The top-level scan path
   dispatches to module-level token-family helpers for punctuation/operators so

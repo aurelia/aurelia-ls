@@ -54,6 +54,75 @@
       "updatedAt": "2026-05-17"
     },
     {
+      "id": "reuse:authored-source-text-cache",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "source",
+        "template",
+        "diagnostics",
+        "overlay"
+      ],
+      "summary": "AuthoredSourceTextCache is the shared raw-file text reader for source-span slicing and cursor offset conversion.",
+      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and future edit surfaces still need exact authored HTML or TypeScript host text. Centralizing the raw read/cache and line math prevents API/template-local filesystem readers from drifting.",
+      "guidance": [
+        "Use AuthoredSourceTextCache when a product already has a source path/span and needs to slice raw authored text or convert offsets to line/character positions.",
+        "Use AuthoredSourceTextCache for app-source text scans that read authored project files, including boot project-shape source-signal scans; boot package/tsconfig discovery and evaluation module-host reads have separate lifetimes.",
+        "Do not replace this with TemplateSource.markup unless the consumer only needs decoded compiler input and not authored-source coordinates.",
+        "Resource convergence should use the same cache for conventional/imported external template text so template-file reads, decoded metadata, diagnostics, cursor loci, and overlays stay on one authored-text boundary.",
+        "I18n imported JSON key spans should use the evaluator asset-module helper over this cache so source addresses point at authored JSON properties rather than the generated module wrapper.",
+        "Use product.architecture source-file read pressure before adding new direct readFileSync, existsSync, or line-offset helpers in semantic-runtime.",
+        "If a future source epoch or content-hash layer appears, thread it through this cache boundary instead of adding local defensive reads in diagnostics, overlays, or completion."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
+          "symbolName": "AuthoredSourceTextCache",
+          "summary": "Shared authored source text cache and line/offset helper boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-expression.ts",
+          "symbolName": "TemplateTypeSystemOverlayExpressionProjector",
+          "summary": "Overlay expression projector slices authored source through the shared cache."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "templateSourceText",
+          "summary": "Template diagnostics and cursor paths use the shared cache for source text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "readImportedHtmlTemplate",
+          "summary": "Resource convergence reads imported/conventional external HTML through the shared cache before metadata stripping."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/asset-module.ts",
+          "symbolName": "authoredAssetModuleSpanForNode",
+          "summary": "Asset module source-span helper maps generated JSON module nodes back through the shared authored source cache."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
+          "summary": "Product architecture pressure prints source-file read pressure from call-site rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
+          "symbolName": "AuthoredSourceTextCache"
+        }
+      ],
+      "createdAt": "2026-05-24",
+      "updatedAt": "2026-05-24"
+    },
+    {
       "id": "frontier:open-seam-reason-provenance",
       "kind": "pressure-frontier",
       "domains": [
@@ -248,6 +317,7 @@
         "Start here when a cache/index points at product details, hot details, TypeChecker carriers, or query-local materialized products.",
         "Register store-local acceleration indexes with KernelStore.registerSidecarIndex(...) instead of hiding them in package-level WeakMaps with no disposal contract.",
         "Use sidecar index telemetry rows to check whether an index is retaining answer-local work after QueryClaimGraph disposal.",
+        "`contract:type-projection-lifetime` proves the TypeChecker type-shape sidecar prunes with product-detail disposal and reprojects fresh details after the same local key is reused.",
         "Do not turn sidecar indexes into semantic storage; durable semantics still belong in kernel records, claims, identities, products, product details, or hot details with explicit lifetimes."
       ],
       "anchors": [
@@ -268,6 +338,11 @@
           "path": "packages/semantic-runtime/src/kernel/README.md",
           "heading": "Record Families",
           "summary": "Kernel docs describing sidecar indexes as named disposable acceleration structures."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
+          "summary": "Contract proving a registered sidecar index drops disposed product-detail references."
         }
       ],
       "liveChecks": [
@@ -283,7 +358,7 @@
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "decision:kernel-handle-compaction",

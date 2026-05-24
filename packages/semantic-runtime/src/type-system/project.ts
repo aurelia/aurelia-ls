@@ -236,6 +236,24 @@ export class TypeSystemProject {
     return source == null ? null : typeSystemOverlaySegmentAt(source, position);
   }
 
+  /** Classify a Program source file through boot admission first, then checker-owned dependency/source buckets. */
+  readProgramSourceFileRole(fileName: string): SourceFileRole | null {
+    const sourceFile = this.readProgramSourceFileByPath(fileName);
+    if (sourceFile == null) {
+      return null;
+    }
+    const normalized = canonicalTypeSystemPath(sourceFile.fileName);
+    const admitted = sourceAdmissionForTypeSystemPath(this.project, normalized);
+    if (admitted != null) {
+      return admitted.role;
+    }
+    return typeSystemProgramSourceFileRole(
+      sourceFile,
+      canonicalTypeSystemPath(this.project.rootDir),
+      this.overlaySourcePaths,
+    );
+  }
+
   /** Read Program-owned TS/JS source files admitted as app source by this project frame. */
   readProjectProgramSourceFiles(): readonly ts.SourceFile[] {
     const projectRootPath = canonicalTypeSystemPath(this.project.rootDir);
@@ -294,6 +312,41 @@ export class TypeSystemProject {
   /** Read a Program-owned declaration counterpart and reject impossible span matches explicitly. */
   readProgramDeclaration<TDeclaration extends ts.Declaration>(declaration: TDeclaration): TDeclaration | null {
     return this.readProgramNode(declaration);
+  }
+
+  /** Read a TypeChecker type only after remapping an evaluator/source-discovery node into this Program epoch. */
+  readProgramTypeAtLocation(node: ts.Node): ts.Type | null {
+    const checkerNode = this.readProgramNode(node);
+    return checkerNode == null ? null : this.checker.getTypeAtLocation(checkerNode);
+  }
+
+  /** Read a TypeChecker type node only after remapping it into this Program epoch. */
+  readProgramTypeFromTypeNode(node: ts.TypeNode): ts.Type | null {
+    const checkerNode = this.readProgramNode(node);
+    return checkerNode == null || !ts.isTypeNode(checkerNode)
+      ? null
+      : this.checker.getTypeFromTypeNode(checkerNode);
+  }
+
+  /** Read a TypeChecker symbol only after remapping an evaluator/source-discovery node into this Program epoch. */
+  readProgramSymbolAtLocation(node: ts.Node): ts.Symbol | null {
+    const checkerNode = this.readProgramNode(node);
+    return checkerNode == null ? null : this.checker.getSymbolAtLocation(checkerNode) ?? null;
+  }
+
+  /** Read an alias-resolved TypeChecker symbol from a Program-remapped value site. */
+  readProgramAliasedSymbolAtLocation(node: ts.Node): ts.Symbol | null {
+    const symbol = this.readProgramSymbolAtLocation(node);
+    return symbol == null ? null : this.resolveAliasedSymbol(symbol);
+  }
+
+  /** Read a symbol's value type at a Program-remapped location. */
+  readProgramTypeOfSymbolAtLocation(
+    symbol: ts.Symbol,
+    location: ts.Node,
+  ): ts.Type | null {
+    const checkerLocation = this.readProgramNode(location);
+    return checkerLocation == null ? null : this.checker.getTypeOfSymbolAtLocation(symbol, checkerLocation);
   }
 
   readProgramNodeRemapStats(): TypeSystemProgramNodeRemapStats {
@@ -956,6 +1009,38 @@ function typeSystemProgramSourceFileGroup(
   return normalizedFileName.endsWith('.d.ts')
     ? { groupKind: 'external-declaration', groupKey: 'external-declarations' }
     : { groupKind: 'external-source', groupKey: 'external-source' };
+}
+
+function typeSystemProgramSourceFileRole(
+  sourceFile: ts.SourceFile,
+  projectRootPath: string,
+  overlaySourcePaths: ReadonlySet<string>,
+): SourceFileRole {
+  const normalized = canonicalTypeSystemPath(sourceFile.fileName);
+  if (overlaySourcePaths.has(normalized)) {
+    return SourceFileRole.Generated;
+  }
+  if (sourceFile.isDeclarationFile || isDefaultLibrarySourceFile(normalized)) {
+    return SourceFileRole.Declaration;
+  }
+  if (typeSystemNodeModulePackageName(normalized) != null) {
+    return SourceFileRole.ExternalSource;
+  }
+  if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
+    return SourceFileRole.Unknown;
+  }
+  return SourceFileRole.ExternalSource;
+}
+
+function sourceAdmissionForTypeSystemPath(
+  project: ProjectBootFrame,
+  normalizedFileName: string,
+): SourceFileAdmission | null {
+  return project.sourceFiles.find((source) => {
+    const projectPath = canonicalTypeSystemPath(resolveProjectPath(project.rootDir, source.path));
+    const workspacePath = canonicalTypeSystemPath(resolveWorkspacePath(project.workspaceRootDir, source.path));
+    return projectPath === normalizedFileName || workspacePath === normalizedFileName;
+  }) ?? null;
 }
 
 function typeSystemNodeModulePackageName(normalizedFileName: string): string | null {

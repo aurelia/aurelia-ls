@@ -1,5 +1,6 @@
 import { performance } from 'node:perf_hooks';
 
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { KernelStore } from '../kernel/store.js';
 import { NamedResourceRecognizer } from './named-resource-recognizer.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
@@ -50,6 +51,7 @@ export class ResourceRecognitionResult {
 export class ResourceRecognitionPass {
   private readonly namedResources = new NamedResourceRecognizer();
   private readonly syntaxResources = new SyntaxResourceRecognizer();
+  private readonly sourceTextCache = new AuthoredSourceTextCache('');
 
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return [
@@ -79,7 +81,7 @@ export class ResourceRecognitionPass {
     );
     phases.push(...emission.profile.phases);
     const convergence = measureResourceRecognitionPhase(phases, 'definition-convergence', () =>
-      new ResourceDefinitionConverger(store).converge(context, observations, emission)
+      new ResourceDefinitionConverger(store, this.sourceTextCache).converge(context, observations, emission)
     );
     return new ResourceRecognitionResult(
       observations,

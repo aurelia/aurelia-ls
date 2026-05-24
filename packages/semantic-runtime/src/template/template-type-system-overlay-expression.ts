@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { ProductHandle } from '../kernel/handles.js';
+import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
 import {
   appendTemplateTypeSystemOverlayExpressionParts,
@@ -13,25 +12,33 @@ import {
   templateTypeSystemOverlayExpressionSupport,
   TemplateTypeSystemOverlayExpressionSupportKind,
 } from './template-type-system-overlay-expression-support.js';
-
-interface SourceText {
-  readonly hostPath: string;
-  readonly text: string;
-}
+import {
+  sourceAddressHandleForRuntimeExpressionSpan,
+} from './runtime-expression-source-address.js';
 
 export const enum TemplateTypeSystemOverlayExpressionProjectionKind {
+  /** Authored source text can be copied directly into the generated TypeScript overlay. */
   CopySource = 'copy-source',
+  /** Generated overlay parts represent Aurelia-specific source through TypeScript-shaped helper calls or aliases. */
   Generated = 'generated',
+  /** The parsed expression has no readable authored source slice in the current project epoch. */
   MissingSource = 'missing-source',
+  /** The expression has a known owner but needs lower semantic substrate before overlay projection. */
   UnsupportedSyntax = 'unsupported-syntax',
 }
 
 export const enum TemplateTypeSystemOverlayExpressionUnsupportedKind {
+  /** Value-converter projection is missing the modeled converter call surface for this expression. */
   ValueConverter = 'value-converter',
+  /** Ancestor binding-context access is deeper than the replayed `$parent` alias chain. */
   AncestorScope = 'ancestor-scope',
+  /** Current binding-context access needs a generated `$this` alias that this scope has not replayed. */
   CurrentBindingContext = 'current-binding-context',
+  /** CustomExpression is owned by an extension grammar such as i18n rather than generic overlay projection. */
   CustomExpression = 'custom-expression',
+  /** The expression needs statement-shaped overlay emission rather than expression projection. */
   StatementShape = 'statement-shape',
+  /** The AST kind is only meaningful inside an owning product such as repeat, interpolation, or destructuring. */
   NonStandalone = 'non-standalone',
 }
 
@@ -126,11 +133,13 @@ export class TemplateTypeSystemOverlayExpressionProjection {
  * unsupported pressure until the semantic runtime has the right substrate for them.
  */
 export class TemplateTypeSystemOverlayExpressionProjector {
-  private readonly sourceTextCache = new Map<string, SourceText | null>();
+  private readonly sourceTextCache: AuthoredSourceTextCache;
 
   constructor(
-    private readonly rootDir: string,
-  ) {}
+    rootDir: string,
+  ) {
+    this.sourceTextCache = new AuthoredSourceTextCache(rootDir);
+  }
 
   copyableExpression(
     expression: ExpressionAstNode,
@@ -148,38 +157,17 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     if (filePath == null) {
       return null;
     }
-    const source = this.sourceText(filePath);
+    const source = this.sourceTextCache.read(filePath);
     if (source == null || span.start < 0 || span.end < span.start || span.end > source.text.length) {
       return null;
     }
     return {
       text: source.text.slice(span.start, span.end),
       semanticProductHandle,
-      sourceAddressHandle: (span.file?.id as AddressHandle | undefined) ?? null,
+      sourceAddressHandle: sourceAddressHandleForRuntimeExpressionSpan(span),
       sourceStart: span.start,
       sourceEnd: span.end,
     };
-  }
-
-  private sourceText(filePath: string): SourceText | null {
-    const hostPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(this.rootDir, filePath);
-    const cached = this.sourceTextCache.get(hostPath);
-    if (cached !== undefined) {
-      return cached;
-    }
-    let source: SourceText | null;
-    try {
-      source = {
-        hostPath,
-        text: readFileSync(hostPath, 'utf8'),
-      };
-    } catch {
-      source = null;
-    }
-    this.sourceTextCache.set(hostPath, source);
-    return source;
   }
 
   private valueConverterExpression(
@@ -470,7 +458,7 @@ function generatedParentExpressionParts(
       childStart < cursor
       || childEnd < childStart
       || childEnd > parent.sourceEnd
-      || child.expression.span.file?.id !== parent.sourceAddressHandle
+      || sourceAddressHandleForRuntimeExpressionSpan(child.expression.span) !== parent.sourceAddressHandle
     ) {
       return null;
     }

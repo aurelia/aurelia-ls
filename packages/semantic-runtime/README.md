@@ -46,8 +46,9 @@ pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry
 That profiler compares analysis depth and inquiry profile, reports phase memory/kernel deltas, shows product/detail,
 handle-character, and source-span-role density when kernel breakdowns are enabled, prints TypeSystemProject subphases,
 Program source-file composition, and compiler-host cache counts, and separates app-world construction cost from public
-query projection cost and query-claim retention. Use it before changing cache policy, materialization depth, hot details,
-source-address storage, or app-opening defaults.
+query projection cost and query-claim retention. Query rows report value JSON bytes, full answer-envelope JSON bytes, and
+continuation count/bytes separately so follow-up richness and MCP token pressure stay visible. Use it before changing
+cache policy, materialization depth, hot details, source-address storage, continuation presentation, or app-opening defaults.
 Aggregate output intentionally keeps per-root, analysis-depth, and inquiry-profile groups before printing global totals.
 Use those grouped rows for depth-policy decisions: a global aggregate can show the total memory/time load, but the grouped
 rows show which depth or profile actually introduced the extra products, TypeScript Program bulk, or retained query

@@ -12,6 +12,7 @@ import type {
   SemanticAuthoringGuidanceRequest,
   SemanticAuthoringRecipePlanRequest,
 } from './contracts.js';
+import { semanticAppQueryCatalogShape } from './app-query-catalog.js';
 
 export interface SemanticRuntimeRoutedAppQueryKeyPlan {
   readonly analysisDepth: SemanticAppAnalysisDepth;
@@ -174,7 +175,10 @@ export function semanticRuntimeRoutedAppQueryBatchLocusKey(
   queries: readonly SemanticAppQuery[],
 ): string {
   const sourceLoci = [...new Set(queries
-    .map((query) => query.cursor?.filePath ?? query.sourceFile?.filePath ?? null)
+    .map((query) => {
+      const shapedQuery = semanticAppQueryCatalogShape(query);
+      return shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
+    })
     .filter((filePath): filePath is string => filePath != null && filePath.trim().length > 0)
     .map(normalizeQuerySourceFileKey))]
     .sort();
@@ -194,21 +198,23 @@ export function semanticRuntimeWorkspaceEpochKey(workspaceKey: string): string {
 }
 
 export function semanticAppQueryKey(query: SemanticAppQuery): string {
+  const shapedQuery = semanticAppQueryCatalogShape(query);
+  // continuationIntents is a response-envelope filter applied after materialization; keep it out of claim identity.
   const parts = [
-    query.kind,
-    query.detail ?? 'compact',
-    query.diagnosticProjection ?? 'default-diagnostics',
-    query.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
-    query.diagnosticPageSize ?? 'default-diagnostic-page',
-    query.openSeamPageSize ?? 'default-open-seam-page',
-    query.includeAuthoringOrientation === true ? 'with-authoring-orientation' : 'no-authoring-orientation',
-    query.rowPageSize ?? 'default-row-page',
-    query.page?.size ?? 'all',
-    query.page?.cursor ?? 'start',
-    query.sourceFile?.filePath ?? 'no-source-file',
-    query.cursor == null
+    shapedQuery.kind,
+    shapedQuery.detail ?? 'compact',
+    shapedQuery.diagnosticProjection ?? 'default-diagnostics',
+    shapedQuery.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
+    shapedQuery.diagnosticPageSize ?? 'default-diagnostic-page',
+    shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
+    shapedQuery.includeAuthoringOrientation === true ? 'with-authoring-orientation' : 'no-authoring-orientation',
+    shapedQuery.rowPageSize ?? 'default-row-page',
+    shapedQuery.page?.size ?? 'all',
+    shapedQuery.page?.cursor ?? 'start',
+    shapedQuery.sourceFile?.filePath ?? 'no-source-file',
+    shapedQuery.cursor == null
       ? 'no-cursor'
-      : `${query.cursor.filePath}:${query.cursor.line}:${query.cursor.character}:${query.cursor.offset ?? 'no-offset'}`,
+      : `${shapedQuery.cursor.filePath}:${shapedQuery.cursor.line}:${shapedQuery.cursor.character}:${shapedQuery.cursor.offset ?? 'no-offset'}`,
   ];
   return parts.map((part) => queryKeyPart(String(part))).join('|');
 }
@@ -217,8 +223,9 @@ export function semanticAppQueryLocusKey(
   projectKey: string,
   query: SemanticAppQuery,
 ): string {
-  if (query.cursor != null) {
-    const cursor = query.cursor;
+  const shapedQuery = semanticAppQueryCatalogShape(query);
+  if (shapedQuery.cursor != null) {
+    const cursor = shapedQuery.cursor;
     return [
       'cursor',
       projectKey,
@@ -228,8 +235,8 @@ export function semanticAppQueryLocusKey(
       cursor.offset ?? 'no-offset',
     ].map((part) => queryKeyPart(String(part))).join(':');
   }
-  if (query.sourceFile?.filePath != null) {
-    return ['source', projectKey, normalizeQuerySourceFileKey(query.sourceFile.filePath)]
+  if (shapedQuery.sourceFile?.filePath != null) {
+    return ['source', projectKey, normalizeQuerySourceFileKey(shapedQuery.sourceFile.filePath)]
       .map((part) => queryKeyPart(String(part)))
       .join(':');
   }
@@ -240,7 +247,8 @@ export function semanticAppQueryEpochKeys(
   projectKey: string,
   query: SemanticAppQuery,
 ): readonly string[] {
-  const sourceFilePath = query.cursor?.filePath ?? query.sourceFile?.filePath ?? null;
+  const shapedQuery = semanticAppQueryCatalogShape(query);
+  const sourceFilePath = shapedQuery.cursor?.filePath ?? shapedQuery.sourceFile?.filePath ?? null;
   const keys = [semanticAppProjectEpochKey(projectKey)];
   if (sourceFilePath != null) {
     keys.push(semanticAppSourceEpochKey(projectKey, sourceFilePath));

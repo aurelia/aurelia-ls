@@ -11,6 +11,10 @@ import {
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
 import {
+  checkerPropertySymbol,
+  symbolForExpression,
+} from '../type-system/checker-node-helpers.js';
+import {
   ContainerDefaultResolverPolicy,
 } from './container-configuration.js';
 import type { TypeSystemProject } from '../type-system/project.js';
@@ -76,7 +80,7 @@ export function readDiContainerApiCallSites(
         source.path,
         source.addressHandle,
         sourceFile,
-        typeSystem.checker,
+        typeSystem,
         sourcePathByFileName,
       );
   });
@@ -86,12 +90,12 @@ function readSourceFileContainerApiCallSites(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly DiContainerApiCallSite[] {
   const sites: DiContainerApiCallSite[] = [];
   const visit = (node: ts.Node): void => {
-    recordContainerApiCallSite(sites, sourcePath, sourceFileAddressHandle, sourceFile, checker, sourcePathByFileName, node);
+    recordContainerApiCallSite(sites, sourcePath, sourceFileAddressHandle, sourceFile, typeSystem, sourcePathByFileName, node);
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -103,16 +107,17 @@ function recordContainerApiCallSite(
   sourcePath: string,
   sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
   node: ts.Node,
 ): void {
+  const checker = typeSystem.checker;
   if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(unwrapExpression(node.expression))) {
     return;
   }
   const access = unwrapExpression(node.expression) as ts.PropertyAccessExpression;
   const methodKind = containerApiMethodKind(access.name.text);
-  if (methodKind == null || !isAureliaContainerReceiver(checker, access.expression, methodKind, sourcePathByFileName)) {
+  if (methodKind == null || !isAureliaContainerReceiver(typeSystem, access.expression, methodKind, sourcePathByFileName)) {
     return;
   }
   const keyExpression = node.arguments[0] ?? null;
@@ -219,13 +224,17 @@ function booleanArgument(
 }
 
 export function isAureliaContainerReceiver(
-  checker: ts.TypeChecker,
+  typeSystem: TypeSystemProject,
   receiver: ts.Expression,
   methodKind: DiContainerApiMethodKind,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): boolean {
-  const type = checker.getTypeAtLocation(receiver);
-  const property = checker.getPropertyOfType(type, methodKind);
+  const checker = typeSystem.checker;
+  const type = typeSystem.readProgramTypeAtLocation(receiver);
+  if (type == null) {
+    return false;
+  }
+  const property = checkerPropertySymbol(checker, type, methodKind);
   const declarations = property?.declarations ?? [];
   return declarations.some((declaration) =>
     isAureliaContainerDeclaration(declaration, sourcePathByFileName)
@@ -374,14 +383,7 @@ function isAureliaCreateContainerCallee(
   if (name == null || name.text !== 'createContainer') {
     return false;
   }
-  const symbol = checker.getSymbolAtLocation(name);
-  if (symbol == null) {
-    return false;
-  }
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  return (target.declarations ?? []).some(isAureliaCreateContainerDeclaration);
+  return (symbolForExpression(checker, name)?.declarations ?? []).some(isAureliaCreateContainerDeclaration);
 }
 
 function isAureliaCreateContainerDeclaration(
@@ -400,12 +402,6 @@ function declarationForReceiverExpression(
   checker: ts.TypeChecker,
   expression: ts.Expression,
 ): ts.Declaration | null {
-  const symbol = checker.getSymbolAtLocation(expression);
-  if (symbol == null) {
-    return null;
-  }
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  return target.valueDeclaration ?? target.declarations?.[0] ?? null;
+  const symbol = symbolForExpression(checker, expression);
+  return symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
 }

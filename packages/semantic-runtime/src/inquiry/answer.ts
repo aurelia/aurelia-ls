@@ -9,6 +9,7 @@ import type {
 import type { InquiryBasis } from './basis.js';
 import type { InquiryLocus } from './locus.js';
 import type { InquiryPageInfo } from './page.js';
+import type { InquiryContinuationApplicability } from './continuation-intent.js';
 
 export const enum InquiryOutcomeKind {
   /** The query closed with the requested result. */
@@ -56,6 +57,8 @@ export const enum InquiryExpansionKind {
 export const enum InquiryContinuationKind {
   /** Continue an ordered result with the next page cursor. */
   NextPage = 'next-page',
+  /** Follow a fully shaped query payload; target query and intent carry the concrete lane. */
+  FollowQuery = 'follow-query',
   /** Narrow an ambiguous answer to a specific source file. */
   SelectSourceFile = 'select-source-file',
   /** Inventory admitted source files before selecting a source locus. */
@@ -73,6 +76,9 @@ export const enum InquiryContinuationKind {
   /** Ask a different query shape or locus. */
   Reroute = 'reroute',
 }
+
+/** Transport-safe value form for continuation action enum members. */
+export type InquiryContinuationKindValue = InquiryContinuationKind | `${InquiryContinuationKind}`;
 
 /** One expansion that was requested, returned, or suggested by an answer. */
 export class InquiryExpansion {
@@ -107,6 +113,8 @@ export class InquiryContinuation<TQuery> {
     readonly rationale: string,
     /** Next query shape. */
     readonly query: TQuery,
+    /** Intent and evidence gates for choosing this continuation without ranking by vibes. */
+    readonly applicability: InquiryContinuationApplicability | null = null,
   ) {}
 }
 

@@ -633,7 +633,10 @@ function typeLooksLikeFetchClient(
   context: FetchClientReadContext,
   expression: ts.Expression,
 ): boolean {
-  const type = context.checker.getTypeAtLocation(expression);
+  const type = context.typeSystem.readProgramTypeAtLocation(expression);
+  if (type == null) {
+    return false;
+  }
   const symbolName = type.symbol?.getName() ?? type.aliasSymbol?.getName() ?? null;
   if (symbolName === 'HttpClient' || symbolName === 'IHttpClient') {
     return true;
