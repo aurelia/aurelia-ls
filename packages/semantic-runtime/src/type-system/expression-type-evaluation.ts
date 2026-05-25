@@ -105,10 +105,12 @@ export interface CheckerExpressionTypeEvaluationCacheStats {
   readonly entries: number;
   readonly hits: number;
   readonly misses: number;
+  readonly stale: number;
   readonly writes: number;
   readonly entriesByBucket: Readonly<Record<string, number>>;
   readonly hitsByBucket: Readonly<Record<string, number>>;
   readonly missesByBucket: Readonly<Record<string, number>>;
+  readonly staleByBucket: Readonly<Record<string, number>>;
   readonly writesByBucket: Readonly<Record<string, number>>;
 }
 
@@ -117,10 +119,12 @@ export class CheckerExpressionTypeEvaluationCacheMarker {
     readonly entries: number,
     readonly hits: number,
     readonly misses: number,
+    readonly stale: number,
     readonly writes: number,
     readonly entriesByBucket: Readonly<Record<string, number>>,
     readonly hitsByBucket: Readonly<Record<string, number>>,
     readonly missesByBucket: Readonly<Record<string, number>>,
+    readonly staleByBucket: Readonly<Record<string, number>>,
     readonly writesByBucket: Readonly<Record<string, number>>,
   ) {}
 }
@@ -137,9 +141,11 @@ export class CheckerExpressionTypeEvaluationCache {
   private readonly evaluations = new Map<string, CheckerExpressionTypeEvaluation>();
   private hits = 0;
   private misses = 0;
+  private stale = 0;
   private writes = 0;
   private readonly hitsByBucket = new Map<string, number>();
   private readonly missesByBucket = new Map<string, number>();
+  private readonly staleByBucket = new Map<string, number>();
   private readonly writesByBucket = new Map<string, number>();
 
   read(localKey: string): CheckerExpressionTypeEvaluation | null {
@@ -159,12 +165,18 @@ export class CheckerExpressionTypeEvaluationCache {
   readOrEvaluate(
     localKey: string,
     evaluate: () => CheckerExpressionTypeEvaluation,
+    canReuse: (evaluation: CheckerExpressionTypeEvaluation) => boolean = () => true,
   ): CheckerExpressionTypeEvaluation {
     const existing = this.read(localKey);
     if (existing != null) {
-      this.hits += 1;
-      incrementCacheBucket(this.hitsByBucket, cacheKeyBucket(localKey));
-      return existing;
+      if (canReuse(existing)) {
+        this.hits += 1;
+        incrementCacheBucket(this.hitsByBucket, cacheKeyBucket(localKey));
+        return existing;
+      }
+      this.evaluations.delete(localKey);
+      this.stale += 1;
+      incrementCacheBucket(this.staleByBucket, cacheKeyBucket(localKey));
     }
     this.misses += 1;
     incrementCacheBucket(this.missesByBucket, cacheKeyBucket(localKey));
@@ -176,10 +188,12 @@ export class CheckerExpressionTypeEvaluationCache {
       entries: this.evaluations.size,
       hits: this.hits,
       misses: this.misses,
+      stale: this.stale,
       writes: this.writes,
       entriesByBucket: cacheEntriesByBucket(this.evaluations.keys()),
       hitsByBucket: cacheBucketSnapshot(this.hitsByBucket),
       missesByBucket: cacheBucketSnapshot(this.missesByBucket),
+      staleByBucket: cacheBucketSnapshot(this.staleByBucket),
       writesByBucket: cacheBucketSnapshot(this.writesByBucket),
     };
   }
@@ -190,10 +204,12 @@ export class CheckerExpressionTypeEvaluationCache {
       snapshot.entries,
       snapshot.hits,
       snapshot.misses,
+      snapshot.stale,
       snapshot.writes,
       snapshot.entriesByBucket,
       snapshot.hitsByBucket,
       snapshot.missesByBucket,
+      snapshot.staleByBucket,
       snapshot.writesByBucket,
     );
   }
@@ -204,10 +220,12 @@ export class CheckerExpressionTypeEvaluationCache {
       entries: Math.max(0, snapshot.entries - marker.entries),
       hits: Math.max(0, snapshot.hits - marker.hits),
       misses: Math.max(0, snapshot.misses - marker.misses),
+      stale: Math.max(0, snapshot.stale - marker.stale),
       writes: Math.max(0, snapshot.writes - marker.writes),
       entriesByBucket: subtractCacheBucketSnapshot(snapshot.entriesByBucket, marker.entriesByBucket),
       hitsByBucket: subtractCacheBucketSnapshot(snapshot.hitsByBucket, marker.hitsByBucket),
       missesByBucket: subtractCacheBucketSnapshot(snapshot.missesByBucket, marker.missesByBucket),
+      staleByBucket: subtractCacheBucketSnapshot(snapshot.staleByBucket, marker.staleByBucket),
       writesByBucket: subtractCacheBucketSnapshot(snapshot.writesByBucket, marker.writesByBucket),
     };
   }

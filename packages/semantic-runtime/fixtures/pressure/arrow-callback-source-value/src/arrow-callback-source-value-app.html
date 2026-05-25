@@ -1,0 +1,48 @@
+<section repeat.for="featured of products.filter(product => product.featured)">
+  <span>${featured.id}</span>
+  <span>${featured.label}</span>
+</section>
+<section repeat.for="lastFeatured of [products.findLast(product => product.featured)]">
+  <span>${lastFeatured.id}</span>
+  <span>${lastFeatured.label}</span>
+</section>
+<section repeat.for="reducedFeatured of [products.reduce((current, product) => product.featured ? product : current, products[0])]">
+  <span>${reducedFeatured.id}</span>
+  <span>${reducedFeatured.label}</span>
+</section>
+<section repeat.for="slicedProduct of products.slice(0, 1)">
+  <span>${slicedProduct.id}</span>
+</section>
+<section repeat.for="reversedProduct of products.toReversed().slice(0, 1)">
+  <span>${reversedProduct.id}</span>
+</section>
+<section repeat.for="sortedProduct of products.toSorted((left, right) => left.id > right.id ? 1 : -1).slice(0, 1)">
+  <span>${sortedProduct.id}</span>
+</section>
+<section repeat.for="splicedProduct of products.toSpliced(0, 1, products[1]).slice(0, 1)">
+  <span>${splicedProduct.id}</span>
+</section>
+<section repeat.for="withProduct of products.with(0, products[1]).slice(0, 1)">
+  <span>${withProduct.id}</span>
+</section>
+<section repeat.for="flatProduct of [products.slice(0, 1)].flat()">
+  <span>${flatProduct.id}</span>
+</section>
+<section repeat.for="joinedIds of [[products[0].id, products[1].id].join('|')]">
+  <span>${joinedIds}</span>
+</section>
+<section repeat.for="featuredIndex of [[products[0].id, products[1].id].lastIndexOf('featured')]">
+  <span>${featuredIndex}</span>
+</section>
+<section repeat.for="getterFeatured of state.featuredProducts">
+  <span>${getterFeatured.id}</span>
+</section>
+<section repeat.for="getterJoinedIds of [state.joinedProductIds]">
+  <span>${getterJoinedIds}</span>
+</section>
+<section repeat.for="callScopeProduct of productsFromThis().slice(0, 1)">
+  <span>${callScopeProduct.id}</span>
+</section>
+<section repeat.for="thisCallProduct of $this.productsFromThis().slice(0, 1)">
+  <span>${thisCallProduct.id}</span>
+</section>

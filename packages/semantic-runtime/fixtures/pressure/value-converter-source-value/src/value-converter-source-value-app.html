@@ -1,0 +1,12 @@
+<template>
+  <section repeat.for="featured of products | featuredProducts">
+    <span>${featured.id}</span>
+    <span>${featured.label}</span>
+  </section>
+  <section repeat.for="dynamicFeatured of products | dynamicContextProducts">
+    <span>${dynamicFeatured.id}</span>
+  </section>
+  <section repeat.for="fallbackProduct of maybeCatalog.products || fallbackProducts">
+    <span>${fallbackProduct.label}</span>
+  </section>
+</template>

@@ -1,7 +1,9 @@
 import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
 import { TemplateOverlayValueConverterApp } from './template-overlay-value-converter-app';
 import {
+  ContextFirstValueConverter,
   ContextualWordValueConverter,
+  DynamicContextualWordValueConverter,
   IdentityOnlyValueConverter,
   MinimumLengthValueConverter,
   WordCountValueConverter,
@@ -14,6 +16,8 @@ new Aurelia()
     MinimumLengthValueConverter,
     IdentityOnlyValueConverter,
     ContextualWordValueConverter,
+    ContextFirstValueConverter,
+    DynamicContextualWordValueConverter,
   )
   .app({
     host: document.querySelector('template-overlay-value-converter') ?? document.body,

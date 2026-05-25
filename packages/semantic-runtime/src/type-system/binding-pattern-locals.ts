@@ -15,7 +15,10 @@ import {
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
-import { checkerNullishType } from './checker-related-types.js';
+import {
+  checkerArrayOrTupleType,
+  checkerNullishType,
+} from './checker-related-types.js';
 import type { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
 
 export class CheckerBindingPatternLocalType {
@@ -262,7 +265,7 @@ function nonArrayRestCertainty(
 ): CheckerBindingPatternRuntimeIssueCertainty | null {
   return sourceType == null
     ? null
-    : compatibilityCertainty(sourceType, isRuntimeArrayType);
+    : compatibilityCertainty(sourceType, (type, checker) => checkerArrayOrTupleType(checker, type));
 }
 
 function compatibilityCertainty(
@@ -329,8 +332,4 @@ function isWeakCheckerType(type: ts.Type): boolean {
 
 function isDestructuringObjectCompatibleType(type: ts.Type, _checker: ts.TypeChecker): boolean {
   return (type.flags & ts.TypeFlags.Object) !== 0;
-}
-
-function isRuntimeArrayType(type: ts.Type, checker: ts.TypeChecker): boolean {
-  return checker.isArrayType(type) || checker.isTupleType(type);
 }

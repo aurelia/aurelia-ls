@@ -1,4 +1,8 @@
 import { TypeSystemOverlaySourceBuilder } from '../type-system/overlay.js';
+import {
+  CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES,
+  CHECKER_DOM_EVENT_MAP_TYPE_NAMES,
+} from '../type-system/dom-node-type.js';
 
 export interface TemplateTypeSystemOverlayPreludeViewModel {
   readonly typeName: string;
@@ -39,33 +43,29 @@ export const templateTypeSystemOverlayPreludeHelpers: readonly TemplateTypeSyste
   {
     key: TemplateTypeSystemOverlayPreludeHelperKey.Repeat,
     owner: TemplateTypeSystemOverlayPreludeHelperOwner.RepeatTemplateController,
-    summary: 'Aurelia repeat.for source categories: arrays, sets, maps, numbers, nullish values, and open values.',
-    emittedNames: ['__au_repeat'],
+    summary: 'Aurelia repeat.for source categories: arrays, maps, sets, numbers, nullish values, any, and unknown.',
+    emittedNames: ['__au_repeat_is_any', '__au_repeat_item', '__au_repeat'],
     lines: [
-      'declare function __au_repeat<T>(value: readonly T[] | null | undefined): Iterable<T>;',
-      'declare function __au_repeat<T>(value: Set<T> | ReadonlySet<T> | null | undefined): Iterable<T>;',
-      'declare function __au_repeat<K, V>(value: Map<K, V> | ReadonlyMap<K, V> | null | undefined): Iterable<[K, V]>;',
-      'declare function __au_repeat(value: number | null | undefined): Iterable<number>;',
-      'declare function __au_repeat(value: any): Iterable<any>;',
+      'type __au_repeat_is_any<T> = 0 extends (1 & T) ? true : false;',
+      'type __au_repeat_item<T> = __au_repeat_is_any<T> extends true ? any : T extends readonly (infer U)[] ? U : T extends Map<infer K, infer V> | ReadonlyMap<infer K, infer V> ? [K, V] : T extends Set<infer U> | ReadonlySet<infer U> ? U : T extends number ? number : unknown;',
+      'declare function __au_repeat<T>(value: T | null | undefined): Iterable<__au_repeat_item<NonNullable<T>>>;',
     ],
   },
   {
     key: TemplateTypeSystemOverlayPreludeHelperKey.ValueConverter,
     owner: TemplateTypeSystemOverlayPreludeHelperOwner.RuntimeValueConverter,
-    summary: 'Aurelia useConverter-shaped toView call surface with withContext argument insertion.',
+    summary: 'Aurelia value-converter caller-context slot and runtime-identity fallback for missing toView calls.',
     emittedNames: [
       '__au_missing_value_converter',
       '__au_value_converter_caller_context',
-      '__au_value_converter_to_view_args',
-      '__au_value_converter_to_view_result',
+      '__au_value_converter_caller_context_value',
       '__au_value_converter_to_view',
     ],
     lines: [
       'declare const __au_missing_value_converter: unknown;',
       'type __au_value_converter_caller_context = { readonly source?: unknown; readonly binding: unknown };',
-      'type __au_value_converter_to_view_args<C, V, A extends readonly unknown[]> = C extends { withContext: true } ? C extends { toView(value: V, caller: __au_value_converter_caller_context, ...args: infer P): unknown } ? P : C extends { toView: unknown } ? never : A : C extends { toView(value: V, ...args: infer P): unknown } ? P : A;',
-      'type __au_value_converter_to_view_result<C, V> = C extends { withContext: true } ? C extends { toView(value: V, caller: __au_value_converter_caller_context, ...args: any): infer R } ? R : V : C extends { toView(value: V, ...args: any): infer R } ? R : V;',
-      'declare function __au_value_converter_to_view<C, V, A extends readonly unknown[]>(converter: C, value: V, ...args: __au_value_converter_to_view_args<C, V, A>): __au_value_converter_to_view_result<C, V>;',
+      'declare const __au_value_converter_caller_context_value: __au_value_converter_caller_context;',
+      'declare function __au_value_converter_to_view<V>(converter: unknown, value: V, ...args: readonly unknown[]): V;',
     ],
   },
   {
@@ -73,9 +73,7 @@ export const templateTypeSystemOverlayPreludeHelpers: readonly TemplateTypeSyste
     owner: TemplateTypeSystemOverlayPreludeHelperOwner.ListenerBinding,
     summary: 'Aurelia listener $event event-map lookup for generated listener scope layers.',
     emittedNames: ['__au_event'],
-    lines: [
-      'type __au_event<K extends string> = K extends keyof GlobalEventHandlersEventMap ? GlobalEventHandlersEventMap[K] : K extends keyof HTMLElementEventMap ? HTMLElementEventMap[K] : CustomEvent;',
-    ],
+    lines: [templateTypeSystemOverlayDomEventHelperLine()],
   },
   {
     key: TemplateTypeSystemOverlayPreludeHelperKey.SwitchCase,
@@ -115,4 +113,12 @@ function appendPreludeHelper(
   for (const line of helper.lines) {
     builder.appendLine(line);
   }
+}
+
+function templateTypeSystemOverlayDomEventHelperLine(): string {
+  const [fallback] = CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES;
+  const clauses = CHECKER_DOM_EVENT_MAP_TYPE_NAMES
+    .map((mapName) => `K extends keyof ${mapName} ? ${mapName}[K]`)
+    .join(' : ');
+  return `type __au_event<K extends string> = ${clauses} : ${fallback};`;
 }

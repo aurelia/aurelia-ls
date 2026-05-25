@@ -242,9 +242,9 @@ next, and whether a caller can act on it.
 classification already happened: the query supplies a site kind and optional product handles for binding scope,
 resource scope, selected resource definition, expression parse, active value site, and optionally a checker-projected
 member owner type. The answer spends those typed details and reports missing inputs rather than re-scanning templates
-or inventing candidates. Member completion after `foo.` can derive the member-owner type from the parser's closed owner
-subtree or, when the cursor is inside a larger expression, from an offset-aware evaluator walk that preserves lexical
-arrow scopes. Listener expressions get their `$event` slot from the runtime binding scope, so `$event.detail` and
+or inventing candidates. Member completion after `foo.` relies on `templateCompletionQueryForCursor` to derive the
+member-owner type from the parser's closed owner subtree or, when the cursor is inside a larger expression, from an
+offset-aware evaluator walk that preserves lexical arrow scopes and runtime binding source context. Listener expressions get their `$event` slot from the runtime binding scope, so `$event.detail` and
 listener callback parameters are TypeChecker projections over Aurelia's listener semantics rather than answer-local
 string handling. Expression-member queries also carry the active value-site product, so bindable target types can
 contextualize arrow parameters when the target surface exposes a callable type. That is an answer-local type
@@ -276,6 +276,14 @@ token from that same owner type without rescanning template source. Empty
 start-tag attribute positions, such as `<my-element |>` before an authored attribute product exists, are still
 classified from the materialized element and template-source span rather than by rescanning project source. That keeps
 cursor-sensitive editor/tooling entry points above the compiler products without creating a second completion path.
+The cursor adapter must use the resource's runtime-analysis expression world, not a fresh checker world, when it asks
+binding-owned source-expression context for the completion scope. State stores, binding-behavior lifecycle, and other
+runtime-discovered expression facts are already on that world; rebuilding it at cursor time makes completions diverge
+from overlays, diagnostics, and data-flow.
+File-level template diagnostics reuse the same cursor adapter for weak-member rows, so they must not override that
+world either. A diagnostic scan may cache authored source text and row de-duplication state, but expression owner
+typing should still spend the resource runtime-analysis world so `t.bind` evaluate-only, `t-params.bind` bind-time
+source-scope effects, overlays, and cursor completions agree.
 
 Interpolation completion adds one extra answer-local projection over the same value-site product: when a text value
 contains multiple incomplete `${...}` holes, the cursor adapter reparses that product with an active offset so the

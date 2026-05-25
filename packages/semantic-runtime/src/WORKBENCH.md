@@ -719,10 +719,12 @@ Binding assignment diagnostics distinguish TypeScript strictness from runtime no
 `astAssign` falls through for unsupported assignment target shapes outside the explicit throw cases, so
 `runtime-expression-unassignable` is authoring guidance (`binding-source-assignment-runtime-noop` plus
 `use-assignable-expression`) rather than a framework-grounded error.
-Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. The existing weak-owner and TypeScript
-strictness rows are `semantic-authoring-policy`; runtime no-op assignment is `framework-runtime-behavior` with no
-framework error code. Do not add `framework-error-code` diagnostics without first checking Aurelia source through Atlas
-`framework.errors` and carrying the exact code. Parser-owned hard failures can now carry exact Aurelia parser labels via
+Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. Weak-owner rows remain
+`semantic-authoring-policy`, while TypeScript strictness rows from binding assignment are `semantic-runtime-product`
+because data-flow has enough observer/value-channel/writeback/source assignability evidence to make the earlier static
+call. Runtime no-op assignment is `framework-runtime-behavior` with no framework error code. Do not add
+`framework-error-code` diagnostics without first checking Aurelia source through Atlas `framework.errors` and carrying
+the exact code. Parser-owned hard failures can now carry exact Aurelia parser labels via
 `ExpressionFrameworkErrorCode`, whose table also records the intended framework package/enum/member because AUR labels
 can collide across packages; companion/frontier parser publications preserve those labels and the failure message. Keep
 that bridge low in the completed-input parser so file/app diagnostics receive framework authority from the parse product

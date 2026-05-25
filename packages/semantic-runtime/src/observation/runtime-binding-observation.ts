@@ -151,6 +151,8 @@ export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
   ScopeSlotTypeCheckerMemberUnavailable = 'scope-slot-typechecker-member-unavailable',
   ScopeSlotRuntimeOnly = 'scope-slot-runtime-only',
   OwnerTypeOpen = 'owner-type-open',
+  /** Key expression type could not be projected far enough to prove keyed source write policy. */
+  KeyTypeOpen = 'key-type-open',
   OwnerMemberNotProjected = 'owner-member-not-projected',
   SourceMemberRuntimeUnassignable = 'source-member-runtime-unassignable',
   SourceMemberGetterWithoutSetter = 'source-member-getter-without-setter',

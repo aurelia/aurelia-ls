@@ -58,7 +58,6 @@ import { HtmlElement } from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   readTypeSystemOverlayDiagnostics,
   type TypeSystemOverlayDiagnostic,
@@ -177,7 +176,6 @@ interface TemplateDiagnosticsScanContext {
   readonly includeHandles: boolean;
   readonly routeConfigProductHandles: readonly ProductHandle[];
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
-  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
   readonly semanticAgreementRows: Set<string>;
@@ -251,6 +249,11 @@ function readTemplateCursorInfoValue(
   const missingInputs = [...new Set(cursorContext.missingInputs)];
   const cursorOffset = readContext.locus.cursor.offset;
   const baseValue = templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs);
+  const bindingSourceAssignmentDiagnostics = bindingSourceAssignmentCursorDiagnostics(
+    store,
+    readContext.selection,
+    cursorOffset,
+  );
   return {
     missingInputs,
     value: withCursorDiagnostics(
@@ -263,9 +266,12 @@ function readTemplateCursorInfoValue(
           cursorOffset,
           includeHandles,
           diagnosticProjection,
-          baseValue.diagnostics,
+          [
+            ...baseValue.diagnostics,
+            ...bindingSourceAssignmentDiagnostics,
+          ],
         ),
-        ...bindingSourceAssignmentCursorDiagnostics(store, readContext.selection, cursorOffset),
+        ...bindingSourceAssignmentDiagnostics,
         ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
         ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
       ],
@@ -725,8 +731,8 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => routerIssueDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...typeProjectionTemplateDiagnosticRows(store, workspaceRootDir, emission, selections, context, projectionPolicy),
-    ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
   ];
   return [...rows].sort((left, right) =>
     (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -940,7 +946,8 @@ function templateOverlayDiagnosticIsPublic(
 
   // The generated overlay is a checker surface, not user-authored TypeScript. Public rows initially admit only
   // diagnostics whose codes describe the copied expression's type relationship; name-resolution holes, syntax errors,
-  // and implicit-any fallout are substrate pressure until the overlay can prove a more precise authored cause.
+  // and implicit-any fallout are substrate pressure until the overlay can prove a more precise authored cause. TS18046
+  // is admitted because an unknown owner often means semantic-runtime preserved a weak app type instead of erasing it.
   switch (diagnostic.diagnostic.code) {
     case 2322:
     case 2339:
@@ -949,6 +956,7 @@ function templateOverlayDiagnosticIsPublic(
     case 2551:
     case 2554:
     case 2588:
+    case 18046:
     case 18047:
     case 18048:
       return true;
@@ -1001,11 +1009,6 @@ function templateDiagnosticsScanContext(
     includeHandles,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
-    // Weak-member diagnostics at binding-observation depth reuse the cursor-completion type path, which can publish
-    // TypeChecker type products in the kernel. The active inquiry profile decides the CPU/memory trade-off through the
-    // query catalog materialization policy; lower analysis depths keep parse/compiler/runtime diagnostics without
-    // paying this query type-projection lane.
-    expressionWorld: new CheckerExpressionTypeWorld(store),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir),
     seenRows: new Set(),
     semanticAgreementRows: new Set(),
@@ -1059,7 +1062,6 @@ function templateDiagnosticRowsForMemberSpan(
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: context.routeConfigProductHandles,
     i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
-    expressionWorld: context.expressionWorld,
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
@@ -1097,9 +1099,15 @@ function semanticTemplateDiagnosticAgreementKey(
   diagnostic: SemanticTemplateCursorDiagnosticRow,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): string | null {
-  return diagnostic.diagnosticKind === 'missing-expression-member'
-    ? templateTypeRelationshipAgreementKey(source, 'missing-member')
-    : null;
+  switch (diagnostic.diagnosticKind) {
+    case 'missing-expression-member':
+      return templateTypeRelationshipAgreementKey(source, 'missing-member');
+    case 'binding-source-assignment-strictness':
+    case 'binding-source-assignment-runtime-noop':
+      return templateTypeRelationshipAgreementKey(source, 'binding-assignment');
+    default:
+      return null;
+  }
 }
 
 function templateOverlayDiagnosticAgreementKey(
@@ -1110,6 +1118,9 @@ function templateOverlayDiagnosticAgreementKey(
     case 2339:
     case 2551:
       return templateTypeRelationshipAgreementKey(source, 'missing-member');
+    case 2322:
+    case 2588:
+      return templateTypeRelationshipAgreementKey(source, 'binding-assignment');
     default:
       return null;
   }

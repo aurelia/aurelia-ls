@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -6,6 +7,7 @@ import {
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
   readAuthoringVerificationSnapshot,
+  SemanticAppQueryKind,
   verifyAuthoringEffects,
 } from '../out/index.js';
 
@@ -375,11 +377,18 @@ const contracts = [
     ],
   ),
 ];
+const mixedFormCursorProbe = await readMixedFormAssignmentCursorProbe();
 
 const failures = contracts.flatMap((contract) => contract.verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => `${contract.fixture}: ${result.summary}`)
   .concat(contract.repairClusterKeyFailures.map((failure) => `${contract.fixture}: ${failure}`)));
+if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
+  failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
+}
+if (mixedFormCursorProbe.overlayAssignmentDiagnostics !== 0) {
+  failures.push(`Expected mixed-form fulfillmentMethod cursor to suppress assignment-shaped overlay diagnostics when data-flow owns the span, observed ${mixedFormCursorProbe.overlayAssignmentDiagnostics}.`);
+}
 
 const summary = {
   contracts: contracts.map((contract) => ({
@@ -392,6 +401,7 @@ const summary = {
       summary: result.summary,
     })),
   })),
+  mixedFormCursorProbe,
 };
 
 if (failures.length > 0) {
@@ -423,6 +433,62 @@ async function verifyFixture(fixtureRoot, storeKey, expectedEffects) {
     expectedEffects: expectedEffects.length,
     verification,
     repairClusterKeyFailures: repairClusterKeyContractFailures(snapshot.authoringOrientation.repairClusters),
+  };
+}
+
+async function readMixedFormAssignmentCursorProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: mixedFormFixtureRoot,
+    storeKey: 'template-diagnostics-contract:mixed-form-cursor',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const htmlPath = path.join(mixedFormFixtureRoot, 'src/components/ticket-editor.html');
+  const htmlText = fs.readFileSync(htmlPath, 'utf8');
+  const diagnostics = readCursorDiagnosticsForNeedle(app, htmlPath, htmlText, 'fulfillmentMethod');
+  return {
+    cursor: 'fulfillmentMethod',
+    diagnostics: diagnostics.length,
+    assignmentDiagnostics: diagnostics.filter((diagnostic) =>
+      diagnostic.diagnosticKind === 'binding-source-assignment-strictness'
+    ).length,
+    overlayAssignmentDiagnostics: diagnostics.filter((diagnostic) =>
+      diagnostic.diagnosticKind === 'template-expression-typescript-diagnostic'
+      && (
+        diagnostic.missingInputs.includes('typescript:TS2322')
+        || diagnostic.missingInputs.includes('typescript:TS2588')
+      )
+    ).length,
+  };
+}
+
+function readCursorDiagnosticsForNeedle(app, htmlPath, htmlText, needle) {
+  const start = htmlText.indexOf(needle);
+  if (start < 0) {
+    return [];
+  }
+  const offset = start + Math.floor(needle.length / 2);
+  const position = positionForOffset(htmlText, offset);
+  return app.ask({
+    kind: SemanticAppQueryKind.TemplateCursorInfo,
+    diagnosticProjection: 'type-projection',
+    cursor: {
+      filePath: htmlPath,
+      line: position.line,
+      character: position.character,
+      offset,
+    },
+  }).value.diagnostics;
+}
+
+function positionForOffset(text, offset) {
+  const before = text.slice(0, offset);
+  const line = before.split(/\r?\n/u).length - 1;
+  const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1;
+  return {
+    line,
+    character: offset - lineStart,
   };
 }
 

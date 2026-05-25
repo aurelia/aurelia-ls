@@ -3,13 +3,10 @@ import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
-  BindingContext,
-  BindingContextKind,
   BindingContextSlot,
   BindingScope,
-  BindingScopeOwnerKind,
-  OverrideContext,
 } from '../configuration/scope.js';
+import { uncommittedScopeFromParent } from '../configuration/uncommitted-binding-scope.js';
 import { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
 import {
   CheckerExpressionCallableParameterKind,
@@ -39,33 +36,27 @@ export class CheckerExpressionContextualTypeProjector {
     sourceAddressHandle: AddressHandle | null,
     contextualType: CheckerTypeReference | null = null,
   ): BindingScope {
-    return new BindingScope(
-      this.store.handles.product(`type-system:arrow-scope:${localKey}`),
-      this.store.handles.identity(`type-system:arrow-scope:${localKey}`),
-      parentScope,
-      new BindingContext(
-        this.store.handles.product(`type-system:arrow-binding-context:${localKey}`),
-        this.store.handles.identity(`type-system:arrow-binding-context:${localKey}`),
-        BindingContextKind.Object,
-        null,
-        null,
-        this.arrowParameterSlots(expression, parentScope, localKey, sourceAddressHandle, contextualType),
-        sourceAddressHandle,
-      ),
-      new OverrideContext(
-        this.store.handles.product(`type-system:arrow-override-context:${localKey}`),
-        this.store.handles.identity(`type-system:arrow-override-context:${localKey}`),
-        null,
-        null,
-        [],
-        sourceAddressHandle,
-      ),
-      false,
-      BindingScopeOwnerKind.SyntheticView,
+    return uncommittedScopeFromParent(this.store, {
+      localKey: `type-system:arrow:${localKey}`,
+      parent: parentScope,
+      bindingContextSlots: this.arrowParameterSlots(expression, parentScope, localKey, sourceAddressHandle, contextualType),
       sourceAddressHandle,
-      [],
-      [],
-    );
+    });
+  }
+
+  arrowFunctionScopeForParameterTypes(
+    expression: ArrowFunction,
+    parentScope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    parameterTypes: readonly CheckerTypeReference[],
+  ): BindingScope {
+    return uncommittedScopeFromParent(this.store, {
+      localKey: `type-system:arrow:${localKey}:parameters`,
+      parent: parentScope,
+      bindingContextSlots: this.arrowParameterSlotsFromTypes(expression, localKey, sourceAddressHandle, parameterTypes),
+      sourceAddressHandle,
+    });
   }
 
   contextualArrayElementType(
@@ -112,6 +103,21 @@ export class CheckerExpressionContextualTypeProjector {
       null,
       null,
       this.arrowParameterType(expression, scope, localKey, sourceAddressHandle, parameter.name.name, index, contextualType),
+      sourceAddressHandle,
+    ));
+  }
+
+  private arrowParameterSlotsFromTypes(
+    expression: ArrowFunction,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    parameterTypes: readonly CheckerTypeReference[],
+  ): readonly BindingContextSlot[] {
+    return expression.args.map((parameter, index) => new BindingContextSlot(
+      parameter.name.name,
+      null,
+      null,
+      parameterTypes[index] ?? this.synthesizeUnknownType(`${localKey}:param:${index}:${parameter.name.name}`, sourceAddressHandle),
       sourceAddressHandle,
     ));
   }

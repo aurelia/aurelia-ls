@@ -1,4 +1,3 @@
-import ts from 'typescript';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   TemplateCompletionSiteKind,
@@ -8,11 +7,11 @@ import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   RuntimeBindingDataFlow,
-  RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
+import { bindingDataFlowDirectionIncludesSourceToTarget } from '../observation/binding-data-flow-direction.js';
 import {
   bindingExpressionAstForProduct,
   runtimeAssignmentTargetAstForProduct,
@@ -46,7 +45,7 @@ import {
   type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
-import { checkerPropertySymbol } from '../type-system/checker-node-helpers.js';
+import { checkerTypeShapeNullishUnionHasValueProperty } from '../type-system/checker-type-shape-access.js';
 import {
   RuntimeAstFrameworkErrorCode,
   RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodes,
@@ -130,7 +129,7 @@ export function cursorDiagnosticRows(
     )];
   }
   if (selectedMember == null) {
-    if (missingMemberIsNullishUnionAccess(ownerType, selectedMemberName)) {
+    if (checkerTypeShapeNullishUnionHasValueProperty(ownerType, selectedMemberName)) {
       return [];
     }
     return [missingMemberDiagnostic(
@@ -143,33 +142,6 @@ export function cursorDiagnosticRows(
     )];
   }
   return [];
-}
-
-function missingMemberIsNullishUnionAccess(
-  ownerType: CheckerTypeShape,
-  selectedMemberName: string,
-): boolean {
-  const carrier = ownerType.carrier;
-  if (ownerType.shapeKind !== CheckerTypeShapeKind.Union || carrier == null || !carrier.type.isUnion()) {
-    return false;
-  }
-  let hasNullishConstituent = false;
-  let hasNonNullishConstituent = false;
-  for (const constituent of carrier.type.types) {
-    if (checkerTypeIsNullishConstituent(constituent)) {
-      hasNullishConstituent = true;
-      continue;
-    }
-    hasNonNullishConstituent = true;
-    if (checkerPropertySymbol(carrier.checker, constituent, selectedMemberName) == null) {
-      return false;
-    }
-  }
-  return hasNullishConstituent && hasNonNullishConstituent;
-}
-
-function checkerTypeIsNullishConstituent(type: ts.Type): boolean {
-  return (type.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)) !== 0;
 }
 
 export function bindingSourceAssignmentDiagnosticKind(
@@ -228,7 +200,7 @@ export function bindingSourceAssignmentDiagnostic(
       ? 'framework-error-code'
       : runtimeNoop
       ? 'framework-runtime-behavior'
-      : 'semantic-authoring-policy',
+      : 'semantic-runtime-product',
     frameworkErrorCode,
     severity: frameworkRuntimeError ? 'error' : 'warning',
     summary: bindingSourceAssignmentSummary(dataFlow, runtimeNoop),
@@ -445,7 +417,7 @@ function runtimeAstFrameworkErrorCodeForDataFlow(
         ? runtimeAstCallTargetFrameworkErrorCode(store, dataFlow)
         : null;
     case CheckerExpressionTypeOpenKind.IncrementInConnectableEvaluation:
-      return dataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
+      return bindingDataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
         ? RuntimeAstFrameworkErrorCode.AstIncrementInfiniteLoop
         : null;
   }
@@ -491,13 +463,6 @@ function runtimeAstCallTargetFrameworkErrorCode(
     default:
       return null;
   }
-}
-
-function dataFlowDirectionIncludesSourceToTarget(
-  direction: RuntimeBindingDataFlowDirection,
-): boolean {
-  return direction === RuntimeBindingDataFlowDirection.SourceToTarget
-    || direction === RuntimeBindingDataFlowDirection.TwoWay;
 }
 
 function runtimeAstSelectedMemberName(

@@ -8,8 +8,16 @@ import {
   BindingScopeConstructionEmission,
   BindingScopeMaterializer,
 } from '../configuration/scope-materializer.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  RuntimeBindingSourceExpressionProjectionKind,
+  projectRuntimeBindingSourceExpressionInScope,
+} from '../observation/runtime-binding-source-expression-context.js';
 import {
   CheckerExpressionScopeNarrower,
   CheckerExpressionScopeNarrowingPolarity,
@@ -33,6 +41,7 @@ import {
   templateControllerValueExpressionProductHandle,
   templateControllerValueTarget,
 } from './template-controller-value.js';
+import { templateControllerRuntimeValueBinding } from './template-controller-binding.js';
 import { staticTemplateControllerBooleanProperty } from './template-controller-value.js';
 import { templateControllerSwitchCaseBranch } from './template-controller-switch-branch.js';
 import type {
@@ -41,6 +50,12 @@ import type {
 } from './template-controller-scope-materializer.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
 import type { TemplateScopeTypeProjector } from './template-scope-type-projector.js';
+
+interface TemplateControllerSourceExpressionSite {
+  readonly expression: ExpressionAstNode;
+  readonly scope: BindingScope;
+  readonly sourceAddressHandle: AddressHandle | null;
+}
 
 /**
  * Applies built-in template-controller flow semantics to runtime Scope construction.
@@ -243,7 +258,17 @@ export class TemplateControllerFlowScopeMaterializer {
   ): CheckerExpressionScopeNarrowingResult | null {
     const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(this.store, switchInstruction));
     const switchExpression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
-    if (switchExpression == null) {
+    const switchSource = switchExpression == null
+      ? null
+      : this.templateControllerSourceExpressionSite(
+        frame.input,
+        parent,
+        switchInstruction,
+        frame.input.runtimeBindings.readControllerForInstruction(switchInstruction.productHandle),
+        switchExpression,
+        `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-source`,
+      );
+    if (switchSource == null) {
       return null;
     }
 
@@ -253,10 +278,10 @@ export class TemplateControllerFlowScopeMaterializer {
         ? null
         : this.scopeNarrower.narrowEqualityDomain({
           localKey: `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-default`,
-          expression: switchExpression,
-          scope: parent,
+          expression: switchSource.expression,
+          scope: switchSource.scope,
           excludeTypes: excludedTypes,
-          sourceAddressHandle: instruction.sourceAddressHandle,
+          sourceAddressHandle: switchSource.sourceAddressHandle ?? instruction.sourceAddressHandle,
         });
     }
 
@@ -277,11 +302,11 @@ export class TemplateControllerFlowScopeMaterializer {
 
     return this.scopeNarrower.narrowEqualityDomain({
       localKey: `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-case`,
-      expression: switchExpression,
-      scope: parent,
+      expression: switchSource.expression,
+      scope: switchSource.scope,
       includeTypes,
       excludeTypes,
-      sourceAddressHandle: instruction.sourceAddressHandle,
+      sourceAddressHandle: switchSource.sourceAddressHandle ?? instruction.sourceAddressHandle,
     });
   }
 
@@ -418,14 +443,24 @@ export class TemplateControllerFlowScopeMaterializer {
   ): BindingScopeConstructionEmission | null {
     const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(this.store, conditionInstruction));
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
-    const narrowing = ast == null
+    const source = ast == null
+      ? null
+      : this.templateControllerSourceExpressionSite(
+        input,
+        parent,
+        conditionInstruction,
+        controller,
+        ast,
+        `${input.localKey}:scope:template-controller:${localSuffix}:condition-source`,
+      );
+    const narrowing = source == null
       ? null
       : this.scopeNarrower.narrow({
         localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
-        expression: ast,
-        scope: parent,
+        expression: source.expression,
+        scope: source.scope,
         polarity,
-        sourceAddressHandle: ownerInstruction.sourceAddressHandle,
+        sourceAddressHandle: source.sourceAddressHandle ?? ownerInstruction.sourceAddressHandle,
       } satisfies CheckerExpressionScopeNarrowingRequest);
     if (narrowing == null) {
       return null;
@@ -447,6 +482,44 @@ export class TemplateControllerFlowScopeMaterializer {
           : BindingScopeConditionPolarity.Falsy,
       )],
     }));
+  }
+
+  private templateControllerSourceExpressionSite(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    controller: RuntimeControllerFrame | null,
+    expression: ExpressionAstNode,
+    localKey: string,
+  ): TemplateControllerSourceExpressionSite | null {
+    const binding = templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller);
+    if (binding == null) {
+      return {
+        expression,
+        scope: parent,
+        sourceAddressHandle: instruction.sourceAddressHandle,
+      };
+    }
+
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
+      binding,
+      expression,
+      localKey,
+      sourceScope: parent,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return null;
+    }
+    // A scope-changing binding behavior affects the controller value binding, not the child synthetic view scope.
+    if (projection.scope.productHandle !== parent.productHandle) {
+      return null;
+    }
+    return {
+      expression: projection.expression,
+      scope: projection.scope,
+      sourceAddressHandle: projection.sourceAddressHandle,
+    };
   }
 
   private constructConditionBranchScope(
@@ -525,7 +598,7 @@ export class TemplateControllerFlowScopeMaterializer {
       instruction,
       controller,
       localSuffix,
-      this.typeSupport.templateControllerObjectBindingContextType(input, parent, instruction, localSuffix),
+      this.typeSupport.templateControllerObjectBindingContextType(input, parent, instruction, localSuffix, controller),
     );
   }
 

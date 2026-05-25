@@ -1,5 +1,12 @@
 import ts from 'typescript';
-import { checkerNumberIndexValueType } from '../type-system/checker-related-types.js';
+import {
+  checkerArrayOrTupleType,
+  checkerCollectionSymbolName,
+  checkerNullishType,
+  checkerNumberIndexValueType,
+} from './checker-related-types.js';
+import { checkerRawTypeAssignable } from './checker-type-assignability.js';
+import { checkerUnionType } from './checker-type-union.js';
 
 /** Return every string literal value in a string-literal union, or null for non-literal members. */
 export function stringLiteralValuesForType(type: ts.Type): readonly string[] | null {
@@ -84,12 +91,35 @@ export function arrayElementTypeFor(
   type: ts.Type,
 ): ts.Type | null {
   const elementTypes = typeParts(type).flatMap((part) =>
-    checker.isArrayType(part) || checker.isTupleType(part)
+    checkerArrayOrTupleType(checker, part)
       ? [checkerNumberIndexValueType(checker, part)]
       : []
   ).filter((part): part is ts.Type => part != null);
   if (elementTypes.length > 0) {
     return elementTypes[0]!;
+  }
+  return null;
+}
+
+/** Return the element type for Array, ReadonlyArray, tuple, or nullable unions of those shapes. */
+export function checkerArrayElementType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  if (type.isUnion()) {
+    const elementTypes = type.types
+      .map((part) => checkerArrayElementType(checker, part))
+      .filter((part): part is ts.Type => part != null);
+    return elementTypes.length === 0 ? null : checkerUnionType(checker, elementTypes);
+  }
+  if (checkerArrayOrTupleType(checker, type)) {
+    return checkerNumberIndexValueType(checker, type);
+  }
+  const symbolName = namedTypeSymbolName(type);
+  if (symbolName === 'Array' || symbolName === 'ReadonlyArray') {
+    return typeReferenceArguments(checker, type)[0]
+      ?? checkerNumberIndexValueType(checker, type)
+      ?? checker.getUnknownType();
   }
   return null;
 }
@@ -104,7 +134,7 @@ export function mutableArrayElementTypeFor(
     if (name === 'ReadonlyArray') {
       return [];
     }
-    return checker.isArrayType(part) || checker.isTupleType(part)
+    return checkerArrayOrTupleType(checker, part)
       ? [checkerNumberIndexValueType(checker, part)]
       : [];
   }).filter((part): part is ts.Type => part != null);
@@ -114,6 +144,22 @@ export function mutableArrayElementTypeFor(
   return null;
 }
 
+/** True when weak or visible checker facts allow a runtime Array/tuple value. */
+export function checkerTypeMayBeRuntimeArrayInstance(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  if (type.isUnion()) {
+    const nonNullish = type.types.filter((part) => !checkerNullishType(checker, part));
+    return nonNullish.length > 0
+      && nonNullish.some((part) => checkerTypeMayBeRuntimeArrayInstance(checker, part));
+  }
+  if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)) !== 0) {
+    return true;
+  }
+  return checkerArrayOrTupleType(checker, type);
+}
+
 /** True when every possible checker type part is a runtime Array/tuple instance. */
 export function isRuntimeArrayInstanceType(
   checker: ts.TypeChecker,
@@ -121,7 +167,56 @@ export function isRuntimeArrayInstanceType(
 ): boolean {
   const parts = typeParts(type);
   return parts.length > 0
-    && parts.every((part) => checker.isArrayType(part) || checker.isTupleType(part));
+    && parts.every((part) => checkerArrayOrTupleType(checker, part));
+}
+
+/** True when at least one union part is an Array/tuple whose element can receive the supplied value type. */
+export function checkerTypeHasAssignableArrayPart(
+  checker: ts.TypeChecker,
+  sourceType: ts.Type,
+  valueType: ts.Type,
+): boolean {
+  return typeParts(sourceType).some((part) => {
+    const elementType = arrayElementTypeFor(checker, part);
+    return elementType != null && checkerRawTypeAssignable(checker, valueType, elementType);
+  });
+}
+
+/** True for checker-visible Array/tuple/Map/Set collection shapes. */
+export function checkerArrayMapSetCollectionType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  if (checkerArrayOrTupleType(checker, type)) {
+    return true;
+  }
+  const symbolName = namedTypeSymbolName(type);
+  return symbolName === 'Map'
+    || symbolName === 'ReadonlyMap'
+    || symbolName === 'Set'
+    || symbolName === 'ReadonlySet';
+}
+
+/** True when a checker type or base type matches one of the named collection interfaces. */
+export function checkerTypeExtendsCollection(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  collectionNames: readonly string[],
+  seen: Set<ts.Type> = new Set(),
+): boolean {
+  if (seen.has(type)) {
+    return false;
+  }
+  seen.add(type);
+  const names = new Set(collectionNames);
+  if (names.has(checkerCollectionSymbolName(type) ?? '')) {
+    return true;
+  }
+  if ((names.has('Array') || names.has('ReadonlyArray')) && checkerArrayOrTupleType(checker, type)) {
+    return true;
+  }
+  return checker.getBaseTypes(type as ts.InterfaceType)
+    ?.some((base) => checkerTypeExtendsCollection(checker, base, collectionNames, seen)) ?? false;
 }
 
 /** Return the key type for Map or ReadonlyMap shapes. */

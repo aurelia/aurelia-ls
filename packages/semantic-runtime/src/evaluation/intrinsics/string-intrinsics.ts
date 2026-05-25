@@ -19,6 +19,22 @@ import {
   stringCoercionText,
 } from './shared.js';
 
+/** String prototype methods recognized as static evaluator host boundaries. */
+export const staticStringPrototypeBoundaryMethods: ReadonlySet<string> = new Set([
+  'endsWith',
+  'includes',
+  'indexOf',
+  'localeCompare',
+  'replace',
+  'replaceAll',
+  'slice',
+  'split',
+  'startsWith',
+  'toLowerCase',
+  'toUpperCase',
+  'trim',
+]);
+
 export function evaluateStringCall(
   call: ts.CallExpression,
   environment: ModuleEnvironmentRecord,

@@ -1,8 +1,18 @@
 import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
-import { ComposeDashboardApp } from './compose-dashboard-app';
+import { StateDefaultConfiguration } from '@aurelia/state';
+import {
+  ComposeDashboardApp,
+  StableWidgetKitValueConverter,
+  dashboardStateHandler,
+  initialDashboardState,
+} from './compose-dashboard-app';
 
 new Aurelia()
-  .register(StandardConfiguration)
+  .register(
+    StandardConfiguration,
+    StableWidgetKitValueConverter,
+    StateDefaultConfiguration.init(initialDashboardState, dashboardStateHandler),
+  )
   .app({
     host: document.body,
     component: ComposeDashboardApp,

@@ -19,9 +19,29 @@ import {
 import type { Container } from '../di/container.js';
 import {
   RuntimeBindingSourceValueEvaluator,
-  RuntimeBindingSourceValueEvaluationKind,
 } from '../observation/binding-source-value-evaluator.js';
+import {
+  RuntimeBindingSourceValueEvaluationKind,
+} from '../observation/binding-source-value-evaluation.js';
+import {
+  projectRuntimeBindingSourceValueContextInScope,
+} from '../observation/binding-source-value-evaluation-context.js';
 import type { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
+import {
+  expressionProductHandleForBinding,
+  isRuntimeExpressionBinding,
+  type RuntimeExpressionBinding,
+} from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  type RuntimeBindingSourceExpressionContextProjection,
+  RuntimeBindingSourceExpressionProjectionKind,
+  checkerContextForRuntimeBindingSourceExpressionProjection,
+  projectRuntimeBindingSourceExpressionInScope,
+  projectRuntimeSourceExpressionWithLifecycle,
+} from '../observation/runtime-binding-source-expression-context.js';
 import type {
   RuntimeBoundControllerPropertyValue,
   RuntimeBoundControllerValueTable,
@@ -48,12 +68,12 @@ import {
 } from '../kernel/vocabulary.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
-  BindableBindingMode,
   type BindableDefinition,
 } from '../resources/bindable-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
 import {
@@ -63,14 +83,15 @@ import {
   type CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
 import {
+  CheckerTypeProjectionOrigin,
+  sameCheckerTypeReference,
   type CheckerTypeMember,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
-  bindingContextSlotDraftForTypeMember,
-  bindingContextSlotTargetTypeShape,
+  bindingContextSlotDraftForExpressionAccess,
 } from '../configuration/binding-scope-slot-projector.js';
 import {
   ProvenanceRecord,
@@ -105,12 +126,11 @@ import {
   bindingExpressionAstForParse,
   completedTemplateExpressionAstForParse,
 } from './expression-parse-projection.js';
+import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
+import { projectRuntimeAssignmentValueConverterWriteback } from '../type-system/value-converter-writeback.js';
 import {
   TemplateControllerFlowState,
 } from './template-controller-flow-state.js';
-import {
-  accessScopeTargetName,
-} from './template-controller-value.js';
 import { TemplateScopeTypeProjector } from './template-scope-type-projector.js';
 import { repeatStaticLocalValue } from './repeat-static-value.js';
 import { TemplateControllerFlowScopeMaterializer } from './template-controller-flow-scope-materializer.js';
@@ -135,10 +155,8 @@ import {
 import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
 import {
   effectiveTemplateBindingMode,
+  templateBindingModeIncludesTargetToSource,
 } from './runtime-binding-mode-behavior.js';
-import {
-  sourceAddressHandleForRuntimeExpressionSpan,
-} from './runtime-expression-source-address.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
@@ -171,6 +189,10 @@ type TemplateScopeConstructionFinePhaseName =
   | 'dynamic-instruction-scopes'
   | 'controller-details'
   | 'commit';
+
+interface BoundControllerSourceExpressionSite {
+  readonly projection: RuntimeBindingSourceExpressionContextProjection | null;
+}
 
 export interface TemplateScopeConstructionRequest {
   /** Store-local key shared with the template compilation pass. */
@@ -533,7 +555,7 @@ export class TemplateControllerScopeMaterializer {
       frame.addInstructionScope(
         instruction.productHandle,
         this.measure(frame.input, 'instruction-expression-scope', () =>
-          this.constructInstructionExpressionScope(frame, current, instruction, `${localSuffix}:instruction:${index}:expression`)
+          this.constructInstructionExpressionScope(frame, current, instruction, `${localSuffix}:instruction:${index}:expression`, controllerContext)
         ),
         controllerContext?.productHandle ?? null,
       );
@@ -605,7 +627,7 @@ export class TemplateControllerScopeMaterializer {
     }
 
     const assignmentScope = this.measure(frame.input, 'runtime-assignment-scope', () =>
-      this.constructRuntimeAssignmentScope(frame, currentScope, instruction, localSuffix)
+      this.constructRuntimeAssignmentScope(frame, currentScope, instruction, localSuffix, controllerContext)
     );
     if (assignmentScope != null) {
       frame.flowState.clearBranch(currentScope);
@@ -713,13 +735,22 @@ export class TemplateControllerScopeMaterializer {
     if (expression == null) {
       return [];
     }
-    const sourceSlot = this.boundControllerSourceSlot(input, expression, value.sourceScope);
-    const evaluatedType = this.boundControllerExpressionType(input, expression, value);
+    const sourceSite = this.boundControllerSourceExpressionSite(input, expression, value, value.sourceAddressHandle);
+    const sourceSlot = sourceSite.projection == null
+      ? null
+      : bindingContextSlotDraftForExpressionAccess(
+        this.store,
+        this.typeProjector,
+        sourceSite.projection.scope,
+        sourceSite.projection.expression,
+        `${input.localKey}:bound-controller:${value.propertyName}:source-slot`,
+      );
+    const evaluatedType = this.boundControllerExpressionType(input, sourceSite, value.propertyName, value.sourceResourceScope);
     const targetType = sourceSlot?.targetType ?? evaluatedType;
     if (targetType == null) {
       return [];
     }
-    const sourceAddressHandle = parse?.sourceAddressHandle ?? sourceSlot?.sourceAddressHandle ?? null;
+    const sourceAddressHandle = value.sourceAddressHandle ?? sourceSlot?.sourceAddressHandle ?? null;
     return [new BindingContextSlotDraft(
       value.propertyName,
       sourceSlot?.targetIdentityHandle ?? null,
@@ -731,75 +762,56 @@ export class TemplateControllerScopeMaterializer {
 
   private boundControllerExpressionType(
     input: TemplateScopeConstructionRequest,
-    expression: ExpressionAstNode,
-    value: RuntimeBoundControllerPropertyValue,
+    sourceSite: BoundControllerSourceExpressionSite,
+    propertyName: string,
+    sourceResourceScope: TemplateResourceScope | null,
   ): CheckerTypeReference | null {
-    if (value.sourceScope == null) {
+    if (sourceSite.projection == null) {
       return null;
     }
+    const context = checkerContextForRuntimeBindingSourceExpressionProjection(
+      sourceSite.projection,
+      false,
+      null,
+      `bound-controller:${propertyName}`,
+    );
     const evaluation = input.expressionWorld
-      .evaluator(input.resourceScope)
-      .evaluateWithScope(
-        expression,
-        value.sourceScope,
-        `${input.localKey}:bound-controller:${value.propertyName}`,
-        sourceAddressHandleForRuntimeExpressionSpan(expression.span),
-      );
+      .evaluator(sourceResourceScope ?? input.resourceScope)
+      .evaluate(context);
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? evaluation.typeReference
       : null;
   }
 
-  private boundControllerSourceSlot(
+  private boundControllerSourceExpressionSite(
     input: TemplateScopeConstructionRequest,
     expression: ExpressionAstNode,
-    sourceScope: BindingScope,
-  ): BindingContextSlotDraft | null {
-    switch (expression.$kind) {
-      case 'AccessScope': {
-        const slot = sourceScope.locate(expression.name.name, expression.ancestor).slot;
-        return slot == null ? null : BindingContextSlotDraft.fromSlot(slot);
-      }
-      case 'AccessMember': {
-        if (expression.object.$kind === 'AccessThis') {
-          const slot = sourceScope.locateThis(expression.object.ancestor).context?.lookup(expression.name.name) ?? null;
-          return slot == null ? null : BindingContextSlotDraft.fromSlot(slot);
-        }
-        const owner = this.boundControllerSourceSlot(input, expression.object, sourceScope);
-        return owner == null
-          ? null
-          : this.boundControllerSourceMemberSlot(input, owner, expression.name.name);
-      }
-      case 'BindingBehavior':
-        return this.boundControllerSourceSlot(input, expression.expression, sourceScope);
-      case 'Paren':
-        return this.boundControllerSourceSlot(input, expression.expression, sourceScope);
-      default:
-        return null;
+    value: RuntimeBoundControllerPropertyValue,
+    sourceAddressHandle: AddressHandle | null,
+  ): BoundControllerSourceExpressionSite {
+    if (value.sourceScope == null) {
+      return {
+        projection: null,
+      };
     }
-  }
-
-  private boundControllerSourceMemberSlot(
-    input: TemplateScopeConstructionRequest,
-    owner: BindingContextSlotDraft,
-    memberName: string,
-  ): BindingContextSlotDraft | null {
-    const ownerTypeShape = bindingContextSlotTargetTypeShape(
-      this.store,
-      this.typeProjector,
-      owner,
-      `${input.localKey}:bound-controller-owner:${owner.name}`,
-    );
-    const member = ownerTypeShape == null
-      ? null
-      : readOrProjectCheckerTypeMembers(
-        this.store,
-        ownerTypeShape,
-        `${input.localKey}:bound-controller-member:${owner.name}:${memberName}`,
-      ).find((candidate) => candidate.name === memberName) ?? null;
-    return member == null
-      ? null
-      : bindingContextSlotDraftForTypeMember(this.store, member);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const projection = projectRuntimeSourceExpressionWithLifecycle({
+      expression,
+      sourceScope: value.sourceScope,
+      localKey: `${input.localKey}:bound-controller:${value.propertyName}:source-scope`,
+      sourceAddressHandle,
+      strictBinding: value.sourceStrictBinding,
+      bindingBehavior: value.sourceBindingBehavior,
+      bindingExpressionScopes,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return {
+        projection: null,
+      };
+    }
+    return {
+      projection,
+    };
   }
 
   private recordOwnedBindingInstructionScopes(
@@ -816,7 +828,7 @@ export class TemplateControllerScopeMaterializer {
       }
       frame.addInstructionScope(
         childInstruction.productHandle,
-        this.constructInstructionExpressionScope(frame, scope, childInstruction, `${localSuffix}:owned:${index}:expression`, instruction),
+        this.constructInstructionExpressionScope(frame, scope, childInstruction, `${localSuffix}:owned:${index}:expression`, controllerContext, instruction),
         controllerContext?.productHandle ?? null,
       );
     });
@@ -827,6 +839,7 @@ export class TemplateControllerScopeMaterializer {
     base: BindingScope,
     instruction: TemplateInstruction,
     localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
     runtimeAssignmentOwner: TemplateInstruction = instruction,
   ): BindingScope {
     if (instruction instanceof StateBindingInstruction) {
@@ -855,6 +868,7 @@ export class TemplateControllerScopeMaterializer {
         runtimeAssignmentOwner,
         instruction,
         localSuffix,
+        controllerContext,
       );
       if (assignmentScope != null) {
         return assignmentScope;
@@ -870,8 +884,9 @@ export class TemplateControllerScopeMaterializer {
     ownerInstruction: TemplateInstruction,
     binding: PropertyBindingInstruction,
     localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
   ): BindingScope | null {
-    const slot = this.runtimeAssignmentSlotForBinding(frame, parent, ownerInstruction, binding);
+    const slot = this.runtimeAssignmentSlotForBinding(frame, parent, ownerInstruction, binding, localSuffix, controllerContext);
     if (slot == null) {
       return null;
     }
@@ -947,8 +962,9 @@ export class TemplateControllerScopeMaterializer {
     parent: BindingScope,
     instruction: TemplateInstruction,
     localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
   ): BindingScopeConstructionEmission | null {
-    const slots = this.runtimeAssignmentSlots(frame, parent, instruction);
+    const slots = this.runtimeAssignmentSlots(frame, parent, instruction, localSuffix, controllerContext);
     if (slots.length === 0) {
       return null;
     }
@@ -974,6 +990,8 @@ export class TemplateControllerScopeMaterializer {
     frame: TemplateScopeConstructionFrame,
     parent: BindingScope,
     instruction: TemplateInstruction,
+    localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
   ): readonly BindingContextSlotDraft[] {
     const bindables = bindablesForInstruction(this.store, instruction);
     if (bindables.length === 0) {
@@ -986,7 +1004,7 @@ export class TemplateControllerScopeMaterializer {
       if (!(binding instanceof PropertyBindingInstruction)) {
         continue;
       }
-      const slot = this.runtimeAssignmentSlotForBinding(frame, parent, instruction, binding, bindables);
+      const slot = this.runtimeAssignmentSlotForBinding(frame, parent, instruction, binding, localSuffix, controllerContext, bindables);
       if (slot == null) {
         continue;
       }
@@ -1000,25 +1018,126 @@ export class TemplateControllerScopeMaterializer {
     parent: BindingScope,
     ownerInstruction: TemplateInstruction,
     binding: PropertyBindingInstruction,
+    localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
     ownerBindables: readonly BindableDefinition[] = bindablesForInstruction(this.store, ownerInstruction),
   ): BindingContextSlotDraft | null {
-    if (ownerBindables.length === 0 || !bindingCanAssignToSource(this.store, binding, ownerBindables, frame.input.resourceScope)) {
+    if (ownerBindables.length === 0 || !bindingCanAssignToSource(this.store, binding, frame.input.resourceScope)) {
       return null;
     }
     const parse = this.typeSupport.readParse(binding.expressionProductHandle);
     const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
-    const name = expression == null ? null : accessScopeTargetName(expression);
+    const target = expression == null ? null : runtimeAssignmentTargetAstForExpression(expression);
+    const name = target?.$kind === 'AccessScope' && target.ancestor === 0
+      ? target.name.name
+      : null;
     if (name == null || parent.lookup(name, 0).slot != null) {
       return null;
     }
     const targetMember = runtimeAssignmentTargetMember(this.store, ownerInstruction, binding, ownerBindables);
+    const targetMemberValueType = targetMember == null
+      ? null
+      : this.runtimeAssignmentTargetMemberValueType(frame, targetMember, localSuffix);
+    const targetType = expression == null
+      ? targetMemberValueType
+      : this.runtimeAssignmentTargetToSourceType(
+          frame,
+          parent,
+          binding,
+          expression,
+          targetMemberValueType,
+          localSuffix,
+          controllerContext,
+        );
+    const targetProductHandle = targetMember != null && targetMemberValueType != null && targetType != null && sameCheckerTypeReference(targetType, targetMemberValueType)
+      ? targetMember.productHandle
+      : null;
     return new BindingContextSlotDraft(
       name,
       null,
-      targetMember?.productHandle ?? null,
-      targetMember?.valueType ?? null,
+      targetProductHandle,
+      targetType,
       parse?.sourceAddressHandle ?? binding.sourceAddressHandle,
     );
+  }
+
+  private runtimeAssignmentRuntimeBinding(
+    input: TemplateScopeConstructionRequest,
+    binding: PropertyBindingInstruction,
+    controllerContext: RuntimeControllerFrame | null,
+  ): RuntimeExpressionBinding | null {
+    const candidates = (controllerContext?.readBindings() ?? input.runtimeBindings.readBindingsForInstruction(binding.productHandle))
+      .filter(isRuntimeExpressionBinding)
+      .filter((candidate) =>
+        candidate.instructionProductHandle === binding.productHandle
+        && expressionProductHandleForBinding(candidate) === binding.expressionProductHandle
+      );
+    return candidates.length === 1 ? candidates[0]! : null;
+  }
+
+  private runtimeAssignmentTargetMemberValueType(
+    frame: TemplateScopeConstructionFrame,
+    targetMember: CheckerTypeMember,
+    localSuffix: string,
+  ): CheckerTypeReference | null {
+    const valueType = targetMember.valueType;
+    if (valueType == null || valueType.productHandle != null || targetMember.carrier?.valueType == null) {
+      return valueType;
+    }
+    return frame.input.expressionWorld.projector.ensureProjection({
+      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-target:${targetMember.name}`,
+      checker: targetMember.carrier.checker,
+      type: targetMember.carrier.valueType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceAddressHandle: valueType.sourceAddressHandle,
+      display: valueType.display,
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    }).toReference();
+  }
+
+  private runtimeAssignmentTargetToSourceType(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    binding: PropertyBindingInstruction,
+    expression: ExpressionAstNode,
+    targetValueType: CheckerTypeReference | null,
+    localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
+  ): CheckerTypeReference | null {
+    if (targetValueType == null) {
+      return null;
+    }
+    const runtimeBinding = this.runtimeAssignmentRuntimeBinding(frame.input, binding, controllerContext);
+    if (runtimeBinding == null) {
+      return null;
+    }
+    const evaluator = frame.input.expressionWorld.evaluator(frame.input.resourceScope);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, frame.input.expressionWorld);
+    const projection = projectRuntimeBindingSourceExpressionInScope(frame.input.runtimeBindings, bindingExpressionScopes, {
+      binding: runtimeBinding,
+      expression,
+      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-writeback`,
+      sourceScope: parent,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return null;
+    }
+    const context = checkerContextForRuntimeBindingSourceExpressionProjection(
+      projection,
+      false,
+      targetValueType,
+      'writeback-type',
+    );
+    const writeback = projectRuntimeAssignmentValueConverterWriteback({
+      expression: projection.expression,
+      evaluator,
+      context,
+      targetValueType,
+    });
+    if (writeback == null) {
+      return targetValueType;
+    }
+    return writeback.targetToSourceValueType;
   }
 
   private capturedAttributeContextForDynamicInstruction(
@@ -1222,6 +1341,10 @@ export class TemplateControllerScopeMaterializer {
           input.sourceValueActivationContext ?? null,
           input.sourceValueDefaultContainer ?? null,
         );
+    const binding = effect.binding.productHandle == null
+      ? null
+      : input.runtimeBindings.readBinding(effect.binding.productHandle);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
     const iteratorProjection = this.measure(input, 'iterator-type-projection', () =>
       this.typeSupport.iteratorProjection(input, parent, effect, localSuffix)
     );
@@ -1277,7 +1400,17 @@ export class TemplateControllerScopeMaterializer {
           : elementTypeForFlattenedIteratorName(effect.localNames, elementType),
         effect.sourceAddressHandle,
         [],
-        repeatStaticLocalValue(iteratorParse, parent, effect, name, sourceValueEvaluator),
+        repeatStaticLocalValue(
+          iteratorParse,
+          parent,
+          effect,
+          name,
+          sourceValueEvaluator,
+          binding != null && isRuntimeExpressionBinding(binding) ? binding : null,
+          input.runtimeBindings,
+          bindingExpressionScopes,
+          input.resourceScope,
+        ),
       ))
     );
     const overrideSlots = this.measure(input, 'iterator-override-slots', () =>
@@ -1373,13 +1506,35 @@ export class TemplateControllerScopeMaterializer {
     if (expression == null) {
       return null;
     }
+    const binding = effect.binding.productHandle == null
+      ? null
+      : input.runtimeBindings.readBinding(effect.binding.productHandle);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const contextProjection = projectRuntimeBindingSourceValueContextInScope({
+      runtimeBindings: input.runtimeBindings,
+      bindingExpressionScopes,
+      binding: binding != null && isRuntimeExpressionBinding(binding) ? binding : null,
+      expression,
+      localKey: `${input.localKey}:let:${effect.productHandle}:source-value`,
+      sourceScope: parent,
+      resourceScope: input.resourceScope,
+    });
+    if (contextProjection.context == null) {
+      return targetType == null
+        ? null
+        : new EvaluationBoundaryValue(
+          EvaluationBoundaryKind.BindingScope,
+          `let.${effect.target}`,
+          null,
+        );
+    }
     const evaluation = new RuntimeBindingSourceValueEvaluator(
       this.store,
       input.evaluation,
       input.boundControllerValues,
       input.sourceValueActivationContext ?? null,
       input.sourceValueDefaultContainer ?? null,
-    ).evaluate(expression, parent);
+    ).evaluate(contextProjection.context);
     if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
       return evaluation.value;
     }
@@ -1524,15 +1679,10 @@ function bindablesForInstruction(
 function bindingCanAssignToSource(
   store: KernelStore,
   binding: PropertyBindingInstruction,
-  bindables: readonly BindableDefinition[],
   resourceScope: TemplateResourceScope | null,
 ): boolean {
   const bindingMode = effectiveTemplateBindingMode(store, binding.bindingMode, binding.expressionProductHandle, resourceScope);
-  if (bindingMode === TemplateBindingMode.FromView || bindingMode === TemplateBindingMode.TwoWay) {
-    return true;
-  }
-  const bindable = bindables.find((candidate) => candidate.name === binding.targetProperty) ?? null;
-  return bindable?.mode === BindableBindingMode.FromView || bindable?.mode === BindableBindingMode.TwoWay;
+  return templateBindingModeIncludesTargetToSource(bindingMode);
 }
 
 function runtimeAssignmentTargetMember(

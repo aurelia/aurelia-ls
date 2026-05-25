@@ -8,7 +8,7 @@ import {
   RuntimeBindingPrimitiveValueKind,
   type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
-import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
+import { checkerPrimitiveLiteralAssignableToType } from '../type-system/checker-primitive-types.js';
 
 export function runtimeBindingPrimitiveValueFromExpressionValue(
   value: ExpressionPrimitiveLiteralValue,
@@ -178,10 +178,7 @@ export function runtimeBindingPrimitiveValueAssignableToType(
   checker: ts.TypeChecker,
   to: ts.Type,
 ): boolean {
-  return checker.isTypeAssignableTo(
-    checkerPrimitiveLiteralType(checker, runtimeBindingPrimitiveValueExpressionValue(value)),
-    to,
-  );
+  return checkerPrimitiveLiteralAssignableToType(checker, runtimeBindingPrimitiveValueExpressionValue(value), to);
 }
 
 export function runtimeBindingStringLiteralTypeDisplay(value: string): string {

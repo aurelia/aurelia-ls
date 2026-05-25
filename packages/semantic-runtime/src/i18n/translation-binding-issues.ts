@@ -32,6 +32,9 @@ import {
   TypeSystemProductDetails,
 } from '../type-system/product-details.js';
 import {
+  checkerTypeAssignableToPrimitiveType,
+} from '../type-system/checker-primitive-types.js';
+import {
   CheckerTypeShapeKind,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
@@ -61,6 +64,14 @@ import {
   instructionScopeLookup,
   type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  checkerContextForRuntimeBindingSourceExpressionProjection,
+  RuntimeBindingSourceExpressionContextProjector,
+  RuntimeBindingSourceExpressionProjectionKind,
+} from '../observation/runtime-binding-source-expression-context.js';
 import {
   I18nTranslationBindingFrameworkErrorCode,
 } from './framework-error-code.js';
@@ -118,6 +129,7 @@ interface TranslationBindingIssueContext {
   readonly runtimeRendering: RuntimeRenderingEmission;
   readonly evaluator: CheckerExpressionTypeEvaluator;
   readonly instructionScopes: RuntimeInstructionScopeLookup;
+  readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
 }
 
 /** Materializes i18n TranslationBinding.create/bind framework failures after renderer and scope handoff. */
@@ -147,10 +159,17 @@ export class I18nTranslationBindingIssueMaterializer {
     const source = this.recordsForSource(input.localKey);
     const records: KernelStoreRecord[] = [...source.records];
     const issues: RuntimeBindingIssue[] = [];
+    const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
     const context: TranslationBindingIssueContext = {
       runtimeRendering: input.runtimeRendering,
       evaluator: input.expressionWorld.evaluator(input.resourceScope),
-      instructionScopes: instructionScopeLookup(input.scopes.instructionScopes),
+      instructionScopes,
+      sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
+        input.runtimeRendering,
+        instructionScopes,
+        bindingExpressionScopes,
+      ),
     };
 
     let groupIndex = 0;
@@ -254,13 +273,17 @@ export class I18nTranslationBindingIssueMaterializer {
     if (ast == null || scope == null) {
       return false;
     }
-    const evaluation = context.evaluator.evaluateWithScope(
-      ast,
-      scope,
-      checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandle),
-      binding.sourceAddressHandle,
-      null,
-      { connectable: true, strict: null },
+    const projection = context.sourceExpressionContexts.projectSource({
+      binding,
+      expression: ast,
+      localKey: checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandle),
+      sourceScope: scope,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return false;
+    }
+    const evaluation = context.evaluator.evaluate(
+      checkerContextForRuntimeBindingSourceExpressionProjection(projection, true),
     );
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       && this.typeDefinitelyNotString(evaluation.typeReference);
@@ -280,7 +303,7 @@ export class I18nTranslationBindingIssueMaterializer {
         && typeReference.display != null
         && !stringLikeDisplay(typeReference.display);
     }
-    return !carrier.checker.isTypeAssignableTo(carrier.type, carrier.checker.getStringType());
+    return !checkerTypeAssignableToPrimitiveType(carrier.checker, carrier.type, 'string');
   }
 
   private recordIssue(

@@ -11,6 +11,9 @@ import {
   expressionSourceRootName,
   primitiveExpressionDisplay,
 } from '../expression/expression-source-name.js';
+import {
+  aureliaArrayMethodSemanticsFor,
+} from '../expression/array-method-semantics.js';
 import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
 
 export interface RuntimeConnectableObservedDependencyDraft {
@@ -263,12 +266,13 @@ function collectCallMemberObservedDependencies(
   context: ObservedDependencyCollectionContext,
 ): void {
   collectObservedDependencies(expression.object, rows, context);
+  const semantics = aureliaArrayMethodSemanticsFor(expression.name.name);
   const canUseRuntimeArrayMethod = (
-    isAutoObservedArrayMethod(expression.name.name)
-    || isArrayCallbackExecutionMethod(expression.name.name)
+    semantics?.astEvaluateAutoObserved === true
+    || semantics?.callbackParameterShape != null
   ) && (context.canUseRuntimeArrayMethod?.(expression, context.rootExpression) ?? true);
-  const shouldObserveCollectionMethod = isAutoObservedArrayMethod(expression.name.name) && canUseRuntimeArrayMethod;
-  const shouldObserveCallbackBody = isArrayCallbackExecutionMethod(expression.name.name) && canUseRuntimeArrayMethod;
+  const shouldObserveCollectionMethod = semantics?.astEvaluateAutoObserved === true && canUseRuntimeArrayMethod;
+  const shouldObserveCallbackBody = semantics?.callbackParameterShape != null && canUseRuntimeArrayMethod;
   if (shouldObserveCollectionMethod) {
     rows.push(observedDependencyDraft(
       RuntimeObservedDependencyKind.TemplateCollectionRead,
@@ -400,52 +404,3 @@ function rootAccessScopeName(expression: ExpressionAstNode): string | null {
       return null;
   }
 }
-
-function isAutoObservedArrayMethod(name: string): boolean {
-  return AUTO_OBSERVED_ARRAY_METHODS.has(name);
-}
-
-function isArrayCallbackExecutionMethod(name: string): boolean {
-  return ARRAY_CALLBACK_EXECUTION_METHODS.has(name);
-}
-
-// Mirrors Aurelia runtime/src/ast.eval.ts autoObserveArrayMethods for ordinary template bindings and expression
-// watchers. Before changing this, compare Atlas `framework.observation:collection-methods` ast-evaluator rows.
-const AUTO_OBSERVED_ARRAY_METHODS = new Set([
-  'at',
-  'every',
-  'filter',
-  'find',
-  'findIndex',
-  'flat',
-  'flatMap',
-  'includes',
-  'indexOf',
-  'join',
-  'lastIndexOf',
-  'map',
-  'reduce',
-  'reduceRight',
-  'slice',
-  'some',
-  'sort',
-]);
-
-// Array callbacks execute the returned Aurelia arrow function with the same connectable, but not every auto-observed
-// array method accepts a callback and not every callback-executing array method is in autoObserveArrayMethods.
-const ARRAY_CALLBACK_EXECUTION_METHODS = new Set([
-  'every',
-  'filter',
-  'find',
-  'findIndex',
-  'findLast',
-  'findLastIndex',
-  'flatMap',
-  'forEach',
-  'map',
-  'reduce',
-  'reduceRight',
-  'some',
-  'sort',
-  'toSorted',
-]);

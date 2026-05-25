@@ -4,6 +4,34 @@
   </section>
   <p else>${fallbackMessage.toUpperCase()}</p>
 
+  <section if.bind="currentItem.kind === 'book'">
+    <p>${bookOnly(currentItem)} ${currentItem.pages}</p>
+  </section>
+  <section else>
+    <p>${notBookOnly(currentItem)}</p>
+  </section>
+
+  <section if.bind="typeof currentPrimitive === 'string'">
+    <p>${stringOnly(currentPrimitive)}</p>
+  </section>
+  <section else>
+    <p>${numberOnly(currentPrimitive)}</p>
+  </section>
+
+  <section if.bind="'pages' in probedItem">
+    <p>${bookOnly(probedItem)}</p>
+  </section>
+  <section else>
+    <p>${notBookOnly(probedItem)}</p>
+  </section>
+
+  <section if.bind="mixedProduct instanceof physicalProductType">
+    <p>${physicalOnly(mixedProduct)} ${mixedProduct.shippingWeight}</p>
+  </section>
+  <section else>
+    <p>${digitalOnly(mixedProduct)}</p>
+  </section>
+
   <section with.bind="selectedProduct">
     <button type="button" click.trigger="$parent.selectProduct(id)">${label}</button>
     <span>${labelLength()}</span>

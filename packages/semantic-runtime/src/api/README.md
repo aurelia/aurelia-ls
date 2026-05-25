@@ -503,6 +503,9 @@ multi-binding props, matching Aurelia's custom-attribute grammar; sibling HTML a
 not treated as portal bindables. Runtime binding diagnostics also include i18n `TranslationBinding` lifecycle products:
 missing `t`/`t.bind` keys (`AUR4000`), duplicate `t-params.bind` on the same translated element (`AUR4001`), and
 dynamic key expressions whose checker type is definitely not string-compatible (`AUR4002`).
+Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
+runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
+behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.
 App diagnostics also include source-backed fetch-client configuration products. The `FetchClientIssues` query owns
 static `HttpClient.configure(...)` and `RetryInterceptor` rows for `AUR5001`, `AUR5002`, `AUR5003`, `AUR5004`,
 `AUR5005`, `AUR5007`, and `AUR5008`; host/global fetch availability (`AUR5000`) and live interceptor-chain return
@@ -629,6 +632,10 @@ semantic-runtime can edit a declaration it cannot locate.
 Repeat locals use the same policy. If `item` is weak because `items` is `any[]`, the cursor row should preserve the
 iterable/source-slot route that introduced `item`; if `item` is weak because the repeat source itself cannot be typed,
 the row stays in `declare-scope-slot-type` territory instead of inventing an owner type.
+An `unknown` repeat source is different: the TypeChecker can represent the slot as `unknown`, so cursor diagnostics
+should report an explicit weak owner with `expression-member-owner-type:no-members` rather than
+`expression-member-owner-type:missing-slot-type`. That keeps the public API aligned with overlay TS18046 rows while
+preserving `missing-slot-type` for genuinely unmaterialized scope slots.
 When `TemplateCursorInfo` is requested with `diagnosticProjection: "type-projection"`, the cursor answer also consults
 the same template overlay diagnostic lane used by template diagnostics and keeps only overlay TypeScript diagnostics
 whose mapped authored span contains the active cursor. Missing-member overlay rows stay suppressed when the semantic
@@ -753,10 +760,13 @@ invocation now spends runtime-html `method_not_implemented` (`AUR0099`) only whe
 the active container tree has no modeled `ISanitizer` resolver; app-provided sanitizer registrations suppress the
 diagnostic. Template diagnostics surface that row as `runtime-value-converter-framework-error` with service-registration
 repair guidance.
-Current weak-owner and strictness diagnostics use `diagnosticAuthority: "semantic-authoring-policy"`;
-runtime-noop assignment rows usually use `diagnosticAuthority: "framework-runtime-behavior"` with
-`frameworkErrorCode: null`; exact assignment failures such as `$host` assignment can use
-`diagnosticAuthority: "framework-error-code"` on the same diagnostic kind.
+Current weak-owner diagnostics use `diagnosticAuthority: "semantic-authoring-policy"` because they represent repair
+guidance for weak or incomplete app types. Assignment strictness diagnostics use
+`diagnosticAuthority: "semantic-runtime-product"` because binding data-flow has already combined observer/value-channel
+semantics, value-converter writeback, source write capability, TypeChecker assignability, and `astAssign` policy into a
+product-level static fact. Runtime-noop assignment rows usually use `diagnosticAuthority:
+"framework-runtime-behavior"` with `frameworkErrorCode: null`; exact assignment failures such as `$host` assignment can
+use `diagnosticAuthority: "framework-error-code"` on the same diagnostic kind.
 Rows with `diagnosticAuthority: "framework-error-code"` should only be introduced after checking Aurelia source through
 Atlas `framework.errors` and should carry the exact framework code. The expression parser now has a low-level
 `ExpressionFrameworkErrorCode` bridge for exact parser counterparts such as `parse_left_hand_side_not_assignable`.
@@ -844,9 +854,9 @@ missing-member, nullish access, type/argument mismatch, and readonly-assignment-
 other admitted checker rows stay on `inspect-owner-type` until the diagnostic policy can prove a more specific repair.
 When a semantic-runtime diagnostic already owns
 the same authored missing-member span, the overlay row is suppressed as duplicate checker evidence rather than surfaced
-as a second user issue; TypeScript-native rows such as argument mismatches, arity mismatches, and nullish access remain
-public. Template overlay rows share the same TypeScript diagnostic severity mapping as ordinary TypeScript diagnostic
-rows so unified diagnostic answers do not drift by lane.
+as a second user issue; TypeScript-native rows such as argument mismatches, arity mismatches, nullish access, and
+unknown-owner access remain public. Template overlay rows share the same TypeScript diagnostic severity mapping as
+ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
 query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair

@@ -4,6 +4,7 @@ import {
   CheckerTypeShapeKind,
   type CheckerTypeShape,
 } from './type-shape.js';
+import { checkerUnionType } from './checker-type-union.js';
 
 export interface CheckerIndexedValueType {
   readonly keyKind: CheckerIndexedAccessKeyKind;
@@ -18,7 +19,24 @@ export interface CheckerRepeatableElementTypeInfo {
   readonly nullishConstituents: number;
 }
 
+export const enum CheckerTypeNullishPresence {
+  /** No visible checker constituent can produce `null`, `undefined`, or `void`. */
+  None = 'none',
+  /** Some visible checker constituents are nullish and some can still carry values. */
+  Maybe = 'maybe',
+  /** Every visible checker constituent is nullish at runtime. */
+  Definitely = 'definitely',
+}
+
 const repeatableElementInfoByChecker = new WeakMap<ts.TypeChecker, WeakMap<ts.Type, CheckerRepeatableElementTypeInfo>>();
+
+/** True when TypeScript exposes the value as an Array or tuple runtime instance. */
+export function checkerArrayOrTupleType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  return checker.isArrayType(type) || checker.isTupleType(type);
+}
 
 export function checkerStringIndexValueType(
   checker: ts.TypeChecker,
@@ -128,8 +146,24 @@ function computeCheckerRepeatableElementTypeInfo(
     return repeatableElementInfo(null, 0, 0, 0, 1);
   }
 
-  if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never | ts.TypeFlags.TypeParameter)) !== 0) {
-    return repeatableElementInfo((type.flags & ts.TypeFlags.Any) !== 0 ? checker.getAnyType() : null, 0, 0, 1, 0);
+  if ((type.flags & ts.TypeFlags.Any) !== 0) {
+    return repeatableElementInfo(checker.getAnyType(), 0, 0, 1, 0);
+  }
+
+  if ((type.flags & ts.TypeFlags.Unknown) !== 0) {
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+  }
+
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    const constraint = checker.getBaseConstraintOfType(type);
+    if (constraint != null && constraint !== type) {
+      return checkerRepeatableElementTypeInfo(checker, constraint);
+    }
+    return repeatableElementInfo(checker.getUnknownType(), 0, 0, 1, 0);
+  }
+
+  if ((type.flags & ts.TypeFlags.Never) !== 0) {
+    return repeatableElementInfo(null, 0, 0, 1, 0);
   }
 
   const elementType = checkerDefaultRepeatableElementType(checker, type);
@@ -208,6 +242,31 @@ export function checkerDefinitelyNullishType(
   return checkerNullishType(checker, type);
 }
 
+/** Classifies whether a checker type can reach Aurelia's nullish access/call branch. */
+export function checkerTypeNullishPresence(
+  checker: ts.TypeChecker | null,
+  type: ts.Type,
+): CheckerTypeNullishPresence {
+  if (type.isUnion()) {
+    let sawNullish = false;
+    let sawValue = false;
+    for (const constituent of type.types) {
+      const presence = checkerTypeNullishPresence(checker, constituent);
+      sawNullish ||= presence !== CheckerTypeNullishPresence.None;
+      sawValue ||= presence !== CheckerTypeNullishPresence.Definitely;
+    }
+    if (sawNullish && sawValue) {
+      return CheckerTypeNullishPresence.Maybe;
+    }
+    return sawNullish
+      ? CheckerTypeNullishPresence.Definitely
+      : CheckerTypeNullishPresence.None;
+  }
+  return checkerNullishType(checker, type)
+    ? CheckerTypeNullishPresence.Definitely
+    : CheckerTypeNullishPresence.None;
+}
+
 export function checkerTypeShapeIsDefinitelyNullish(
   typeShape: CheckerTypeShape,
 ): boolean {
@@ -217,6 +276,19 @@ export function checkerTypeShapeIsDefinitelyNullish(
   }
   return typeShape.shapeKind === CheckerTypeShapeKind.Primitive
     && (typeShape.display === 'null' || typeShape.display === 'undefined' || typeShape.display === 'void');
+}
+
+/** Classifies nullish reachability for a projected checker type shape. */
+export function checkerTypeShapeNullishPresence(
+  typeShape: CheckerTypeShape,
+): CheckerTypeNullishPresence {
+  const carrierType = typeShape.carrier?.type ?? null;
+  if (carrierType != null) {
+    return checkerTypeNullishPresence(typeShape.carrier?.checker ?? null, carrierType);
+  }
+  return checkerTypeShapeIsDefinitelyNullish(typeShape)
+    ? CheckerTypeNullishPresence.Definitely
+    : CheckerTypeNullishPresence.None;
 }
 
 /** Match a checker type or its apparent type against exported/interface-style names and generic display names. */
@@ -268,7 +340,7 @@ function unionRepeatableElementTypeInfo(
   return repeatableElementInfo(
     infos.some((info) => info.unsupportedConstituents > 0)
       ? null
-      : commonRelatedType(checker, elementTypes),
+      : commonOrUnionRelatedType(checker, elementTypes),
     sumRepeatableInfo(infos, 'supportedConstituents'),
     sumRepeatableInfo(infos, 'unsupportedConstituents'),
     sumRepeatableInfo(infos, 'openConstituents'),
@@ -297,7 +369,7 @@ function checkerDefaultRepeatableElementType(
     // The iterator projector synthesizes [key, value] entries; this predicate only needs to admit Map as a built-in repeat source.
     return checker.getUnknownType();
   }
-  if (checker.isTupleType(type) || checker.isArrayType(type)) {
+  if (checkerArrayOrTupleType(checker, type)) {
     return checkerNumberIndexValueType(checker, type) ?? checker.getUnknownType();
   }
   return null;
@@ -337,6 +409,17 @@ function commonRelatedType(
   return first != null && rest.every((type) => checker.typeToString(type) === checker.typeToString(first))
     ? first
     : null;
+}
+
+function commonOrUnionRelatedType(
+  checker: ts.TypeChecker,
+  types: readonly ts.Type[],
+): ts.Type | null {
+  const common = commonRelatedType(checker, types);
+  if (common != null || types.length === 0) {
+    return common;
+  }
+  return checkerUnionType(checker, types);
 }
 
 function unionRelatedType(

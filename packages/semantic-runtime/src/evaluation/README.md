@@ -29,7 +29,8 @@ projects static type and member surfaces from the checker for template/expressio
   declarations, and evaluator-local own properties on object/function/class/instance values.
 - Keep common ECMAScript collection/string glue in the evaluator substrate, including `Object.keys/values/entries/fromEntries`,
   `Array.from`, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/slice/sort,
-  array push/pop/shift/unshift/splice/reverse/fill mutation, and string startsWith/endsWith/includes/indexOf/split/replace/replaceAll/slice/trim/case transforms.
+  non-mutating array copy methods such as toReversed/toSorted/toSpliced/with, array push/pop/shift/unshift/splice/reverse/fill
+  mutation, and string startsWith/endsWith/includes/indexOf/split/replace/replaceAll/slice/trim/case transforms.
 - Preserve host-environment and external-module carriers as explicit evaluator-local boundary object/value carriers, so
   boundary-dependent expressions propagate without being mislabeled as generic dynamic branches, missing identifiers, or
   object-property fallbacks.
@@ -70,11 +71,28 @@ projects static type and member surfaces from the checker for template/expressio
 - Recognizing Aurelia resources, DI registrations, template semantics, or framework APIs.
 - Treating evaluator-local values as durable kernel products.
 - Projecting userland member/property surfaces for template expression completion; that belongs to `../type-system`.
+- Replacing TypeScript's standard library, generic inference, overload resolution, or checker-backed declaration model.
 - Running arbitrary user code, setters, async bodies, generators, or host/runtime APIs. Constructors and local getters
   are only interpreted through evaluator-known class values under the normal expression/statement guardrails. Async
   function calls return a Promise-shaped evaluator value with an explicit async-execution boundary rather than executing
   the body.
 - Ranking answers for IDE, Atlas, tooling, AI, diagnostics, AOT, or refactoring consumers.
+
+## Intrinsic Boundary
+
+The evaluator should not become a parallel TypeScript standard library. TypeScript owns checker-backed standard
+library declarations, generics, overloads, readonly/mutable library surfaces, and userland type inference. The evaluator
+owns deterministic ECMAScript-shaped value closure when a semantic-runtime consumer needs source values for app-world
+construction, DI/configuration/resource admission, binding-source value reduction, or an explicit open seam.
+
+That boundary is the reason standard intrinsics are modeled selectively. Add an intrinsic only when it closes a
+source-value question that the TypeChecker cannot answer as a value and that a product consumer can spend. Keep complex
+or host-time behavior explicit as boundary/open values. When a checker-backed expression can answer the static type,
+prefer the type-system path; when a synthetic product has no checker carrier, expose the smallest product-owned shape
+needed by Aurelia semantics rather than rebuilding the whole library surface.
+If an intrinsic pressure item mostly asks about generics, overloads, readonly/mutable library variants, or ordinary
+inference, stop in the type-system path instead. Evaluator intrinsics should close deterministic runtime values for
+DI/configuration/resource/template/data-flow consumers, not act as a shadow checker.
 
 ## Design Pressure
 
@@ -107,12 +125,14 @@ configuration values to degrade when a recognizer asks a second question about t
 `StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
 binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
 every property or target probe.
-Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles a direct
-ambient `resolve(ClassKey)` call when the evaluator is already in an activation-like frame with `this`, and it asks the
-generic class-instantiation substrate to build that class value. Module/static contexts still fall through to the normal
-external-boundary path so DI issue publication can report absent active-container sites. Registered/interface-key lookup
-is handled by the binding-source activation context when an active modeled container is available; keep that DI-world
-join out of the generic static evaluator.
+Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles browser
+ambient globals such as `document`, `window`, `self`, `customElements`, and `console` as host-environment boundaries so
+app admission can preserve host-dependent setup expressions without reporting them as missing identifiers. It also
+handles a direct ambient `resolve(ClassKey)` call when the evaluator is already in an activation-like frame with `this`,
+and it asks the generic class-instantiation substrate to build that class value. Module/static contexts still fall
+through to the normal external-boundary path so DI issue publication can report absent active-container sites.
+Registered/interface-key lookup is handled by the binding-source activation context when an active modeled container is
+available; keep that DI-world join out of the generic static evaluator.
 `StaticEvaluationPolicy` also owns evaluator guardrails. Statement, depth, loop, and intrinsic-callback budgets are
 there to prevent runaway interpretation of arbitrary source, not to express user-facing query pagination. Intrinsics
 that speculate on a receiver or callback should use the evaluator checkpoint/restore lane so an abandoned attempt
@@ -120,10 +140,17 @@ does not leak transient open seams or consumed statement budget into the rest of
 `IntrinsicCallbackFrame` is the shared lifetime primitive for callback-bearing intrinsics: it owns the checkpoint,
 counts callback invocations against `maxIntrinsicCallbackEvaluations`, and lets the intrinsic decide whether exhausted
 precision becomes unknown membership/order, an unknown scalar result, or `undefined`.
+`operators.ts` owns primitive operator reduction shared by the static evaluator and binding-source value callbacks.
+Relational operators intentionally close the deterministic numeric and string comparison lanes; mixed coercion and
+host-object comparison should stay open until a product consumer proves the narrower required subset.
 `intrinsics.ts` is the intentional dispatcher and public contract surface for `StaticEvaluator`; implementation lives under
 `intrinsics/` by ECMAScript family (`array`, `object`, `string`, `collection`, `promise`, `regexp`, and module-boundary
 calls). Keep new standard behavior in that family split so the dispatcher stays a routing table rather than a second
-evaluator body.
+evaluator body. Before extending an intrinsic family, classify the authority: TypeScript owns checker-backed stdlib
+typing, evaluator intrinsics own deterministic source-value closure, binding-source array reducers own Aurelia
+binding-scope value closure, and observer/controller semantics own dependency or lifecycle facts. If the requested
+behavior is a modern web-standard operation missing from Aurelia framework observation, record it as framework update
+pressure rather than permanent semantic-runtime divergence.
 
 `project-evaluation.ts` owns the shared project pass over boot admissions. `StaticProjectEvaluationPass` is the small
 public facade; `StaticProjectEvaluationFrame` is the per-run lifetime object that owns the admission index, module source
@@ -194,7 +221,15 @@ binding-source layer, but keep ordinary equality/comparison/arithmetic closure h
 primitive/nullish ECMAScript semantics, not a strict-equality alias: `null == undefined`, boolean-number coercion, and
 string-number comparison belong here so source-level guards such as `value == null ? ... : ...` close the same way for
 static evaluation and binding-source reads. Strict `===` / `!==` should remain exact evaluator-value equality unless
-the ECMAScript value model grows a real object/ToPrimitive lane.
+the ECMAScript value model grows a real object/ToPrimitive lane. `in` and `instanceof` also live here when both sides
+can close over evaluator-modeled objects, arrays, namespaces, classes, or admitted host-global constructors. Unary `!`,
+numeric `+`/`-`, `typeof`, and `void` share that same table; TypeScript-only `~` also stays there for the static
+evaluator while Aurelia parser admission continues to reject it.
+
+`global-intrinsics.ts` owns value-level semantics for Aurelia expression-parser globals such as `parseInt`, `Math`,
+`JSON`, `Array`, and `Object`. This is shared by the TS-shaped static evaluator and Aurelia binding-source value
+evaluation: parser admission stays in `expression/global-names.ts`, TypeChecker projection stays in the type-system
+lane, and host-dependent globals remain boundary/runtime-open values instead of becoming observed binding dependencies.
 
 `representative-values.ts` owns conservative value summaries for places where semantic-runtime intentionally does not
 materialize every possible runtime instance. Repeated template views and speculative conditional branches can keep exact
@@ -208,7 +243,14 @@ precision.
 read/write, getter invocation through the evaluator host, module namespace lookups, collection/string size and prototype
 boundary values, and RegExp instance fields. Keep recursion, policy, and unknown/open-seam construction on
 `StaticEvaluator`; keep property receiver/key semantics in this substrate instead of duplicating object access in
-recognizers.
+recognizers. Array prototype boundary recognition spends `aureliaArrayMethodSemanticsFor(...)`, so the evaluator does
+not maintain a second native Array method allow-list beside TypeChecker projection, source-value reduction, and
+connectable observation. String prototype boundary recognition spends `staticStringPrototypeBoundaryMethods` from the
+string intrinsic lane so property access and call evaluation do not drift on host string methods.
+`StaticValueMemberRead` is the shared low-level outcome for those property/keyed reads, and
+`foldStaticValueMemberRead(...)` is the handoff that prevents StaticEvaluator and binding-source value consumers from
+drifting when a new read outcome is introduced. Consumers may map `Getter` and `Open` differently, but the outcome
+algebra itself belongs here.
 `EvaluationObjectProperty.node` is nullable because not every evaluator value is born from a TypeScript AST node:
 Aurelia binding-source evaluation can produce object values from template expression ASTs. Code that needs a TS-backed
 property declaration or initializer must check for a node explicitly instead of treating object values as implicitly
@@ -233,12 +275,15 @@ TypeScript-authored.
   for object properties materialized out of the generated default export. HTML/CSS asset modules still only provide
   default string values; escaped-string source maps should become a real asset primitive before any consumer claims
   exact interior spans there.
-- Supported intrinsic calls are deliberately standard-shaped: current coverage includes `Object.freeze`,
+- Supported intrinsic calls are deliberately standard-shaped: current coverage includes direct Aurelia-admitted globals
+  such as `parseInt`, `parseFloat`, `isNaN`, `isFinite`, URI encode/decode calls, `Math` numeric methods, `JSON.parse`,
+  `JSON.stringify`, `Object.keys`, `Object.values`, `Object.entries`, `Array.isArray`, `Array.of`, and `Array.from`
+  through `global-intrinsics.ts`, plus TS-shaped calls such as `Object.freeze`,
   `Object.assign`, `Object.keys`, `Object.values`, `Object.entries`, `Object.fromEntries`, `String(...)`, `Array.of`,
   `Array.from`, `Array.isArray`, `new Array(...)`, `RegExp(...)`, `new RegExp(...)`, `array.concat`, `array.map`,
   `array.flatMap`, `array.filter`, `array.find`, `array.findIndex`, `array.some`, `array.every`, `array.forEach`,
   `array.reduce`, `array.reduceRight`, `array.fill`, `array.flat`, `array.includes`, `array.indexOf`, `array.join`,
-  `array.slice`, `array.sort`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
+  `array.slice`, `array.sort`, `array.toSpliced`, `array.with`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
   `array.reverse`, string `slice`, `localeCompare`, `startsWith`, `endsWith`, `includes`, `indexOf`,
   `split`, `replace`, `replaceAll`, `trim`, case transforms, `Map.get`, `Map.set`, `Map.has`, `Map.delete`,
   `Set.has`, `Set.add`, `Set.delete`, and `Promise.resolve` over evaluator-known values.

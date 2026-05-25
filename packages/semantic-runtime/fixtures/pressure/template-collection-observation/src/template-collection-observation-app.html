@@ -6,6 +6,7 @@
 <p>${formatters.map(format => format(label)).join(', ')}</p>
 <p>${products.forEach(eachProduct => eachProduct.name)}</p>
 <p>${products.findLast(lastProduct => lastProduct.name.includes(label))}</p>
+<p>${products.reduce((selected, product) => product.name.localeCompare(selected.name) > 0 ? product : selected, selectedProduct).id}</p>
 <p>${products.sort((left, right) => left.id.localeCompare(right.id)).length}</p>
 <p>${products[selectedProductIndex].name}</p>
 <p>${productLookup[selectedProductId].tags.includes(label)}</p>

@@ -12,6 +12,46 @@ export class BuiltInProduct {
   }
 }
 
+export class PhysicalBuiltInProduct extends BuiltInProduct {
+  constructor(
+    id: string,
+    label: string,
+    readonly shippingWeight: number,
+  ) {
+    super(id, label);
+  }
+}
+
+export class DigitalBuiltInProduct extends BuiltInProduct {
+  constructor(
+    id: string,
+    label: string,
+    readonly downloadUrl: string,
+  ) {
+    super(id, label);
+  }
+}
+
+export interface BookCatalogItem {
+  readonly kind: 'book';
+  readonly title: string;
+  readonly pages: number;
+}
+
+export interface ServiceCatalogItem {
+  readonly kind: 'service';
+  readonly title: string;
+  readonly hourlyRate: number;
+}
+
+export interface ArchivedCatalogItem {
+  readonly kind: 'archived';
+  readonly title: string;
+  readonly archivedAt: string;
+}
+
+export type CatalogItem = BookCatalogItem | ServiceCatalogItem | ArchivedCatalogItem;
+
 @customElement({
   name: 'template-controller-built-ins-app',
   template,
@@ -36,6 +76,20 @@ export class TemplateControllerBuiltInsApp {
   readonly listTitle = 'List view';
   readonly detailTitle = 'Detail view';
   readonly portalMessage = 'Portaled content';
+  readonly currentItem: CatalogItem = {
+    kind: 'book',
+    title: 'Typed branch',
+    pages: 184,
+  };
+  readonly probedItem: CatalogItem = {
+    kind: 'service',
+    title: 'Property probe',
+    hourlyRate: 120,
+  };
+  readonly physicalProductType = PhysicalBuiltInProduct;
+  readonly mixedProduct: PhysicalBuiltInProduct | DigitalBuiltInProduct =
+    new PhysicalBuiltInProduct('boxed', 'Boxed product', 2.4);
+  readonly currentPrimitive: string | number = 'typed guard';
   mode: 'list' | 'detail' | 'other' = 'detail';
   modeGroup: 'list' | 'detail' | 'other' = 'list';
   fallMode: 'list' | 'detail' | 'other' = 'list';
@@ -58,6 +112,30 @@ export class TemplateControllerBuiltInsApp {
 
   otherOnly(mode: 'other'): string {
     return mode;
+  }
+
+  bookOnly(item: BookCatalogItem): string {
+    return item.title;
+  }
+
+  notBookOnly(item: ServiceCatalogItem | ArchivedCatalogItem): string {
+    return item.title;
+  }
+
+  stringOnly(value: string): string {
+    return value.toUpperCase();
+  }
+
+  numberOnly(value: number): string {
+    return value.toFixed();
+  }
+
+  physicalOnly(product: PhysicalBuiltInProduct): string {
+    return product.shippingWeight.toFixed();
+  }
+
+  digitalOnly(product: DigitalBuiltInProduct): string {
+    return product.downloadUrl;
   }
 
   formatReason(reason: unknown): string {

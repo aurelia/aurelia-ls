@@ -50,10 +50,16 @@ export const enum AtlasWorkRouteCoverageDimension {
   BindingDataFlowSubstrate = "binding-data-flow-substrate",
   /** Checker-bearing routes should reuse TypeSystemProject/checker helpers instead of feature-local TypeChecker forks. */
   CheckerValueAccess = "checker-value-access",
+  /** Checker-epoch consumers should enter the shared TypeSystemProject Program/overlay/diagnostic boundary. */
+  TypeSystemProjectEpoch = "type-system-project-epoch",
   /** Public answer families still need intent-aware typed continuations threaded through route-local APIs. */
   IntentAwareContinuations = "intent-aware-continuations",
   /** Public answer families that materialize through query-claim retention, reuse, disposal, or telemetry policy. */
   QueryClaimGraph = "query-claim-graph",
+  /** Expression-bearing routes should share the TypeChecker request context instead of reassembling scope/source/runtime-mode axes locally. */
+  ExpressionEvaluationContext = "expression-evaluation-context",
+  /** Source-value consumers should reuse the binding-owned Scope/static-evaluator request context instead of feature-local runtime value reducers. */
+  SourceValueEvaluationContext = "source-value-evaluation-context",
 }
 
 /** Route-local state for a cross-cutting coverage dimension. */

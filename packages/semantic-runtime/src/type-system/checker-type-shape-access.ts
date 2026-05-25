@@ -31,8 +31,11 @@ import {
 } from './type-shape.js';
 import {
   checkerIndexKindForKeyType,
+  checkerIterableElementType,
   checkerNumberIndexValueType,
   checkerNullishType,
+  checkerTypeNullishPresence,
+  CheckerTypeNullishPresence,
 } from './checker-related-types.js';
 import {
   checkerPropertySymbol,
@@ -51,13 +54,25 @@ import {
 import { sourceSpanForCheckerDeclaration } from './declaration-source.js';
 
 export const enum CheckerTypeShapeMemberWriteAccessKind {
+  /** Declared property or accessor can receive a runtime assignment. */
   Writable = 'writable',
+  /** Declared property is TypeScript-readonly, but JavaScript runtime assignment can still be attempted. */
   Readonly = 'readonly',
+  /** Declared accessor exposes a getter without a setter. */
   GetterWithoutSetter = 'getter-without-setter',
+  /** Declared member is callable/constructable rather than assignable storage. */
   MethodLike = 'method-like',
+  /** Checker exposed a member symbol but not enough declarations to prove mutability. */
   DeclarationMissing = 'declaration-missing',
+  /** String index signature can receive a runtime assignment. */
   StringIndexWritable = 'string-index-writable',
+  /** String index signature is TypeScript-readonly, but JavaScript runtime assignment can still be attempted. */
   StringIndexReadonly = 'string-index-readonly',
+  /** Number index signature can receive a runtime assignment. */
+  NumberIndexWritable = 'number-index-writable',
+  /** Number index signature is TypeScript-readonly, but JavaScript runtime assignment can still be attempted. */
+  NumberIndexReadonly = 'number-index-readonly',
+  /** Neither a declared member nor a compatible index signature could be projected. */
   Missing = 'missing',
 }
 
@@ -212,6 +227,33 @@ export class CheckerTypeShapeAccess {
     );
   }
 
+  /** Projects the non-nullish lane of a checker-backed type shape for Aurelia non-strict access/call semantics. */
+  nonNullishTypeShape(
+    ownerType: CheckerTypeShape,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = ownerType.sourceAddressHandle,
+  ): CheckerTypeShape | null {
+    const carrier = ownerType.carrier;
+    if (carrier == null) {
+      return null;
+    }
+    const narrowed = carrier.checker.getNonNullableType(carrier.type);
+    if (narrowed === carrier.type) {
+      return ownerType;
+    }
+    return this.projector.ensureProjection({
+      localKey,
+      checker: carrier.checker,
+      type: narrowed,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: carrier.declarations[0] ?? null,
+      sourceAddressHandle,
+      ownerIdentityHandle: ownerType.identityHandle,
+      display: carrier.checker.typeToString(narrowed),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    } satisfies CheckerTypeProjectionRequest);
+  }
+
   memberWriteAccess(
     ownerType: CheckerTypeShape,
     memberName: string,
@@ -234,9 +276,25 @@ export class CheckerTypeShapeAccess {
 
     const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
     if (checkerMember != null) {
+      const memberKind = checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations);
+      const mappedReadonly = checkerMember.declarations.length === 0 && memberKind === CheckerTypeMemberKind.Property
+        ? checkerSyntheticMappedPropertyReadonly(checkerMember.symbol)
+        : null;
+      if (mappedReadonly != null) {
+        return checkerTypeMemberWriteAccessResult(
+          mappedReadonly
+            ? CheckerTypeShapeMemberWriteAccessKind.Readonly
+            : CheckerTypeShapeMemberWriteAccessKind.Writable,
+          checkerMember.symbol.getName(),
+          memberKind,
+          [],
+          null,
+          !mappedReadonly,
+        );
+      }
       return checkerTypeMemberWriteAccessFromSurface(
         checkerMember.symbol.getName(),
-        checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
+        memberKind,
         checkerDeclarationsAreReadonly(checkerMember.declarations),
         checkerMember.declarations,
         this.checkerMemberValueSourceAddressHandle(checkerMember)
@@ -261,6 +319,59 @@ export class CheckerTypeShapeAccess {
     return {
       accessKind: CheckerTypeShapeMemberWriteAccessKind.Missing,
       memberName,
+      memberKind: null,
+      declarations: [],
+      sourceAddressHandle: null,
+      checkerWritable: null,
+    };
+  }
+
+  keyedWriteAccess(
+    ownerType: CheckerTypeShape,
+    keyType: CheckerTypeShape,
+  ): CheckerTypeShapeMemberWriteAccess {
+    if (ownerType.shapeKind === CheckerTypeShapeKind.Any) {
+      return checkerTypeMemberWriteAccessResult(
+        CheckerTypeShapeMemberWriteAccessKind.Writable,
+        keyType.display ?? '[key]',
+        CheckerTypeMemberKind.Property,
+        [],
+        null,
+        true,
+      );
+    }
+
+    const finiteKeys = finitePropertyKeysForKeyType(keyType);
+    const finiteKeyAccess = finiteKeys.length === 0
+      ? null
+      : combineFiniteKeyMemberWriteAccess(
+        finiteKeys.map((key) => this.memberWriteAccess(ownerType, key)),
+        keyType.display ?? finiteKeys.join(' | '),
+      );
+    if (finiteKeyAccess != null && finiteKeyAccess.accessKind !== CheckerTypeShapeMemberWriteAccessKind.Missing) {
+      return finiteKeyAccess;
+    }
+
+    const indexKind = indexKindForKeyType(keyType);
+    if (indexKind != null) {
+      const indexInfo = checkerTypeShapeIndexInfo(ownerType, indexKind);
+      if (indexInfo != null) {
+        return checkerTypeIndexWriteAccessResult(
+          indexKind,
+          keyType.display ?? `[${indexKind}]`,
+          indexInfo.isReadonly,
+          ownerType.sourceAddressHandle,
+        );
+      }
+    }
+
+    if (finiteKeyAccess != null) {
+      return finiteKeyAccess;
+    }
+
+    return {
+      accessKind: CheckerTypeShapeMemberWriteAccessKind.Missing,
+      memberName: keyType.display ?? '[key]',
       memberKind: null,
       declarations: [],
       sourceAddressHandle: null,
@@ -306,6 +417,41 @@ export class CheckerTypeShapeAccess {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(indexType),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    } satisfies CheckerTypeProjectionRequest);
+  }
+
+  iteratedValueType(
+    ownerType: CheckerTypeShape,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = ownerType.sourceAddressHandle,
+  ): CheckerTypeShape | null {
+    if (ownerType.iteratedValueType?.productHandle != null) {
+      const iteratedValueType = this.resolveReference(ownerType.iteratedValueType);
+      if (iteratedValueType != null) {
+        return iteratedValueType;
+      }
+    }
+
+    const checker = ownerType.carrier?.checker ?? null;
+    const type = ownerType.carrier?.type ?? null;
+    if (checker == null || type == null) {
+      return null;
+    }
+
+    const iteratedType = checkerIterableElementType(checker, type);
+    if (iteratedType == null) {
+      return null;
+    }
+
+    return this.projector.ensureProjection({
+      localKey,
+      checker,
+      type: iteratedType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: ownerType.carrier?.declarations[0] ?? null,
+      sourceAddressHandle,
+      display: checker.typeToString(iteratedType),
       memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
@@ -518,6 +664,33 @@ export function checkerTypeMemberWriteAccess(
   );
 }
 
+/** Whether a checker-backed union is nullish and every value constituent exposes the requested property. */
+export function checkerTypeShapeNullishUnionHasValueProperty(
+  ownerType: CheckerTypeShape,
+  propertyName: string,
+): boolean {
+  const carrier = ownerType.carrier;
+  if (ownerType.shapeKind !== CheckerTypeShapeKind.Union || carrier == null || !carrier.type.isUnion()) {
+    return false;
+  }
+  let hasNullishConstituent = false;
+  let hasNonNullishConstituent = false;
+  for (const constituent of carrier.type.types) {
+    const nullishPresence = checkerTypeNullishPresence(carrier.checker, constituent);
+    if (nullishPresence !== CheckerTypeNullishPresence.None) {
+      hasNullishConstituent = true;
+    }
+    if (nullishPresence === CheckerTypeNullishPresence.Definitely) {
+      continue;
+    }
+    hasNonNullishConstituent = true;
+    if (checkerPropertySymbol(carrier.checker, constituent, propertyName) == null) {
+      return false;
+    }
+  }
+  return hasNullishConstituent && hasNonNullishConstituent;
+}
+
 function checkerTypeMemberWriteAccessFromSurface(
   memberName: string,
   memberKind: CheckerTypeMemberKind,
@@ -597,6 +770,69 @@ function checkerTypeMemberWriteAccessResult(
   };
 }
 
+function checkerTypeIndexWriteAccessResult(
+  indexKind: ts.IndexKind,
+  memberName: string,
+  isReadonly: boolean,
+  sourceAddressHandle: AddressHandle | null,
+): CheckerTypeShapeMemberWriteAccess {
+  const accessKind = indexKind === ts.IndexKind.Number
+    ? isReadonly
+      ? CheckerTypeShapeMemberWriteAccessKind.NumberIndexReadonly
+      : CheckerTypeShapeMemberWriteAccessKind.NumberIndexWritable
+    : isReadonly
+      ? CheckerTypeShapeMemberWriteAccessKind.StringIndexReadonly
+      : CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable;
+  return checkerTypeMemberWriteAccessResult(
+    accessKind,
+    memberName,
+    CheckerTypeMemberKind.IndexSignature,
+    [],
+    sourceAddressHandle,
+    !isReadonly,
+  );
+}
+
+function combineFiniteKeyMemberWriteAccess(
+  accesses: readonly CheckerTypeShapeMemberWriteAccess[],
+  memberName: string,
+): CheckerTypeShapeMemberWriteAccess {
+  const blocking = accesses.find((access) => !checkerTypeMemberWriteAccessKindIsWritable(access.accessKind));
+  if (blocking != null) {
+    return {
+      ...blocking,
+      memberName,
+    };
+  }
+  return checkerTypeMemberWriteAccessResult(
+    CheckerTypeShapeMemberWriteAccessKind.Writable,
+    memberName,
+    accesses[0]?.memberKind ?? CheckerTypeMemberKind.Property,
+    accesses.flatMap((access) => access.declarations),
+    accesses.find((access) => access.sourceAddressHandle != null)?.sourceAddressHandle ?? null,
+    accesses.every((access) => access.checkerWritable === true) ? true : null,
+  );
+}
+
+function checkerTypeMemberWriteAccessKindIsWritable(
+  accessKind: CheckerTypeShapeMemberWriteAccessKind,
+): boolean {
+  switch (accessKind) {
+    case CheckerTypeShapeMemberWriteAccessKind.Writable:
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable:
+    case CheckerTypeShapeMemberWriteAccessKind.NumberIndexWritable:
+      return true;
+    case CheckerTypeShapeMemberWriteAccessKind.Readonly:
+    case CheckerTypeShapeMemberWriteAccessKind.GetterWithoutSetter:
+    case CheckerTypeShapeMemberWriteAccessKind.MethodLike:
+    case CheckerTypeShapeMemberWriteAccessKind.DeclarationMissing:
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexReadonly:
+    case CheckerTypeShapeMemberWriteAccessKind.NumberIndexReadonly:
+    case CheckerTypeShapeMemberWriteAccessKind.Missing:
+      return false;
+  }
+}
+
 function checkerTypeMemberValueAccessResult(
   accessKind: CheckerTypeShapeMemberValueAccessKind,
   memberName: string,
@@ -651,6 +887,21 @@ function checkerTypeShapeIndexInfo(
   return carrier.checker.getIndexInfoOfType(carrier.type, indexKind)
     ?? carrier.checker.getIndexInfoOfType(carrier.checker.getApparentType(carrier.type), indexKind)
     ?? null;
+}
+
+function checkerSyntheticMappedPropertyReadonly(symbol: ts.Symbol): boolean | null {
+  const mappedType = (symbol as {
+    readonly links?: {
+      readonly mappedType?: {
+        readonly declaration?: ts.MappedTypeNode;
+      };
+    };
+  }).links?.mappedType;
+  const readonlyToken = mappedType?.declaration?.readonlyToken ?? null;
+  if (mappedType == null) {
+    return null;
+  }
+  return readonlyToken != null && readonlyToken.kind !== ts.SyntaxKind.MinusToken;
 }
 
 function indexKindForKeyType(typeShape: CheckerTypeShape): ts.IndexKind | null {

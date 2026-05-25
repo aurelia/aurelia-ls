@@ -424,7 +424,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   Prefer that before manually reading framework observation source for callback/proxy/getter category questions.
   The collection-methods projection keeps `astEvaluate`'s array auto-observe list beside `ProxyObservable`'s
   array/map/set wrappers, including which wrappers collect the collection, invoke callbacks inside the active
-  connectable turn, and wrap callback/result values. Prefer it before changing semantic-runtime collection method sets.
+  connectable turn, and wrap callback/result values. Shared proxy iterator helpers are expanded into the receiver
+  paths that expose them, so array `keys`/`values`/`entries`, map/set `keys`/`values`/`entries`, and the array/map/set
+  `Symbol.iterator` handoff stay visible rather than collapsing into one generic helper row. Prefer it before changing
+  semantic-runtime collection method sets.
 - [framework-observation-internals.ts](framework-observation-internals.ts) indexes source-backed observation machinery:
   `ObserverLocator`, `NodeObserverLocator`, dirty-checking, collection helper functions, observer cache access, and
   connectable subscribe/unsubscribe mechanics. It also records the `ComputedObserver` auto-dependency path and

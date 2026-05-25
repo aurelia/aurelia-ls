@@ -3,14 +3,27 @@ import { EvaluationOpenSeamKind } from '../seams.js';
 import {
   EvaluationBoundaryValue,
   EvaluationValueKind,
-  isEvaluationPrimitiveValue,
-  readEvaluationPrimitive,
   type EvaluationFunctionValue,
   type EvaluationRegularExpressionValue,
   type EvaluationValue,
 } from '../values.js';
 import type { ModuleEnvironmentRecord } from '../environment.js';
 import type { StaticIntrinsicEvaluationHost } from './contracts.js';
+import {
+  readArrayStartIndex,
+  readArraySpliceDeleteCount,
+  readArrayWithIndex,
+  readSliceBound,
+  stringCoercionText,
+} from '../value-coercion.js';
+
+export {
+  readArrayStartIndex,
+  readArraySpliceDeleteCount,
+  readArrayWithIndex,
+  readSliceBound,
+  stringCoercionText,
+};
 
 export const enum IntrinsicCallbackEvaluationKind {
   /** Callback invocation completed within the evaluator's intrinsic callback budget. */
@@ -66,19 +79,6 @@ export class IntrinsicCallbackFrame {
   }
 }
 
-export function stringCoercionText(value: EvaluationValue): string | null {
-  if (value.kind === EvaluationValueKind.BigInt) {
-    return value.text.endsWith('n') ? value.text.slice(0, -1) : value.text;
-  }
-  if (value.kind === EvaluationValueKind.RegularExpression) {
-    return `/${value.pattern}/${value.flags}`;
-  }
-  if (!isEvaluationPrimitiveValue(value)) {
-    return null;
-  }
-  return String(readEvaluationPrimitive(value));
-}
-
 export function isBoundaryEvaluationValue(
   value: EvaluationValue,
 ): value is EvaluationValue & {
@@ -98,20 +98,6 @@ export function boundaryIntrinsicCallValue(
   call: ts.CallExpression,
 ): EvaluationBoundaryValue {
   return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${intrinsicName}(...)`, call);
-}
-
-export function readArrayStartIndex(
-  value: EvaluationValue,
-  length: number,
-): number | null {
-  if (value.kind === EvaluationValueKind.Undefined) {
-    return 0;
-  }
-  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
-    return null;
-  }
-  const integer = Math.trunc(value.value);
-  return Math.min(Math.max(integer < 0 ? length + integer : integer, 0), length);
 }
 
 export function readSliceRange(
@@ -135,23 +121,6 @@ export function readSliceRange(
     start: Math.min(Math.max(start, 0), length),
     end: Math.min(Math.max(end, 0), length),
   };
-}
-
-export function readSliceBound(
-  value: EvaluationValue,
-  length: number,
-  undefinedValue: number,
-): number | null {
-  if (value.kind === EvaluationValueKind.Undefined) {
-    return undefinedValue;
-  }
-  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
-    return null;
-  }
-  const integer = Math.trunc(value.value);
-  return integer < 0
-    ? length + integer
-    : integer;
 }
 
 export function arrayCallbackValue(

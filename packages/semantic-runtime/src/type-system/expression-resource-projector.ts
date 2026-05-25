@@ -1,4 +1,3 @@
-import type { BindingScope } from '../configuration/scope.js';
 import type {
   BindingBehaviorExpression,
   ExpressionAstNode,
@@ -22,10 +21,22 @@ import {
   CheckerExpressionCallProjector,
 } from './expression-call-projector.js';
 import {
+  CheckerStrictTrueComparisonKind,
+} from './checker-type-member-surface.js';
+import {
+  VALUE_CONVERTER_TO_VIEW_METHOD,
+  type RuntimeValueConverterMethodName,
+  valueConverterWithContextComparisonKind,
+} from './value-converter-call-surface.js';
+import {
   type CheckerExpressionTypeEvaluation,
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
 } from './expression-type-evaluation.js';
+import {
+  CheckerExpressionTypeEvaluationContext,
+  CheckerExpressionTypeBindingBehaviorEvaluation,
+} from './expression-type-context.js';
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
   CheckerTypeMemberKind,
@@ -33,15 +44,8 @@ import {
 } from './type-shape.js';
 
 export interface CheckerExpressionResourceProjectorHost {
-  evaluateNode(
-    expression: ExpressionAstNode,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): CheckerExpressionTypeEvaluation;
+  evaluateNode(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation;
 }
-
-export type RuntimeValueConverterMethodName = 'toView' | 'fromView';
 
 /**
  * Projects expression-level resource semantics for value converters and binding behaviors.
@@ -61,22 +65,21 @@ export class CheckerExpressionResourceProjector {
 
   evaluateValueConverter(
     expression: ValueConverterExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    const inner = this.evaluateValueConverterRoot(expression.expression, scope, `${localKey}:converter-input`, sourceAddressHandle);
+    const localKey = context.projectionLocalKey();
+    const inner = this.evaluateValueConverterRoot(
+      context.child(expression.expression, 'converter-input'),
+    );
     if (inner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return inner;
     }
 
     return this.evaluateValueConverterMethod(
       expression,
-      'toView',
+      VALUE_CONVERTER_TO_VIEW_METHOD,
       inner,
-      scope,
-      localKey,
-      sourceAddressHandle,
+      context,
     );
   }
 
@@ -84,14 +87,13 @@ export class CheckerExpressionResourceProjector {
     expression: ValueConverterExpression,
     methodName: RuntimeValueConverterMethodName,
     input: CheckerExpressionTypeEvaluation,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
     if (input.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return input;
     }
 
+    const localKey = context.projectionLocalKey();
     const definition = this.findValueConverterDefinition(expression.name.name);
     if (definition == null) {
       return this.support.open(
@@ -140,34 +142,96 @@ export class CheckerExpressionResourceProjector {
       );
     }
 
-    return this.calls.evaluateCallReturn(
+    const callerContextKind = this.valueConverterCallerContextKind(
+      converterType.typeShape,
+      `converter:${definition.name}:${methodName}:with-context`,
+    );
+    if (callerContextKind === CheckerStrictTrueComparisonKind.MaybeTrue) {
+      const withoutContext = this.evaluateValueConverterMethodCall(
+        expression,
+        method.typeShape,
+        input,
+        false,
+        `converter:${definition.name}:${methodName}`,
+        method.sourceAddressHandle,
+        context,
+      );
+      if (withoutContext.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+        return withoutContext;
+      }
+      const withContext = this.evaluateValueConverterMethodCall(
+        expression,
+        method.typeShape,
+        input,
+        true,
+        `converter:${definition.name}:${methodName}:with-context-branch`,
+        method.sourceAddressHandle,
+        context,
+      );
+      if (withContext.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+        return withContext;
+      }
+      return this.support.evaluateTypeUnion(
+        [withoutContext, withContext],
+        `${localKey}:converter:${definition.name}:${methodName}:dynamic-with-context-return`,
+        method.sourceAddressHandle,
+        `Projected value-converter '${definition.name}' ${methodName} return across dynamic withContext branches.`,
+      );
+    }
+
+    return this.evaluateValueConverterMethodCall(
       expression,
       method.typeShape,
+      input,
+      callerContextKind === CheckerStrictTrueComparisonKind.DefinitelyTrue,
+      `converter:${definition.name}:${methodName}`,
+      method.sourceAddressHandle,
+      context,
+    );
+  }
+
+  private evaluateValueConverterMethodCall(
+    expression: ValueConverterExpression,
+    methodType: CheckerTypeShape,
+    input: CheckerExpressionTypeEvaluation,
+    includeCallerContext: boolean,
+    localSuffix: string,
+    methodSourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation {
+    return this.calls.evaluateCallReturn(
+      context,
+      methodType,
       this.valueConverterMethodArguments(
         expression,
         input,
-        converterType.typeShape,
-        `${localKey}:converter:${definition.name}:${methodName}`,
-        sourceAddressHandle,
+        includeCallerContext,
+        localSuffix,
+        context.sourceAddressHandle,
       ),
-      scope,
-      `${localKey}:converter:${definition.name}:${methodName}-return`,
-      sourceAddressHandle,
-      method.sourceAddressHandle,
+      methodSourceAddressHandle,
+      `${localSuffix}-return`,
     );
   }
 
   evaluateBindingBehavior(
     expression: BindingBehaviorExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    if (expression.name.name === STATE_BINDING_BEHAVIOR_NAME) {
-      return this.evaluateStateBindingBehavior(expression, scope, localKey, sourceAddressHandle);
+    if (context.runtimeContext.bindingBehavior === CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly) {
+      return this.evaluateValueConverterRoot(
+        context.child(expression.expression, `behavior:${expression.name.name}:evaluate-only`),
+      );
     }
 
-    const inner = this.evaluateValueConverterRoot(expression.expression, scope, `${localKey}:behavior:${expression.name.name}`, sourceAddressHandle);
+    if (expression.name.name === STATE_BINDING_BEHAVIOR_NAME) {
+      return this.evaluateStateBindingBehavior(expression, context);
+    }
+
+    const localKey = context.projectionLocalKey();
+    const inner = this.evaluateValueConverterRoot(
+      context.child(expression.expression, `behavior:${expression.name.name}`),
+    );
     if (inner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return inner;
     }
@@ -193,10 +257,9 @@ export class CheckerExpressionResourceProjector {
 
   private evaluateStateBindingBehavior(
     expression: BindingBehaviorExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
+    const localKey = context.projectionLocalKey();
     const definition = this.findBindingBehaviorDefinition(expression.name.name);
     if (definition == null) {
       return this.support.open(
@@ -214,9 +277,9 @@ export class CheckerExpressionResourceProjector {
     }
     const stateScope = this.stateScopes.scopeForBindingBehavior(
       expression,
-      scope,
+      context.scope,
       `${localKey}:behavior:${expression.name.name}`,
-      sourceAddressHandle,
+      context.sourceAddressHandle,
     );
     if (stateScope.scope == null) {
       return this.support.open(
@@ -227,59 +290,44 @@ export class CheckerExpressionResourceProjector {
       );
     }
     return this.evaluateValueConverterRoot(
-      expression.expression,
-      stateScope.scope,
-      `${localKey}:behavior:${expression.name.name}:state-scope`,
-      sourceAddressHandle,
+      context.childInScope(expression.expression, stateScope.scope, `behavior:${expression.name.name}:state-scope`),
     );
   }
 
   private evaluateValueConverterRoot(
-    expression: IsBindingBehavior,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    return this.host.evaluateNode(expression, scope, localKey, sourceAddressHandle);
+    return this.host.evaluateNode(context);
   }
 
   private valueConverterMethodArguments(
     expression: ValueConverterExpression,
     input: CheckerExpressionTypeEvaluation,
-    converterType: CheckerTypeShape,
-    localKey: string,
+    includeCallerContext: boolean,
+    localSuffix: string,
     sourceAddressHandle: AddressHandle | null,
   ): readonly CheckerExpressionCallArgument[] {
     const args: CheckerExpressionCallArgument[] = [{
       expression: expression.expression,
-      localKey: `${localKey}-input`,
+      localSuffix: `${localSuffix}-input`,
       precomputedEvaluation: input,
     }];
-    if (this.valueConverterUsesCallerContext(expression, converterType, `${localKey}:with-context`)) {
+    if (includeCallerContext) {
       args.push({
         expression,
-        localKey: `${localKey}:caller-context`,
-        precomputedEvaluation: this.valueConverterCallerContext(expression, `${localKey}:caller-context`, sourceAddressHandle),
+        localSuffix: `${localSuffix}:caller-context`,
+        precomputedEvaluation: this.valueConverterCallerContext(expression, `${localSuffix}:caller-context`, sourceAddressHandle),
       });
     }
-    args.push(...checkerExpressionCallArguments(expression.args, `${localKey}-args`));
+    args.push(...checkerExpressionCallArguments(expression.args, `${localSuffix}-args`));
     return args;
   }
 
-  private valueConverterUsesCallerContext(
-    expression: ValueConverterExpression,
+  private valueConverterCallerContextKind(
     converterType: CheckerTypeShape,
     localKey: string,
-  ): boolean {
-    const evaluation = this.access.evaluateMemberOnType(
-      expression,
-      converterType,
-      'withContext',
-      localKey,
-      converterType.sourceAddressHandle,
-    );
-    return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      && evaluation.typeShape.display === 'true';
+  ): CheckerStrictTrueComparisonKind {
+    return valueConverterWithContextComparisonKind(this.support.store, converterType, localKey);
   }
 
   private valueConverterCallerContext(

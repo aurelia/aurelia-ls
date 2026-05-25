@@ -251,6 +251,7 @@
         "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
         "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
         "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
+        "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
         "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
         "Scope API issue spans should carry the boot-admitted source-file handle through sourceSiteForNode/sourceSpanAddressForSite. Do not fall back to filename re-resolution for this scanner-owned path.",
         "Scope API issue products should publish through ConfigurationIssuePublisher after the scanner-owned source span is created."

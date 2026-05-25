@@ -51,9 +51,10 @@ The tooling model should keep that split:
   then attaches typed product details. Inquiry should read those details for expression name visibility instead of
   peeking into controller construction or compiler-world internals.
 - `scope.ts` owns the runtime lookup rule once. `BindingScope.lookup(...)` returns reference-shaped products for normal
-  expression/type-system consumers, while `BindingScope.locate(...)` returns the same result with concrete modeled
-  scope/context objects for materializers that must keep evaluating across the resolved runtime context. Observation,
-  diagnostics, and authoring should use these APIs rather than reimplementing parent/override/boundary traversal.
+  expression/type-system consumers, while `BindingScope.locate(...)`, `BindingScope.locateThis(...)`, and
+  `BindingScope.locateBoundary()` return concrete modeled scope/context objects for materializers that must keep
+  evaluating across the resolved runtime context. Observation, diagnostics, and authoring should use these APIs rather
+  than reimplementing parent, override, `$this`, or boundary traversal.
 - `binding-scope-slot-projector.ts` owns the TypeChecker-backed handoff from projected context type members into
   binding-context slot drafts. Keep that projection out of scope product publication so `Scope` remains the runtime
   lookup surface and the type-system layer remains the source of static member surfaces. If the context type was
@@ -63,6 +64,11 @@ The tooling model should keep that split:
   `state.handleAction`, use `bindingContextSlotTargetTypeShape(...)` to materialize the slot target type from the
   retained checker member carrier. Do not make all view-model slots eagerly project nested members just because one
   template or overlay needs a composed state-class member.
+- When a materializer needs the actual slot named by a source expression, use
+  `bindingContextSlotDraftForExpressionAccess(...)`. It spends `BindingScope.locate(...)` for `AccessScope`, unwraps
+  parentheses and binding behaviors, and walks nested `AccessMember` paths through the same lazy slot-target type
+  projection. Do not add a bound-controller-, overlay-, or router-local source-slot walker for statically slot-shaped
+  expressions.
 - `scope-api-issues.ts` owns direct authored calls to Aurelia's runtime `Scope` static API when source or TypeChecker
   facts prove a null/undefined first argument. It claims runtime `null_scope` (`AUR0203`) for
   `Scope.fromParent(...)`/`Scope.getContext(...)` null scopes and runtime `create_scope_with_null_context` (`AUR0204`)

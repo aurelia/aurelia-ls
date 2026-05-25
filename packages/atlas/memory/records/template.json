@@ -658,6 +658,7 @@
         "Walk interpolation hole expressions when collecting value-converter applications: runtime-html binds and evaluates each InterpolationPartBinding expression, not only the outer Interpolation AST.",
         "Source value-converter application and issue products to the exact converter name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
         "Keep missing converter resource lookup in the runtime-html AST/binding-utils lane; this materializer owns effects after the converter resource is visible.",
+        "Template overlays should call checker-visible converter `toView(...)` methods directly so overload order and argument diagnostics come from TypeScript's native call resolution; the generated identity helper is only for missing converters or converter targets without `toView`, and dynamic `withContext` should emit both strict-true runtime branches. Keep the overlay branch projection paired with the direct TypeChecker expression evaluator union proof.",
         "The first modeled framework path is `SanitizeValueConverter.toView(...)`: visible `sanitize` plus no modeled app `ISanitizer` resolver claims runtime-html `method_not_implemented` / `AUR0099`, while app `ISanitizer` registrations suppress it.",
         "Before adding another converter-owned framework code, inspect `framework.errors` usage rows and use `framework.resources` / `framework.rendering` to confirm the owning runtime concept."
       ],
@@ -1831,6 +1832,7 @@
         "Use TypeChecker constructable candidates as a semantic fallback when value evaluation stays open but the component binding source type names custom-element classes.",
         "Resource-definition lookup can enter through module-local identity when evaluator values carry a module key, or through unique local declaration identity when a TypeChecker declaration is the carrier.",
         "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, and `activate(model)` compares the model binding source type with the activation parameter type through shared checker assignability. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
+        "`activate(model)` parameter projection spends the shared `checker-signature-parameters.ts` overload candidate-basis. Do not regress runtime composition to `getCallSignatures()[0]`; overloaded lifecycle hooks should compare the model against all arity-compatible first-parameter candidates through checker-backed union projection.",
         "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
         "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
         "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
@@ -1936,6 +1938,7 @@
       "guidance": [
         "Start from TemplateControllerScopeMaterializer when repeat.for locals need value-side semantics; it owns the BindingContextSlot creation and can attach representative static values.",
         "Use repeatStaticLocalValue to project conservative representative values from statically known iterables, including common string-pattern property values.",
+        "repeatStaticLocalValue should enter source-value reduction through projectRuntimeBindingSourceValueContextInScope(...), including its no-runtime-binding fallback, so repeat locals do not re-own binding-behavior lifecycle, strict-mode, or value-converter resource-scope policy.",
         "RuntimeBindingSourceValueEvaluator should consume BindingContextSlot.staticValue before falling back to TypeChecker member access; local object/property evaluation belongs there rather than in router or authoring code.",
         "This pass closes the binding-source-slot-no-static-value pressure for static repeat arrays, but it is not recursive per-view hydration. Treat per-item child rendering and controller-bind-value timing as separate future substrate work."
       ],
@@ -2015,7 +2018,7 @@
         "overlay"
       ],
       "summary": "Built-in runtime-html and ui-virtualization template-controller flow now share one framework-resource-backed overlay contract surface.",
-      "rationale": "The built-in controller fixture covers if/else, repeat, with, portal, promise/pending/then/catch, and switch/case/default-case through runtime controller rows, durable BindingScope narrowing, and generated overlay type inference, including repeat array/map/set/number source categories plus switch/case discriminant replay for scalar cases, array cases, default exclusions, and static fall-through chains. The focused contract compares runtime-html template-controller semantics with the runtime-html built-in resource catalog and the framework-source-derived target/name table. It also admits @aurelia/ui-virtualization DefaultVirtualizationConfiguration, materializes the virtual-repeat resource catalog row, proves frameworkTemplateControllerSemantics includes virtual-repeat, and uses a dedicated fixture to prove virtual-repeat.for item locals and $index flow through the same overlay path. Future work should extend the framework-shaped semantics, scope materializer, narrower, and overlay prelude owners rather than adding answer-local TypeScript fallbacks or fixture-only patches.",
+      "rationale": "The built-in controller fixture covers if/else, repeat, with, portal, promise/pending/then/catch, and switch/case/default-case through runtime controller rows, durable BindingScope narrowing, and generated overlay type inference, including repeat array/map/set/number source categories, strict-literal, typeof, property-presence, and instanceof if/else narrowing, plus switch/case discriminant replay for scalar cases, array cases, default exclusions, and static fall-through chains. The focused contract compares runtime-html template-controller semantics with the runtime-html built-in resource catalog and the framework-source-derived target/name table. It also admits @aurelia/ui-virtualization DefaultVirtualizationConfiguration, materializes the virtual-repeat resource catalog row, proves frameworkTemplateControllerSemantics includes virtual-repeat, and uses a dedicated fixture to prove virtual-repeat.for item locals and $index flow through the same overlay path. Future work should extend the framework-shaped semantics, scope materializer, narrower, and overlay prelude owners rather than adding answer-local TypeScript fallbacks or fixture-only patches.",
       "guidance": [
         "Start with template-controller-semantics.ts when a runtime-html template-controller needs a value property, flow kind, or child-view cardinality.",
         "Use TemplateControllerFlowScopeMaterializer for child Scope effects; with.bind value scopes should project the non-nullish object binding context before BindingScopeSlotProjector derives visible members.",
@@ -2023,7 +2026,7 @@
         "Repeat overlay replay should keep array, map, set, and numeric repeat source categories in the shared __au_repeat helper and prove them through the built-in template-controller contract before adding local iterable shortcuts.",
         "Switch/case replay should use the authored switch expression, read static case values from SetPropertyInstruction as runtime strings, read bound expression values from expression products, and model blocking previous cases plus static fall-through chains before narrowing a case branch.",
         "Default-case replay should exclude all readable direct case values; unreadable previous cases or dynamic fall-through should degrade the branch to a plain block instead of inventing a predicate.",
-        "Durable BindingScope slot narrowing for switch equality and fall-through belongs in CheckerExpressionScopeNarrower and TemplateControllerFlowScopeMaterializer; overlay replay should spend those scope facts rather than duplicating API answer code.",
+        "Durable BindingScope slot narrowing for if/else strict literal equality, typeof primitive guards, property-presence `in` guards, `instanceof` constructor guards, switch equality, and fall-through belongs in CheckerExpressionScopeNarrower and TemplateControllerFlowScopeMaterializer; overlay replay should spend those scope facts rather than duplicating API answer code.",
         "Run pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins after changing built-in template-controller semantics, scope replay, resource catalog mirrors, framework-registration admission, or overlay helper generation.",
         "Use pnpm --filter @aurelia-ls/atlas framework:resources -- --projection=convergence --resourceKind=template-controller --detail --rows=30 when deciding whether a template-controller coverage claim is runtime-html-only or broader framework/plugin pressure.",
         "Treat virtual-repeat template-controller resource/scope/overlay flow as covered by this contract, but keep ui-virtualization CollectionStrategyLocator, IDomRenderer, scroller, DOM renderer, and plugin error-policy semantics as a separate deeper pressure frontier."
@@ -2105,13 +2108,17 @@
         "Start with template-type-system-overlay-expression-support.ts before adding or removing an UnsupportedSyntax lane.",
         "The old unsupportedOverlayExpressionSyntax helper was retired; if that symbol still appears as the next work item, treat it as Atlas/Work Router hygiene and route to the support matrix rather than rebuilding a blacklist.",
         "Keep the overlay thread centered even when the immediate work is in template controllers, bindings, observers, resources, or checker projection. Those layers are dependencies that must be connected before overlays can stay faithful without split-brain.",
-        "Keep value-converter syntax lowered through RuntimeValueConverterMaterializer and the overlay prelude; do not treat value converters as arbitrary JavaScript child expressions in authored templates.",
+        "Keep value-converter syntax lowered through RuntimeValueConverterMaterializer, direct checker-visible `toView(...)` calls, and the overlay prelude identity fallback; do not treat value converters as arbitrary JavaScript child expressions in authored templates. Dynamic checker-visible `withContext` must model both runtime strict-true branches rather than choosing one arity locally, and the generated overlay should agree with CheckerExpressionTypeEvaluator on the branch return union.",
+        "Copied source expressions must consume the runtime binding projection's `strictBinding` axis. Strict-false read/call sites lower to optional-chain-shaped TypeScript so overlay diagnostics agree with Aurelia non-strict nullish `astEvaluate`; assignment targets opt out because writeability and assignability belong to binding data-flow/source assignment policy.",
         "Keep binding behaviors value-transparent in expression overlays; bind-time behavior effects and diagnostics belong to RuntimeBindingBehaviorMaterializer.",
         "Keep ForOfStatement, Interpolation, BindingIdentifier, and binding patterns owner-handled. Repeat scope construction and interpolation hole binding should project their child value expressions.",
         "Treat CustomExpression as an owner surface, currently i18n TranslationBinding, rather than as generic unsupported TypeScript syntax.",
-        "Treat DestructuringAssignment as statement-overlay pressure. Do not hide it by pretending it is a standalone TypeScript expression.",
+        "Treat DestructuringAssignment as statement-overlay pressure only if the semantic parser admits it. At the current checkpoint, semantic-runtime normalizes repeat destructuring into binding patterns; Atlas expression:coverage reports that class as normalized-unconstructed with dormant statement-frontier flags rather than an active overlay gap.",
         "TypeScript-shaped parents may splice generated child expression parts only when spans are source-backed and non-overlapping; preserve parent source segments for diagnostic mapping.",
         "Add named TypeScript helper declarations in template-type-system-overlay-prelude.ts rather than inlining helper declarations at expression projection sites. Each helper row should name an owner, emitted declaration names, and non-empty declaration text.",
+        "The repeat prelude helper should use type-level item projection instead of an `any` fallback overload: preserve `any` as `any`, but let `unknown` sources stay unknown so TS18046 can surface through public overlay diagnostics.",
+        "Repeat unknown preservation is not overlay-only: checker repeat element projection and template scope construction should carry an explicit unknown slot so cursor/member diagnostics report no projected members rather than missing-slot-type.",
+        "Repeat locals produced by synthetic array methods depend on hydrated related type references. If Array.flat/flatMap or nested array literals lose a slot type, inspect CheckerTypeShapeAccess.iteratedValueType before adding overlay-local helpers.",
         "Do not add empty prelude rows for concepts that emit no reusable helper. Promise result locals, $this/$parent aliases, and generated temporary locals are overlay plan/layer facts.",
         "Keep TemplateTypeSystemOverlaySkippedReason as an emitted-fact vocabulary, not a planning wishlist. Add a skip reason only when the builder can actually emit it and the owner/substrate gap is understood.",
         "Run pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays after changing expression support, prelude helpers, value-converter lowering, scope alias replay, or overlay source segment construction."
@@ -2142,12 +2149,17 @@
         },
         {
           "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas expression:coverage -- --query=DestructuringAssignment --detail",
+          "summary": "Atlas coverage probe for parser construction, support-matrix ownership, and overlay/evaluator consumer rows for expression AST kinds."
+        },
+        {
+          "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays",
           "summary": "Contract for overlay source mapping, support matrix coverage, generated-child splicing, value-converter lowering, aliases, diagnostics, and public overlay rows."
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-05-25"
     },
     {
       "id": "frontier:ui-virtualization-runtime-semantics",
@@ -2253,16 +2265,39 @@
       "rationale": "Generated TypeScript overlays now have a Program-owned source path, expression support matrix, prelude inventory, template-controller scope replay, explicit overlay diagnostics, and authored-source segment mapping. The open frontier is not to make overlays locally cleverer. It is to ensure overlays spend the same semantic-runtime products as diagnostics, binding/data-flow, observer value channels, i18n CustomExpression owners, evaluation/value-source readers, and future LSP edit plans. The risk is split-brain: TypeScript may accept generated overlay code while Aurelia binding/writeback semantics reject it, a semantic diagnostic may already own the same authored span, or a future rename may see only a generated segment without the non-overlay Aurelia reference family.",
       "guidance": [
         "Start here when asking whether overlays are complete for diagnostics, typechecking, rename, MCP, or LSP readiness.",
+        "Template overlays consume source-value facts indirectly through materialized BindingScope slots and bound-controller/runtime-composition products. Do not make generated TypeScript call RuntimeBindingSourceValueEvaluator locally; fix the upstream binding-flow/source-value path if a slot or value fact is missing.",
         "Use retired-symbol queries such as unsupportedOverlayExpressionSyntax as route hygiene canaries: they should point at the overlay expression support matrix and integration route, not at fresh evaluator/parser implementation work.",
         "Keep template-controller, binding/data-flow, observer, i18n, router, resource, and evaluator work framed as overlay substrate when the overlay needs those facts; do not add TypeScript-only overlay approximations. Overlay-local `$this`/`$parent` state should stay in the alias replay cursor, while scope facts still come from materialized BindingScope products.",
-        "Statement-shaped surfaces such as DestructuringAssignment need statement/block overlay emission or a lower shared primitive, not a fake standalone expression.",
+        "When overlay replay projects a source expression that creates a child scope, use the expression's runtime source scope rather than the final leaf scope. Repeat iterable sources, let sources, with.bind values, promise sources, and switch/case values should see the parent/source scope aliases that Aurelia would have used at evaluation time. Same-level template-controller conditions can read prior same-level scope effects that have already been replayed into the aggregate synthetic scope, but runtime scope effects must not read the local they are creating.",
+        "Runtime-binding overlay source reads should enter through RuntimeBindingSourceExpressionContextProjector rather than a behavior-name precheck. For source-scope-changing binding behaviors, wrap the copied source expression instead of mutating the generated child-view scope. `& state` changes the binding source evaluation scope through framework binding.useScope(...), while a template-controller child view such as repeat still keeps the original view-model parent for `$parent`.",
+        "The current copied-source wrapper only synthesizes `StateBinding` replay tails because `& state` is the only modeled bind-time source-scope-changing behavior. If another framework binding behavior calls binding.useScope(...), extend the runtime source-expression projector and shared overlay layer vocabulary first; do not add an overlay-local fallback for arbitrary BindingScopeOwnerKind values.",
+        "Runtime-binding overlay source reads also carry strictBinding. Strict-false read/call expressions should generate TypeScript that models non-strict nullish `undefined` results rather than surfacing TS18047 from copied text, while assignment targets stay on the binding data-flow/source-assignment lane.",
+        "Cursor/member-owner reads that need a runtime binding source projection for an expression offset should use bindingSourceContextProjectionForTemplateExpressionParseAtOffset(...) from template-expression-selection.ts, not a completion-local RuntimeBindingSourceExpressionContextProjector fork.",
+        "When cursor completion already has the selected ambient BindingScope, pass it into bindingSourceContextProjectionForTemplateExpressionParseAtOffset(...). That lets repeated controller/rendering applications disambiguate runtime bindings through templateScopeCanEvaluateSourceScope(...) before falling back to a raw known-scope checker context.",
+        "If an overlay source-expression projection produces a source scope unrelated to the ambient overlay scope, keep it as explicit unsupported pressure. Do not recast the projected expression through ambient aliases; the proper fix is lower scope/threading coherence, not a generated-TypeScript fallback.",
+        "Runtime binding selection for overlays should be scoped by `templateScopeCanEvaluateSourceScope(...)`. Same-level synthetic scopes may evaluate a source scope only when `templateScopeCanReplaySourceScope(...)` proves the ambient synthetic scope replayed the source creators and visible slots; a shared parent alone is not sufficient. Identity/source-backed slot type differences are valid refinements, but anonymous source-less slots must keep the same projected type before replay can treat them as the same fact.",
+        "Plural runtime binding source-context selection must converge explicitly. If candidate bindings project to different source scopes, strictness, binding-behavior lifecycle modes, source addresses, or expression spans, the shared selector should stay open rather than allowing overlays, cursor diagnostics, completions, or future edit surfaces to pick the first compatible runtime binding by emission order.",
+        "`templateScopeSourceReplayRelation(...)` owns the broader generated-analysis question: can an ambient scope copy this source expression directly, or must it synthesize deeper source-scope replay layers? Keep that relation in template-scope-replay rather than re-growing overlay-local ancestry checks.",
+        "Bound-controller child root slot projection should spend the same source-expression lifecycle helper as ordinary runtime bindings before overlays read the child slot type. Do not let overlay aliases compensate for a bound-controller-specific AstBindThenEvaluate/AstEvaluateOnly branch.",
+        "Bound-controller child root aliases should use the scope-materialized slot type even when the parent-bound value is structural. If the type needs an importable generated spelling, fix generated-type-expression.ts instead of falling back to the child bindable initializer or suppressing overlay arity diagnostics.",
+        "Do not leak a source-scope-changing template-controller condition into child-view scope. A state-backed `if.bind` condition can type-check through the state source scope, but ordinary child bindings still see the original child view unless they also use `& state`.",
+        "Template completions and weak-member diagnostics must use the resource's runtime-analysis expression world before asking RuntimeBindingSourceExpressionContextProjector for cursor source scope; a fresh expression world loses app/runtime facts such as configured state stores and i18n binding-behavior lifecycle.",
+        "If completions work before diagnostics but lose `type-shape-detail` afterward, inspect expression-cache product lifetime first. Diagnostics can cache expression evaluations whose answer-local TypeShape products are then disposed; CheckerExpressionTypeEvaluator should invalidate stale cache entries instead of completion code tolerating missing details.",
+        "Definition-level expression parses can have several runtime instruction-scope applications. Overlay generation should spend `bindingScopesForTemplateExpressionParse(...)` and emit probes for each unique materialized BindingScope; singular scope lookup is intentionally unambiguous-only so consumers do not silently choose the first recursive render-context row.",
+        "Statement-shaped surfaces such as DestructuringAssignment need statement/block overlay emission or a lower shared primitive when they are actually parser-admitted. The current semantic parser carries repeat destructuring through BindingPattern projection; use the expression coverage script before turning a support-matrix frontier row into implementation work.",
         "CustomExpression should route through owner-specific products, currently i18n TranslationBinding, before generic overlay unsupported-syntax handling changes.",
         "From-view, two-way, checked/select/class/style, getter-only computed targets, nullish writeback, and other direction-sensitive channels must be checked against binding data-flow and observer products, not only generated TypeScript assignability.",
-        "Overlay diagnostics should map checker rows back through exact generated segments and suppress or join rows already owned by semantic diagnostics on the same authored span.",
+        "Runtime-assignment overlay locals should consume the scope-materialized source-local type. The target bindable member may supply an indexed-access expression only when the source-local type still equals the target member type; value-converter `fromView` results and other converted writeback locals should emit their own stable type expression or remain explicit pressure.",
+        "Overlay diagnostics should map checker rows back through exact generated segments and suppress or join rows already owned by semantic diagnostics on the same authored span. Missing-member rows suppress TS2339/TS2551, and binding data-flow source-assignment rows suppress assignment-shaped TS2322/TS2588 so semantic-runtime product diagnostics keep the actionable repair target. Cursor diagnostics must project binding-assignment rows before overlay rows so cursor-time answers spend the same agreement policy as file/app diagnostics.",
+        "Repeat overlay prelude projection should preserve weak app types: `any` may stay `any`, but `unknown` repeat sources should produce unknown locals and public TS18046 diagnostics instead of silently degrading to `any`.",
+        "Keep repeat unknown slot preservation shared below overlays: TypeChecker iterator projection should use the common checker-union helper and materialize unknown locals so semantic cursor diagnostics expose no-members rather than missing-slot-type.",
+        "Generated overlay context-slot locals should spend materialized BindingScope target types when present and degrade to `unknown` when absent; `contract:type-system-overlays` checks generated overlay text for accidental `undefined as any` holes across current canaries.",
+        "Keep synthetic Array.flat/flatMap repeat locals on the shared iterated-type hydration substrate. A compact checker related reference from an inner array must be hydrated before scope construction, otherwise cursor diagnostics regress to missing-slot-type even though the checker can prove the element type.",
         "Future rename/edit work must join overlay source segments with TypeScript references and Aurelia semantic references; overlay provenance alone is not a complete edit reachability model.",
+        "This frontier is nextActionPolicy=when-touched after common app-builder-facing overlay, binding-flow, observer, value-channel, component-object-boundary, computed/getter, and runtime-effect contracts stayed green. Keep it as integration grounding while app-builder discovers concrete generated-code patterns; do not let pixel-perfect rare expression narrowing or abstract overlay completeness block authoring/app-builder work.",
         "If Work Router misses overlay/typechecking/diagnostic/provenance phrases, improve the template-overlay-integration route before continuing product work."
       ],
-      "nextActionPolicy": "proactive",
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -2275,6 +2310,24 @@
           "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
           "symbolName": "templateScopeReplayChain",
           "summary": "Shared BindingScope ancestry replay and `$this`/`$parent` alias reachability policy for overlay, cursor, diagnostic, and future edit surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeCanEvaluateSourceScope",
+          "summary": "Shared source-scope evaluation predicate for ancestor scopes and same-level synthetic scopes that replayed source facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeSourceReplayRelation",
+          "summary": "Shared source-scope relation for generated analyses that can wrap copied expressions in deeper replay layers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeCanReplaySourceScope",
+          "summary": "Same-level synthetic-scope replay predicate that requires source creators and visible slots, not only a common parent scope."
         },
         {
           "kind": "source",
@@ -2293,6 +2346,30 @@
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
           "symbolName": "appendTemplateTypeSystemOverlayScopeBlock",
           "summary": "Overlay layer/block emission boundary for generated checker surfaces, including parent alias capture/replay across generated blocks."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
+          "symbolName": "bindingScopesForTemplateExpressionParse",
+          "summary": "Plural expression-to-runtime-scope selector used by overlays when one instruction has several materialized scope applications."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
+          "symbolName": "runtimeExpressionBindingsForTemplateExpressionParseInScope",
+          "summary": "Scoped runtime binding selector used before overlays copy binding source expressions under a materialized BindingScope."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
+          "symbolName": "bindingSourceContextProjectionForTemplateExpressionParseAtOffset",
+          "summary": "Offset-aware template expression parse to runtime source projection selector for cursor and diagnostic consumers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+          "symbolName": "RuntimeBindingSourceExpressionContextProjector",
+          "summary": "Binding-owned source expression context projector consumed by overlays before copying runtime binding source expressions."
         },
         {
           "kind": "source",
@@ -2332,8 +2409,18 @@
         },
         {
           "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas expression:coverage -- --query=DestructuringAssignment --detail",
+          "summary": "Atlas coverage probe for parser construction, support-matrix ownership, and overlay/evaluator consumer rows for expression AST kinds."
+        },
+        {
+          "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays",
           "summary": "Focused contract for overlay source mapping, support matrix, generated-child splicing, diagnostics, and public overlay rows."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-source-scope",
+          "summary": "Focused contract for cursor completions through runtime binding source scopes without child-scope leakage."
         },
         {
           "kind": "fixture",
@@ -2343,12 +2430,22 @@
         {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-value-converter",
-          "summary": "Pressure fixture for value-converter lowering, generated child splicing, and diagnostic source mapping."
+          "summary": "Pressure fixture for value-converter lowering, direct toView overlay calls, dynamic withContext runtime branches, generated child splicing, and diagnostic source mapping."
         },
         {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller",
           "summary": "Pressure fixture for overlay typing through parent-bound controller values."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-state-binding-scope",
+          "summary": "Pressure fixture proving overlay source reads for `& state` without changing repeat child `$parent` ancestry."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-controller-state-condition-boundary",
+          "summary": "Pressure fixture proving state-backed template-controller conditions do not leak store names into ordinary child bindings."
         },
         {
           "kind": "fixture",
@@ -2376,8 +2473,33 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeCanEvaluateSourceScope"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeSourceReplayRelation"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-scope-replay.ts",
+          "symbolName": "templateScopeCanReplaySourceScope"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-expression-support.ts",
           "symbolName": "templateTypeSystemOverlayExpressionSupportMatrix"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
+          "symbolName": "bindingScopesForTemplateExpressionParse"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-expression-selection.ts",
+          "symbolName": "runtimeExpressionBindingsForTemplateExpressionParseInScope"
         },
         {
           "kind": "source-declaration-exists",
@@ -2386,12 +2508,17 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+          "symbolName": "RuntimeBindingSourceExpressionContextProjector"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
           "symbolName": "RuntimeBindingDataFlowMaterializer"
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-05-25"
     }
   ]
 }

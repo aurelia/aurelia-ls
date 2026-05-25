@@ -2,6 +2,7 @@ import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
+  bindingExpressionAstForParseAtOffset,
   runtimeAcceptedBindingExpressionAstForParse,
   runtimeAssignmentTargetAstForParse,
 } from './expression-parse-projection.js';
@@ -25,6 +26,16 @@ export function bindingExpressionAstForProduct(
 ): ExpressionAstNode | null {
   const parse = readTemplateExpressionParse(store, expressionProductHandle);
   return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+}
+
+/** Reads the cursor-active runtime binding expression for a materialized expression product. */
+export function bindingExpressionAstForProductAtOffset(
+  store: KernelStore,
+  expressionProductHandle: ProductHandle | null,
+  offset: number,
+): ExpressionAstNode | null {
+  const parse = readTemplateExpressionParse(store, expressionProductHandle);
+  return parse == null ? null : bindingExpressionAstForParseAtOffset(parse, offset);
 }
 
 /** Reads the runtime assignment target AST for a materialized expression product. */

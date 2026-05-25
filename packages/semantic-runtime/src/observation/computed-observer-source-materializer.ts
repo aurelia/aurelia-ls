@@ -23,9 +23,11 @@ import {
 import { ExpressionParser } from '../expression/expression-parser.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
-  checkerCollectionSymbolName,
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
+import {
+  checkerArrayMapSetCollectionType,
+} from '../type-system/checker-collection-types.js';
 import {
   checkerPropertySymbol,
   checkerSymbolValueType,
@@ -521,14 +523,7 @@ function checkerDeepObservableCollectionType(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): boolean {
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
-    return true;
-  }
-  const symbolName = checkerCollectionSymbolName(type);
-  return symbolName === 'Map'
-    || symbolName === 'ReadonlyMap'
-    || symbolName === 'Set'
-    || symbolName === 'ReadonlySet';
+  return checkerArrayMapSetCollectionType(checker, type);
 }
 
 function checkerDeepObservableObjectType(

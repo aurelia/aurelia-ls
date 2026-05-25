@@ -1,7 +1,9 @@
 import { BindingScope } from '../configuration/scope.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { Container } from '../di/container.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
+import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
   TemplateBindingMode,
 } from '../template/instruction-ir.js';
@@ -17,11 +19,20 @@ import type { TemplateScopeConstructionEmission } from '../template/template-con
 import {
   effectivePropertyBindingMode,
 } from '../template/runtime-binding-mode-behavior.js';
-import { instructionScopeLookup } from './runtime-binding-expression.js';
+import {
+  instructionScopeLookup,
+  isRuntimeExpressionBinding,
+} from './runtime-binding-expression.js';
 import {
   sameCheckerTypeReference,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
+import {
+  CheckerExpressionTypeBindingBehaviorEvaluation,
+} from '../type-system/expression-type-context.js';
+import {
+  bindingBehaviorEvaluationForRuntimeBindingSource,
+} from './runtime-binding-source-expression-context.js';
 
 export interface RuntimeBoundControllerPropertyValue {
   readonly controllerProductHandle: ProductHandle;
@@ -29,7 +40,17 @@ export interface RuntimeBoundControllerPropertyValue {
   readonly propertyName: string;
   readonly bindingProductHandle: ProductHandle;
   readonly expressionProductHandle: ProductHandle | null;
+  /** Authored source address for the parent binding expression that feeds this child controller property. */
+  readonly sourceAddressHandle: AddressHandle | null;
   readonly sourceScope: BindingScope | null;
+  /** Compiler resource scope visible to the parent binding source expression. */
+  readonly sourceResourceScope: TemplateResourceScope | null;
+  /** Compiler-world container visible to parent binding-source `resolve(...)` calls. */
+  readonly sourceDefaultContainer: Container | null;
+  /** Rendering-controller strict mode that the parent binding uses for source evaluation. */
+  readonly sourceStrictBinding: boolean | null;
+  /** Binding-behavior lifecycle that already shaped the parent source scope handoff. */
+  readonly sourceBindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation;
 }
 
 export interface RuntimeControllerDefinitionReference {
@@ -47,6 +68,7 @@ export interface RuntimeBindingSourceValueRuntimeAnalysis {
 export interface RuntimeBindingSourceValueTemplateResource {
   readonly compilation: {
     readonly compilerWorld: {
+      readonly container: Container;
       readonly resourceScope: TemplateResourceScope | null;
     };
     readonly definition: {
@@ -232,7 +254,12 @@ export function runtimeBoundControllerValueTableForTemplateResources(
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     resources.flatMap((resource) =>
-      boundControllerValuesForRuntimeAnalysis(store, resource.runtimeAnalysis, resource.compilation.compilerWorld.resourceScope)
+      boundControllerValuesForRuntimeAnalysis(
+        store,
+        resource.runtimeAnalysis,
+        resource.compilation.compilerWorld.resourceScope,
+        resource.compilation.compilerWorld.container,
+      )
     ),
     resources.flatMap((resource) => controllerDefinitionsForRuntimeAnalysis(resource)),
   );
@@ -244,11 +271,12 @@ export function extendRuntimeBoundControllerValueTable(
   rootDefinition: RuntimeControllerDefinitionReference,
   runtimeAnalysis: RuntimeBindingSourceValueRuntimeAnalysis,
   resourceScope: TemplateResourceScope | null,
+  sourceDefaultContainer: Container | null,
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     [
       ...base.values,
-      ...boundControllerValuesForRuntimeAnalysis(store, runtimeAnalysis, resourceScope),
+      ...boundControllerValuesForRuntimeAnalysis(store, runtimeAnalysis, resourceScope, sourceDefaultContainer),
     ],
     [
       ...base.readControllerDefinitions(),
@@ -262,6 +290,7 @@ function boundControllerValuesForRuntimeAnalysis(
   store: KernelStore,
   analysis: RuntimeBindingSourceValueRuntimeAnalysis,
   resourceScope: TemplateResourceScope | null,
+  sourceDefaultContainer: Container | null,
 ): readonly RuntimeBoundControllerPropertyValue[] {
   const bindingsByProductHandle = new Map<ProductHandle, RuntimeBinding>(analysis.runtimeRendering.bindings
     .map((binding) => [binding.productHandle, binding]));
@@ -279,7 +308,7 @@ function boundControllerValuesForRuntimeAnalysis(
     }
     const binding = bindingsByProductHandle.get(targetAccess.binding.productHandle) ?? null;
     const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(store, binding, resourceScope);
-    if (binding == null || expressionProductHandle === undefined) {
+    if (binding == null || expressionProductHandle === undefined || !isRuntimeExpressionBinding(binding)) {
       continue;
     }
     const targetController = controllersByProductHandle.get(targetAccess.targetControllerProductHandle) ?? null;
@@ -289,7 +318,12 @@ function boundControllerValuesForRuntimeAnalysis(
       propertyName: targetAccess.targetProperty,
       bindingProductHandle: binding.productHandle,
       expressionProductHandle,
+      sourceAddressHandle: readTemplateExpressionParse(store, expressionProductHandle)?.sourceAddressHandle ?? null,
       sourceScope: scopes.scopeForBinding(analysis.runtimeRendering, binding),
+      sourceResourceScope: resourceScope,
+      sourceDefaultContainer,
+      sourceStrictBinding: analysis.runtimeRendering.readRenderContextForBinding(binding.productHandle)?.renderingController.strict ?? null,
+      sourceBindingBehavior: bindingBehaviorEvaluationForRuntimeBindingSource(binding),
     });
   }
   return values;

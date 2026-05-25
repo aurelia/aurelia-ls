@@ -11,4 +11,4 @@
 <au-compose component="chart-widget" model.bind="selectedWidget"></au-compose>
 <au-compose component="inventory-widget" model="static-widget"></au-compose>
 
-<widget-host kit.bind="kit"></widget-host>
+<widget-host kit.bind="kit | stableWidgetKit & state"></widget-host>

@@ -30,6 +30,8 @@ pnpm --filter @aurelia-ls/atlas pressure:workspace-architecture
 pnpm --filter @aurelia-ls/atlas profile:workspace-architecture
 pnpm --filter @aurelia-ls/atlas pressure:product-architecture
 pnpm --filter @aurelia-ls/atlas profile:product-architecture
+pnpm --filter @aurelia-ls/atlas expression:coverage -- --query=DestructuringAssignment --detail
+pnpm --filter @aurelia-ls/atlas expression:coverage -- --projection=collection-methods --flag=modern-array-framework-observation-gap --detail
 pnpm --filter @aurelia-ls/atlas self-check
 ```
 
@@ -290,6 +292,11 @@ pnpm --filter @aurelia-ls/atlas self-check
   projection includes the `template-callback-evaluation` row for ArrowFunction
   body evaluation with the captured connectable, so callback/proxy questions no
   longer need a manual `ast.eval.ts` read as the first move. Use
+  `--projection=collection-methods --surfaceKind=proxy-observable --detail`
+  when comparing semantic-runtime collection policy to framework proxy wrappers;
+  shared `keys`/`values`/`entries` helpers expand into array, map/set, and
+  `Symbol.iterator` exposure rows.
+  Use
   `--projection=flow-sites --surfaceKind=ast-evaluator` before adding fixture
   boilerplate or product semantics around direct `state.member` template reads.
   The ObserverLocator decision projection is the first read for getter/accessor

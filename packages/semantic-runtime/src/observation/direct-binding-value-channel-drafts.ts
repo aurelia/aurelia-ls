@@ -16,6 +16,7 @@ import {
 } from './runtime-binding-observation.js';
 import type {
   BindingSourceTypeReader,
+  BindingValueChannelDraftContext,
   RuntimeBindingValueChannelDraft,
   RuntimeValueChannelBinding,
 } from './binding-value-channel-draft-types.js';
@@ -28,6 +29,7 @@ export class DirectBindingValueChannelDrafts {
     local: string,
     targetOperation: RuntimeBindingTargetOperation | null,
     readSourceType: BindingSourceTypeReader,
+    context: BindingValueChannelDraftContext,
   ): RuntimeBindingValueChannelDraft {
     if (targetOperation == null) {
       return {
@@ -83,7 +85,10 @@ export class DirectBindingValueChannelDrafts {
         };
       case RuntimeBindingTargetOperationKind.EventListenerAdd:
         const invocationValueType = this.owner.types.eventHandlerInvocationValueType(
+          `${local}:event-handler`,
           sourceType,
+          targetOperation,
+          context,
           targetOperation.sourceAddressHandle,
         );
         return {

@@ -1,18 +1,18 @@
 import ts from 'typescript';
 
-import {
-  BindingScope,
-} from '../configuration/scope.js';
+import type { BindingContextSlot } from '../configuration/scope.js';
 import type {
   CallMemberExpression,
   CallScopeExpression,
   ExpressionAstNode,
 } from '../expression/ast.js';
-import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
+import {
+  CheckerExpressionTypeEvaluationContext,
+} from '../type-system/expression-type-context.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
 import {
   readCheckerTypeShape,
@@ -42,12 +42,10 @@ import {
 } from './trackable-method-dependency-recognition.js';
 
 export interface RuntimeTrackableMethodObservedDependencyRequest {
-  readonly expression: ExpressionAstNode;
-  readonly scope: BindingScope;
+  /** Checker expression request that owns source expression, runtime Scope, source address, and evaluator mode. */
+  readonly checkerContext: CheckerExpressionTypeEvaluationContext;
   readonly store: KernelStore;
   readonly evaluator: CheckerExpressionTypeEvaluator;
-  readonly localKey: string;
-  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 /**
@@ -61,7 +59,7 @@ export function collectRuntimeTrackableMethodObservedDependencyDrafts(
   request: RuntimeTrackableMethodObservedDependencyRequest,
 ): readonly RuntimeObservedDependencyDraft[] {
   const collector = new RuntimeTrackableMethodObservedDependencyCollector(request);
-  collector.visit(request.expression);
+  collector.visit(request.checkerContext.expression);
   return collector.read();
 }
 
@@ -173,7 +171,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   }
 
   private recordCallScope(expression: CallScopeExpression): void {
-    const lookup = this.request.scope.locate(expression.name.name, expression.ancestor);
+    const lookup = this.request.checkerContext.scope.locate(expression.name.name, expression.ancestor);
     const slotMember = checkerTypeMemberForSlot(this.request.store, lookup.slot);
     if (slotMember != null) {
       this.recordTrackableTypeMember(slotMember);
@@ -183,14 +181,10 @@ class RuntimeTrackableMethodObservedDependencyCollector {
   }
 
   private recordCallMember(expression: CallMemberExpression): void {
-    const ownerEvaluation = this.request.evaluator.evaluateWithScope(
+    const ownerEvaluation = this.request.evaluator.evaluate(this.request.checkerContext.child(
       expression.object,
-      this.request.scope,
-      `${this.request.localKey}:trackable-owner:${expression.span.start}`,
-      this.request.sourceAddressHandle,
-      null,
-      { connectable: true, strict: null },
-    );
+      `trackable-owner:${expression.span.start}`,
+    ));
     const ownerType = ownerEvaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? ownerEvaluation.typeShape
       : null;
@@ -206,7 +200,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
       : readOrProjectCheckerTypeMembers(
         this.request.store,
         ownerType,
-        ownerType.productHandle ?? `${this.request.localKey}:trackable-method-owner`,
+        ownerType.productHandle ?? `${this.request.checkerContext.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === expression.name.name) ?? null;
     if (member == null) {
       return;
@@ -228,7 +222,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
       : readOrProjectCheckerTypeMembers(
         this.request.store,
         ownerType,
-        ownerType.productHandle ?? `${this.request.localKey}:trackable-method-owner`,
+        ownerType.productHandle ?? `${this.request.checkerContext.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === methodName) ?? null;
     if (member != null) {
       this.recordTrackableTypeMember(member);
@@ -251,7 +245,7 @@ class RuntimeTrackableMethodObservedDependencyCollector {
 
 function checkerTypeMemberForSlot(
   store: KernelStore,
-  slot: BindingScope['bindingContext']['slots'][number] | null,
+  slot: BindingContextSlot | null,
 ): CheckerTypeMember | null {
   if (slot?.targetProductHandle == null) {
     return null;

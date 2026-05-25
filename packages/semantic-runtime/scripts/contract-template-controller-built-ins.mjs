@@ -144,6 +144,16 @@ assertController('default-case', 'switch-default', 'optional', 'switch-case-to-s
 
 assertExpressionType('$parent.selectProduct(id)', 'boolean');
 assertExpressionType('selectedProduct.label', 'string');
+assertExpressionType('bookOnly(currentItem)', 'string');
+assertExpressionType('currentItem.pages', 'number');
+assertExpressionType('notBookOnly(currentItem)', 'string');
+assertExpressionType('stringOnly(currentPrimitive)', 'string');
+assertExpressionType('numberOnly(currentPrimitive)', 'string');
+assertExpressionType('bookOnly(probedItem)', 'string');
+assertExpressionType('notBookOnly(probedItem)', 'string');
+assertExpressionType('physicalOnly(mixedProduct)', 'string');
+assertExpressionType('mixedProduct.shippingWeight', 'number');
+assertExpressionType('digitalOnly(mixedProduct)', 'string');
 assertExpressionType('label', 'string');
 assertExpressionType('labelLength()', 'number');
 assertExpressionType('arrayProduct.label', 'string');
@@ -195,6 +205,14 @@ assertBranchSlotDisplay('modeGroup', '"other"');
 assertBranchSlotDisplay('fallMode', '"list"');
 assertBranchSlotDisplay('fallMode', '"list" | "detail"');
 assertBranchSlotDisplay('fallMode', '"other"');
+assertBranchSlotDisplay('currentItem', 'BookCatalogItem');
+assertBranchSlotDisplay('currentItem', 'ServiceCatalogItem | ArchivedCatalogItem');
+assertBranchSlotDisplay('currentPrimitive', 'string');
+assertBranchSlotDisplay('currentPrimitive', 'number');
+assertBranchSlotDisplay('probedItem', 'BookCatalogItem');
+assertBranchSlotDisplay('probedItem', 'ServiceCatalogItem | ArchivedCatalogItem');
+assertBranchSlotDisplay('mixedProduct', 'PhysicalBuiltInProduct');
+assertBranchSlotDisplay('mixedProduct', 'DigitalBuiltInProduct');
 
 const summary = {
   fixtureRoot,
@@ -389,7 +407,10 @@ function virtualRepeatControllerCount(runtimeControllers) {
 function branchScopeSlotDisplays(resource) {
   const rows = new Map();
   for (const scope of resource?.runtimeAnalysis.scopes.readScopes() ?? []) {
-    if (!scope.scopeCreators.some((creator) => creator.creatorKind === 'template-controller-branch')) {
+    if (!scope.scopeCreators.some((creator) =>
+      creator.creatorKind === 'template-controller-branch'
+      || creator.creatorKind === 'template-controller-condition'
+    )) {
       continue;
     }
     for (const slot of scope.bindingContext.slots) {

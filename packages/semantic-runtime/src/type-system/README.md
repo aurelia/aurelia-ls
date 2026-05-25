@@ -44,11 +44,38 @@ source, value, expression, or template-local slot.
   the same call-return path as TypeChecker-backed function and constructor types.
 - Project call and construct signatures through a named call projector so overload arity, argument assignability, and
   value-converter `toView(value, ...args)` semantics are not buried in the evaluator switch.
+- Treat `CheckerTypeShape.callReturnType` / `constructReturnType` as a synthetic-shape shortcut only when no retained
+  checker carrier exists. Checker-backed function and constructor calls must pass through `CheckerExpressionCallProjector`
+  so overload arity, argument-sensitive inference, and tagged-template runtime arity stay coherent.
+- Use `checker-signature-parameters.ts` when a non-expression Aurelia lifecycle handoff needs checker call semantics
+  without constructing a fake expression call. ListenerBinding handler references and au-compose `activate(model)`
+  both need runtime-argument overload narrowing, and matcher bindings need their two-value comparison call shape;
+  none of these should read `getCallSignatures()[0]` or trust `CheckerTypeShape.callReturnType` for checker-backed
+  callable values.
+- Use the same signature substrate for non-call-site constructor semantics. `instanceof` narrowing and runtime target
+  instance projection should use the union of construct-signature return types, matching TypeScript's narrowing lane,
+  while authored `new ...(...)` expressions stay in `CheckerExpressionCallProjector` so argument-sensitive overload
+  selection remains call-site-shaped.
 - Keep call-argument and callback-parameter context related but distinct. A positional callback parameter receives the
   value at one runtime argument position, while a callback rest parameter receives the array or tuple of remaining
-  values; both policies belong in `CheckerExpressionCallProjector`.
+  values; both policies belong in `CheckerExpressionCallProjector`. Cursor/member-owner descent should ask that same
+  call projector for callback parameter scopes on checker-backed call and construct arguments, so overloaded callbacks
+  such as `Array.prototype.reduce` do not need answer-local completion heuristics.
+- Let call-signature projection spend simple direct generic inference from non-callback arguments before projecting
+  callback locals. `Array.prototype.reduce(..., initialValue)` is the canary: the accumulator's `U` should come from the
+  initial value before cursor, diagnostic, observation, or return-type projection reads the reducer callback.
+- Keep native Array method projection split by type source. Checker-backed arrays should use TypeScript's declared call
+  signatures; product-owned synthetic arrays and tuples use `CheckerExpressionArrayMethodProjector`; concrete static
+  binding-source value reduction uses `RuntimeBindingSourceArrayMethodEvaluator`.
+- Keep the standard-library boundary explicit. TypeScript owns declared library member surfaces, generics, overloads,
+  readonly/mutable variants, and ordinary checker inference; semantic-runtime should only add product-owned synthetic
+  shapes where Aurelia runtime/template products have no checker carrier, and those shapes should be the smallest
+  surface needed by downstream Aurelia semantics.
 - Represent expression-level control-flow results as synthetic union shapes with only common safe member surfaces rather
   than turning every different-branch expression into an answer-layer policy decision.
+- Preserve synthetic array/object literal element surfaces by unioning differing closed element shapes instead of
+  degrading them to `Array<mixed>`. Repeat locals, overlays, diagnostics, and cursor inquiries should all see the same
+  common member surface for inline literal collections.
 - Project repeat-local types through runtime repeat semantics, including synthetic tuple-shaped entries for
   `Map<K, V>` / `ReadonlyMap<K, V>` so `[key, value] of map` can flow into the same binding-pattern machinery as
   arrays and object destructuring.
@@ -73,19 +100,50 @@ source, value, expression, or template-local slot.
 - Route checker index-signature reads through `checkerStringIndexValueType(...)` and `checkerNumberIndexValueType(...)`.
   `checker-related-types.ts` owns the union-aware `getIndexTypeOfType(...)` call so router, observation, binding, and
   template consumers do not reopen feature-local index-access helpers.
+- Keep nullish presence and non-nullish projection reusable. `checker-related-types.ts` owns the three-state
+  `CheckerTypeNullishPresence` classification, and `CheckerTypeShapeAccess.nonNullishTypeShape(...)` owns the
+  non-nullish lane over a projected type shape. Member/keyed/call evaluation should spend those primitives so optional
+  or non-strict maybe-nullish reads become the reached value union `undefined`, while strict or unknown strictness stays
+  explicit runtime/open pressure.
+- Keep nullish-union member policy in the same type-shape access substrate. Diagnostic policy that sees a missing
+  member on `T | null | undefined` should ask `checkerTypeShapeNullishUnionHasValueProperty(...)` whether every
+  non-nullish constituent exposes that member before reporting weak-member pressure; do not reopen union constituent
+  walks inside API answer code.
+- Prefer checker-backed unions before synthetic common-member unions when every branch came from the same checker
+  epoch. Preserving the real TypeScript union is what keeps `T[] | undefined` collection, member, and call surfaces
+  available to downstream repeat, source-value, overlay, and diagnostic consumers.
 - Use `checkerTypeHasAnyName(...)` when a feature needs a generic exported/interface-style checker type-name match.
   Feature materializers should not grow local apparent-type/name/display candidate lists unless they are modeling a
   domain-specific runtime rule such as proxy-observation wrapping.
+- Use `checkerArrayOrTupleType(...)` for the low-level checker Array/tuple predicate,
+  `checker-collection-types.ts` for checker literal domains, runtime Array/tuple recognition, and collection/map
+  element/key/value projection, and `checker-primitive-types.ts` for broad primitive assignability plus callable-return
+  primitive checks. Observation value channels, proxy observation, binding-pattern runtime checks, and binding data-flow
+  consume these facts from type-system instead of owning parallel collection/primitive-shape helpers.
 - Preserve the key kind for projected indexed access. A type can be indexable by number without supporting arbitrary
   dot-member fallback; string-index signature semantics, numeric keyed access, and finite literal-key access must stay
   separate so diagnostics do not invent synthetic members for primitive or array-like owners.
 - Spend compiler resource scope when expression semantics need resource lookup. Value-converter projection resolves
   the visible `ValueConverterDefinition`, projects the converter instance type, and reads the `toView` return surface
   without collapsing that lookup into static evaluation.
+- Keep binding-behavior lifecycle explicit on `CheckerExpressionTypeEvaluationContext.runtimeContext`. Most rendered
+  bindings ask the checker the post-`astBind(...)` question, where source-scope-changing behaviors such as `& state`
+  have already affected the source scope. Some framework owners, notably i18n dynamic translation keys, only run
+  `astEvaluate(...)`; those contexts must unwrap binding behaviors without applying bind-time side effects.
 - Preserve TypeScript literal precision for Aurelia primitive literal AST nodes. `checker-primitive-types.ts` owns the
   split between broad runtime primitive result lanes such as interpolation/arithmetic and literal expression lanes such
   as `'open'`, `42`, and `true`; `contract:expression-primitive-literals` keeps expression evaluation and
   template-controller match typing on the same helper.
+- Keep branch-local scope narrowing in `CheckerExpressionScopeNarrower`. Truthy/falsy, nullish/non-nullish, switch
+  match domains, `typeof` primitive guards, property-presence `in` guards, `instanceof` constructor guards, and strict
+  literal equality such as `item.kind === 'book'` should all publish refined `BindingContextSlot` types there,
+  including discriminant-style root-union narrowing when the compared member belongs to a union slot. Overlays may let
+  TypeScript narrow copied expressions, but durable
+  template-controller scopes, completions, diagnostics, and data-flow need the same branch facts without rediscovering
+  them from generated TS.
+- Treat rare branch-narrowing forms as canaries, not as the app-builder readiness gate. Common app-building patterns
+  need coherent scope replay, binding/data-flow, observer/value-channel, repeat/with/promise/switch basics, and
+  diagnostic agreement more than pixel-perfect `in`/`instanceof` completion behavior in every edge case.
 
 ## Non-Responsibilities
 
@@ -205,6 +263,15 @@ diagnostics remain hidden from ordinary project diagnostics while
 the explicit overlay-diagnostic lane maps copied generated segments back to exact authored template spans when
 generated and source lengths match. Broad segment mapping remains the fallback for generated text that does not copy a
 source span one-for-one.
+`generated-type-expression.ts` owns generated TypeScript type expressions for semantic slot aliases. It should prefer
+source-stable importable expressions over display strings, including structural type nodes such as function types whose
+parameter or return types need import rewriting and unqualified checker-global declarations such as DOM element
+interfaces. This keeps bound-controller overlays from falling back to a child placeholder bindable type merely because
+the parent-bound value is a structural function returned by a converter, and keeps listener event overlays from owning
+their own display-string type printer for `currentTarget`/`target` refinements.
+`dom-node-type.ts` owns DOM tag-name and event-map vocabulary. `$event` scope construction, listener handler-reference
+value channels, and generated overlay event helpers should spend that vocabulary instead of spelling
+`GlobalEventHandlersEventMap`/`HTMLElementEventMap` fallback policy locally.
 The template overlay path now has a selector/expression/plan/emitter split: `template-expression-selection.ts` owns the
 shared expression/value-site and expression-parse to runtime-scope lookup used by cursor inquiries, diagnostics, and
 overlays; `template-type-system-overlay-expression.ts` owns copied authored expression projection and named
@@ -239,11 +306,13 @@ guards. Non-replayed binding-pattern
 current-context aliases remain explicit pressure until the alias layer can represent them without obscuring Aurelia's
 runtime lookup rules.
 The `template-overlay-value-converter` fixture proves the first generated Aurelia-expression call surface: when resource
-recognition supplies an importable value-converter target, the overlay emits a typed `useConverter`-shaped helper rather
-than reinterpreting converter syntax locally. The helper calls the converter's `toView(value, ...args)` surface when it
-exists, inserts the framework caller-context slot when the converter has literal `withContext = true`, preserves the
-input value when the converter type has no `toView`, and still lets TypeScript report argument diagnostics such as
-TS2345 on authored converter arguments when the method exists. The same projection is accepted by overlay scope layers,
+recognition supplies an importable value-converter target with checker-visible `toView`, the overlay emits a direct
+converter method call rather than a conditional helper so TypeScript's native overload selection remains authoritative.
+Literal `withContext = true` inserts the framework caller-context slot before authored arguments, converter types
+without `toView` fall back to the runtime-identity helper, checker-visible dynamic `withContext` emits both runtime
+strict-true branches, and TS2345 diagnostics still map to authored converter argument spans when the method exists. The
+fixture keeps the dynamic branches return-distinct so the overlay and direct `CheckerExpressionTypeEvaluator` contract
+must both infer the same `string | number` union instead of accidentally choosing one arity. The same projection is accepted by overlay scope layers,
 so converter calls can participate in `if.bind` conditions and `repeat.for` iterable setup instead of being limited to
 standalone expression probes. Built-in converters whose resource metadata lacks an importable module path can derive
 their target type from checker carrier declarations. Missing converters use an unknown converter placeholder so
@@ -256,6 +325,19 @@ data-flow because it has the binding direction, observer value channel, source w
 assignability, and framework `astAssign` policy. When a public diagnostic needs a precise user span, it should derive
 the assignment target through the shared runtime assignment-target AST helper while keeping the data-flow product as the
 semantic fact.
+Overlay scope replay must project each replayed owner expression with the `BindingScope` where Aurelia evaluates that
+owner expression, not with the final leaf expression scope. Repeat iterable sources, `let` sources, `with.bind` values,
+and promise sources are evaluated before the child scope they create, so their overlay projection uses the parent/source
+scope's `$this`/`$parent` alias support. Same-level branch and condition creators may read the aggregate synthetic scope
+that already replayed earlier same-level `let`, repeat, or runtime-assignment facts, but a scope effect must never read
+the local it is creating. The final leaf scope is still used for the expression probe itself. This keeps generated
+TypeScript from accidentally accepting an ancestor alias only because a deeper child expression happened to have more
+replayed parents, while still letting later branch guards see legitimate same-level facts.
+Expression-to-scope selection is plural at the helper boundary: compiled instruction products are definition-level
+carriers, while runtime rendering may apply the same instruction under several controller/scope contexts. Overlay
+generation uses `bindingScopesForTemplateExpressionParse(...)` and emits probes for each unique materialized scope;
+the singular `bindingScopeForTemplateExpressionParse(...)` is intentionally unambiguous-only so cursor-like consumers
+can fall back to source-span scope selection instead of silently picking the first render-context row.
 `$this`, `$parent`, and boundary `this` expression source tokens are binding-context alias pressure, not ordinary
 TypeScript name-resolution failures. The overlay currently emits a typed resource-template function, binds root
 `$this` from that function `this`, and adds repeat-scope `$parent`/`$this` aliases from replayed binding-context slots.
@@ -269,15 +351,25 @@ relationship. Public rows currently admit semantic TypeScript codes such as miss
 type/argument mismatch, and readonly assignment, and carry `missingInput: "typescript:TS####"` plus a structured
 `inspect-owner-type` action target over the authored expression span. Missing-member overlay rows are suppressed when
 the semantic template diagnostic lane already owns the same authored span, so TypeScript becomes checker evidence
-rather than a duplicate issue. The public fixture currently keeps argument mismatch, arity mismatch, and nullish access
-rows as TypeScript-native overlay evidence, and the value-converter fixture adds converter argument mismatch over the
-same policy. Keep this policy narrow until ancestor aliases and event target/currentTarget refinements have first-class
-overlay semantics.
+rather than a duplicate issue. Binding assignment overlay rows follow the same rule: if data-flow already owns
+assignment strictness or runtime no-op for the authored span, suppress assignment-shaped TS2322/TS2588 and keep the
+semantic-runtime product diagnostic as the actionable surface. The public fixture currently keeps argument mismatch,
+arity mismatch, and nullish access
+rows as TypeScript-native overlay evidence, preserves TS18046 for unknown repeat locals instead of weakening them to
+`any`, and the value-converter fixture adds converter argument mismatch over the same policy. The matching repeat
+scope projection must also preserve unknown as an explicit TypeChecker-backed slot, so semantic cursor diagnostics
+report `no-members` on a known weak owner instead of `missing-slot-type`. Keep this policy narrow
+until ancestor aliases and event target/currentTarget refinements have first-class overlay semantics.
+Generated overlay locals follow the same rule: when a materialized scope slot carries a target type, the overlay emits
+that type; when no target type exists, it emits `unknown`, not `any`. `contract:type-system-overlays` makes this
+contract-visible by checking generated overlay text for accidental `undefined as any` holes.
 Template cursor-info participates in that same public projection when a caller opts into
 `diagnosticProjection: "type-projection"`. Cursor-info does not run a separate hover checker; it filters mapped overlay
 diagnostic rows to the active authored cursor span and reuses the same duplicate-suppression and TypeScript-code
-admission policy as template diagnostics. This keeps cursor-time explanations aligned with file/app diagnostics while
-still allowing cheaper `available-products` cursor reads when TypeChecker overlay diagnostics are not needed.
+admission policy as template diagnostics. Cursor-time binding assignment rows are collected before overlay rows for the
+same span, so TS2322/TS2588 stays suppressed there too. This keeps cursor-time explanations aligned with file/app
+diagnostics while still allowing cheaper `available-products` cursor reads when TypeChecker overlay diagnostics are not
+needed.
 Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
 different AST identity from the Program epoch. Prefer `TypeSystemProject.readProgramSourceFileByPath(...)` or
@@ -292,6 +384,9 @@ checker-owned declaration, or a missing overlay/source admission signal.
 Source addresses may carry host-facing workspace-relative paths, while project admissions carry project-relative paths.
 `TypeSystemProject.readProgramSourceFileByPath(...)` accepts absolute, project-relative, and workspace-relative paths so
 a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics beside the checker epoch.
+`source-address-expression.ts` owns the shared "source-span address to exact TypeScript expression" read used by
+state-store initial-state type projection and binding-source value reduction. Add to that helper instead of copying
+local `smallestExpressionForSpan(...)` walks into evaluator, state, router, or template code.
 Evaluator-owned AST access is deliberately named `readEvaluatedSourceFileByPath(...)` / `readEvaluatedSourceFileByModuleKey(...)`
 so call sites do not accidentally use an evaluation SourceFile with the checker.
 Checker-observed source-file addresses keep their file-role metadata in public `SemanticSourceReference.sourceFileRole`
@@ -396,24 +491,51 @@ these forms for data-flow while another path does not, source/member routes beco
 the runtime expression is valid. Interpolation holes are separate runtime expression parts: type and observation
 consumers that need per-hole binding-behavior handoffs should project each part instead of relying on the outer
 `Interpolation` AST as one scope.
-`evaluateWithScope(...)` also accepts a small runtime context for framework choices that affect evaluation. The modeled
-mode bits mirror Aurelia's `astEvaluate` call shape: `connectable` controls the source-to-target dependency-collection
-guard, while `strict` controls whether nullish member/keyed/call reads become runtime errors or ordinary `undefined`
-results. Unknown strictness stays open so diagnostics do not claim a framework error without a proven runtime evaluator
-mode. `++`, `--`, and compound assignment become an explicit open kind when a binding connectable is collecting
-dependencies because Aurelia throws `ast_increment_infinite_loop`; listener/event-style evaluations that pass no
-connectable can still project a numeric result.
+`CheckerExpressionTypeEvaluationContext` is the TypeChecker request envelope for expression evaluation. It carries the
+AST, modeled `BindingScope`, semantic local key, source address, contextual target type, and the small runtime mode that
+mirrors Aurelia's `astEvaluate` call shape. `connectable` controls the source-to-target dependency-collection guard,
+while `strict` controls whether nullish member/keyed/call reads become runtime errors or ordinary `undefined` results.
+Unknown strictness stays open so diagnostics do not claim a framework error without a proven runtime evaluator mode.
+`++`, `--`, and compound assignment become an explicit open kind when a binding connectable is collecting dependencies
+because Aurelia throws `ast_increment_infinite_loop`; listener/event-style evaluations that pass no connectable can
+still project a numeric result. Public evaluator entrypoints that ask expression-type or offset/member-owner questions
+should enter through a named context factory at the request boundary instead of reassembling expression/scope/source
+axes locally. Raw construction is intentionally kept inside the context class; non-rendered exact-scope callers use
+`CheckerExpressionTypeEvaluationContext.knownScope(...)`, and rendered runtime bindings use
+`checkerContextForRuntimeBindingSourceExpressionProjection(...)`.
+The runtime binding-source projection is also the lifetime carrier for binding-behavior scope projection: it keeps the
+`RuntimeBindingExpressionScopeProjector` that performed the original source handoff, and source-value consumers derive
+their evaluation context from that projection rather than passing a second projector beside it. This keeps TypeChecker
+expression reads and static source-value reduction on the same proven lifecycle axis for `& state`, i18n evaluate-only
+keys, recursive render contexts, bound-controller reads, and composition inputs.
+The context is generic over the current Aurelia AST node so feature-specific evaluator calls can require a proven
+expression owner without accepting loose scope/local/source/runtime arguments. Value-converter `fromView` writeback is
+the canary: it now evaluates each converter method from a `CheckerExpressionTypeEvaluationContext<ValueConverterExpression>`
+child of the already-projected binding source context.
+Evaluator-adjacent projectors that descend into child expressions, callable arguments, value-converter inputs, or
+cursor member-owner paths should receive or derive `CheckerExpressionTypeEvaluationContext` requests rather than adding
+parallel parameter-list wrappers for the same axes. `CheckerExpressionCallProjector` receives that context when it is
+asked to evaluate call or construct arguments for overload selection, but its narrower contextual-parameter helpers can
+stay type-shape based because they answer signature questions rather than evaluating an Aurelia expression request.
+`contract:expression-context-usage` is the structural guard for this boundary: direct context construction is allowed
+only in the context type itself, contract scripts are scanned for old constructor leaks, documented exact-scope fallback
+owners must use `knownScope(...)`, and rendered binding, overlay, diagnostics, i18n, router, and observation consumers
+should normally enter through the runtime binding-source projection helper.
 Its companion files are part of the same substrate: `expression-type-evaluation.ts` owns result/open/cache vocabulary,
 `expression-type-world.ts` owns cache/evaluator lifetime, `expression-type-support.ts` owns shared checker-carrier,
 global, primitive, project/open/resolve/union primitives for evaluator-side projectors, `expression-type-synthesis.ts`
 owns synthetic expression/template type-shape construction, `expression-call-projector.ts` owns TypeChecker
 call/construct signature selection and return projection, `expression-argument-context-projector.ts` owns the bridge
 from Aurelia callable AST forms to contextual argument types, and
-`checker-type-shape-access.ts` owns reusable member, apparent-member, keyed, finite-keyed, index-signature, and
-member-write access over projected type-shape products. `checker-type-union.ts` owns the narrow bridge to TypeScript's
+`checker-type-shape-access.ts` owns reusable member, apparent-member, keyed, finite-keyed, index-signature, member-write,
+and keyed-write access over projected type-shape products. `checker-type-union.ts` owns the narrow bridge to TypeScript's
 checker-backed union factory when all alternatives come from the same hot checker epoch. Observation maps those
 lower-level access results into Aurelia `astAssign` policy instead of reopening checker member lookup beside expression
 evaluation.
+Mapped types such as `Record<K, V>` can expose finite property symbols without source declarations. Member/write access
+should still classify those through the checker carrier and the mapped readonly token: mutable mapped properties are
+writable runtime targets, while `Readonly<Record<K, V>>` remains TypeScript-strictness pressure. Do not treat an empty
+declaration list on a checker synthetic mapped property as an open source-assignment result by itself.
 `expression-access-projector.ts` sits one layer above that lower type-shape access substrate: it owns Aurelia
 AccessMember/AccessKeyed/CallMember callee semantics, including owner/key evaluation, optional and non-strict nullish
 reads, finite keyed access, and index-signature fallback. Keep runtime expression access policy there instead of
@@ -439,9 +561,20 @@ diagnostics hooked through this projector instead of adding template-controller-
 `expression-resource-projector.ts` owns expression-level resource semantics for value converters and binding behaviors:
 compiler resource-scope lookup, converter target hydration, value-converter method projection, and duplicate behavior
 checks. `toView` and `fromView` both route through the same checker call projector; if the converter target does not
-expose the requested method, the framework `useConverter(...)` fallback leaves the value unchanged. Keep those
-resource-expression policies there instead of threading resource lookups through the evaluator switch or
-completion-specific helpers.
+expose the requested method, the framework `useConverter(...)` fallback leaves the value unchanged. Template overlays
+emit direct `toView(...)` method calls whenever the method is checker-visible instead of wrapping overload surfaces in a
+generic conditional helper; dynamic `withContext` still emits an explicit runtime-branch expression because the branch
+itself is the framework call-shape policy. Keep those resource-expression policies there instead of threading resource lookups through the evaluator switch or
+completion-specific helpers. Converter method projection keeps the outer `ValueConverter` expression as the call
+context, then hands the converter input, optional caller-context, and authored converter args to the call projector as
+child expression arguments so overload selection and generated overlay calls spend the same TypeChecker call semantics.
+`value-converter-writeback.ts` is the shared `astAssign` bridge for `fromView`: binding data-flow and runtime-assignment
+scope construction both use it, so target-to-source assignment rows and synthetic writeback locals cannot drift into
+parallel converter-chain loops.
+Callers that start from a lazy `CheckerTypeMember.valueType` must materialize the reference before converter
+projection; a checker-key-only reference is fine for display, but `fromView` overload selection needs the current
+program's retained checker carrier. Use the shared expression world/projector for that handoff instead of inventing a
+feature-local type hydrator.
 `expression-member-owner-projector.ts` owns cursor-offset member-owner projection and delegates
 value evaluation plus arrow-function scope creation back to the evaluator, so completion and diagnostic code do not
 grow separate offset walkers. `expression-branch-scope.ts` owns expression-local truthy/falsy branch Scope projection,
@@ -497,6 +630,11 @@ callback parameter typing, object-option typing, and nested literal context do n
   `bindingContextSlotTargetTypeShape(...)` is the shared continuation for that case: it spends the slot's retained
   checker member carrier and `CheckerTypeProjector.ensureProjection(...)`, keeping the member surface lazy while giving
   scope construction, overlays, and future cursor inquiries one grounded way to continue through the slot.
+- Statically slot-shaped source expressions should enter that same continuation through
+  `bindingContextSlotDraftForExpressionAccess(...)`. It converts `AccessScope`/`AccessThis`/`AccessMember` paths into a
+  `BindingContextSlotDraft` by spending the runtime `BindingScope` first and only then asking the TypeChecker member
+  surface for deeper members. That keeps child root slots, overlay aliases, and future reference/cursor consumers on one
+  source-slot path instead of pairing a TypeChecker member chain with an unrelated Scope lookup.
 - Checker type members do not have standalone durable kernel identities by default. Their hot `productHandle` is an
   in-process follow-up key; value-type projections and scope slots should use the member declaration identity when one
   exists, otherwise the owning type-shape identity. Do not invent a `TypeSystemIdentity` only to parent a member value.
@@ -509,6 +647,13 @@ callback parameter typing, object-option typing, and nested literal context do n
   the product they actually need. Runtime binding-scope construction is also a legitimate enumeration consumer:
   `BindingScopeSlotProjector` may spend `readOrProjectCheckerTypeMembers(...)` so view-model fields such as route
   class references are visible to Aurelia expression lookup.
+- `checkerMemberStrictTrueComparisonKind(...)` is the shared policy for framework branches that literally test
+  `member === true`. It keeps absent members separate from dynamic maybe-true values, so products can decide early
+  whether a branch is definitely off, definitely on, or must remain represented as both possible runtime branches.
+- `value-converter-call-surface.ts` owns the named `toView`/`fromView`/`withContext` surface and the checker-visible
+  `withContext === true` policy consumed by expression typing, source-value reduction, and template overlays. Keep that
+  arity decision shared; generated overlays, TypeChecker evaluator calls, and source-value reduction should not
+  rediscover converter caller-context behavior through local member scans.
 - Checker member write access is also a source-routing substrate, not just a boolean writability helper. When
   `CheckerTypeShapeAccess.memberWriteAccess(...)` falls back to a raw checker/apparent-property symbol, it materializes
   the member's value/declaration source before returning. Binding data-flow spends that source as
@@ -519,8 +664,9 @@ callback parameter typing, object-option typing, and nested literal context do n
 - The expression type evaluator is deliberately member-surface-oriented, not runtime-value-oriented. Value converters
   can close over checker-visible `toView`/`fromView` return types because the compiler resource scope supplies a
   runtime definition; the call projector treats the converter's input value as the first method argument, inserts a
-  synthesized caller-context argument for literal `withContext = true`, and then spends converter arguments for overload
-  selection. Missing converter methods are identity conversions, matching runtime-html `evaluatorUseConverter(...)`,
+  synthesized caller-context argument for literal `withContext = true`, unions both strict-true runtime branches when
+  `withContext` may be true but is not fixed, and then spends converter arguments for overload selection. Missing
+  converter methods are identity conversions, matching runtime-html `evaluatorUseConverter(...)`,
   while missing converter resources remain open. Call/construct projection is intentionally lazy: a single
   arity-compatible signature does not cause argument evaluation just to re-prove the same return type, while overloaded
   surfaces can spend argument assignability to narrow the return lane. Generic inference from synthetic arguments,
@@ -573,6 +719,11 @@ callback parameter typing, object-option typing, and nested literal context do n
   visible `TemplateResourceScope`, expression kind/span or source address, runtime evaluation mode, and contextual type
   before reading the world cache. Caller local keys still name the semantic role and projection handles, but callers do
   not need to manually encode every scope dimension to avoid cross-template or cross-resource cache reuse.
+- The shared expression cache is product-lifetime-aware. Public query profiles may dispose answer-local TypeShape
+  products after shaping diagnostics, completions, or cursor answers; if a cached expression evaluation points at a
+  disposed type product, `CheckerExpressionTypeEvaluator` treats that cache entry as stale and re-evaluates through the
+  ordinary projector. Do not patch downstream answer helpers to tolerate missing type-shape detail when the correct fix
+  is cache/product lifetime coherence.
 - Expression projection handles must spend the same expression source-span lane as the cache key. `CheckerTypeProjector`
   can legitimately reuse type shapes by local projection key before deeper TypeChecker identity checks, so
   `CheckerExpressionTypeEvaluator` appends the expression kind/span to the projection local key before evaluating a
@@ -599,9 +750,15 @@ callback parameter typing, object-option typing, and nested literal context do n
   composition, diagnostics, resource convergence, router, or shape-access code unless the framework semantics require a
   narrower lookup. Product-architecture checker-call pressure is the canary for this: direct `getPropertyOfType` calls
   should stay inside the type-system substrate unless a new caller has an explicitly documented narrower lookup.
-- `contract:checker-value-access` is the executable canary for that ownership rule. It allows TypeChecker value-access
-  calls inside `type-system/` and the proxy-observation collector's documented local function-body context; any other
-  feature-side checker call should first prove that TypeSystemProject, checker helpers, or shape access cannot own it.
+- `contract:checker-value-access` is the executable canary for that ownership rule. It now covers direct value access,
+  assignability, collection-shape, and type-argument checker calls. It allows those calls inside `type-system/` and the
+  proxy-observation collector's documented local function-body context; any other feature-side checker call should first
+  prove that TypeSystemProject, checker helpers, collection helpers, or shape access cannot own it.
+- Raw checker assignability is also centralized. Use `checkerRawTypeAssignable(...)`,
+  `checkerTypeReferenceAssignable(...)`, or the primitive/string-domain helpers in `checker-primitive-types.ts` instead
+  of calling `checker.isTypeAssignableTo(...)` from observation, i18n, template, or expression policy code. The product
+  may publish earlier assignability facts than the framework checks at runtime when doing so gives clearer diagnostics
+  and authoring guidance; the split point should still live in a shared TypeChecker helper rather than a local AST walk.
 - `TypeSystemProject` owns ordinary Program-node remaps before `getTypeAtLocation(...)`. Feature code that receives
   nodes from evaluation, resource convergence, diagnostics, or template materialization should call
   `readProgramTypeAtLocation(...)` instead of reading directly from `typeSystem.checker`; the only expected non-owner
@@ -618,9 +775,27 @@ callback parameter typing, object-option typing, and nested literal context do n
 - `CheckerExpressionCallProjector` owns the distinction between runtime argument context and callback parameter binding
   context. Target rest parameters unwrap to their element type for ordinary arguments and positional callback
   parameters, but arrow rest bindings preserve the target rest array or synthesize a tuple-shaped remaining-argument
-  product when the target signature is fixed-arity. Optional callable target parameters, such as
-  `Array.prototype.sort(compareFn?)`, should spend the non-nullish callable signature when typing arrow parameters; a
-  union with `undefined` at the callback value boundary must not force callback locals back to `unknown`.
+  product when the target signature is fixed-arity. Optional callable target parameters and maybe-nullish callable
+  targets, such as `Array.prototype.sort(compareFn?)` or `maybeFormatter?.(value => value.member)`, should spend the
+  non-nullish callable signature when typing arrow parameters; a union with `null`/`undefined` at the callback value or
+  callee boundary must not force callback locals back to `unknown`.
+- `checker-signature-parameters.ts` owns overload candidate-basis and runtime-argument-to-parameter projection below
+  the expression call projector. Use it when a non-expression product, such as `AuCompose activate(model)`, needs the
+  same callable parameter semantics without creating a fake Aurelia expression or choosing the first TypeScript
+  signature by accident.
+- Direct type-parameter inference in `CheckerExpressionCallProjector` is intentionally narrow: only direct
+  type-parameter parameter slots are inferred from non-callback arguments before callback scopes are projected. This is
+  not a local TypeScript inference clone; it exists so product-owned Aurelia expressions spend enough call context to
+  avoid `Product | U`-style weak owners on common callback APIs without inventing answer-layer repairs.
+- The bounding rule is not "model every intrinsic that appears in a template." Checker-backed expressions should stay
+  on TypeScript declarations and the call projector. Product-owned synthetic shapes should receive only the members
+  that semantic-runtime itself manufactured, such as synthetic arrays/tuples from inline literals or template locals.
+  Static source-value reduction should close deterministic values only when a consumer needs them; otherwise keep the
+  type/reference answer checker-backed and the value answer open.
+- Use the authority test before adding another standard-library case: Program-owned TypeChecker carriers answer types,
+  overloads, generics, readonly/mutable library variants, and ordinary inference; semantic-runtime answers only the
+  Aurelia-specific crossing, such as synthetic product shapes with no checker carrier, template/control-flow scopes,
+  observer/data-flow consequences, or source values that a concrete product consumer spends.
 - Overload narrowing must account for TypeScript callback overloads whose parameter surfaces are identical but return
   contracts differ. `Array.prototype.filter` is the important canary: Aurelia template arrows cannot spell a TypeScript
   type-predicate return, so inline arrows should reject the type-guard overload and choose the ordinary predicate
@@ -628,6 +803,30 @@ callback parameter typing, object-option typing, and nested literal context do n
   callback-local `product` in `products.filter(product => product.tags.includes(label))` remains `Product` while the
   call return closes as `Product[]`, not `S[] | Product[]`. Keep this policy in the call projector instead of teaching
   diagnostics or observation to special-case array methods.
+- Native Array methods on synthetic arrays are not TypeScript overload projection, because no checker carrier exists for
+  the synthetic receiver. `CheckerExpressionArrayMethodProjector` owns the product-side method semantics for
+  `map`/`filter`/`find`/`flatMap`/`reduce`/`sort`-style calls over synthetic array and tuple shapes, including callback
+  scopes that mirror framework `astEvaluate` parameter order. This prevents inline literal arrays from being precise in
+  overlays but missing in direct expression, repeat, diagnostic, or cursor projections.
+- Synthetic Array callback support stops at the Aurelia crossing. It should prove callback parameter flow, member
+  access, and the Array method's product-owned return shape, but it should not reduce arbitrary standard-library calls
+  such as `String.prototype.localeCompare` on synthetic primitive values just because they appear inside a callback.
+- Result-independent callback methods such as `filter`, `find`, `some`, `every`, `forEach`, `sort`, and `toSorted`
+  should validate that the required callback exists and then project the product-owned call result without evaluating
+  the callback body for the whole-call type. Cursor/member-owner descent may still enter that same callback body through
+  `callbackScopeForArgument(...)` when the inquiry locus is inside the callback.
+  Atlas collection-method coverage names this as the `callbackBodyDrivesTypeProjection` axis so predicate/comparator
+  methods do not get conflated with `map`/`flatMap`/`reduce` return-shaping callbacks.
+- Compact related type references such as `iteratedValueType` may need hydration before another product-owned
+  synthetic shape consumes them. `CheckerTypeShapeAccess.iteratedValueType(...)` is the shared handoff: it resolves
+  already materialized product references and, when the owner has a checker carrier, projects the checker iterable
+  element type lazily. Keep `Array.flat`/`flatMap`, repeat source projection, and future iterator-like products on this
+  helper instead of letting compact checker references turn into missing-slot diagnostics downstream.
+- Cursor/member-owner descent through inline synthetic Array callbacks must reuse that same callback scope instead of
+  inventing a fake checker signature. `callbackScopeForArgument(...)` is the handoff from CallMember argument position
+  into the product-owned callback locals used by whole-expression evaluation.
+- `contract:contextual-call-argument-completion` keeps the public cursor/completion side honest for TypeChecker-backed
+  callback arguments, checker-backed arrays, and synthetic array method callbacks.
 - Template completion and file/app diagnostic scans also enter through `CheckerExpressionTypeWorld`. The query object
   stays product-handle-shaped, but cursor-context construction may receive a hot world so repeated diagnostic probes
   share the same projector/evaluator cache instead of rebuilding a local TypeChecker expression stack per member span.
@@ -637,15 +836,23 @@ callback parameter typing, object-option typing, and nested literal context do n
 - Synthetic union shapes preserve only members and secondary type references common to every branch. If a future inquiry
   needs branch-aware completions, add an explicit answer continuation instead of weakening the union product into a bag
   of possible names.
+- Synthetic array literals should use the same union machinery for their element/indexed/iterated type when every
+  closed element shape is known but the exact element references differ. This keeps inline literal repeat sources such
+  as `item of [{ id: 'first' }, { id: 'second' }]` aligned across CheckerExpressionTypeEvaluator,
+  CheckerExpressionIterableProjector, template overlays, and eventual diagnostics instead of making overlay-generated
+  TypeScript more precise than the product model.
 - When all union alternatives still carry hot TypeChecker types from the same checker epoch, use
   `checkerBackedUnionTypeForReferences` before falling back to a synthetic union display. This matters for runtime
   value-channel facts such as `option model.bind="null"` plus `option value.bind="product.id"`: the target value is
   really `string | null`, and target-to-source assignability should compare that checker-owned union rather than hide
   behind the bound source type.
 - Template-controller branch narrowing is deliberately explicit and local. The current closed branch profile handles
-  scope-name truthiness, loose nullish comparisons, simple boolean negation, truthy `&&`, falsy `||`, and adjacent
-  `else` negative narrowing. Broader control-flow analysis should continue to land as named semantic profiles rather
-  than as accidental evaluator behavior.
+  scope-name truthiness, loose nullish comparisons, simple boolean negation, truthy `&&`, falsy `||`, `typeof`
+  primitive guards, strict literal equality, property-presence `in` guards, `instanceof` constructor guards, and
+  adjacent `else` negative narrowing. Broader control-flow analysis should continue to land as named semantic profiles
+  rather than as accidental evaluator behavior. Branch narrowing may unwrap binding behaviors through the rendered binding
+  source-expression projector, but a scope-changing behavior such as `& state` must not leak its source scope into the
+  child synthetic view; the child binding still needs its own source-scope-changing behavior to read store members.
 - Template-controller branch replay is not the same as branch narrowing. When no narrowed slot can be published, the
   scope still needs a `TemplateControllerCondition` creator carrying the condition instruction and polarity so overlays,
   diagnostics, and future completion surfaces can reconstruct the child-view guard.
@@ -674,6 +881,9 @@ callback parameter typing, object-option typing, and nested literal context do n
   resolvers inside answer code or expression semantics. Use `memberValueAccess` when the caller needs to distinguish a
   missing member from a checker-visible member whose value type could not be projected; use `memberValueType` only when
   every non-closed access can honestly be treated as absent.
+- Missing-member diagnostic suppression for nullable unions is still a type-shape access question. Use
+  `checkerTypeShapeNullishUnionHasValueProperty(...)` when the owner is a checker-backed union and the product needs to
+  decide whether the visible issue is nullishness rather than an actually missing value member.
 - Related checker references on projected shapes are allowed to be handleless until a consumer needs detail. Access
   helpers must not treat a handleless `indexedValueType` or member reference as a terminal result; they should fall
   through to the retained checker carrier and materialize the reached value shape at the current semantic site.

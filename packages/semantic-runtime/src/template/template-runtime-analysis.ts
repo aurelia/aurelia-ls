@@ -167,6 +167,8 @@ export class TemplateRuntimeAnalysisEmission {
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
     /** Runtime-html AuCompose composition contexts/controllers derived after source values and data-flow are visible. */
     readonly runtimeComposition: RuntimeCompositionEmission,
+    /** Runtime-analysis expression world shared by scope, overlay, observation, and source-expression consumers. */
+    readonly expressionWorld: CheckerExpressionTypeWorld,
     /** Nested timing profile for the runtime/checker half of template analysis. */
     readonly profile: TemplateRuntimeAnalysisProfile,
   ) {}
@@ -300,6 +302,7 @@ class TemplateRuntimeAnalysisFrame {
       bindingValueChannel,
       bindingDataFlow,
       runtimeComposition,
+      this.expressionWorld,
       profile,
     );
   }
@@ -447,6 +450,7 @@ class TemplateRuntimeAnalysisFrame {
       scopes,
       this.request.compilerWorld.resourceScope,
       this.expressionWorld,
+      this.request.typeSystem,
     ));
   }
 
@@ -523,6 +527,7 @@ class TemplateRuntimeAnalysisFrame {
         scopes,
       },
       this.request.compilerWorld.resourceScope,
+      this.request.compilerWorld.container,
     );
     return this.services.runtimeComposition.materialize(new RuntimeCompositionMaterializationRequest(
       this.request.localKey,
@@ -530,8 +535,10 @@ class TemplateRuntimeAnalysisFrame {
       controllerBind,
       bindingDataFlow,
       scopes,
+      this.expressionWorld,
       this.request.projectContext,
       this.request.resourceDefinitions,
+      this.request.compilerWorld.resourceScope,
       this.request.evaluation == null
         ? null
         : new RuntimeBindingSourceValueEvaluator(

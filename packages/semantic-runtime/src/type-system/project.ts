@@ -32,6 +32,7 @@ import {
   type TypeSystemOverlaySource,
   type TypeSystemOverlaySourceSegment,
 } from './overlay.js';
+import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -1229,8 +1230,8 @@ function constructedReturnType(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): ts.Type | null {
-  const signature = type.getConstructSignatures()[0] ?? null;
-  return signature == null ? null : checker.getReturnTypeOfSignature(signature);
+  // Constructors instantiate one runtime target shape; overload-sensitive authored calls use the call projector instead.
+  return checkerConstructReturnTypeUnion(checker, type);
 }
 
 function classDeclarationFromDeclaration(

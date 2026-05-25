@@ -39,6 +39,16 @@ the shared groups after runtime rendering and template-scope construction, then 
 translation keys (`AUR4000`), duplicate parameter binding (`AUR4001`), and non-string dynamic key expressions
 (`AUR4002`). Keep this in the i18n folder: the failure boundary is the i18n runtime binding lifecycle, while the API
 consumes the resulting `RuntimeBindingIssue` products through the shared template diagnostic lane.
+Rendered `TranslationBinding` products remain expression-visible so cursor, overlay, and source-expression consumers can
+ask the right view-model versus parameter-scope question. Translation key bindings stay lifecycle-owned, while
+`t-params.bind` also publishes source-only data-flow so its parameter object type remains queryable. Neither form owns a
+generic value-channel, and neither should emit generic open seams for missing accessors or observers.
+The key and parameter expression lifecycles are intentionally different. Framework `TranslationBinding.bind` evaluates
+the dynamic key expression without first calling `astBind(...)`, so binding behaviors such as `& state` unwrap during
+key type diagnostics instead of changing the key source scope. Framework `ParameterBinding.bind` does call
+`astBind(...)`, so `t-params.bind` can use source-scope-changing binding behaviors before static data-flow and
+TypeChecker reads. Both lifecycles still enter through the shared runtime binding source-expression projector; i18n
+does not carry a private evaluate-only TypeChecker rule.
 
 ## Boundaries
 

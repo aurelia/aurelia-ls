@@ -27,7 +27,11 @@ import {
   evaluateArraySome,
   evaluateArraySort,
   evaluateArraySplice,
+  evaluateArrayToReversed,
+  evaluateArrayToSorted,
   evaluateArrayUnshift,
+  evaluateArrayToSpliced,
+  evaluateArrayWith,
 } from './intrinsics/array-intrinsics.js';
 import {
   evaluateCollectionDelete,
@@ -39,6 +43,13 @@ import {
   evaluateSetConstructor,
 } from './intrinsics/collection-intrinsics.js';
 import type { StaticIntrinsicEvaluationHost } from './intrinsics/contracts.js';
+import {
+  AureliaGlobalIntrinsicEvaluationKind,
+  evaluateAureliaExpressionGlobalCall,
+  evaluateAureliaExpressionGlobalConstructor,
+  evaluateAureliaExpressionGlobalMemberCallFromPath,
+} from './global-intrinsics.js';
+import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { evaluateDynamicImport, evaluateCommonJsRequire } from './intrinsics/module-intrinsics.js';
 import {
   evaluateObjectAssign,
@@ -49,6 +60,7 @@ import {
 } from './intrinsics/object-intrinsics.js';
 import { evaluatePromiseContinuation, evaluatePromiseResolve, evaluatePromiseThen } from './intrinsics/promise-intrinsics.js';
 import { evaluateRegExpCall, evaluateRegExpConstructor } from './intrinsics/regexp-intrinsics.js';
+import { evaluateCallArgumentValues } from './intrinsics/shared.js';
 import {
   evaluateStringCall,
   evaluateStringLocaleCompare,
@@ -57,6 +69,7 @@ import {
   evaluateStringSplit,
   evaluateStringTransform,
 } from './intrinsics/string-intrinsics.js';
+import { EvaluationOpenSeamKind } from './seams.js';
 import type { EvaluationValue } from './values.js';
 import { readCallCalleeText, unwrapExpression } from './ts-syntax.js';
 
@@ -87,7 +100,32 @@ export function evaluateKnownConstructor(
     case 'RegExp':
       return evaluateRegExpConstructor(expression, environment, moduleKey, depth + 1, host);
     default:
-      return null;
+      return evaluateGlobalIntrinsicConstructor(expression, constructorName, environment, moduleKey, depth, host);
+  }
+}
+
+function evaluateGlobalIntrinsicConstructor(
+  expression: ts.NewExpression,
+  constructorName: string | null,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  if (constructorName == null || !isAureliaExpressionGlobalName(constructorName)) {
+    return null;
+  }
+  const argumentValues = (expression.arguments ?? []).map((argument) =>
+    host.evaluateExpression(argument, environment, moduleKey, depth + 1)
+  );
+  const result = evaluateAureliaExpressionGlobalConstructor(constructorName, argumentValues, expression);
+  switch (result.kind) {
+    case AureliaGlobalIntrinsicEvaluationKind.Value:
+      return result.value;
+    case AureliaGlobalIntrinsicEvaluationKind.RuntimeOpen:
+      return host.unknown(result.reason, expression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    case AureliaGlobalIntrinsicEvaluationKind.Unsupported:
+      return host.unknown(result.reason, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
 }
 
@@ -116,10 +154,51 @@ export function evaluateKnownIntrinsic(
     return staticIntrinsic;
   }
 
+  const globalIntrinsic = evaluateGlobalIntrinsicCall(call, calleeText, environment, moduleKey, depth, host);
+  if (globalIntrinsic != null) {
+    return globalIntrinsic;
+  }
+
   const callee = unwrapExpression(call.expression);
   return ts.isPropertyAccessExpression(callee)
     ? evaluatePrototypeIntrinsicCall(call, callee.name.text, callee.expression, environment, moduleKey, depth, host)
     : null;
+}
+
+function evaluateGlobalIntrinsicCall(
+  call: ts.CallExpression,
+  calleeText: string | null,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  if (calleeText == null) {
+    return null;
+  }
+  const argumentValues = evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host);
+  const memberDot = calleeText.lastIndexOf('.');
+  const result = memberDot < 0
+    ? isAureliaExpressionGlobalName(calleeText)
+      ? evaluateAureliaExpressionGlobalCall(calleeText, argumentValues, call)
+      : null
+    : evaluateAureliaExpressionGlobalMemberCallFromPath(
+      calleeText.slice(0, memberDot),
+      calleeText.slice(memberDot + 1),
+      argumentValues,
+      call,
+    );
+  if (result == null) {
+    return null;
+  }
+  switch (result.kind) {
+    case AureliaGlobalIntrinsicEvaluationKind.Value:
+      return result.value;
+    case AureliaGlobalIntrinsicEvaluationKind.RuntimeOpen:
+      return host.unknown(result.reason, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    case AureliaGlobalIntrinsicEvaluationKind.Unsupported:
+      return host.unknown(result.reason, call, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
+  }
 }
 
 function evaluateStaticIntrinsicCall(
@@ -188,9 +267,13 @@ function evaluatePrototypeIntrinsicCall(
     case 'filter':
       return evaluateArrayFilter(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'find':
-      return evaluateArrayFind(call, receiverExpression, environment, moduleKey, depth + 1, host);
+      return evaluateArrayFind(call, receiverExpression, environment, moduleKey, depth + 1, host, false);
+    case 'findLast':
+      return evaluateArrayFind(call, receiverExpression, environment, moduleKey, depth + 1, host, true);
     case 'findIndex':
-      return evaluateArrayFindIndex(call, receiverExpression, environment, moduleKey, depth + 1, host);
+      return evaluateArrayFindIndex(call, receiverExpression, environment, moduleKey, depth + 1, host, false);
+    case 'findLastIndex':
+      return evaluateArrayFindIndex(call, receiverExpression, environment, moduleKey, depth + 1, host, true);
     case 'some':
       return evaluateArraySome(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'every':
@@ -204,7 +287,9 @@ function evaluatePrototypeIntrinsicCall(
     case 'includes':
       return evaluateArrayOrStringIncludes(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'indexOf':
-      return evaluateArrayIndexOf(call, receiverExpression, environment, moduleKey, depth + 1, host);
+      return evaluateArrayIndexOf(call, receiverExpression, environment, moduleKey, depth + 1, host, false);
+    case 'lastIndexOf':
+      return evaluateArrayIndexOf(call, receiverExpression, environment, moduleKey, depth + 1, host, true);
     case 'join':
       return evaluateArrayJoin(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'flat':
@@ -221,6 +306,12 @@ function evaluatePrototypeIntrinsicCall(
       return evaluateArrayShift(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'reverse':
       return evaluateArrayReverse(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'toReversed':
+      return evaluateArrayToReversed(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'toSpliced':
+      return evaluateArrayToSpliced(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'with':
+      return evaluateArrayWith(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'splice':
       return evaluateArraySplice(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'slice':
@@ -241,6 +332,8 @@ function evaluatePrototypeIntrinsicCall(
       return evaluateStringReplace(call, receiverExpression, environment, moduleKey, depth + 1, host, methodName);
     case 'sort':
       return evaluateArraySort(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'toSorted':
+      return evaluateArrayToSorted(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'localeCompare':
       return evaluateStringLocaleCompare(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'get':

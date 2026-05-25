@@ -30,11 +30,27 @@ import {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  RuntimeBindingSourceValueEvaluation,
-  RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
-import { instructionScopeLookup } from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingSourceValueEvaluation,
+  RuntimeBindingSourceValueEvaluationKind,
+} from '../observation/binding-source-value-evaluation.js';
+import {
+  RuntimeBindingSourceValueEvaluationContext,
+  sourceValueContextForRuntimeBindingSourceExpressionProjection,
+} from '../observation/binding-source-value-evaluation-context.js';
+import {
+  instructionScopeLookup,
+  isRuntimeExpressionBinding,
+} from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  RuntimeBindingSourceExpressionContextProjector,
+  RuntimeBindingSourceExpressionProjectionKind,
+} from '../observation/runtime-binding-source-expression-context.js';
 import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
 import {
   runtimeBoundControllerValueTableForTemplateResources,
@@ -48,11 +64,12 @@ import {
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
 import { bindingExpressionAstForProduct, readTemplateExpressionParse } from '../template/expression-parse-product.js';
+import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { RuntimeControllerCreationKind } from '../template/runtime-controller.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
+import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
-import type { TemplateScopeConstructionEmission } from '../template/template-controller-scope-materializer.js';
 import {
   NavigationInstructionKind,
   RouterIssueKind,
@@ -101,6 +118,10 @@ interface RouterResourceInstructionSite {
   readonly controller: RuntimeControllerFrame;
   readonly instruction: HydrateAttributeInstruction;
   readonly scope: BindingScope | null;
+  readonly runtimeRendering: RuntimeRenderingEmission;
+  readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
+  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly resourceScope: TemplateResourceScope | null;
   readonly host: HtmlElement | null;
   readonly sourceAddressHandle: AddressHandle | null;
 }
@@ -270,7 +291,7 @@ export class RouteInstructionMaterializationProjectPass {
     routerOptions: RouterOptionsMaterializationProjectResult,
     state: RouteInstructionMaterializationState,
   ): void {
-    const site = routerResourceInstructionSite(store, controller, routeContext, resource.runtimeAnalysis.scopes);
+    const site = routerResourceInstructionSite(store, controller, routeContext, resource);
     if (site == null) {
       return;
     }
@@ -395,8 +416,9 @@ function routerResourceInstructionSite(
   store: KernelStore,
   controller: RuntimeControllerFrame,
   routeContext: RouteContextModel | null,
-  scopes: TemplateScopeConstructionEmission,
+  resource: RouteInstructionTemplateResource,
 ): RouterResourceInstructionSite | null {
+  const runtimeAnalysis = resource.runtimeAnalysis;
   if (controller.creationKind !== RuntimeControllerCreationKind.CustomAttribute) {
     return null;
   }
@@ -412,16 +434,26 @@ function routerResourceInstructionSite(
   if (!(instruction instanceof HydrateAttributeInstruction)) {
     return null;
   }
+  const instructionScopes = instructionScopeLookup(runtimeAnalysis.scopes.instructionScopes);
+  const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(store, runtimeAnalysis.expressionWorld);
   const host = htmlElementForInstruction(store, instruction);
   return {
     kind,
     routeContext,
     controller,
     instruction,
-    scope: instructionScopeLookup(scopes.instructionScopes).scopeForInstruction(
+    scope: instructionScopes.scopeForInstruction(
       instruction.productHandle,
       instructionRenderingControllerProductHandle(controller),
     ),
+    runtimeRendering: runtimeAnalysis.runtimeRendering,
+    sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
+      runtimeAnalysis.runtimeRendering,
+      instructionScopes,
+      bindingExpressionScopes,
+    ),
+    bindingExpressionScopes,
+    resourceScope: resource.compilation.compilerWorld.resourceScope,
     host,
     sourceAddressHandle: instruction.sourceAddressHandle ?? controller.sourceAddressHandle,
   };
@@ -506,9 +538,12 @@ function closeRouterResourceInstruction(
     return null;
   }
   const property = site.kind === RouterResourceInstructionKind.Load ? 'route' : 'value';
-  const value = sourceValueEvaluator.withActiveContainer(
-    activeContainerForRouterInstructionSite(site),
-    () => staticRouterResourceValue(store, site.instruction, property, site.scope, sourceValueEvaluator, resourceIndex),
+  const value = staticRouterResourceValue(
+    store,
+    site,
+    property,
+    sourceValueEvaluator.withDefaultActiveContainer(activeContainerForRouterInstructionSite(site)),
+    resourceIndex,
   );
   if (site.kind === RouterResourceInstructionKind.Href && value.state === 'route-expression' && hrefRouteExpressionIsExternal(store, site, value)) {
     return null;
@@ -1337,9 +1372,8 @@ interface DynamicBindingReason {
 
 function staticRouterResourceValue(
   store: KernelStore,
-  hydrate: HydrateAttributeInstruction,
+  site: RouterResourceInstructionSite,
   property: string,
-  scope: BindingScope | null = null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue {
@@ -1347,7 +1381,7 @@ function staticRouterResourceValue(
   let dynamicReason: string | null = null;
   let dynamicReasonKinds: readonly OpenSeamReasonKind[] = [];
   let dynamicSourceAddressHandle: AddressHandle | null = null;
-  for (const productHandle of hydrate.bindingInstructionProductHandles) {
+  for (const productHandle of site.instruction.bindingInstructionProductHandles) {
     const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
     if (instruction instanceof SetPropertyInstruction && instruction.targetProperty === property) {
       const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
@@ -1370,9 +1404,10 @@ function staticRouterResourceValue(
       }
       const multiAttrValue = expressionRouterResourceValue(
         store,
+        site,
+        productHandle,
         instruction.expressionProductHandle,
         valueSourceAddressHandle,
-        scope,
         sourceValueEvaluator,
         resourceIndex,
       );
@@ -1381,7 +1416,7 @@ function staticRouterResourceValue(
       }
       sawDynamic = true;
       dynamicSourceAddressHandle ??= valueSourceAddressHandle;
-      const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, site, productHandle, instruction.expressionProductHandle, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
@@ -1390,9 +1425,10 @@ function staticRouterResourceValue(
       const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
       const propertyBound = expressionRouterResourceValue(
         store,
+        site,
+        productHandle,
         instruction.expressionProductHandle,
         valueSourceAddressHandle,
-        scope,
         sourceValueEvaluator,
         resourceIndex,
       );
@@ -1401,20 +1437,27 @@ function staticRouterResourceValue(
       }
       sawDynamic = true;
       dynamicSourceAddressHandle ??= valueSourceAddressHandle;
-      const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, site, productHandle, instruction.expressionProductHandle, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
     }
     if (instruction instanceof InterpolationInstruction && instruction.target === property) {
       const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
-      const interpolated = interpolatedStringValue(store, instruction.expressionProductHandles[0] ?? null, valueSourceAddressHandle, scope, sourceValueEvaluator);
+      const interpolated = interpolatedStringValue(
+        store,
+        site,
+        productHandle,
+        instruction.expressionProductHandles[0] ?? null,
+        valueSourceAddressHandle,
+        sourceValueEvaluator,
+      );
       if (interpolated != null) {
         return interpolated;
       }
       sawDynamic = true;
       dynamicSourceAddressHandle ??= valueSourceAddressHandle;
-      const reason = dynamicBindingReason(store, instruction.expressionProductHandles[0] ?? null, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, site, productHandle, instruction.expressionProductHandles[0] ?? null, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
     }
@@ -1447,9 +1490,10 @@ function instructionValueSourceAddressHandle(
 
 function expressionRouterResourceValue(
   store: KernelStore,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null = null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue | null {
@@ -1462,30 +1506,52 @@ function expressionRouterResourceValue(
   const expressionSourceAddressHandle = expressionSourceAddressHandleForProduct(store, expressionProductHandle)
     ?? sourceAddressHandle;
   if (expression.$kind === 'ObjectLiteral') {
-    return eagerInstructionValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator, resourceIndex);
+    return eagerInstructionValue(
+      expression,
+      expressionSourceAddressHandle,
+      site,
+      bindingInstructionProductHandle,
+      sourceValueEvaluator,
+      resourceIndex,
+    );
   }
   if (expression.$kind === 'Interpolation') {
-    return interpolatedStringValue(store, expressionProductHandle, expressionSourceAddressHandle, scope, sourceValueEvaluator);
+    return interpolatedStringValue(
+      store,
+      site,
+      bindingInstructionProductHandle,
+      expressionProductHandle,
+      expressionSourceAddressHandle,
+      sourceValueEvaluator,
+    );
   }
-  const evaluatedInstruction = evaluatedRouterResourceValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator, resourceIndex);
+  const evaluatedInstruction = evaluatedRouterResourceValue(
+    expression,
+    expressionSourceAddressHandle,
+    site,
+    bindingInstructionProductHandle,
+    sourceValueEvaluator,
+    resourceIndex,
+  );
   if (evaluatedInstruction != null) {
     return evaluatedInstruction;
   }
-  return expressionStringValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator)
-    ?? invalidClosedRouterInstructionValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator);
+  return expressionStringValue(expression, expressionSourceAddressHandle, site, bindingInstructionProductHandle, sourceValueEvaluator)
+    ?? invalidClosedRouterInstructionValue(expression, expressionSourceAddressHandle, site, bindingInstructionProductHandle, sourceValueEvaluator);
 }
 
 function eagerInstructionValue(
   expression: ObjectLiteralExpression,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue | null {
-  if (scope == null || sourceValueEvaluator == null) {
+  if (site.scope == null || sourceValueEvaluator == null) {
     return null;
   }
-  const instruction = eagerInstructionFromObjectLiteral(expression, scope, sourceValueEvaluator, resourceIndex);
+  const instruction = eagerInstructionFromObjectLiteral(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
   if (instruction.state === 'missing') {
     return null;
   }
@@ -1520,7 +1586,8 @@ type EagerRouteInstructionRead =
 
 function eagerInstructionFromObjectLiteral(
   expression: ObjectLiteralExpression,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   resourceIndex: ResourceDefinitionIndex,
 ): EagerRouteInstructionRead {
@@ -1528,7 +1595,7 @@ function eagerInstructionFromObjectLiteral(
   if (componentExpression == null) {
     return { state: 'missing' };
   }
-  const component = eagerRouteComponent(componentExpression, scope, sourceValueEvaluator, resourceIndex);
+  const component = eagerRouteComponent(componentExpression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
   if (component.state === 'dynamic') {
     return {
       state: 'dynamic',
@@ -1538,7 +1605,8 @@ function eagerInstructionFromObjectLiteral(
   }
   const params = eagerRouteParameters(
     readObjectLiteralValue(expression, 'params'),
-    scope,
+    site,
+    bindingInstructionProductHandle,
     sourceValueEvaluator,
   );
   if (params.state === 'dynamic') {
@@ -1550,7 +1618,8 @@ function eagerInstructionFromObjectLiteral(
   }
   const viewport = eagerRouteViewport(
     readObjectLiteralValue(expression, 'viewport'),
-    scope,
+    site,
+    bindingInstructionProductHandle,
     sourceValueEvaluator,
   );
   if (viewport.state === 'dynamic') {
@@ -1562,7 +1631,8 @@ function eagerInstructionFromObjectLiteral(
   }
   const children = eagerRouteChildren(
     readObjectLiteralValue(expression, 'children'),
-    scope,
+    site,
+    bindingInstructionProductHandle,
     sourceValueEvaluator,
     resourceIndex,
   );
@@ -1587,6 +1657,48 @@ function eagerInstructionFromObjectLiteral(
 type EvaluationObjectLikeRouteInstructionValue =
   | EvaluationObjectValue
   | EvaluationInstanceValue;
+
+function evaluateRouterSourceExpression(
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
+  expression: ExpressionAstNode,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+): RuntimeBindingSourceValueEvaluation {
+  if (site.scope == null) {
+    return RuntimeBindingSourceValueEvaluation.open(
+      'Router resource binding source did not have a modeled runtime Scope.',
+      [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+    );
+  }
+  const binding = site.runtimeRendering.readBindingForInstruction(bindingInstructionProductHandle);
+  if (binding == null || !isRuntimeExpressionBinding(binding)) {
+    return sourceValueEvaluator.evaluate(RuntimeBindingSourceValueEvaluationContext.knownScope(
+      expression,
+      site.scope,
+      undefined,
+      site.resourceScope,
+    ));
+  }
+  const projection = site.sourceExpressionContexts.projectSource({
+    binding,
+    expression,
+    localKey: `router-resource:${binding.productHandle}:source-value:${expression.span.start}:${expression.span.end}`,
+    sourceScope: site.scope,
+  });
+  if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+    return RuntimeBindingSourceValueEvaluation.open(
+      projection.openReason,
+      [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+    );
+  }
+  return sourceValueEvaluator.evaluate(
+    sourceValueContextForRuntimeBindingSourceExpressionProjection(
+      projection,
+      undefined,
+      site.resourceScope,
+    ),
+  );
+}
 
 function eagerInstructionFromObjectValue(
   value: EvaluationObjectLikeRouteInstructionValue,
@@ -1646,11 +1758,12 @@ type EagerRouteComponentRead =
 
 function eagerRouteComponent(
   expression: ExpressionAstNode,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   resourceIndex: ResourceDefinitionIndex,
 ): EagerRouteComponentRead {
-  const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluated = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
     return {
       state: 'dynamic',
@@ -1717,7 +1830,8 @@ type EagerRouteParametersRead =
 
 function eagerRouteParameters(
   expression: ExpressionAstNode | null,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): EagerRouteParametersRead {
   if (expression == null) {
@@ -1732,10 +1846,10 @@ function eagerRouteParameters(
   if (expression.$kind === 'ObjectLiteral') {
     return {
       state: 'closed',
-      params: paramsFromObjectLiteral(expression, scope, sourceValueEvaluator),
+      params: paramsFromObjectLiteral(expression, site, bindingInstructionProductHandle, sourceValueEvaluator),
     };
   }
-  const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluated = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
     return {
       state: 'dynamic',
@@ -1791,13 +1905,14 @@ type EagerRouteViewportRead =
 
 function eagerRouteViewport(
   expression: ExpressionAstNode | null,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): EagerRouteViewportRead {
   if (expression == null) {
     return { state: 'closed', viewport: null };
   }
-  const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluated = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
     return {
       state: 'dynamic',
@@ -1840,7 +1955,8 @@ type EagerRouteChildrenRead =
 
 function eagerRouteChildren(
   expression: ExpressionAstNode | null,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   resourceIndex: ResourceDefinitionIndex,
 ): EagerRouteChildrenRead {
@@ -1848,7 +1964,7 @@ function eagerRouteChildren(
     return { state: 'closed', children: [] };
   }
   if (expression.$kind !== 'ArrayLiteral') {
-    const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+    const evaluated = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
     if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluated.value?.kind === EvaluationValueKind.Array) {
       return eagerRouteChildrenFromArrayValue(evaluated.value, resourceIndex);
     }
@@ -1858,18 +1974,19 @@ function eagerRouteChildren(
       reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
     };
   }
-  return eagerRouteChildrenFromArray(expression, scope, sourceValueEvaluator, resourceIndex);
+  return eagerRouteChildrenFromArray(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
 }
 
 function eagerRouteChildrenFromArray(
   expression: ArrayLiteralExpression,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   resourceIndex: ResourceDefinitionIndex,
 ): EagerRouteChildrenRead {
   const children: EagerPathGenerationInstruction[] = [];
   for (const element of expression.elements) {
-    const child = eagerRouteChildInstruction(element, scope, sourceValueEvaluator, resourceIndex);
+    const child = eagerRouteChildInstruction(element, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
     if (child.state === 'dynamic') {
       return child;
     }
@@ -1919,12 +2036,13 @@ function eagerRouteChildrenFromValue(
 
 function eagerRouteChildInstruction(
   expression: ExpressionAstNode,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   resourceIndex: ResourceDefinitionIndex,
 ): Exclude<EagerRouteInstructionRead, { readonly state: 'missing' }> {
   if (expression.$kind === 'ObjectLiteral') {
-    const child = eagerInstructionFromObjectLiteral(expression, scope, sourceValueEvaluator, resourceIndex);
+    const child = eagerInstructionFromObjectLiteral(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
     return child.state === 'missing'
       ? {
           state: 'dynamic',
@@ -1933,7 +2051,7 @@ function eagerRouteChildInstruction(
         }
       : child;
   }
-  const component = eagerRouteComponent(expression, scope, sourceValueEvaluator, resourceIndex);
+  const component = eagerRouteComponent(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, resourceIndex);
   return instructionFromComponentRead(component);
 }
 
@@ -1979,7 +2097,8 @@ function emptyEagerRouteParameters(): EagerRouteParameters {
 
 function paramsFromObjectLiteral(
   expression: ObjectLiteralExpression,
-  scope: BindingScope,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): EagerRouteParameters {
   const values = new Map<string, EagerRouteParameterValue>();
@@ -1988,7 +2107,7 @@ function paramsFromObjectLiteral(
     if (valueExpression == null) {
       continue;
     }
-    const evaluated = sourceValueEvaluator.evaluate(valueExpression, scope);
+    const evaluated = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, valueExpression, sourceValueEvaluator);
     values.set(String(expression.keys[index]), evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluated.value != null
       ? eagerRouteParameterValue(evaluated.value)
       : {
@@ -2054,7 +2173,8 @@ function readObjectLiteralValue(
 function expressionStringValue(
   expression: ExpressionAstNode,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null = null,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
 ): StaticStringBindingValue | null {
   switch (expression.$kind) {
@@ -2070,15 +2190,16 @@ function expressionStringValue(
     case 'Template':
       return dynamicRouteStringValue(expression.cooked, expression.expressions.length, sourceAddressHandle);
     default:
-      return evaluatedStringValue(expression, scope, sourceValueEvaluator, sourceAddressHandle);
+      return evaluatedStringValue(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, sourceAddressHandle);
   }
 }
 
 function interpolatedStringValue(
   store: KernelStore,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null = null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null = null,
 ): StaticStringBindingValue | null {
   if (expressionProductHandle == null) {
@@ -2089,20 +2210,21 @@ function interpolatedStringValue(
     return null;
   }
   return dynamicRouteStringValue(expression.parts, expression.expressions.length, sourceAddressHandle)
-    ?? evaluatedStringValue(expression, scope, sourceValueEvaluator, sourceAddressHandle);
+    ?? evaluatedStringValue(expression, site, bindingInstructionProductHandle, sourceValueEvaluator, sourceAddressHandle);
 }
 
 function evaluatedRouterResourceValue(
   expression: AcceptedBindingExpressionAst,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   resourceIndex: ResourceDefinitionIndex,
 ): StaticRouterResourceValue | null {
-  if (scope == null || sourceValueEvaluator == null) {
+  if (site.scope == null || sourceValueEvaluator == null) {
     return null;
   }
-  const evaluation = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluation.value == null) {
     return {
       state: 'dynamic',
@@ -2149,14 +2271,15 @@ function evaluatedRouterResourceValue(
 
 function evaluatedStringValue(
   expression: AcceptedBindingExpressionAst | null,
-  scope: BindingScope | null,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   sourceAddressHandle: AddressHandle | null,
 ): StaticStringBindingValue | null {
-  if (expression == null || scope == null || sourceValueEvaluator == null) {
+  if (expression == null || site.scope == null || sourceValueEvaluator == null) {
     return null;
   }
-  const evaluation = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (
     evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value
     && evaluation.value?.kind === EvaluationValueKind.String
@@ -2184,7 +2307,8 @@ function evaluatedStringValue(
 function invalidClosedRouterInstructionValue(
   expression: AcceptedBindingExpressionAst,
   sourceAddressHandle: AddressHandle | null,
-  scope: BindingScope | null,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
 ): Extract<StaticRouterResourceValue, { readonly state: 'invalid-instruction' }> | null {
   if (expression.$kind === 'PrimitiveLiteral' && typeof expression.value !== 'string') {
@@ -2194,10 +2318,10 @@ function invalidClosedRouterInstructionValue(
       sourceAddressHandle,
     };
   }
-  if (scope == null || sourceValueEvaluator == null) {
+  if (site.scope == null || sourceValueEvaluator == null) {
     return null;
   }
-  const evaluation = sourceValueEvaluator.evaluate(expression, scope);
+  const evaluation = evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
   if (evaluation.kind !== RuntimeBindingSourceValueEvaluationKind.Value || evaluation.value == null) {
     return null;
   }
@@ -2228,11 +2352,18 @@ function definitelyInvalidInstructionValueKind(
 
 function dynamicBindingReason(
   store: KernelStore,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
-  scope: BindingScope | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
 ): DynamicBindingReason | null {
-  const evaluation = evaluatedBindingExpressionProduct(store, expressionProductHandle, scope, sourceValueEvaluator);
+  const evaluation = evaluatedBindingExpressionProduct(
+    store,
+    site,
+    bindingInstructionProductHandle,
+    expressionProductHandle,
+    sourceValueEvaluator,
+  );
   return evaluation == null ? null : dynamicBindingReasonForEvaluation(evaluation);
 }
 
@@ -2272,15 +2403,18 @@ function expressionSourceAddressHandleForProduct(
 
 function evaluatedBindingExpressionProduct(
   store: KernelStore,
+  site: RouterResourceInstructionSite,
+  bindingInstructionProductHandle: ProductHandle,
   expressionProductHandle: ProductHandle | null,
-  scope: BindingScope | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
 ): RuntimeBindingSourceValueEvaluation | null {
-  if (expressionProductHandle == null || scope == null || sourceValueEvaluator == null) {
+  if (expressionProductHandle == null || site.scope == null || sourceValueEvaluator == null) {
     return null;
   }
   const expression = bindingExpressionAstForProduct(store, expressionProductHandle);
-  return expression == null ? null : sourceValueEvaluator.evaluate(expression, scope);
+  return expression == null
+    ? null
+    : evaluateRouterSourceExpression(site, bindingInstructionProductHandle, expression, sourceValueEvaluator);
 }
 
 function dynamicRouteStringValue(

@@ -1,5 +1,20 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from '../environment.js';
+import {
+  evaluationArrayElementsInIterationOrder,
+  evaluationArrayIterationCallbackArguments,
+  evaluationArrayReducerCallbackArguments,
+} from '../array-callback-values.js';
+import {
+  evaluationArrayConcat,
+  evaluationArrayFlat,
+  evaluationArraySlice,
+  evaluationArraySortedElements,
+  evaluationArrayToSpliced,
+  evaluationArrayToReversed,
+  evaluationArrayWith,
+  defaultEvaluationArraySortCompare,
+} from '../array-value-operations.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
 import {
   EvaluationArrayElement,
@@ -22,9 +37,12 @@ import {
   IntrinsicCallbackFrame,
   isBoundaryEvaluationValue,
   readArrayStartIndex,
+  readArraySpliceDeleteCount,
+  readArrayWithIndex,
   readSliceRange,
   stringCoercionText,
 } from './shared.js';
+import { readArrayLastIndexStart } from '../value-coercion.js';
 import { evaluateStringPredicateFromReceiver } from './string-intrinsics.js';
 
 export function evaluateArrayConstructor(
@@ -73,19 +91,11 @@ export function evaluateArrayConcat(
   if (receiver.kind !== EvaluationValueKind.Array) {
     return host.unknown('Array.concat receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const elements: EvaluationArrayElement[] = [...receiver.elements];
-  let mayHaveUnknownElements = receiver.mayHaveUnknownElements;
-  let mayHaveUnknownOrder = receiver.mayHaveUnknownOrder;
-  for (const value of evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host)) {
-    if (value.kind === EvaluationValueKind.Array) {
-      elements.push(...value.elements);
-      mayHaveUnknownElements ||= value.mayHaveUnknownElements;
-      mayHaveUnknownOrder ||= value.mayHaveUnknownOrder;
-    } else {
-      elements.push(new EvaluationArrayElement(value, call));
-    }
-  }
-  return new EvaluationArrayValue(elements, mayHaveUnknownElements, call, mayHaveUnknownOrder);
+  return evaluationArrayConcat(
+    receiver,
+    evaluateCallArgumentValues(call, environment, moduleKey, depth + 1, host),
+    call,
+  );
 }
 
 export function evaluateArrayFrom(
@@ -192,19 +202,6 @@ export function arrayFromSourceElements(
   }
 }
 
-function arrayIterationCallbackArguments(
-  element: EvaluationArrayElement,
-  index: number,
-  receiver: EvaluationArrayValue,
-  node: ts.Node,
-): readonly EvaluationValue[] {
-  return [
-    element.value,
-    new EvaluationNumberValue(index, node),
-    receiver,
-  ];
-}
-
 export function evaluateArrayMap(
   call: ts.CallExpression,
   receiverExpression: ts.Expression,
@@ -234,7 +231,7 @@ export function evaluateArrayMap(
     }
     const mapped = callbackFrame.evaluate(
       callback.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (mapped.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -274,7 +271,7 @@ export function evaluateArrayFlatMap(
     }
     const mapped = callbackFrame.evaluate(
       callback.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (mapped.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -321,7 +318,7 @@ export function evaluateArrayFilter(
     }
     const predicateResult = callbackFrame.evaluate(
       predicate.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -346,32 +343,33 @@ export function evaluateArrayFind(
   moduleKey: string,
   depth: number,
   host: StaticIntrinsicEvaluationHost,
+  rightToLeft: boolean,
 ): EvaluationValue {
+  const intrinsicName = rightToLeft ? 'findLast' : 'find';
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (isBoundaryEvaluationValue(receiver)) {
-    return boundaryIntrinsicCallValue(receiver, 'find', call);
+    return boundaryIntrinsicCallValue(receiver, intrinsicName, call);
   }
   if (receiver.kind !== EvaluationValueKind.Array) {
-    return host.unknown('Array.find receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`Array.${intrinsicName} receiver did not reduce to a known array.`, receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const predicate = arrayCallbackValue(call, environment, moduleKey, depth + 1, host, 'Array.find predicate');
+  const predicate = arrayCallbackValue(call, environment, moduleKey, depth + 1, host, `Array.${intrinsicName} predicate`);
   if (predicate.kind !== 'known') {
     return predicate.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
   let sawOpenPredicate = receiver.mayHaveUnknownElements;
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
+  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
     if (element == null) {
       continue;
     }
     const predicateResult = callbackFrame.evaluate(
       predicate.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
-      return host.unknown('Array.find exceeded intrinsic callback budget.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+      return host.unknown(`Array.${intrinsicName} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
     }
     const keep = readEvaluationTruthiness(predicateResult.value);
     if (keep == null) {
@@ -383,7 +381,7 @@ export function evaluateArrayFind(
     }
   }
   return sawOpenPredicate
-    ? host.unknown('Array.find result depended on an open predicate or unknown element membership.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
+    ? host.unknown(`Array.${intrinsicName} result depended on an open predicate or unknown element membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
     : EvaluationUndefined;
 }
 
@@ -394,32 +392,33 @@ export function evaluateArrayFindIndex(
   moduleKey: string,
   depth: number,
   host: StaticIntrinsicEvaluationHost,
+  rightToLeft: boolean,
 ): EvaluationValue {
+  const intrinsicName = rightToLeft ? 'findLastIndex' : 'findIndex';
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (isBoundaryEvaluationValue(receiver)) {
-    return boundaryIntrinsicCallValue(receiver, 'findIndex', call);
+    return boundaryIntrinsicCallValue(receiver, intrinsicName, call);
   }
   if (receiver.kind !== EvaluationValueKind.Array) {
-    return host.unknown('Array.findIndex receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`Array.${intrinsicName} receiver did not reduce to a known array.`, receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const predicate = arrayCallbackValue(call, environment, moduleKey, depth + 1, host, 'Array.findIndex predicate');
+  const predicate = arrayCallbackValue(call, environment, moduleKey, depth + 1, host, `Array.${intrinsicName} predicate`);
   if (predicate.kind !== 'known') {
     return predicate.value;
   }
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
   let sawOpenPredicate = receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder;
-  for (let index = 0; index < receiver.elements.length; index++) {
-    const element = receiver.elements[index];
+  for (const { element, index } of evaluationArrayElementsInIterationOrder(receiver, rightToLeft)) {
     if (element == null) {
       continue;
     }
     const predicateResult = callbackFrame.evaluate(
       predicate.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
-      return host.unknown('Array.findIndex exceeded intrinsic callback budget.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+      return host.unknown(`Array.${intrinsicName} exceeded intrinsic callback budget.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
     }
     const keep = readEvaluationTruthiness(predicateResult.value);
     if (keep == null) {
@@ -431,7 +430,7 @@ export function evaluateArrayFindIndex(
     }
   }
   return sawOpenPredicate
-    ? host.unknown('Array.findIndex result depended on an open predicate, unknown order, or unknown membership.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
+    ? host.unknown(`Array.${intrinsicName} result depended on an open predicate, unknown order, or unknown membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
     : new EvaluationNumberValue(-1, call);
 }
 
@@ -486,7 +485,7 @@ export function evaluateArrayQuantifier(
     }
     const predicateResult = callbackFrame.evaluate(
       predicate.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (predicateResult.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -540,7 +539,7 @@ export function evaluateArrayForEach(
     }
     const result = callbackFrame.evaluate(
       callback.value,
-      arrayIterationCallbackArguments(element, index, receiver, call),
+      evaluationArrayIterationCallbackArguments(element, index, receiver, call),
     );
     if (result.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -598,12 +597,7 @@ export function evaluateArrayReduce(
       : position;
     const result = callbackFrame.evaluate(
       reducer.value,
-      [
-        accumulator,
-        element.value,
-        new EvaluationNumberValue(originalIndex, call),
-        receiver,
-      ],
+      evaluationArrayReducerCallbackArguments(accumulator, element, originalIndex, receiver, call),
     );
     if (result.kind === IntrinsicCallbackEvaluationKind.BudgetExhausted) {
       callbackFrame.restore();
@@ -611,8 +605,8 @@ export function evaluateArrayReduce(
     }
     accumulator = result.value;
   }
-  if (receiver.mayHaveUnknownElements) {
-    return host.unknown(`Array.${intrinsicName} result depended on unknown element membership.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  if (receiver.mayHaveUnknownElements || receiver.mayHaveUnknownOrder) {
+    return host.unknown(`Array.${intrinsicName} result depended on unknown element membership or order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   return accumulator;
 }
@@ -673,46 +667,55 @@ export function evaluateArrayIndexOf(
   moduleKey: string,
   depth: number,
   host: StaticIntrinsicEvaluationHost,
+  rightToLeft: boolean,
 ): EvaluationValue {
+  const intrinsicName = rightToLeft ? 'lastIndexOf' : 'indexOf';
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (isBoundaryEvaluationValue(receiver)) {
-    return boundaryIntrinsicCallValue(receiver, 'indexOf', call);
+    return boundaryIntrinsicCallValue(receiver, intrinsicName, call);
   }
   if (receiver.kind !== EvaluationValueKind.Array && receiver.kind !== EvaluationValueKind.String) {
-    return host.unknown('indexOf receiver did not reduce to a known array or string.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`${intrinsicName} receiver did not reduce to a known array or string.`, receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   const search = call.arguments[0] == null
     ? EvaluationUndefined
     : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-  const start = call.arguments[1] == null
-    ? 0
-    : readArrayStartIndex(
-      host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1),
-      receiver.kind === EvaluationValueKind.String ? receiver.value.length : receiver.elements.length,
-    );
+  const receiverLength = receiver.kind === EvaluationValueKind.String ? receiver.value.length : receiver.elements.length;
+  const start = rightToLeft
+    ? readArrayLastIndexStart(call.arguments[1] == null
+      ? EvaluationUndefined
+      : host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1), receiverLength)
+    : call.arguments[1] == null
+      ? 0
+      : readArrayStartIndex(
+        host.evaluateExpression(call.arguments[1], environment, moduleKey, depth + 1),
+        receiverLength,
+      );
   if (start == null) {
-    return host.unknown('indexOf start index did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`${intrinsicName} start index did not close statically.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   if (receiver.kind === EvaluationValueKind.String) {
     const searchText = stringCoercionText(search);
     return searchText == null
-      ? host.unknown('String.indexOf search value did not reduce to a static string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
-      : new EvaluationNumberValue(receiver.value.indexOf(searchText, start), call);
+      ? host.unknown(`String.${intrinsicName} search value did not reduce to a static string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
+      : new EvaluationNumberValue(rightToLeft
+        ? receiver.value.lastIndexOf(searchText, start)
+        : receiver.value.indexOf(searchText, start), call);
   }
   if (search.kind === EvaluationValueKind.Unknown) {
     return search;
   }
   if (receiver.mayHaveUnknownOrder) {
-    return host.unknown('Array.indexOf depended on unknown element order.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return host.unknown(`Array.${intrinsicName} depended on unknown element order.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const offset = receiver.elements
-    .slice(start)
-    .findIndex((element) => evaluationValuesEqual(element.value, search));
-  if (offset >= 0) {
-    return new EvaluationNumberValue(start + offset, call);
+  const foundIndex = rightToLeft
+    ? receiver.elements.slice(0, start + 1).findLastIndex((element) => evaluationValuesEqual(element.value, search))
+    : receiver.elements.slice(start).findIndex((element) => evaluationValuesEqual(element.value, search));
+  if (foundIndex >= 0) {
+    return new EvaluationNumberValue(rightToLeft ? foundIndex : start + foundIndex, call);
   }
   return receiver.mayHaveUnknownElements
-    ? host.unknown('Array.indexOf search did not match known elements and the array may contain unknown elements.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
+    ? host.unknown(`Array.${intrinsicName} search did not match known elements and the array may contain unknown elements.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall)
     : new EvaluationNumberValue(-1, call);
 }
 
@@ -777,31 +780,7 @@ export function evaluateArrayFlat(
   if (depthValue.kind !== EvaluationValueKind.Number || !Number.isFinite(depthValue.value)) {
     return host.unknown('Array.flat depth did not reduce to a finite number.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
-  const flattened = flattenArrayElements(receiver.elements, Math.max(0, Math.trunc(depthValue.value)));
-  return new EvaluationArrayValue(
-    flattened.elements,
-    receiver.mayHaveUnknownElements || flattened.mayHaveUnknownElements,
-    call,
-    receiver.mayHaveUnknownOrder,
-  );
-}
-
-export function flattenArrayElements(
-  elements: readonly EvaluationArrayElement[],
-  depth: number,
-): { readonly elements: readonly EvaluationArrayElement[]; readonly mayHaveUnknownElements: boolean } {
-  const flattened: EvaluationArrayElement[] = [];
-  let mayHaveUnknownElements = false;
-  for (const element of elements) {
-    if (depth > 0 && element.value.kind === EvaluationValueKind.Array) {
-      const child = flattenArrayElements(element.value.elements, depth - 1);
-      flattened.push(...child.elements);
-      mayHaveUnknownElements ||= element.value.mayHaveUnknownElements || child.mayHaveUnknownElements;
-      continue;
-    }
-    flattened.push(element);
-  }
-  return { elements: flattened, mayHaveUnknownElements };
+  return evaluationArrayFlat(receiver, Math.max(0, Math.trunc(depthValue.value)), call);
 }
 
 export function evaluateArrayFill(
@@ -926,6 +905,92 @@ export function evaluateArrayReverse(
   receiver.value.elements.reverse();
   receiver.value.mayHaveUnknownOrder ||= receiver.value.mayHaveUnknownElements;
   return receiver.value;
+}
+
+export function evaluateArrayToReversed(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'toReversed', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.Array) {
+    return host.unknown('Array.toReversed receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  return evaluationArrayToReversed(receiver, call);
+}
+
+export function evaluateArrayToSpliced(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'toSpliced', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.Array) {
+    return host.unknown('Array.toSpliced receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const start = readSpliceStart(call, receiver.elements.length, environment, moduleKey, depth + 1, host);
+  if (start == null) {
+    return host.unknown('Array.toSpliced start index did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const deleteCount = readSpliceDeleteCount(call, start, receiver.elements.length, environment, moduleKey, depth + 1, host);
+  if (deleteCount == null) {
+    return host.unknown('Array.toSpliced delete count did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const inserted = evaluateArrayMutationElements(call.arguments.slice(2), environment, moduleKey, depth + 1, host);
+  return evaluationArrayToSpliced(
+    receiver,
+    start,
+    deleteCount,
+    inserted.elements,
+    inserted.mayHaveUnknownElements,
+    inserted.mayHaveUnknownOrder,
+    call,
+  );
+}
+
+export function evaluateArrayWith(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'with', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.Array) {
+    return host.unknown('Array.with receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const indexExpression = call.arguments[0];
+  if (indexExpression != null && ts.isSpreadElement(indexExpression)) {
+    return host.unknown('Array.with index did not close statically.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const indexValue = indexExpression == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(indexExpression, environment, moduleKey, depth + 1);
+  const index = readArrayWithIndex(indexValue, receiver.elements.length);
+  if (index == null) {
+    return host.unknown('Array.with index did not close to an in-range index.', indexExpression ?? call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const valueExpression = call.arguments[1];
+  const value = valueExpression == null || ts.isSpreadElement(valueExpression)
+    ? EvaluationUndefined
+    : host.evaluateExpression(valueExpression, environment, moduleKey, depth + 1);
+  return evaluationArrayWith(receiver, index, value, call);
 }
 
 export function evaluateArraySplice(
@@ -1062,13 +1127,7 @@ function readSpliceDeleteCount(
     return null;
   }
   const value = host.evaluateExpression(deleteCountExpression, environment, moduleKey, depth + 1);
-  if (value.kind === EvaluationValueKind.Undefined) {
-    return 0;
-  }
-  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
-    return null;
-  }
-  return Math.min(Math.max(Math.trunc(value.value), 0), length - start);
+  return readArraySpliceDeleteCount(value, start, length, call.arguments.length > 0, true);
 }
 
 export function evaluateArrayOrStringSlice(
@@ -1087,12 +1146,7 @@ export function evaluateArrayOrStringSlice(
     const range = readSliceRange(call, receiver.elements.length, environment, moduleKey, depth + 1, host);
     return range == null
       ? new EvaluationArrayValue(receiver.elements, true, call, true)
-      : new EvaluationArrayValue(
-        receiver.elements.slice(range.start, range.end),
-        receiver.mayHaveUnknownElements,
-        call,
-        receiver.mayHaveUnknownOrder,
-      );
+      : evaluationArraySlice(receiver, range.start, range.end, call);
   }
   if (receiver.kind === EvaluationValueKind.String) {
     const range = readSliceRange(call, receiver.value.length, environment, moduleKey, depth + 1, host);
@@ -1143,6 +1197,31 @@ export function evaluateArraySort(
   return receiver;
 }
 
+export function evaluateArrayToSorted(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'toSorted', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.Array) {
+    return host.unknown('Array.toSorted receiver did not reduce to a known array.', receiverExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+
+  const sorted = sortArrayElements(call, receiver.elements, environment, moduleKey, depth + 1, host);
+  return new EvaluationArrayValue(
+    sorted.elements,
+    receiver.mayHaveUnknownElements,
+    call,
+    sorted.mayHaveUnknownOrder,
+  );
+}
+
 export function sortArrayElements(
   call: ts.CallExpression,
   elements: readonly EvaluationArrayElement[],
@@ -1156,7 +1235,7 @@ export function sortArrayElements(
 } {
   const compareExpression = call.arguments[0];
   if (compareExpression == null) {
-    return sortWithComparator(elements, defaultArraySortCompare);
+    return evaluationArraySortedElements(elements, defaultEvaluationArraySortCompare);
   }
 
   const callbackFrame = new IntrinsicCallbackFrame(host, call, moduleKey, depth + 1);
@@ -1169,7 +1248,7 @@ export function sortArrayElements(
     };
   }
 
-  const sorted = sortWithComparator(elements, (left, right) => {
+  const sorted = evaluationArraySortedElements(elements, (left, right) => {
     const result = callbackFrame.evaluate(
       compareValue,
       [left.value, right.value],
@@ -1185,47 +1264,6 @@ export function sortArrayElements(
     callbackFrame.restore();
   }
   return sorted;
-}
-
-export function sortWithComparator(
-  elements: readonly EvaluationArrayElement[],
-  compare: (left: EvaluationArrayElement, right: EvaluationArrayElement) => number | null,
-): {
-  readonly elements: readonly EvaluationArrayElement[];
-  readonly mayHaveUnknownOrder: boolean;
-} {
-  let mayHaveUnknownOrder = false;
-  const decorated = elements.map((element, index) => ({ element, index }));
-  decorated.sort((left, right) => {
-    const result = compare(left.element, right.element);
-    if (result == null || Number.isNaN(result)) {
-      mayHaveUnknownOrder = true;
-      return left.index - right.index;
-    }
-    return result === 0
-      ? left.index - right.index
-      : result;
-  });
-  return {
-    elements: decorated.map((entry) => entry.element),
-    mayHaveUnknownOrder,
-  };
-}
-
-export function defaultArraySortCompare(
-  left: EvaluationArrayElement,
-  right: EvaluationArrayElement,
-): number | null {
-  const leftText = defaultArraySortText(left.value);
-  const rightText = defaultArraySortText(right.value);
-  if (leftText == null || rightText == null) {
-    return null;
-  }
-  return leftText.localeCompare(rightText);
-}
-
-export function defaultArraySortText(value: EvaluationValue): string | null {
-  return stringCoercionText(value);
 }
 
 export function evaluateArrayOf(

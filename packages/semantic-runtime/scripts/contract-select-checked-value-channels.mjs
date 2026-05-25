@@ -126,6 +126,14 @@ expectMatcherFunctionChannels(
     expectedCount: 12,
   },
 );
+expectMatcherFunctionChannels(
+  'checked-select-custom-matcher',
+  'Overloaded matcher.bind should use the two-argument framework call shape rather than first-signature return metadata.',
+  {
+    sourceName: 'overloadedMatchItems',
+    expectedCount: 1,
+  },
+);
 expectValueChannel(
   'checked-select-custom-matcher',
   'Checked array membership should stay distinct from boolean checkbox flow.',

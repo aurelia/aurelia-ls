@@ -58,11 +58,9 @@ class RuntimeBindingValueChannelDraftFrame {
     private readonly sourceOperation: RuntimeBindingSourceOperation | null,
     private readonly context: BindingValueChannelDraftContext,
   ) {
-    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
     this.readSourceType = support.sourceTypeReaderForBinding(
       binding,
-      scope,
-      context.evaluator,
+      context,
       targetAccess?.targetProperty ?? null,
     );
   }
@@ -80,7 +78,12 @@ class RuntimeBindingValueChannelDraftFrame {
       || this.binding instanceof LetBinding
       || this.binding instanceof ListenerBinding
     ) {
-      return this.directBinding.valueChannelDraftForTargetOperation(this.local, this.targetOperation, this.readSourceType);
+      return this.directBinding.valueChannelDraftForTargetOperation(
+        this.local,
+        this.targetOperation,
+        this.readSourceType,
+        this.context,
+      );
     }
     if (this.targetAccess == null) {
       return this.openMissingTargetAccess();

@@ -1,8 +1,5 @@
 import ts from 'typescript';
 import {
-  SourceSpanAddress,
-} from '../kernel/address.js';
-import {
   ConfigurationOptionContributionKind,
   ConfigurationOptionValueKind,
   type ConfigurationOptionContribution,
@@ -18,6 +15,7 @@ import { FrameworkRegistrationKind } from '../registration/registration-referenc
 import {
   CheckerTypeProjector,
 } from '../type-system/checker-projector.js';
+import { sourceExpressionForSourceAddress } from '../type-system/source-address-expression.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -301,7 +299,11 @@ function stateStoreInitialStateType(
   if (typeSystem == null || contribution?.value.addressHandle == null) {
     return null;
   }
-  const node = programExpressionForSourceAddress(store, typeSystem, contribution.value.addressHandle);
+  const node = sourceExpressionForSourceAddress(
+    store,
+    contribution.value.addressHandle,
+    (path) => typeSystem.readProgramSourceFileByPath(path),
+  );
   if (node == null) {
     return null;
   }
@@ -319,44 +321,6 @@ function stateStoreInitialStateType(
     sourceAddressHandle: contribution.value.addressHandle,
     display: checker.typeToString(type, node),
   }).toReference();
-}
-
-function programExpressionForSourceAddress(
-  store: KernelStore,
-  typeSystem: TypeSystemProject,
-  sourceAddressHandle: AddressHandle,
-): ts.Expression | null {
-  const address = store.readAddress(sourceAddressHandle);
-  if (!(address instanceof SourceSpanAddress)) {
-    return null;
-  }
-  const fileAddress = store.readAddress(address.fileHandle);
-  if (fileAddress?.kind !== 'source-file-address') {
-    return null;
-  }
-  const sourceFile = typeSystem.readProgramSourceFileByPath(fileAddress.path);
-  return sourceFile == null ? null : smallestExpressionForSpan(sourceFile, address.start, address.end);
-}
-
-function smallestExpressionForSpan(
-  sourceFile: ts.SourceFile,
-  start: number,
-  end: number,
-): ts.Expression | null {
-  let best: ts.Expression | null = null;
-  const visit = (node: ts.Node): void => {
-    if (node.end < start || node.getStart(sourceFile) > end) {
-      return;
-    }
-    if (ts.isExpression(node) && node.getStart(sourceFile) === start && node.end === end) {
-      best = node;
-    }
-    if (node.getStart(sourceFile) <= start && end <= node.end) {
-      ts.forEachChild(node, visit);
-    }
-  };
-  visit(sourceFile);
-  return best;
 }
 
 function argumentsByIndex(

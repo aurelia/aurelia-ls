@@ -42,6 +42,7 @@ import {
   evaluateKnownIntrinsic as evaluateStaticIntrinsic,
   type StaticIntrinsicEvaluationHost,
 } from './intrinsics.js';
+import { evaluateAureliaExpressionGlobalAccess } from './global-intrinsics.js';
 import { EvaluationOpenSeam, EvaluationOpenSeamKind } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -54,6 +55,8 @@ import {
 } from './nullish-expression.js';
 import {
   evaluateStaticBinaryOperator,
+  evaluateStaticUnaryOperation,
+  staticUnaryOperationForToken,
   staticTokenName,
 } from './operators.js';
 import { representativeEvaluationValues } from './representative-values.js';
@@ -91,6 +94,7 @@ import {
 } from './literals.js';
 import {
   evaluateStaticElementAccess,
+  evaluateStaticElementValue,
   evaluateStaticPropertyAccess,
   evaluateStaticPropertyValue,
   readStaticOwnProperty,
@@ -293,6 +297,18 @@ export class StaticEvaluator {
   ): StaticExpressionEvaluationResult {
     const openStart = this.openSeams.length;
     const value = evaluateStaticPropertyValue(receiver, propertyName, node, moduleKey, 0, this.propertyAccessHost);
+    return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
+  }
+
+  /** Read one keyed member from an evaluator value, including guarded accessor invocation for local getters. */
+  evaluateElementValue(
+    receiver: EvaluationValue,
+    argument: EvaluationValue,
+    moduleKey: string,
+    node: ts.Node,
+  ): StaticExpressionEvaluationResult {
+    const openStart = this.openSeams.length;
+    const value = evaluateStaticElementValue(receiver, argument, node, moduleKey, 0, this.propertyAccessHost);
     return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
   }
 
@@ -917,6 +933,10 @@ export class StaticEvaluator {
       if (hostValue != null) {
         return hostValue;
       }
+      const globalValue = evaluateAureliaExpressionGlobalAccess(identifier.text, identifier);
+      if (globalValue != null) {
+        return globalValue;
+      }
       return this.unknown(`Identifier '${identifier.text}' is not available in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
     if (value.kind === EvaluationValueKind.Unknown && !value.hasOpenSeam) {
@@ -1331,33 +1351,12 @@ export class StaticEvaluator {
     if (operand.kind === EvaluationValueKind.BoundaryValue) {
       return boundaryDependencyValue(expression, operand);
     }
-    switch (expression.operator) {
-      case ts.SyntaxKind.ExclamationToken: {
-        const truthy = readEvaluationTruthiness(operand);
-        return truthy == null
-          ? this.unknown('Logical not operand did not reduce to known truthiness.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression)
-          : new EvaluationBooleanValue(!truthy, expression);
-      }
-      case ts.SyntaxKind.PlusToken: {
-        if (!isEvaluationPrimitiveValue(operand)) {
-          return this.unknown('Unary plus operand did not reduce to a numeric primitive.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
-        }
-        return new EvaluationNumberValue(Number(readEvaluationPrimitive(operand)), expression);
-      }
-      case ts.SyntaxKind.MinusToken: {
-        if (!isEvaluationPrimitiveValue(operand)) {
-          return this.unknown('Unary minus operand did not reduce to a numeric primitive.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
-        }
-        return new EvaluationNumberValue(-Number(readEvaluationPrimitive(operand)), expression);
-      }
-      case ts.SyntaxKind.TildeToken: {
-        return operand.kind === EvaluationValueKind.Number
-          ? new EvaluationNumberValue(~operand.value, expression)
-          : this.unknown('Bitwise not operand did not reduce to a number.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
-      }
-      default:
-        return this.unknown(`Unary operator ${staticTokenName(expression.operator)} is not evaluated.`, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
+    const operation = staticUnaryOperationForToken(expression.operator);
+    if (operation == null) {
+      return this.unknown(`Unary operator ${staticTokenName(expression.operator)} is not evaluated.`, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
     }
+    return evaluateStaticUnaryOperation(operation, operand, expression)
+      ?? this.unknown(`Unary operator ${staticTokenName(expression.operator)} did not reduce over a known operand.`, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
 
   private evaluateTypeOfExpression(
@@ -1379,35 +1378,14 @@ export class StaticEvaluator {
         EvaluationOpenSeamKind.UnsupportedExpression,
       );
     }
-    switch (operand.kind) {
-      case EvaluationValueKind.Undefined:
-        return new EvaluationStringValue('undefined', expression);
-      case EvaluationValueKind.Boolean:
-        return new EvaluationStringValue('boolean', expression);
-      case EvaluationValueKind.Number:
-        return new EvaluationStringValue('number', expression);
-      case EvaluationValueKind.BigInt:
-        return new EvaluationStringValue('bigint', expression);
-      case EvaluationValueKind.String:
-      case EvaluationValueKind.StringPattern:
-        return new EvaluationStringValue('string', expression);
-      case EvaluationValueKind.Function:
-      case EvaluationValueKind.Class:
-        return new EvaluationStringValue('function', expression);
-      case EvaluationValueKind.Null:
-      case EvaluationValueKind.Array:
-      case EvaluationValueKind.Set:
-      case EvaluationValueKind.Map:
-      case EvaluationValueKind.Object:
-      case EvaluationValueKind.BoundaryObject:
-      case EvaluationValueKind.RegularExpression:
-      case EvaluationValueKind.Instance:
-      case EvaluationValueKind.ModuleNamespace:
-      case EvaluationValueKind.Promise:
-        return new EvaluationStringValue('object', expression);
-      case EvaluationValueKind.BoundaryValue:
-        return new EvaluationUnknownValue(`typeof ${operand.path} depends on host environment state.`, expression, true);
+    const value = evaluateStaticUnaryOperation('typeof', operand, expression);
+    if (value != null) {
+      return value;
     }
+    if (operand.kind === EvaluationValueKind.BoundaryValue) {
+      return new EvaluationUnknownValue(`typeof ${operand.path} depends on host environment state.`, expression, true);
+    }
+    return this.unknown('typeof operand did not reduce to a modeled value.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
 
   private evaluateTypeOfIdentifier(
@@ -1420,6 +1398,7 @@ export class StaticEvaluator {
     }
     const value = environment.readValue(identifier.text)
       ?? this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
+      ?? evaluateAureliaExpressionGlobalAccess(identifier.text, identifier)
       ?? null;
     return value ?? EvaluationUndefined;
   }
@@ -1440,7 +1419,7 @@ export class StaticEvaluator {
         EvaluationOpenSeamKind.UnsupportedExpression,
       );
     }
-    return new EvaluationUndefinedValue(expression);
+    return evaluateStaticUnaryOperation('void', operand, expression) ?? new EvaluationUndefinedValue(expression);
   }
 
   private evaluateConditionalExpression(

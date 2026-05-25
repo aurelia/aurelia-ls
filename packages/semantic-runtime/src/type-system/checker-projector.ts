@@ -710,14 +710,14 @@ function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShape
       checkerIterableElementType(input.checker, input.type),
       input.sourceNode ?? null,
     ),
-    callReturnType: returnTypeReferenceForSignature(
+    callReturnType: compactRepresentativeReturnTypeForSignatures(
       input.checker,
-      input.type.getCallSignatures()[0] ?? null,
+      input.type.getCallSignatures(),
       input.sourceNode ?? null,
     ),
-    constructReturnType: returnTypeReferenceForSignature(
+    constructReturnType: compactRepresentativeReturnTypeForSignatures(
       input.checker,
-      input.type.getConstructSignatures()[0] ?? null,
+      input.type.getConstructSignatures(),
       input.sourceNode ?? null,
     ),
   };
@@ -930,6 +930,15 @@ function returnTypeReferenceForSignature(
     CheckerTypeProjectionOrigin.TypeChecker,
     null,
   );
+}
+
+/** Records compact fallback metadata for carrierless shape reads; checker-backed calls must use the call projector. */
+function compactRepresentativeReturnTypeForSignatures(
+  checker: ts.TypeChecker,
+  signatures: readonly ts.Signature[],
+  sourceNode: ts.Node | null,
+): CheckerTypeReference | null {
+  return returnTypeReferenceForSignature(checker, signatures[0] ?? null, sourceNode);
 }
 
 function valueTypeReferenceForMember(

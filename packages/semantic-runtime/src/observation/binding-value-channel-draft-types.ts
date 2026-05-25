@@ -3,8 +3,10 @@ import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-t
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
-import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
+import type { TypeSystemProject } from '../type-system/project.js';
+import type { RuntimeValueChannelBinding } from './runtime-binding-expression.js';
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
+import type { RuntimeBindingSourceExpressionContextProjector } from './runtime-binding-source-expression-context.js';
 import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
@@ -12,7 +14,7 @@ import type {
   RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
 
-export type RuntimeValueChannelBinding = RuntimeExpressionBinding;
+export type { RuntimeValueChannelBinding } from './runtime-binding-expression.js';
 
 export type RuntimeBindingValueChannelDraft = {
   readonly channelKind: RuntimeBindingValueChannelKind;
@@ -33,7 +35,9 @@ export interface BindingValueChannelDraftContext {
     readonly controllerBind: RuntimeControllerBindEmission;
   };
   readonly instructionScopes: RuntimeInstructionScopeLookup;
+  readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
   readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly typeSystem: TypeSystemProject | null;
 }
 
 export type BindingSourceTypeReader = () => CheckerTypeReference | null;

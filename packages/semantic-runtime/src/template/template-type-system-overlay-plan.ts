@@ -68,6 +68,7 @@ export interface TemplateTypeSystemOverlayBindingContextLayer {
 export interface TemplateTypeSystemOverlayTypedBindingContextLayer {
   readonly kind: 'typed-binding-context';
   readonly locals: readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[];
+  readonly parentAlias?: TemplateTypeSystemOverlayScopeAlias | null;
 }
 
 export interface TemplateTypeSystemOverlayLetLayer {
@@ -83,6 +84,7 @@ export interface TemplateTypeSystemOverlayContextSlotLayer {
 export interface TemplateTypeSystemOverlayContextSlotLocal {
   readonly name: string;
   readonly valueKind: TemplateTypeSystemOverlayContextSlotValueKind;
+  readonly typeExpression: string | null;
 }
 
 export type TemplateTypeSystemOverlayContextSlotValueKind =
@@ -281,12 +283,15 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   }
 
   private appendTypedBindingContextLayer(layer: TemplateTypeSystemOverlayTypedBindingContextLayer): void {
-    this.builder.append(`${this.indent}{\n`);
+    const indent = this.indent;
+    const capturedParent = this.captureParentAlias(layer.parentAlias ?? null, indent);
+    this.builder.append(`${indent}{\n`);
     this.depth += 1;
     const nestedIndent = this.indent;
+    this.appendCapturedParentAlias(capturedParent, nestedIndent);
     for (const local of layer.locals) {
       this.builder.appendLine(local.typeExpression == null
-        ? `${nestedIndent}const ${local.name} = undefined as any;`
+        ? `${nestedIndent}const ${local.name} = undefined as unknown;`
         : `${nestedIndent}const ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
     this.builder.appendLine(layer.locals.length === 0
@@ -386,7 +391,9 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
   private appendContextSlotLayer(layer: TemplateTypeSystemOverlayContextSlotLayer): void {
     const indent = this.indent;
     for (const local of layer.locals) {
-      this.builder.appendLine(`${indent}let ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`);
+      this.builder.appendLine(local.typeExpression == null
+        ? `${indent}let ${local.name} = ${contextSlotLocalInitializer(local.valueKind)};`
+        : `${indent}let ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
   }
 
@@ -422,7 +429,7 @@ class TemplateTypeSystemOverlayScopeBlockWriter {
     const indent = this.indent;
     for (const local of layer.locals) {
       this.builder.appendLine(local.typeExpression == null
-        ? `${indent}let ${local.name} = undefined as any;`
+        ? `${indent}let ${local.name} = undefined as unknown;`
         : `${indent}let ${local.name} = undefined as unknown as ${local.typeExpression};`);
     }
   }
@@ -473,7 +480,7 @@ function contextSlotLocalInitializer(valueKind: TemplateTypeSystemOverlayContext
     case 'number':
       return '0';
     case 'dynamic':
-      return 'undefined as any';
+      return 'undefined as unknown';
   }
 }
 

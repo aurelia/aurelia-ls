@@ -69,6 +69,11 @@ still be realistic app code rather than artificial parser torture cases.
   connectable, so comparator member reads are template dependencies even though proxy sort comparator values stay raw.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation` is the focused semantic
   contract for this fixture.
+- `arrow-callback-source-value` captures `Scope.fromParent`-shaped Aurelia arrow callbacks inside binding-source array
+  method calls. It preserves static repeat-local value reduction for callback-filtered arrays without moving callback
+  parameter scope semantics into overlay-only TypeScript source. It also proves binding-context `CallScope` and
+  `$this`-owned `CallMember` pass the Aurelia receiver into evaluator-local method calls that read `this`.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-source-arrow-callbacks` protects that source-value path.
 - `template-controller-built-ins` captures all runtime-html built-in template-controller families in one small template:
   `if`/`else`, `repeat`, `with`, `portal`, `promise`/`pending`/`then`/`catch`, and `switch`/`case`/`default-case`.
   It preserves controller-flow rows, link hooks, child-view cardinality, `with.bind` non-nullish scope projection,
@@ -99,9 +104,11 @@ still be realistic app code rather than artificial parser torture cases.
   this fixture.
 - `listener-method-reference` captures Aurelia `ListenerBinding` source expressions that either invoke a state method
   directly, evaluate to a method reference that Aurelia invokes with the DOM event, or return a handler function that
-  Aurelia then invokes. It preserves the split between authored binding-expression display (`state.submit($event)`),
-  event-handler invocation value channels, and AppTopology service-member names (`submit`) so low-boilerplate listener
-  guidance does not lose source precision or require forwarding component methods.
+  Aurelia then invokes. Its overloaded reference canary proves event-channel return typing uses runtime event-argument
+  overload selection instead of first-signature metadata. It preserves the split between authored binding-expression
+  display (`state.submit($event)`), event-handler invocation value channels, and AppTopology service-member names
+  (`submit`) so low-boilerplate listener guidance does not lose source precision or require forwarding component
+  methods.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:listener-method-reference` is the focused semantic contract for
   this fixture.
 - `weak-owner-repair-planning` captures missing repeat-local slot typing, an `any[]` repeat local, an `any`-typed owner
@@ -275,10 +282,12 @@ still be realistic app code rather than artificial parser torture cases.
   coverage, child-container handoff, object/class view-model composition, static component name resolution, and
   `activate(model)` boundary without claiming live recursive composed-child hydration. The fixture also includes a
   child custom element that receives a broad `Constructable`-typed widget kit through bindables and resolves a concrete
-  component with `Array.find(...)` plus an instance method predicate. That preserves the substrate pressure where
-  recursive rendering needs parent-to-child bound controller values, the static evaluator needs method-call `this`
-  binding, and exact object literals should return `undefined` for absent properties instead of widening into unknown
-  object shape.
+  component with `Array.find(...)` plus an instance method predicate. The parent-bound `kit` expression also uses a
+  parent-local value converter before crossing into the child, preserving the rule that bound-controller values carry
+  the parent compiler resource scope rather than re-evaluating parent expressions with child resource visibility. That
+  preserves the substrate pressure where recursive rendering needs parent-to-child bound controller values, the static
+  evaluator needs method-call `this` binding, and exact object literals should return `undefined` for absent properties
+  instead of widening into unknown object shape.
 - `recursive-custom-element-surfaces` captures a self-recursive custom element whose child render is guarded by
   runtime state. It preserves the finite aggregate rendering boundary: the first recursive surface should create
   custom-element and synthetic-view controller rows, carry parent-to-child bindable flow through the active
@@ -303,6 +312,16 @@ still be realistic app code rather than artificial parser torture cases.
 - `synthetic-writeback-local` captures a two-way custom-attribute bindable that writes into a `$`-prefixed local such
   as `display-data.bind: $displayData`, then uses that local in later template scope. It preserves Aurelia's runtime
   writeback-local behavior without telling users to declare the synthetic local on their view-model.
+- `synthetic-writeback-converter-local` captures a writeback local behind a value converter whose `fromView` result
+  differs from the target bindable type. It preserves the split between target member type carriers and source-local
+  assignment types so overlays and data-flow do not type the synthetic local as the custom-attribute bindable.
+- `value-converter-source-value` captures a repeat source that flows through an evaluator-local value converter
+  `toView` call before static representative locals are projected. It also keeps a checker-dynamic `withContext`
+  converter open for static value reduction while preserving the repeat local element type, and proves that non-strict
+  nullish member access reduces to `undefined` before a short-circuit fallback source is chosen. It preserves the
+  binding-source value substrate shared by router/static-value consumers without making overlays grow converter-specific
+  value policy. The focused contract also asserts the strict-false overlay emits no TS18047/nullish template
+  diagnostic and keeps the fallback repeat local typed as the fallback element type.
 - `template-compiler-errors` captures malformed classification, root `<template>` surrogate failures,
   projection/shadow-DOM slot failures, local-template shape failures, custom-attribute multi-binding, `<let>`, and
   command-owned template syntax that maps to exact Aurelia template-compiler `ErrorNames` authority. It preserves

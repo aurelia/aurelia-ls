@@ -2245,6 +2245,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "sourceAddressHandleForRuntimeExpressionSpan",
       "PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS",
       "source reference carrier",
+      "public address carrier display",
+      "authored source address collapse",
+      "generated address carrier preservation",
     ],
     queryCanaries: [
       {
@@ -2273,6 +2276,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "identity anchored generated address continuation source precision",
         summary:
           "Generated-address source precision should route through the kernel source-address resolver when the anchor is a semantic identity.",
+      },
+      {
+        query:
+          "describeStoredAddress authoredSourceAddressForStoredAddress duplicate switch source address",
+        summary:
+          "The public source-reference switch preserves generated/template carriers, while the kernel source-address switch collapses those carriers to authored source for lookup; inspect the contracts before deduping.",
       },
       {
         query:
@@ -2954,6 +2963,223 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
+    id: "semantic-runtime.binding-source-value-evaluation",
+    aliases: [
+      "runtime-binding-source-value-evaluator",
+      "frontier:runtime-binding-source-value-evaluator",
+      "binding-source-value-evaluator",
+      "source-value-evaluation-context",
+    ],
+    title: "Binding Source Value Evaluation",
+    summary:
+      "Evaluate deterministic Aurelia binding-source values through modeled Scope, static evaluator reuse, active DI visibility, and bound-controller handoff.",
+    domains: ["semantic-runtime", "observation", "binding", "evaluation", "type-system", "template"],
+    roles: ["orient", "analyze", "refactor", "verify"],
+    terms: [
+      "RuntimeBindingSourceValueEvaluator",
+      "RuntimeBindingSourceValueEvaluationContext",
+      "RuntimeBindingSourceEvaluationFrame",
+      "RuntimeBindingSourceMemberValueReader",
+      "RuntimeBindingSourceArrayMethodEvaluator",
+      "RuntimeBindingSourceValueEvaluation",
+      "binding-source value",
+      "source-value evaluation context",
+      "source-value intrinsic boundary",
+      "deterministic source-value closure",
+      "binding-source array method deterministic closure",
+      "active DI container binding-source value",
+      "bound controller source-value",
+      "value-converter source-value",
+      "StaticEvaluator source-value reuse",
+      "readStaticValueProperty",
+      "readStaticValueElement",
+      "StaticValueMemberRead",
+      "foldStaticValueMemberRead",
+      "source-independent static member read",
+      "RuntimeBindingSourceExpressionContextProjector",
+      "source expression lifecycle",
+      "projectRuntimeBindingSourceValueContextInScope",
+      "sourceValueContextForRuntimeBindingSourceExpressionProjection",
+      "knownScope source-value",
+      "binding-source-needs-runtime-value",
+      "standard library authority boundary",
+    ],
+    queryCanaries: [
+      {
+        query: "runtime binding source value evaluator",
+        summary:
+          "Direct source-value evaluator queries should have a stable route id instead of only reaching binding-flow by overlap.",
+      },
+      {
+        query:
+          "RuntimeBindingSourceValueEvaluationContext source-value evaluation context active DI container bound controller recursion",
+        summary:
+          "Static binding-source value closure should enter through the binding-owned request context, not mutable evaluator state or feature-local reducers.",
+      },
+      {
+        query:
+          "source-value intrinsic boundary deterministic closure TypeScript stdlib checker-backed",
+        summary:
+          "Source-value work should close only deterministic values a product consumer spends; checker-backed standard-library type surfaces stay with TypeScript.",
+      },
+      {
+        query: "binding-source array method deterministic closure",
+        summary:
+          "Array source-value behavior should route to the binding-owned array method reducer and shared array operation primitives.",
+      },
+      {
+        query:
+          "StaticValueMemberRead fold source-independent member read binding-source value static evaluator",
+        summary:
+          "Source-independent binding-source member reads and StaticEvaluator property access should share the lower static member-read outcome fold.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.SourceValueEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "RuntimeBindingSourceValueEvaluationContext is the owner request shape for source-value reduction over expression AST, modeled BindingScope, active DI container, resource scope, binding-behavior lifecycle, and bound-controller recursion guards. Rendered bindings enter through source-expression projections; exact non-rendered scopes enter through knownScope(...).",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.ExpressionEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.type-system.expression-semantics",
+        summary:
+          "Source-value evaluation is intentionally distinct from CheckerExpressionTypeEvaluationContext: it asks for deterministic runtime values, not TypeChecker type/reference projection. It should still consume the same rendered binding source-expression lifecycle facts before reducing values.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.observation.binding-flow",
+        summary:
+          "Binding data-flow, router, composition, overlays, and template-controller static values consume source-value reduction. Coverage stays partial as a guardrail against feature-local reducers or source-expression lifecycle shortcuts.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+        symbolName: "RuntimeBindingSourceValueEvaluator",
+        role: "primary",
+        summary:
+          "Observation-side evaluator for deterministic binding-source value reduction over modeled Aurelia scopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts",
+        symbolName: "RuntimeBindingSourceValueEvaluationContext",
+        role: "primary",
+        summary:
+          "Source-value request context carrying scope, resource scope, active container, lifecycle, and recursion guard facts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-evaluation-frame.ts",
+        symbolName: "RuntimeBindingSourceEvaluationFrame",
+        role: "supporting",
+        summary:
+          "Per-read static evaluator frame that preserves module/evaluator state and active DI visibility.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-member-value.ts",
+        symbolName: "RuntimeBindingSourceMemberValueReader",
+        role: "supporting",
+        summary:
+          "Binding-source property/keyed read boundary above shared static property-access helpers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-array-method-value.ts",
+        symbolName: "RuntimeBindingSourceArrayMethodEvaluator",
+        role: "supporting",
+        summary:
+          "Binding-source native Array method reducer for closed source-value arrays and callback scopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/property-access.ts",
+        symbolName: "foldStaticValueMemberRead",
+        role: "supporting",
+        summary:
+          "Shared static member-read outcome fold consumed by StaticEvaluator and binding-source source-value reduction.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+        symbolName: "RuntimeBindingSourceExpressionContextProjector",
+        role: "supporting",
+        summary:
+          "Rendered-binding source-expression lifecycle projector used before source-value contexts are created.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:binding-source-arrow-callbacks",
+        role: "pressure",
+        summary:
+          "Canary for binding-source array callbacks, source-value receiver binding, and method-call reduction.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:binding-source-value-converters",
+        role: "pressure",
+        summary:
+          "Canary for value-converter source-value reduction and context-sensitive open behavior.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-context-usage",
+        role: "supporting",
+        summary:
+          "Guards context entry points for TypeChecker and source-value expression consumers.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas expression:coverage -- --projection=collection-methods --detail",
+        role: "pressure",
+        summary:
+          "Coverage lane comparing source-value Array methods with TypeChecker, observation, and static host-boundary lanes.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "observation", "binding", "type-system"],
+        role: "grounding",
+        summary:
+          "Durable memory carries source-value evaluator boundaries, standard-library authority policy, and consumer guardrails.",
+      },
+    ],
+    authority: [
+      "Aurelia expression evaluation and Scope lookup semantics for binding-source reads.",
+      "Shared StaticEvaluator and property-access primitives for deterministic JavaScript value closure.",
+      "Binding-flow and runtime binding source-expression projection for rendered binding lifecycle facts.",
+      "TypeScript owns checker-backed standard-library declarations, overloads, generics, and inference.",
+    ],
+    cautions: [
+      "Do not grow RuntimeBindingSourceValueEvaluator into a parallel TypeScript standard library.",
+      "Do not add router-, composition-, overlay-, or diagnostic-local source-value reducers when a binding-source context can carry the fact.",
+      "Do not merge this context into CheckerExpressionTypeEvaluationContext unless a broader expression-site primitive is deliberately designed.",
+      "Mutating receiver methods should stay open for rendered binding source-value closure unless a product consumer proves a safe mutation-state model.",
+    ],
+    nextQuestions: [
+      "Is the requested fact a deterministic runtime value, a TypeChecker type/reference, or an Aurelia observation/controller consequence?",
+      "Does the caller already have a rendered binding source projection, an exact modeled Scope, or neither?",
+      "Can a shared evaluator/property/array primitive answer the value, or should this remain an explicit open source-value row?",
+      "Which downstream consumer actually spends the closed value: router, composition, template-controller scope, data-flow, overlay, diagnostics, or authoring?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.evaluator.world-construction",
+      "semantic-runtime.template-overlay-integration",
+      "semantic-runtime.template-recursive-rendering",
+      "router.viewport.authoring-semantics",
+    ],
+  },
+  {
     id: "semantic-runtime.observation.binding-flow",
     aliases: [
       "semantic-runtime.select-checked-value-channels",
@@ -2961,8 +3187,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "frontier:select-and-checked-value-channel-drafts",
       "bound-controller-value-flow",
       "frontier:bound-controller-value-flow",
-      "runtime-binding-source-value-evaluator",
-      "frontier:runtime-binding-source-value-evaluator",
       "binding-data-flow-materializer",
       "frontier:binding-data-flow-materializer",
     ],
@@ -3031,7 +3255,32 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "binding data flow value channel",
       "binding source value evaluator",
       "RuntimeBindingSourceValueEvaluator",
+      "RuntimeBindingSourceValueEvaluationContext",
+      "source-value evaluation context",
+      "binding-source value request context",
+      "source-value intrinsic boundary",
+      "deterministic source-value closure",
+      "binding-source array method deterministic closure",
+      "binding-source relational operator value closure",
+      "RuntimeBindingSourceExpressionContextProjector",
+      "binding source expression context",
+      "rendered binding source expression context",
+      "source expression lifecycle",
+      "source-expression lifecycle projection",
+      "source expression lifecycle bound controller",
+      "source expression lifecycle helper",
+      "source expression lifecycle projection helper",
+      "bindingContextSlotDraftForExpressionAccess",
+      "source expression slot projector",
+      "AccessScope AccessMember source slot",
+      "value-channel source type strict mode",
+      "checker collection types",
+      "checker literal domains",
+      "collection map element key value projection",
+      "active DI container binding-source value",
       "RuntimeBindingSourceEvaluationFrame",
+      "CheckerExpressionTypeEvaluationContext",
+      "binding-flow expression evaluation context",
       "binding-source-needs-runtime-value",
       "binding source needs runtime value",
       "select value channel",
@@ -3061,6 +3310,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "RuntimeBindingExpressionScopeProjector",
       "InterpolationPartBinding",
       "state binding behavior interpolation",
+      "state initial source value",
+      "state initial-state source-value",
+      "state initial-state source-value bound controller",
+      "StateBinding scope slot initial state value",
       "framework service customization",
       "source assignment reason fixtures",
       "mixed-form-surfaces",
@@ -3100,6 +3353,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "false TS2554 child bindable callback",
       "bound controller Array.find",
       "Array.find receiver did not reduce to a known array",
+      "bound controller state initial value",
       "property method this binding",
       "ObserverLocator function key ComputedObserver",
       "function-key computed observer",
@@ -3114,6 +3368,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "observer locator",
         summary:
           "Observer-locator questions should start from framework-shaped observation, not app-specific heuristics.",
+      },
+      {
+        query: "state initial source value bound controller",
+        summary:
+          "State-backed parent-bound child values should route through binding-flow source-value evaluation as well as state store configuration.",
       },
       {
         query: "ObserverLocator getObserver function key ComputedObserver",
@@ -3221,6 +3480,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Product-handle to runtime-accepted binding AST questions should route to the template expression product primitive before feature-local observation/router helpers are added.",
       },
       {
+        query:
+          "RuntimeBindingSourceExpressionContextProjector value-channel source type strict mode binding-behavior source scope",
+        summary:
+          "Binding source TypeChecker and source-value reads should route through the shared rendered-binding source-expression context projector.",
+      },
+      {
+        query: "source expression lifecycle bound controller",
+        summary:
+          "Bound-controller child root slots and rendered binding reads should route through the same source-expression lifecycle projection helper.",
+      },
+      {
+        query: "bindingContextSlotDraftForExpressionAccess bound controller source slot AccessMember",
+        summary:
+          "Slot-shaped parent-bound source expressions should route through the shared BindingScope source-expression slot projector, not feature-local walkers.",
+      },
+      {
         query: "ValidationController bridge role evidence validate property info",
         summary:
           "Validation controller property-info and validate binding-behavior questions should route through binding-flow and validation-html framework grounding before bridge evidence is closed.",
@@ -3232,7 +3507,23 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         state: AtlasWorkRouteCoverageState.Partial,
         depth: AtlasWorkRouteCoverageDepth.Verified,
         summary:
-          "Binding-flow owns the shared source/target/value-channel substrate: PropertyBinding, ObserverLocator, RuntimeBindingExpressionScopeProjector, RuntimeBindingSourceValueEvaluator, RuntimeBoundControllerValueTable, value-channel drafts, source writeability, value-converter writeback, assignability, data-flow summaries, and diagnostics policy are wired and covered by focused contracts. The remaining route-local obligation is to keep consumers from reintroducing local source/write/checker/value-channel policy and to close any gaps found by the binding-flow coverage pass.",
+          "Binding-flow owns the shared source/target/value-channel substrate: PropertyBinding, ObserverLocator, RuntimeBindingExpressionScopeProjector, RuntimeBindingSourceValueEvaluator, RuntimeBoundControllerValueTable, value-channel drafts, source writeability, value-converter writeback, assignability, data-flow summaries, and diagnostics policy are wired and covered by focused contracts. Runtime-assignment writeback now also proves converter fromView source-local typing through synthetic-writeback-converter-local. Current overlay/diagnostic consumers spend data-flow rows and materialized scope slots rather than duplicating assignment policy; the partial state is a standing anti-regression guardrail for future consumers that might reintroduce local source/write/checker/value-channel policy.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.ExpressionEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.type-system.expression-semantics",
+        summary:
+          "Binding-flow spends RuntimeBindingSourceExpressionContextProjector before constructing CheckerExpressionTypeEvaluationContext for rendered binding source reads. Value-channel source typing, data-flow source typing, binding-owned observed dependencies, router resource values, runtime composition, repeat static locals, let static values, and child bindable source-slot projection now share recursive instruction-scope lookup, binding-behavior source-scope projection, rendering-controller strict mode, and the lower source-expression lifecycle helper before entering TypeChecker or source-value evaluation contexts. Focused binding-flow, overlay, i18n lifecycle, select/checked, and checker-access contracts verify this boundary.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.SourceValueEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.binding-source-value-evaluation",
+        summary:
+          "RuntimeBindingSourceValueEvaluationContext is the source-value request envelope for expression AST, modeled BindingScope, active DI container override, resource scope, binding-behavior lifecycle, and bound-controller recursion guards. Its constructor is intentionally private: rendered bindings enter through source-expression projections, while non-rendered exact-scope reads enter through knownScope(...). Router, composition, repeat-static-value, and template-controller let-value consumers now call RuntimeBindingSourceValueEvaluator through this context, with binding/router/composition/recursive-rendering/overlay contracts passing after the refactor.",
       },
     ],
     anchors: [
@@ -3284,6 +3575,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/type-system/checker-collection-types.ts",
+        role: "supporting",
+        summary:
+          "Shared checker literal-domain and collection/map shape helpers consumed by value-channel and data-flow materializers.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/api/template-diagnostic-policy.ts",
         symbolName: "bindingDataFlowDiagnostics",
         role: "primary",
@@ -3320,6 +3619,24 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+        symbolName: "RuntimeBindingSourceExpressionContextProjector",
+        role: "primary",
+        summary:
+          "Binding-owned rendered source-expression context handoff shared by TypeChecker, source-value, and observed-dependency consumers.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+        symbolName: "projectRuntimeBindingSourceExpressionInScope",
+        role: "supporting",
+        summary:
+          "Known-source-scope handoff for consumers that already proved the runtime BindingScope.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
         symbolName: "RuntimeBindingBehaviorMaterializer",
         role: "supporting",
@@ -3333,7 +3650,34 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "RuntimeBoundControllerValueTable",
         role: "supporting",
         summary:
-          "Parent-to-child bound controller value table feeds binding-source evaluation across recursive rendering contexts.",
+          "Parent-to-child bound controller value table carries source values plus parent strict/runtime context across resource boundaries.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-binding.ts",
+        symbolName: "templateControllerRuntimeValueBinding",
+        role: "supporting",
+        summary:
+          "Shared lookup for the runtime expression binding that supplies a template-controller value in one render context.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts",
+        symbolName: "RuntimeBindingSourceValueEvaluationContext",
+        role: "primary",
+        summary:
+          "Binding-owned request context for static source-value reduction, Scope lookup, active container/resource resolution, binding-behavior lifecycle, and recursive bound-controller reads.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts",
+        symbolName: "RuntimeBindingSourceValueEvaluationContext.knownScope",
+        role: "supporting",
+        summary:
+          "Named exact-scope fallback owned by shared source-value context projectors or consumers deliberately outside rendered runtime binding projection.",
       },
       {
         kind: "source",
@@ -3998,6 +4342,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Shared astEvaluate/connectable dependency collector used by binding data-flow and ExpressionWatcher products, with caller-owned collection-read policy for runtime array receivers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/observed-dependency-member-source.ts",
+        symbolName: "observedMemberSourceForBindingDependency",
+        role: "primary",
+        summary:
+          "BindingScope-aware observed-dependency member/source projector shared by binding data-flow publication.",
       },
       {
         kind: "source",
@@ -4754,6 +5106,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "composed dashboard",
       "activate model handoff",
       "activation model handoff",
+      "overloaded activate model",
+      "activate model overload",
+      "checker signature candidate basis",
       "renderingContextKind",
       "definition-resource",
       "recursive-resource-instance",
@@ -4833,6 +5188,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "RuntimeCompositionMaterializer CompositionContext CompositionController",
         summary:
           "Runtime composition product work should route through the existing composition materializer instead of ad hoc API logic.",
+      },
+      {
+        query: "AuCompose overloaded activate model checker signature candidate basis",
+        summary:
+          "Overloaded activate(model) handoff should route to runtime composition plus shared TypeChecker signature parameter projection, not a first-signature local shortcut.",
       },
       {
         query: "AuCompose bound controller Array.find property method this binding",
@@ -4917,6 +5277,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Runtime composition product model records component candidates, compiled templates, and activation model handoff.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+        symbolName: "activationModelHandoffForType",
+        role: "supporting",
+        summary:
+          "Checker-backed AuCompose activate(model) lifecycle handoff that reuses shared signature parameter projection and assignability.",
       },
       {
         kind: "source",
@@ -5190,6 +5559,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "unsupported Aurelia expression overlay",
       "scope slot projection",
       "runtime binding context",
+      "template completion source scope",
+      "template completion runtime analysis expression world",
+      "template diagnostics runtime analysis expression world",
+      "state binding completion scope",
     ],
     queryCanaries: [
       {
@@ -5206,6 +5579,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "template expression selection expression parse runtime scope lookup",
         summary:
           "Cursor inquiries, diagnostics, and overlays should share the expression/value-site to BindingScope selector before adding local lookup.",
+      },
+      {
+        query: "template completion source scope state binding expression world",
+        summary:
+          "Template completion and weak-member diagnostics should spend runtime-analysis expression-world state and rendered binding source-scope projection during cursor-context member-owner derivation.",
       },
       {
         query: "template expression projection value converter binding behavior parent this overlay",
@@ -5305,6 +5683,21 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Shared expression/value-site and expression-parse to runtime-scope selector for cursor inquiries, diagnostics, and overlays.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/template-completion.ts",
+        symbolName: "TemplateCompletionCursorContextBuilder",
+        role: "supporting",
+        summary:
+          "Cursor completion/diagnostic adapter that spends runtime-analysis expression world and binding source-expression scope before publishing the product-handle completion query.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-source-scope",
+        role: "pressure",
+        summary:
+          "Public completion canary for state-bound source scope without child-scope leakage.",
       },
       {
         kind: "source",
@@ -5863,11 +6256,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     coverage: [
       {
+        dimension: AtlasWorkRouteCoverageDimension.TypeSystemProjectEpoch,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "TypeSystemProject is the current shared checker epoch for app-local TypeScript Program construction, semantic overlay roots, Program-node remap, source-role classification, ordinary TypeScript diagnostics, and type-system telemetry. `contract:type-projection-lifetime`, `contract:typescript-diagnostics`, `contract:checker-value-access`, and `profile:app-telemetry` are the current witnesses; inquiry-depth/lazy-checker work remains a neighboring query-claim/app-opening policy question rather than a second Program path.",
+      },
+      {
         dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
         state: AtlasWorkRouteCoverageState.Covered,
         depth: AtlasWorkRouteCoverageDepth.Verified,
         summary:
-          "TypeSystemProject owns Program-node remap APIs and checker-node/checker-related helper access for property/value-type/symbol/index/type-node reads. The checker-value-access contract AST-scans semantic-runtime and permits direct value-access checker calls only inside type-system owners or documented local type-context boundaries such as proxy observation.",
+          "TypeSystemProject owns Program-node remap APIs and checker-node/checker-related helper access for property/value-type/symbol/index/type-node reads. The checker-value-access contract AST-scans semantic-runtime and permits direct value-access, type-argument, and collection-shape checker calls only inside type-system owners or documented local type-context boundaries such as proxy observation.",
       },
     ],
     anchors: [
@@ -6166,6 +6566,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "overlay typechecking diagnostics rename provenance",
       "overlay typechecking",
       "overlay diagnostics",
+      "app-builder readiness overlay",
+      "MCP app-builder common pattern overlay",
+      "common app-building overlay coherence",
       "readTypeSystemOverlayDiagnostics",
       "TemplateTypeSystemOverlayBuilder",
       "TemplateTypeSystemOverlayExpressionProjector",
@@ -6181,6 +6584,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "unsupported overlay expression",
       "unsupported overlay expression syntax",
       "overlay expression syntax support matrix",
+      "semantic expression coverage",
+      "expression:coverage",
+      "expression kind coverage",
+      "expression kind admission",
+      "parser constructed expression kind",
       "TypeSystemOverlaySource",
       "TypeSystemOverlaySourceBuilder",
       "generated overlay segment",
@@ -6194,6 +6602,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "overlay semantic diagnostics split brain",
       "overlay binding data-flow split brain",
       "overlay evaluation split brain",
+      "overlay expression evaluation context split brain",
+      "CheckerExpressionTypeEvaluationContext overlay",
       "statement-shaped overlay",
       "statement overlay emission",
       "DestructuringAssignment overlay",
@@ -6202,10 +6612,46 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "translation binding overlay",
       "promise-result overlay",
       "template-controller overlay",
+      "template overlay state binding source expression source scope",
+      "template overlay source scope",
+      "overlay source scope",
+      "overlay ambient scope",
+      "overlay source scope fallback",
+      "unrelated source scope overlay",
+      "runtime binding source scope overlay ambient",
+      "same-level synthetic scope replay",
+      "template scope can evaluate source scope",
+      "templateScopeCanEvaluateSourceScope",
+      "templateScopeCanReplaySourceScope",
+      "StateBinding replay tail",
+      "wrapRuntimeSourceExpression owner fallback",
+      "runtime binding source scope selection overlay",
+      "state binding source scope overlay",
+      "state backed if bind condition child scope leak",
+      "state-backed template-controller condition child scope boundary",
+      "source-scope-changing template-controller condition child binding",
+      "RuntimeBindingSourceExpressionContextProjector overlay",
+      "strictBinding overlay",
+      "strict false nullish overlay typechecker",
+      "non strict nullish overlay diagnostics",
+      "TS18047 strict false overlay",
+      "source-scope-changing binding behavior overlay",
+      "bindingScopesForTemplateExpressionParse",
+      "plural expression scope",
+      "instruction scope applications overlay",
       "binding data-flow overlay",
       "observer channel overlay",
       "from-view overlay",
       "two-way overlay",
+      "generated overlay any hole",
+      "undefined as any overlay",
+      "overlay unknown not any",
+      "generated-type-expression overlay",
+      "checker global type expression overlay",
+      "DOM event member overlay",
+      "listener currentTarget target overlay type expression",
+      "BindingScope context slot overlay",
+      "bindingContextSlotDraftForExpressionAccess overlay source slot",
       "rename provenance overlay",
       "rename overlay provenance",
       "LSP overlay",
@@ -6235,12 +6681,68 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "DestructuringAssignment statement-shaped overlay emission",
         summary:
-          "Statement-shaped expression pressure should route to overlay plan/block emission instead of pretending it is a standalone expression.",
+          "Statement-shaped expression pressure should first prove whether the semantic parser constructs the expression kind, then route live syntax to overlay plan/block emission instead of pretending it is a standalone expression.",
+      },
+      {
+        query: "semantic expression coverage parser constructed overlay support matrix",
+        summary:
+          "AST-kind coverage questions should use the expression coverage probe before assuming a support-matrix row is live parser admission or dead syntax.",
       },
       {
         query: "rename overlay source segment authored source provenance",
         summary:
           "Rename and edit readiness should route through exact overlay/source-address mapping and the edit affordance route.",
+      },
+      {
+        query: "bindingScopesForTemplateExpressionParse plural expression scope recursive overlay",
+        summary:
+          "Overlay expression-scope selection should route through the plural runtime-scope selector rather than a first instruction-scope application.",
+      },
+      {
+        query: "template overlay state binding source expression source scope",
+        summary:
+          "State binding overlay pressure should route through the binding-owned source-expression context handoff, not child-view scope mutation.",
+      },
+      {
+        query: "overlay source scope unrelated ambient fallback",
+        summary:
+          "Unrelated overlay source scopes should stay explicit substrate pressure rather than being copied through ambient aliases.",
+      },
+      {
+        query: "same-level synthetic scope replay overlay binding source scope",
+        summary:
+          "Same-level synthetic overlay scopes should route through the shared source-scope evaluation predicate before selecting runtime bindings; source-backed slot type differences can be refinements, while anonymous source-less slots need matching projected types.",
+      },
+      {
+        query: "state backed if bind condition child scope leak",
+        summary:
+          "State-backed template-controller conditions can spend state source scope for their own expression but must not publish store slots into ordinary child-view bindings.",
+      },
+      {
+        query: "strict false nullish overlay typechecker",
+        summary:
+          "Strict-false nullish overlay pressure should route through runtime binding strictBinding, TypeChecker nullish presence, and binding data-flow write policy rather than answer-layer diagnostic suppression.",
+      },
+      {
+        query: "generated overlay undefined as any BindingScope context slot unknown",
+        summary:
+          "Generated overlay local typing should route through materialized BindingScope slot types and the no-any overlay contract, not through overlay-local fallback casts.",
+      },
+      {
+        query: "bindingContextSlotDraftForExpressionAccess overlay source slot",
+        summary:
+          "Overlay source-slot questions should route back to materialized BindingScope/source-expression slot projection before adding generated TypeScript casts.",
+      },
+      {
+        query: "listener currentTarget target overlay generated-type-expression DOM event member",
+        summary:
+          "Listener-event overlay refinements should route through generated-type-expression and scope-projected event member types rather than display-string type printing in the overlay builder.",
+      },
+      {
+        query:
+          "app-builder readiness overlay binding data-flow observer value-channel common patterns",
+        summary:
+          "App-builder readiness should check ordinary overlay/binding/observer agreement, then pivot to app-builder pattern discovery instead of polishing rare expression-narrowing edges.",
       },
     ],
     coverage: [
@@ -6252,20 +6754,44 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Template overlay expression projection now slices authored template text through the shared AuthoredSourceTextCache instead of overlay-local file reads, and the overlay contract verifies generated diagnostics map back to exact authored spans. Any future raw source slicing in overlay/cursor diagnostics should route through the same kernel boundary before adding local line/offset helpers.",
       },
       {
-        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
-        state: AtlasWorkRouteCoverageState.Partial,
-        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        dimension: AtlasWorkRouteCoverageDimension.TypeSystemProjectEpoch,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
         ownerRouteId: "semantic-runtime.type-system-project-epoch",
         summary:
-          "Template overlays consume TypeSystemProject and checker helpers for Program-owned evidence, but overlay work remains a high-risk split-brain lane because generated TypeScript can look correct while binding/data-flow or observer semantics disagree. Keep checker lookups routed through type-system owners before broadening overlay-local diagnostics.",
+          "Template overlays enter TypeScript through TypeSystemOverlaySource roots on the shared TypeSystemProject epoch, then consume readTypeSystemOverlayDiagnostics for generated-to-authored diagnostic mapping. Overlay work should deepen TypeSystemProject overlays or semantic products instead of creating a template-local Program or checker path.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.type-system-project-epoch",
+        summary:
+          "Template overlays emit Program-owned generated source and consume checker diagnostics through TypeSystemProject/readTypeSystemOverlayDiagnostics rather than raw TypeChecker calls. The checker-value-access contract and product-architecture pressure keep raw checker value/assignability calls centralized in type-system owners; the remaining overlay split-brain risk is binding/data-flow or observer disagreement, not overlay-local checker access.",
       },
       {
         dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
         state: AtlasWorkRouteCoverageState.Partial,
-        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
         ownerRouteId: "semantic-runtime.observation.binding-flow",
         summary:
-          "Template overlays should consume binding data-flow for fromView/twoWay writeback, checked/select/class/style value channels, target/source assignability, bound-controller values, and source open reasons. Coverage is partial because generated TypeScript can still diverge from Aurelia binding semantics if overlay helpers grow local writeback or value-channel policy.",
+          "Template overlays should consume binding data-flow for fromView/twoWay writeback, checked/select/class/style value channels, target/source assignability, bound-controller values, source open reasons, and scope-materialized local types. Runtime-assignment locals now spend scope-materialized source-local types, including converter fromView results that differ from the target bindable member; context-slot locals such as repeat override slots spend BindingScope target types when present and degrade to unknown rather than any. Coverage remains partial as an anti-regression guardrail: common app-builder-facing contracts are green, but future overlay helpers must not regrow local writeback, value-channel policy, or type-erasing fallback casts.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.ExpressionEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.type-system.expression-semantics",
+        summary:
+          "Template overlays still own generated TypeScript source mapping and prelude replay, but overlay-local expression type questions spend CheckerExpressionTypeEvaluationContext through materialized BindingScope products or RuntimeBindingSourceExpressionContextProjector. Scope replay projects child-scope creator expressions with their runtime source scope instead of the final leaf scope, and overlay expression probes spend the plural bindingScopesForTemplateExpressionParse selector so definition-level instruction products do not hide recursive render-context applications. `contract:expression-context-usage` now guards knownScope exact-scope fallbacks and rendered-binding projection calls, while raw construction is private to the context class and contract scripts are scanned for old constructor leaks. The remaining overlay risk is binding/value-flow divergence, not a separate expression-context axis.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.SourceValueEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.binding-source-value-evaluation",
+        summary:
+          "Template overlays do not own runtime value closure directly. RuntimeBindingSourceValueEvaluationContext remains the source-value request shape for static binding-source values, DI-backed source reads, and bound-controller handoff; overlays consume the materialized BindingScope and slot facts produced by that lower path. The overlay, composition, binding-flow, i18n lifecycle, and source-scope contracts cover this indirect consumer boundary.",
       },
       {
         dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
@@ -6303,11 +6829,35 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-scope-replay.ts",
+        symbolName: "templateScopeCanEvaluateSourceScope",
+        role: "supporting",
+        summary:
+          "Shared predicate for deciding whether a runtime binding source scope can be evaluated at an ambient generated-analysis scope.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-expression-support.ts",
         symbolName: "templateTypeSystemOverlayExpressionSupportMatrix",
         role: "primary",
         summary:
           "AST-kind support and owner matrix that prevents unsupported syntax from becoming overlay-local guesswork.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-expression-selection.ts",
+        symbolName: "bindingScopesForTemplateExpressionParse",
+        role: "primary",
+        summary:
+          "Plural expression-to-runtime-scope selector used when definition-level template expressions have several materialized instruction-scope applications.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-expression-selection.ts",
+        symbolName: "runtimeExpressionBindingsForTemplateExpressionParseInScope",
+        role: "supporting",
+        summary:
+          "Scoped runtime-binding selector that prevents overlays from spending sibling bindings for the same definition-level expression.",
       },
       {
         kind: "source",
@@ -6332,6 +6882,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Reusable helper inventory for emitted checker surfaces; non-helper overlay facts should stay in overlay layers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-binding-source-expression-context.ts",
+        symbolName: "RuntimeBindingSourceExpressionContextProjector",
+        role: "primary",
+        summary:
+          "Binding-owned source-expression context projector consumed by overlays for source-scope-changing binding behaviors.",
       },
       {
         kind: "source",
@@ -6375,10 +6933,31 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas expression:coverage -- --query=DestructuringAssignment --detail",
+        role: "pressure",
+        summary:
+          "Atlas expression-kind coverage probe for parser construction, support-matrix ownership, and overlay/evaluator consumer rows.",
+      },
+      {
+        kind: "script",
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays",
         role: "pressure",
         summary:
           "Focused contract for overlay sources, support matrix, generated-child splicing, diagnostics, and public overlay rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-context-usage",
+        role: "pressure",
+        summary:
+          "Structural contract proving direct CheckerExpressionTypeEvaluationContext construction stays in documented context/fallback owners while runtime binding consumers route through the projection helper.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-source-scope",
+        role: "pressure",
+        summary:
+          "Focused contract for cursor completions through runtime binding source scopes without child-scope leakage.",
       },
       {
         kind: "path",
@@ -6411,6 +6990,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "pressure",
         summary:
           "Fixture for child controller overlay typing through parent-bound values.",
+      },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/fixtures/pressure/template-overlay-state-binding-scope",
+        role: "pressure",
+        summary:
+          "Fixture proving `& state` overlay source reads without changing template-controller child `$parent` ancestry.",
       },
       {
         kind: "path",
@@ -6717,6 +7304,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
     terms: [
       "CheckerExpressionTypeEvaluator",
+      "CheckerExpressionTypeEvaluationContext",
+      "checker expression type evaluation context",
+      "Aurelia expression evaluation context",
+      "expression evaluation context",
       "checker expression type evaluator",
       "expression type evaluator",
       "type-system expression semantics",
@@ -6724,16 +7315,87 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "type-system",
       "type system",
       "TypeChecker",
+      "CheckerExpressionArrayMethodProjector",
+      "synthetic Array method projector",
+      "synthetic Array reduce",
+      "app-builder readiness expression context",
+      "common app-building expression coherence",
+      "rare branch narrowing canary",
+      "Array.reduce synthetic array",
+      "TypeScript standard library boundary",
+      "TypeScript owns checker-backed stdlib Aurelia crossings",
+      "TypeScript owns standard library generics overloads inference",
+      "Aurelia crossings product-owned synthetic shapes",
+      "standard library intrinsic boundary",
+      "standard library boundary",
+      "intrinsic boundary",
+      "stdlib boundary",
+      "parallel TypeScript stdlib",
+      "synthetic array standard library boundary",
+      "synthetic Array generics overloads",
+      "toSorted source-value boundary",
+      "result-independent Array callback",
+      "synthetic Array comparator body boundary",
+      "localeCompare comparator boundary",
+      "callback-body-type-independent",
+      "callback-body-drives-type",
+      "string relational operator boundary",
       "checker-backed expression",
+      "nullish call target",
+      "optional call target",
+      "non-strict call target",
+      "nullish union value property",
+      "checkerTypeShapeNullishUnionHasValueProperty",
+      "nullable union missing member diagnostic",
+      "evaluateCallableCallReturn",
+      "checker signature parameters",
+      "checker-signature-parameters",
+      "checkerSignatureCandidateBasis",
+      "checkerCallableReturnTypesForRuntimeArguments",
+      "checkerConstructReturnTypeUnion",
+      "checkerSignatureParameterType",
+      "runtime argument arity signature",
+      "overloaded constructor instanceof",
+      "construct signature union",
+      "runtime event argument signature",
+      "ListenerBinding handler overload",
+      "event handler invocation overload",
+      "matcher.bind overload",
+      "custom matcher runtime arguments",
+      "overload candidate basis",
+      "generated-type-expression",
+      "checker global type expression",
+      "global declaration type expression",
+      "DOM lib interface type expression",
       "CheckerExpressionTypeWorld",
       "expression type world",
       "checker primitive literal",
       "primitive literal type",
       "checker-primitive-types",
+      "checker-collection-types",
+      "checker collection types",
+      "checker literal domain",
+      "collection shape helper",
+      "collection method coverage",
+      "modern array framework observation gap",
+      "type-visible source-value open array method",
+      "source-value mutating receiver open array method",
+      "source-value-mutating-receiver-open",
+      "source-value unmodeled host array open",
+      "source-value-unmodeled-host-array-open",
       "contract:expression-primitive-literals",
       "expression cache source span",
       "expression projection local key",
       "expression kind span projection key",
+      "runtime evaluator mode",
+      "runtime expression connectable strict mode",
+      "binding behavior lifecycle",
+      "astBind then evaluate",
+      "astEvaluate only",
+      "evaluate-only binding behavior",
+      "connectable expression evaluation",
+      "IAstEvaluator strict",
+      "astEvaluate scope evaluator connectable",
       "speculative checker context",
       "speculative binding scope",
       "speculative binding scope overlay",
@@ -6764,6 +7426,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "missing slot type",
       "binding source slot",
       "binding source slot checker handoff",
+      "bindingContextSlotDraftForExpressionAccess",
+      "source expression slot projector",
       "binding-source-slot-no-static-value",
       "cursor member owner",
       "completion query",
@@ -6786,6 +7450,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "binding source slot checker handoff",
         summary:
           "Binding source-slot gaps that mention checker handoff need this route before observation patches.",
+      },
+      {
+        query: "bindingContextSlotDraftForExpressionAccess source expression slot checker handoff",
+        summary:
+          "Source-expression-to-slot projection should spend BindingScope first and TypeChecker member continuation second.",
       },
       {
         query: "speculative checker context",
@@ -6824,19 +7493,148 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Primitive literal precision pressure should route to checker-primitive-types and the expression primitive literal contract before local helper duplication.",
       },
       {
+        query:
+          "TypeScript standard library boundary synthetic Array generics overloads checker-backed stdlib",
+        summary:
+          "Stdlib, generic, and overload questions should route to TypeScript checker authority; only product-owned Aurelia/runtime shapes should become synthetic expression semantics.",
+      },
+      {
+        query:
+          "intrinsics generics TypeScript owns Aurelia crossings expression context overlay",
+        summary:
+          "Natural boundary questions should route to the no-parallel-stdlib decision: TypeScript owns checker-backed stdlib, while semantic-runtime owns Aurelia crossings and product-owned synthetic facts.",
+      },
+      {
+        query:
+          "synthetic Array reduce CheckerExpressionArrayMethodProjector standard library boundary",
+        summary:
+          "Natural synthetic Array method questions should route to the expression semantics boundary before adding product-owned stdlib-like behavior.",
+      },
+      {
+        query:
+          "toSorted string relational source-value boundary",
+        summary:
+          "When an Array method pressure item touches both type and value answers, keep checker-backed stdlib semantics in TypeScript and close only the product-owned deterministic value subset.",
+      },
+      {
+        query:
+          "synthetic Array toSorted localeCompare comparator result-independent callback",
+        summary:
+          "Result-independent callback methods should prove callback-scope construction and Array result shape without reducing arbitrary stdlib calls inside comparator or predicate bodies.",
+      },
+      {
+        query:
+          "callback-body-type-independent Array method coverage callback body drives type projection",
+        summary:
+          "Array method coverage should distinguish callback-scope construction from callback-return-driven whole-call type projection.",
+      },
+      {
+        query:
+          "modern array framework observation gap type-visible source-value open collection method coverage",
+        summary:
+          "Array-method boundary questions should route to the collection-method coverage projection before semantic-runtime expands checker, source-value, or observation tables.",
+      },
+      {
+        query:
+          "source-value mutating receiver open array method sort coverage",
+        summary:
+          "Mutating Array methods such as sort should be understood as source-value policy boundaries before treating them as missing standard-library reducers.",
+      },
+      {
         query: "expression cache source span projection local key collision",
         summary:
           "Source-span/cache collisions should route to the evaluator projection-key boundary before changing TypeChecker projector reuse.",
       },
+      {
+        query:
+          "Aurelia expression evaluation context scope source runtime mode contextual type",
+        summary:
+          "Context-envelope questions should route to the TypeChecker expression request context before adding another consumer-local evaluator parameter list.",
+      },
+      {
+        query:
+          "nullish optional non-strict call target CheckerExpressionTypeEvaluator call return",
+        summary:
+          "Optional/non-strict/nullish CallScope, CallMember, and CallFunction policy belongs in the evaluator's callable-call-return lane while signature projection stays in CheckerExpressionCallProjector.",
+      },
+      {
+        query:
+          "nullish union value property checker type shape access missing member diagnostic",
+        summary:
+          "Missing-member diagnostic policy for nullable unions should spend checkerTypeShapeNullishUnionHasValueProperty instead of duplicating TypeChecker union/member walks in API code.",
+      },
+      {
+        query:
+          "checker signature parameters overload candidate basis runtime argument arity",
+        summary:
+          "Shared TypeChecker signature parameter substrate should own overload/arity policy for expression calls and lifecycle handoffs.",
+      },
+      {
+        query:
+          "checkerConstructReturnTypeUnion overloaded constructor instanceof construct signature union",
+        summary:
+          "Non-call-site constructor facts such as instanceof and runtime target projection should use construct return unions, while authored new expressions stay call-site-shaped.",
+      },
+      {
+        query:
+          "ListenerBinding handler reference event handler invocation overload runtime event argument",
+        summary:
+          "Listener handler-reference return typing should route to checker signature parameters plus DOM event-map typing, not first-signature callReturnType metadata.",
+      },
+      {
+        query:
+          "matcher.bind custom matcher overload two runtime arguments callReturnType",
+        summary:
+          "Matcher boolean-return checks should use the two-value framework call shape through shared signature parameters, not checker-backed callReturnType metadata.",
+      },
+      {
+        query:
+          "generated-type-expression checker global declaration DOM lib interface overlay",
+        summary:
+          "Generated TypeScript annotations should route through the type-system generated type-expression helper instead of consumer-local display text.",
+      },
+      {
+        query:
+          "connectable strict runtime evaluator mode expression TypeChecker context",
+        summary:
+          "Framework astEvaluate mode pressure should route through CheckerExpressionTypeEvaluationContext instead of mutable evaluator state or a second evaluator.",
+      },
+      {
+        query:
+          "binding behavior lifecycle astBind astEvaluate expression TypeChecker context",
+        summary:
+          "Questions about whether binding behaviors apply source-scope effects should route through the expression runtime-context axis.",
+      },
+      {
+        query:
+          "app-builder readiness expression context rare branch narrowing canary",
+        summary:
+          "Expression-context readiness for app-builder should be judged by common generated-code paths; rare branch-narrowing forms are coherence canaries, not the default completion target.",
+      },
     ],
     coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.ExpressionEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "CheckerExpressionTypeEvaluationContext is the TypeChecker expression request envelope for AST, BindingScope, source address, contextual target type, runtime evaluator mode, and binding-behavior lifecycle. Raw construction is private to the context class; exact-scope callers use knownScope(...), rendered runtime bindings use checkerContextForRuntimeBindingSourceExpressionProjection(...), and contract scripts are scanned so the test harness cannot keep the old constructor pathway alive. The old evaluateWithScope parameter path is removed, member-owner/argument/resource/call descent uses the context surface, and semantic-runtime build plus focused overlay/template-controller/i18n contracts verify current consumers compile through it.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.TypeSystemProjectEpoch,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.type-system-project-epoch",
+        summary:
+          "TypeChecker-backed expression semantics spend checker carriers, Program-remapped source nodes, and synthetic type products published inside the shared TypeSystemProject epoch. Synthetic Array and other product-owned shapes must stay bounded to Aurelia crossings; ordinary stdlib declarations, overloads, and generics stay checker-owned.",
+      },
       {
         dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
         state: AtlasWorkRouteCoverageState.Partial,
         depth: AtlasWorkRouteCoverageDepth.Semantic,
         ownerRouteId: "semantic-runtime.observation.binding-flow",
         summary:
-          "CheckerExpressionTypeWorld, CheckerExpressionTypeEvaluator, CheckerTypeShapeAccess, binding-pattern local projection, member-owner projection, and primitive/source-open facts are shared by binding data-flow source typing and writeability. Coverage is partial until all binding-flow consumers can be checked for local TypeChecker helper forks and evaluator-local source/write policy.",
+          "CheckerExpressionTypeWorld, CheckerExpressionTypeEvaluator, CheckerTypeShapeAccess, binding-pattern local projection, member-owner projection, and primitive/source-open facts are shared by binding data-flow source typing and writeability. Coverage is partial as a guardrail for new consumers, not an app-builder blocker: common overlay, value-channel, computed/getter, component-object-boundary, and runtime-effect contracts are green, while future binding-flow consumers still need checks for local TypeChecker helper forks and evaluator-local source/write policy.",
       },
       {
         dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
@@ -6851,11 +7649,38 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/type-system/expression-type-context.ts",
+        symbolName: "CheckerExpressionTypeEvaluationContext",
+        role: "primary",
+        summary:
+          "TypeChecker-side request context for one Aurelia expression evaluation, including scope, source, contextual type, cache key, projection key, and runtime mode axes.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/expression-type-context.ts",
+        symbolName: "CheckerExpressionTypeEvaluationContext.knownScope",
+        role: "supporting",
+        summary:
+          "Named exact-scope entry point for non-rendered TypeChecker expression requests; rendered runtime bindings should enter through the binding-source projection helper.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
         symbolName: "CheckerExpressionTypeEvaluator",
         role: "primary",
         summary:
           "Main TypeChecker-backed expression evaluator and current large-class frontier.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+        symbolName: "CheckerExpressionTypeEvaluator.evaluateCallableCallReturn",
+        role: "supporting",
+        summary:
+          "Shared optional/non-strict/nullish call-return policy for CallScope, CallMember, and CallFunction before signature projection.",
       },
       {
         kind: "source",
@@ -6869,11 +7694,36 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/type-system/checker-signature-parameters.ts",
+        symbolName: "checkerConstructReturnTypeUnion",
+        role: "supporting",
+        summary:
+          "Shared non-call-site construct-signature return union for instanceof narrowing and runtime target instance projection.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/checker-signature-parameters.ts",
+        role: "supporting",
+        summary:
+          "Shared signature candidate-basis, arity, rest/optional parameter, and parameter-type projection helpers.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/type-system/checker-primitive-types.ts",
         symbolName: "checkerPrimitiveLiteralType",
         role: "supporting",
         summary:
           "Shared TypeChecker primitive/literal projection split for expression evaluation and template-controller matching.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/checker-collection-types.ts",
+        role: "supporting",
+        summary:
+          "Shared literal-domain and collection/map shape helpers that keep observation value-channel and data-flow checker facts out of local helper forks.",
       },
       {
         kind: "source",
@@ -6892,6 +7742,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Shared member/index/write access resolver over projected checker type shapes.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
+        symbolName: "checkerTypeShapeNullishUnionHasValueProperty",
+        role: "supporting",
+        summary:
+          "Shared nullable-union value-member check for diagnostic and cursor policy.",
       },
       {
         kind: "source",
@@ -6994,6 +7853,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Contract proving primitive literal AST nodes preserve TypeScript literal type display and same-local-key source-span isolation.",
       },
       {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/atlas expression:coverage -- --projection=collection-methods --detail",
+        role: "pressure",
+        summary:
+          "Atlas collection-method coverage keeps checker projection, source-value reduction, astEvaluate collection reads, and ProxyObservable wrapping in separate lanes.",
+      },
+      {
         kind: "memory",
         domains: ["semantic-runtime", "type-system", "expression", "checker"],
         role: "grounding",
@@ -7058,17 +7925,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     authority: [
       "TypeScript checker facts and semantic-runtime CheckerExpressionTypeWorld lifetime.",
+      "CheckerExpressionTypeEvaluationContext for the TypeChecker request axes: expression AST, modeled BindingScope, source address, contextual target type, and runtime evaluator mode.",
       "Template-controller scope products when expressions are nested under Aurelia control flow.",
       "Observation/binding value-source consumers that reveal source-slot pressure.",
       "Atlas route and memory canaries when future queries miss this substrate.",
     ],
     cautions: [
       "Do not add a second local TypeChecker expression evaluator for cursor, diagnostics, or binding observation.",
+      "Do not reintroduce parameter-list wrappers around expression evaluation; add fields or derivation helpers to CheckerExpressionTypeEvaluationContext when the TypeChecker request genuinely needs a new axis.",
+      "Do not force RuntimeBindingSourceValueEvaluator or template overlay projection into this context unless they need the exact same TypeChecker request object; if they do, redesign a broader expression-site primitive first.",
+      "Do not implement a parallel TypeScript standard library in synthetic expression semantics; checker-backed stdlib declarations, generics, overloads, and ordinary inference belong to TypeScript.",
       "Lifecycle/control-flow-specific expression reads should layer a speculative context on shared checker/evaluator state.",
       "If the Work Router misses this frontier, fix route ontology or memory anchors before continuing product work.",
     ],
     nextQuestions: [
       "Does the requested expression read need global checker facts, template-control-flow context, or binding-observation runtime mode?",
+      "Is the missing fact a TypeChecker evaluation axis, an overlay source-mapping axis, or a runtime/source-value evaluation policy?",
       "Can CheckerExpressionTypeWorld provide the needed evaluator/cache lifetime, or does it need a layered speculative context?",
       "Which source-slot or member-owner product should be reused before adding local TypeChecker walks?",
     ],
@@ -7546,6 +8418,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "aliasedResourcesRegistry",
       "aliasedResourcesRegistry IRegistry module loader",
       "analyzed module exports",
+      "standard intrinsic boundary",
+      "standard library intrinsic boundary",
+      "stdlib boundary",
+      "parallel TypeScript standard library",
+      "deterministic source-value closure",
+      "string relational operator source-value",
+      "relational operator source-value boundary",
+      "Array.toSorted source-value closure",
     ],
     queryCanaries: [
       {
@@ -7567,6 +8447,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "static evaluator",
         summary:
           "Evaluator feature gaps should route to lower-level static evaluation capability.",
+      },
+      {
+        query:
+          "standard intrinsic boundary deterministic source-value closure parallel TypeScript standard library",
+        summary:
+          "Evaluator intrinsic work should model deterministic value closure for semantic consumers, not duplicate checker-backed stdlib typing or generic inference.",
+      },
+      {
+        query:
+          "deterministic array source-value closure evaluator relational operator",
+        summary:
+          "Array source-value gaps should route to shared evaluator/operator primitives when the missing fact is deterministic value closure.",
       },
       {
         query:
@@ -7849,6 +8741,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     cautions: [
       "A surface gap in authoring or templates should often pivot down into evaluator capability instead of being smoked through.",
       "Avoid parallel one-off evaluation contexts that forget module variables or already-resolved environment state.",
+      "Do not grow evaluator intrinsics into a full TypeScript standard-library clone; use TypeScript for checker-backed stdlib surfaces and keep evaluator additions tied to concrete source-value consumers.",
       "If Atlas cannot reveal the flow cheaply, improve Atlas instead of continuing from stale memory.",
     ],
     nextQuestions: [
@@ -8199,6 +9092,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Routed app-building recipes should find router/viewport semantics for list/detail routes and route-parameter-selected state.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.SourceValueEvaluationContext,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.binding-source-value-evaluation",
+        summary:
+          "Dynamic router-resource values consume RuntimeBindingSourceValueEvaluationContext through RouteInstructionMaterializationProjectPass, including active-container DI closure for route instruction sites. Router-dynamic-pattern and active-link contracts verify the current consumer path, while broader router lifecycle and viewport state remain owned by router/viewport semantics.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -8503,6 +9406,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "AUR4002",
       "translation binding lifecycle",
       "translation binding diagnostics",
+      "translation binding behavior lifecycle",
+      "t.bind evaluate only",
+      "t-params astBind",
+      "i18n cursor completion lifecycle",
+      "i18n state binding behavior",
       "imported JSON translation key source span",
       "AuthoredSourceTextCache i18n JSON",
     ],
@@ -8526,6 +9434,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "CustomExpression custom expression i18n translation binding overlay",
         summary:
           "CustomExpression pressure should route to i18n translation binding/key evaluation before generic overlay syntax skips.",
+      },
+      {
+        query: "t.bind evaluate only t-params astBind state binding behavior",
+        summary:
+          "i18n key and parameter expressions have different binding-behavior lifecycles and should not be collapsed into a generic binding-source rule.",
+      },
+      {
+        query: "i18n cursor completion t.bind evaluate only t-params source scope",
+        summary:
+          "i18n cursor/member-owner questions should prove t.bind stays evaluate-only while t-params spends bind-time source-scope projection.",
       },
     ],
     coverage: [
@@ -8567,6 +9485,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Synthetic pressure fixture for i18n TranslationBinding lifecycle framework-error cases.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:i18n-binding-lifecycle",
+        role: "supporting",
+        summary:
+          "Contract proving i18n dynamic keys are evaluate-only while t-params spends bind-time source-scope projection across diagnostics, data-flow, and cursor completion.",
       },
       {
         kind: "lens",
@@ -8654,6 +9579,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "dispatch payload value channel",
       "$event.target.value",
       "state binding behavior",
+      "initial-state source value",
+      "state initial source value",
+      "StateBinding scope slot initial state value",
       "raw Error authority",
     ],
     queryCanaries: [
@@ -8671,6 +9599,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "state dispatch payload action literal target value value-channel",
         summary:
           "State dispatch payload typing should route through state command value-channel flow before generic template repair policy.",
+      },
+      {
+        query: "state initial source value bound controller",
+        summary:
+          "State initial-value source reads should route to the state store product and observation source-value evaluator together.",
       },
     ],
     anchors: [
@@ -8957,6 +9890,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "scope slot type",
       "missing slot type",
       "binding assignment strictness",
+      "semantic-runtime-product assignment strictness",
+      "compiler-like assignment strictness",
     ],
     queryCanaries: [
       {

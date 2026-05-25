@@ -34,4 +34,12 @@ export class CheckedSelectCustomMatcherApp {
   matchItems(left: MatchableItem | null, right: MatchableItem | null): boolean {
     return left?.id === right?.id;
   }
+
+  overloadedMatchItems(): number;
+  overloadedMatchItems(left: MatchableItem | null, right: MatchableItem | null): boolean;
+  overloadedMatchItems(left?: MatchableItem | null, right?: MatchableItem | null): number | boolean {
+    return left === undefined && right === undefined
+      ? 0
+      : left?.id === right?.id;
+  }
 }

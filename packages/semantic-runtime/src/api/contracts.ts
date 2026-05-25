@@ -4115,6 +4115,7 @@ export type SemanticTemplateCursorDiagnosticKind =
 
 export type SemanticTemplateCursorDiagnosticAuthority =
   | 'semantic-authoring-policy'
+  | 'semantic-runtime-product'
   | 'typescript'
   | 'framework-runtime-behavior'
   | 'framework-error-code';

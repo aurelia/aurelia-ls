@@ -22,15 +22,26 @@ import {
   type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
 import {
+  CheckerExpressionTypeEvaluationContext,
+} from '../type-system/expression-type-context.js';
+import {
+  isRuntimeExpressionBinding,
+  type RuntimeExpressionBinding,
+} from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  RuntimeBindingSourceExpressionProjectionKind,
+  checkerContextForRuntimeBindingSourceExpressionProjection,
+  projectRuntimeBindingSourceExpressionInScope,
+} from '../observation/runtime-binding-source-expression-context.js';
+import {
   checkerRepeatableElementTypeInfo,
-  checkerCollectionSymbolName,
-  checkerNumberIndexValueType,
 } from '../type-system/checker-related-types.js';
 import {
-  checkerPropertySymbol,
-  checkerSymbolValueType,
-} from '../type-system/checker-node-helpers.js';
-import { checkerUnionType } from '../type-system/checker-type-union.js';
+  checkerArrayElementType,
+} from '../type-system/checker-collection-types.js';
 import {
   CheckerBindingPatternLocalProjection,
   type CheckerBindingPatternLocalType,
@@ -61,6 +72,8 @@ import {
   templateControllerStaticValue,
 } from './template-controller-value.js';
 import type { TemplateScopeConstructionRequest } from './template-controller-scope-materializer.js';
+import type { RuntimeControllerFrame } from './runtime-controller.js';
+import { templateControllerRuntimeValueBinding } from './template-controller-binding.js';
 import {
   HtmlElement,
   normalizeHtmlTagName,
@@ -68,7 +81,7 @@ import {
 } from './html-ir.js';
 import {
   checkerLookupLocation,
-  globalDeclaredType,
+  resolveCheckerDomEventType,
   resolveCheckerDomNodeType,
 } from '../type-system/dom-node-type.js';
 import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
@@ -159,12 +172,18 @@ export class TemplateScopeTypeProjector {
     if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
       return null;
     }
-    const evaluation = this.typeEvaluator(input).evaluateIteratorElement(
+    const context = this.evaluationContextForRuntimeBinding(
       parse.result.ast,
+      input,
       parent,
       `${input.localKey}:scope:${localSuffix}`,
       effect.sourceAddressHandle,
+      this.runtimeExpressionBinding(input, effect.binding.productHandle),
     );
+    if (context == null) {
+      return null;
+    }
+    const evaluation = this.typeEvaluator(input).evaluateIteratorElement(context);
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? checkerTypeReferenceWithSource(evaluation.typeReference, evaluation.sourceAddressHandle)
       : null;
@@ -199,12 +218,18 @@ export class TemplateScopeTypeProjector {
     if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
       return new TemplateIteratorScopeProjection(parse, null, new CheckerBindingPatternLocalProjection([], []), null);
     }
-    const projection = this.typeEvaluator(input).evaluateIteratorProjection(
+    const context = this.evaluationContextForRuntimeBinding(
       parse.result.ast,
+      input,
       parent,
       `${input.localKey}:scope:${localSuffix}`,
       effect.sourceAddressHandle,
+      this.runtimeExpressionBinding(input, effect.binding.productHandle),
     );
+    if (context == null) {
+      return new TemplateIteratorScopeProjection(parse, null, new CheckerBindingPatternLocalProjection([], []), null);
+    }
+    const projection = this.typeEvaluator(input).evaluateIteratorProjection(context);
     const elementType = projection.element.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? checkerTypeReferenceWithSource(projection.element.typeReference, projection.element.sourceAddressHandle)
       : null;
@@ -229,12 +254,18 @@ export class TemplateScopeTypeProjector {
     if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
       return null;
     }
-    const source = this.typeEvaluator(input).evaluateWithScope(
+    const context = this.evaluationContextForRuntimeBinding(
       parse.result.ast.iterable,
+      input,
       parent,
       `${input.localKey}:scope:${localSuffix}:iterator-source-repeatable`,
       effect.sourceAddressHandle,
+      this.runtimeExpressionBinding(input, effect.binding.productHandle),
     );
+    if (context == null) {
+      return null;
+    }
+    const source = this.typeEvaluator(input).evaluate(context);
     return this.iteratorRepeatableIssueFromEvaluation(source, parse.result.ast.iterable.span);
   }
 
@@ -277,12 +308,18 @@ export class TemplateScopeTypeProjector {
     if (ast == null) {
       return null;
     }
-    const evaluation = this.typeEvaluator(input).evaluateWithScope(
+    const context = this.evaluationContextForRuntimeBinding(
       ast,
+      input,
       parent,
       `let:${effect.productHandle}:${effect.target}`,
       effect.sourceAddressHandle,
+      this.runtimeExpressionBinding(input, effect.binding.productHandle),
     );
+    if (context == null) {
+      return null;
+    }
+    const evaluation = this.typeEvaluator(input).evaluate(context);
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? evaluation.typeReference
       : null;
@@ -293,18 +330,25 @@ export class TemplateScopeTypeProjector {
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     localSuffix: string,
+    controller: RuntimeControllerFrame | null = null,
   ): CheckerTypeReference | null {
     const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, instruction));
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     if (ast == null) {
       return null;
     }
-    const evaluation = this.typeEvaluator(input).evaluateWithScope(
+    const context = this.evaluationContextForRuntimeBinding(
       ast,
+      input,
       parent,
       `${input.localKey}:scope:template-controller:${localSuffix}:value`,
       instruction.sourceAddressHandle,
+      templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller),
     );
+    if (context == null) {
+      return null;
+    }
+    const evaluation = this.typeEvaluator(input).evaluate(context);
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? evaluation.typeReference
       : null;
@@ -315,8 +359,9 @@ export class TemplateScopeTypeProjector {
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     localSuffix: string,
+    controller: RuntimeControllerFrame | null = null,
   ): CheckerTypeReference | null {
-    const valueType = this.templateControllerValueType(input, parent, instruction, localSuffix);
+    const valueType = this.templateControllerValueType(input, parent, instruction, localSuffix, controller);
     return valueType == null
       ? null
       : this.nonNullishTypeReference(
@@ -331,6 +376,7 @@ export class TemplateScopeTypeProjector {
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     localSuffix: string,
+    controller: RuntimeControllerFrame | null = null,
   ): readonly CheckerTypeReference[] | null {
     const staticValue = templateControllerStaticValue(this.store, instruction);
     if (staticValue != null) {
@@ -354,6 +400,7 @@ export class TemplateScopeTypeProjector {
         ast,
         `${input.localKey}:scope:template-controller:${localSuffix}:match`,
         instruction.sourceAddressHandle,
+        templateControllerRuntimeValueBinding(this.store, input.runtimeBindings, instruction, controller),
       );
   }
 
@@ -443,9 +490,10 @@ export class TemplateScopeTypeProjector {
     expression: ExpressionAstNode,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    binding: RuntimeExpressionBinding | null,
   ): readonly CheckerTypeReference[] | null {
     if (expression.$kind === 'Paren') {
-      return this.matchTypesForExpression(input, parent, expression.expression, `${localKey}:paren`, sourceAddressHandle);
+      return this.matchTypesForExpression(input, parent, expression.expression, `${localKey}:paren`, sourceAddressHandle, binding);
     }
     if (expression.$kind === 'PrimitiveLiteral') {
       const reference = this.literalTypeReference(input, expression.value, `${localKey}:literal`, sourceAddressHandle);
@@ -460,12 +508,18 @@ export class TemplateScopeTypeProjector {
       return references.length === expression.elements.length ? references : null;
     }
 
-    const evaluation = this.typeEvaluator(input).evaluateWithScope(
+    const context = this.evaluationContextForRuntimeBinding(
       expression,
+      input,
       parent,
       `${localKey}:dynamic`,
       sourceAddressHandle,
+      binding,
     );
+    if (context == null) {
+      return null;
+    }
+    const evaluation = this.typeEvaluator(input).evaluate(context);
     if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
@@ -524,6 +578,40 @@ export class TemplateScopeTypeProjector {
 
   private typeEvaluator(input: TemplateScopeConstructionRequest) {
     return input.expressionWorld.evaluator(input.resourceScope);
+  }
+
+  private evaluationContextForRuntimeBinding(
+    expression: ExpressionAstNode,
+    input: TemplateScopeConstructionRequest,
+    sourceScope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    binding: RuntimeExpressionBinding | null,
+  ): CheckerExpressionTypeEvaluationContext | null {
+    if (binding == null) {
+      return CheckerExpressionTypeEvaluationContext.knownScope(expression, sourceScope, localKey, sourceAddressHandle);
+    }
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const projection = projectRuntimeBindingSourceExpressionInScope(input.runtimeBindings, bindingExpressionScopes, {
+      binding,
+      expression,
+      localKey,
+      sourceScope,
+    });
+    return projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open
+      ? null
+      : checkerContextForRuntimeBindingSourceExpressionProjection(projection, false);
+  }
+
+  private runtimeExpressionBinding(
+    input: TemplateScopeConstructionRequest,
+    productHandle: ProductHandle | null,
+  ): RuntimeExpressionBinding | null {
+    if (productHandle == null) {
+      return null;
+    }
+    const binding = input.runtimeBindings.readBinding(productHandle);
+    return binding != null && isRuntimeExpressionBinding(binding) ? binding : null;
   }
 
   private listenerEventTypeReference(
@@ -631,27 +719,7 @@ function listenerEventType(
   location: ts.Node | null,
   eventName: string,
 ): ts.Type | null {
-  const lookupLocation = location ?? checkerLookupLocation(typeSystem);
-  return lookupLocation == null
-    ? null
-    : eventMapPropertyType(typeSystem, lookupLocation, 'GlobalEventHandlersEventMap', eventName)
-      ?? eventMapPropertyType(typeSystem, lookupLocation, 'HTMLElementEventMap', eventName)
-      ?? globalDeclaredType(typeSystem, 'CustomEvent', lookupLocation)
-      ?? globalDeclaredType(typeSystem, 'Event', lookupLocation);
-}
-
-function eventMapPropertyType(
-  typeSystem: TypeSystemProject,
-  location: ts.Node,
-  mapName: string,
-  eventName: string,
-): ts.Type | null {
-  const checker = typeSystem.checker;
-  const mapType = globalDeclaredType(typeSystem, mapName, location);
-  const property = mapType == null ? null : checkerPropertySymbol(checker, mapType, eventName);
-  return property == null
-    ? null
-    : checkerSymbolValueType(checker, property, location);
+  return resolveCheckerDomEventType(typeSystem, eventName, location ?? checkerLookupLocation(typeSystem));
 }
 
 function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
@@ -663,26 +731,4 @@ function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
     default:
       return false;
   }
-}
-
-function checkerArrayElementType(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): ts.Type | null {
-  if (type.isUnion()) {
-    const elementTypes = type.types
-      .map((part) => checkerArrayElementType(checker, part))
-      .filter((part): part is ts.Type => part != null);
-    return elementTypes.length === 0 ? null : checkerUnionType(checker, elementTypes);
-  }
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
-    return checkerNumberIndexValueType(checker, type);
-  }
-  const symbolName = checkerCollectionSymbolName(type);
-  if (symbolName === 'Array' || symbolName === 'ReadonlyArray') {
-    return checker.getTypeArguments(type as ts.TypeReference)[0]
-      ?? checkerNumberIndexValueType(checker, type)
-      ?? checker.getUnknownType();
-  }
-  return null;
 }

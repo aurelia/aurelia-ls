@@ -9,31 +9,30 @@ import type { AddressHandle } from '../kernel/handles.js';
 import type { CheckerTypeReference } from './type-shape.js';
 import type { CheckerExpressionTypeEvaluation } from './expression-type-evaluation.js';
 import type { CheckerExpressionArgumentContextExpression } from './expression-argument-context-projector.js';
+import type { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 
 export interface CheckerExpressionMemberOwnerProjectorHost {
   evaluateNode(
-    expression: ExpressionAstNode,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    contextualType?: CheckerTypeReference | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
   arrowFunctionScope(
     expression: ArrowFunction,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    contextualType?: CheckerTypeReference | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): BindingScope;
 
   contextualArgumentType(
     expression: CheckerExpressionArgumentContextExpression,
     argumentIndex: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerTypeReference | null;
+
+  contextualArgumentScope(
+    expression: CheckerExpressionArgumentContextExpression,
+    argumentIndex: number,
+    argumentExpression: ExpressionAstNode,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): BindingScope | null;
 
   contextualArrayElementType(
     contextualType: CheckerTypeReference | null,
@@ -57,88 +56,86 @@ export class CheckerExpressionMemberOwnerProjector {
   ) {}
 
   evaluateAtOffset(
-    expression: ExpressionAstNode,
+    context: CheckerExpressionTypeEvaluationContext,
     offset: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null = null,
-    contextualType: CheckerTypeReference | null = null,
   ): CheckerExpressionTypeEvaluation | null {
+    const expression = context.expression;
     switch (expression.$kind) {
       case 'AccessMember':
         return this.memberNameContainsOffset(expression, offset)
-          ? this.host.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
-          : this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle);
+          ? this.host.evaluateNode(context.child(expression.object, `owner:${expression.name.name}`))
+          : this.evaluateAtOffset(context.child(expression.object, 'object'), offset);
       case 'CallMember':
         return this.memberNameContainsOffset(expression, offset)
-          ? this.host.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
-          : this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
-            ?? this.evaluateArgumentListAtOffset(expression, expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+          ? this.host.evaluateNode(context.child(expression.object, `owner:${expression.name.name}`))
+          : this.evaluateAtOffset(context.child(expression.object, 'object'), offset)
+            ?? this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'Paren':
       case 'Unary':
-        return this.evaluateAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType);
+        return this.evaluateAtOffset(context.child(expression.expression, 'expression', context.contextualType), offset);
       case 'BindingBehavior':
       case 'ValueConverter':
-        return this.evaluateAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType)
-          ?? this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.expression, 'expression', context.contextualType), offset)
+          ?? this.evaluateListAtOffset(expression.args, context, 'args', offset);
       case 'AccessKeyed':
-        return this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.key, offset, scope, `${localKey}:key`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.object, 'object'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.key, 'key'), offset);
       case 'CallFunction':
-        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
-          ?? this.evaluateArgumentListAtOffset(expression, expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.func, 'func'), offset)
+          ?? this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'CallScope':
       case 'CallGlobal':
-        return this.evaluateArgumentListAtOffset(expression, expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+        return this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'New':
-        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
-          ?? this.evaluateArgumentListAtOffset(expression, expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.func, 'func'), offset)
+          ?? this.evaluateArgumentListAtOffset(expression, expression.args, context, offset);
       case 'TaggedTemplate':
-        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
-          ?? this.evaluateArgumentListAtOffset(expression, expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.func, 'func'), offset)
+          ?? this.evaluateArgumentListAtOffset(expression, expression.expressions, context, offset);
       case 'Binary':
-        return this.evaluateAtOffset(expression.left, offset, scope, `${localKey}:left`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.right, offset, scope, `${localKey}:right`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.left, 'left'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.right, 'right'), offset);
       case 'Conditional':
-        return this.evaluateAtOffset(expression.condition, offset, scope, `${localKey}:condition`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.yes, offset, scope, `${localKey}:yes`, sourceAddressHandle, contextualType)
-          ?? this.evaluateAtOffset(expression.no, offset, scope, `${localKey}:no`, sourceAddressHandle, contextualType);
+        return this.evaluateAtOffset(context.child(expression.condition, 'condition'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.yes, 'yes', context.contextualType), offset)
+          ?? this.evaluateAtOffset(context.child(expression.no, 'no', context.contextualType), offset);
       case 'Assign':
-        return this.evaluateAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.value, offset, scope, `${localKey}:value`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.target, 'target'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.value, 'value'), offset);
       case 'ArrowFunction': {
         if (!this.expressionContainsOffset(expression.body, offset)) {
           return null;
         }
         return this.evaluateAtOffset(
-          expression.body,
+          context.childInScope(
+            expression.body,
+            this.host.arrowFunctionScope(expression, context),
+            'arrow-body',
+          ),
           offset,
-          this.host.arrowFunctionScope(expression, scope, `${localKey}:arrow`, sourceAddressHandle, contextualType),
-          `${localKey}:arrow-body`,
-          sourceAddressHandle,
         );
       }
       case 'ArrayLiteral':
-        return this.evaluateArrayLiteralAtOffset(expression, offset, scope, `${localKey}:elements`, sourceAddressHandle, contextualType);
+        return this.evaluateArrayLiteralAtOffset(expression, context, offset);
       case 'ObjectLiteral':
-        return this.evaluateObjectLiteralAtOffset(expression, offset, scope, `${localKey}:values`, sourceAddressHandle, contextualType);
+        return this.evaluateObjectLiteralAtOffset(expression, context, offset);
       case 'Template':
       case 'Interpolation':
-        return this.evaluateListAtOffset(expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+        return this.evaluateListAtOffset(expression.expressions, context, 'expressions', offset);
       case 'ForOfStatement':
-        return this.evaluateAtOffset(expression.iterable, offset, scope, `${localKey}:iterable`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.iterable, 'iterable'), offset);
       case 'BindingPatternDefault':
-        return this.evaluateAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.default, offset, scope, `${localKey}:default`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.target, 'target'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.default, 'default'), offset);
       case 'ArrayBindingPattern':
-        return this.evaluateListAtOffset(expression.elements, offset, scope, `${localKey}:elements`, sourceAddressHandle)
-          ?? (expression.rest == null ? null : this.evaluateAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+        return this.evaluateListAtOffset(expression.elements, context, 'elements', offset)
+          ?? (expression.rest == null ? null : this.evaluateAtOffset(context.child(expression.rest, 'rest'), offset));
       case 'ObjectBindingPattern':
-        return this.evaluateListAtOffset(expression.properties.map((property) => property.value), offset, scope, `${localKey}:properties`, sourceAddressHandle)
-          ?? (expression.rest == null ? null : this.evaluateAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+        return this.evaluateListAtOffset(expression.properties.map((property) => property.value), context, 'properties', offset)
+          ?? (expression.rest == null ? null : this.evaluateAtOffset(context.child(expression.rest, 'rest'), offset));
       case 'DestructuringAssignment':
-        return this.evaluateAtOffset(expression.pattern, offset, scope, `${localKey}:pattern`, sourceAddressHandle)
-          ?? this.evaluateAtOffset(expression.source, offset, scope, `${localKey}:source`, sourceAddressHandle);
+        return this.evaluateAtOffset(context.child(expression.pattern, 'pattern'), offset)
+          ?? this.evaluateAtOffset(context.child(expression.source, 'source'), offset);
       case 'AccessThis':
       case 'AccessBoundary':
       case 'AccessScope':
@@ -155,29 +152,22 @@ export class CheckerExpressionMemberOwnerProjector {
 
   private evaluateArrayLiteralAtOffset(
     expression: { readonly elements: readonly ExpressionAstNode[] },
+    context: CheckerExpressionTypeEvaluationContext,
     offset: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    contextualType: CheckerTypeReference | null,
   ): CheckerExpressionTypeEvaluation | null {
     for (const [index, element] of expression.elements.entries()) {
       if (!this.expressionContainsOffset(element, offset)) {
         continue;
       }
       const elementContextualType = this.host.contextualArrayElementType(
-        contextualType,
+        context.contextualType,
         index,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
+        `${context.projectionLocalKey()}:elements:${index}`,
+        context.sourceAddressHandle,
       );
       const evaluation = this.evaluateAtOffset(
-        element,
+        context.child(element, `elements:${index}`, elementContextualType),
         offset,
-        scope,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
-        elementContextualType,
       );
       if (evaluation != null) {
         return evaluation;
@@ -188,11 +178,8 @@ export class CheckerExpressionMemberOwnerProjector {
 
   private evaluateObjectLiteralAtOffset(
     expression: { readonly keys: readonly (number | string)[]; readonly values: readonly ExpressionAstNode[] },
+    context: CheckerExpressionTypeEvaluationContext,
     offset: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    contextualType: CheckerTypeReference | null,
   ): CheckerExpressionTypeEvaluation | null {
     for (const [index, value] of expression.values.entries()) {
       if (!this.expressionContainsOffset(value, offset)) {
@@ -200,18 +187,14 @@ export class CheckerExpressionMemberOwnerProjector {
       }
       const key = String(expression.keys[index] ?? index);
       const propertyContextualType = this.host.contextualObjectPropertyType(
-        contextualType,
+        context.contextualType,
         key,
-        `${localKey}:${index}:${key}`,
-        sourceAddressHandle,
+        `${context.projectionLocalKey()}:values:${index}:${key}`,
+        context.sourceAddressHandle,
       );
       const evaluation = this.evaluateAtOffset(
-        value,
+        context.child(value, `values:${index}`, propertyContextualType),
         offset,
-        scope,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
-        propertyContextualType,
       );
       if (evaluation != null) {
         return evaluation;
@@ -222,21 +205,17 @@ export class CheckerExpressionMemberOwnerProjector {
 
   private evaluateListAtOffset(
     expressions: readonly ExpressionAstNode[],
+    context: CheckerExpressionTypeEvaluationContext,
+    localSuffix: string,
     offset: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation | null {
     for (const [index, expression] of expressions.entries()) {
       if (!this.expressionContainsOffset(expression, offset)) {
         continue;
       }
       const evaluation = this.evaluateAtOffset(
-        expression,
+        context.child(expression, `${localSuffix}:${index}`),
         offset,
-        scope,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
       );
       if (evaluation != null) {
         return evaluation;
@@ -248,10 +227,8 @@ export class CheckerExpressionMemberOwnerProjector {
   private evaluateArgumentListAtOffset(
     argumentContext: CheckerExpressionArgumentContextExpression,
     expressions: readonly ExpressionAstNode[],
+    context: CheckerExpressionTypeEvaluationContext,
     offset: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation | null {
     for (const [index, expression] of expressions.entries()) {
       if (!this.expressionContainsOffset(expression, offset)) {
@@ -260,17 +237,19 @@ export class CheckerExpressionMemberOwnerProjector {
       const contextualType = this.host.contextualArgumentType(
         argumentContext,
         index,
-        scope,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
+        context,
+      );
+      const contextualScope = this.host.contextualArgumentScope(
+        argumentContext,
+        index,
+        expression,
+        context,
       );
       const evaluation = this.evaluateAtOffset(
-        expression,
+        contextualScope != null && expression.$kind === 'ArrowFunction' && this.expressionContainsOffset(expression.body, offset)
+          ? context.childInScope(expression.body, contextualScope, `args:${index}:arrow-body`)
+          : context.child(expression, `args:${index}`, contextualType),
         offset,
-        scope,
-        `${localKey}:${index}`,
-        sourceAddressHandle,
-        contextualType,
       );
       if (evaluation != null) {
         return evaluation;

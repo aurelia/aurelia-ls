@@ -4,6 +4,8 @@
   <p>${message | wordCount:minimumCount | identityOnly}</p>
   <p>${message | identityOnly:minimumText}</p>
   <p>${message | contextualWord:minimumCount}</p>
+  <p>${message | contextFirst:minimumCount}</p>
+  <p>${message | dynamicContextualWord:minimumCount}</p>
   <section if.bind="message | wordCount:minimumCount">
     <span>${message}</span>
   </section>

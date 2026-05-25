@@ -5,6 +5,11 @@
   </label>
 
   <label>
+    Readonly first flag
+    <input type="checkbox" checked.bind="state.readonlyFlags[0]">
+  </label>
+
+  <label>
     First item name
     <select value.bind="state.itemNames[0]">
       <option value="i-0">Initial</option>
@@ -46,5 +51,10 @@
   <label>
     Expedited
     <input type="checkbox" checked.bind="state.selectedByTagId.expedite">
+  </label>
+
+  <label>
+    Readonly expedited
+    <input type="checkbox" checked.bind="state.readonlySelectedByTagId['expedite']">
   </label>
 </section>

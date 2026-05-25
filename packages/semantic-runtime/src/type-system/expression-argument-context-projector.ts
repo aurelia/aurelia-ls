@@ -6,8 +6,6 @@ import type {
   NewExpression,
   TaggedTemplateExpression,
 } from '../expression/ast.js';
-import type { BindingScope } from '../configuration/scope.js';
-import type { AddressHandle } from '../kernel/handles.js';
 import {
   checkerTypeShapeIsDefinitelyNullish,
 } from './checker-related-types.js';
@@ -16,7 +14,13 @@ import {
   type CheckerExpressionTypeEvaluation,
   CheckerExpressionTypeEvaluationResultKind,
 } from './expression-type-evaluation.js';
-import { CheckerExpressionCallProjector } from './expression-call-projector.js';
+import {
+  CheckerExpressionCallableParameterKind,
+  CheckerExpressionCallProjector,
+  checkerExpressionCallArguments,
+  type CheckerExpressionCallArgument,
+} from './expression-call-projector.js';
+import type { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 import type { CheckerTypeReference } from './type-shape.js';
 
 export type CheckerExpressionArgumentContextExpression =
@@ -30,43 +34,32 @@ export type CheckerExpressionArgumentContextExpression =
 export interface CheckerExpressionArgumentContextProjectorHost {
   evaluateCallScopeCallee(
     expression: CallScopeExpression,
-    scope: BindingScope,
-    localKey: string,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
   evaluateCallGlobalCallee(
     expression: CallGlobalExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionType | null;
 
   evaluateCallMemberCallee(
     expression: CallMemberExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
   evaluateCallFunctionCallee(
     expression: CallFunctionExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
   evaluateNewConstructor(
     expression: NewExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 
   evaluateTaggedTemplateTag(
     expression: TaggedTemplateExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation;
 }
 
@@ -76,6 +69,7 @@ type CheckerExpressionArgumentContextTarget =
     readonly callee: CheckerExpressionType;
     readonly signatureArgumentIndex: number;
     readonly runtimeArgumentCount: number;
+    readonly args: readonly CheckerExpressionCallArgument[] | null;
     readonly localKey: string;
   }
   | {
@@ -83,6 +77,7 @@ type CheckerExpressionArgumentContextTarget =
     readonly constructor: CheckerExpressionType;
     readonly argumentIndex: number;
     readonly runtimeArgumentCount: number;
+    readonly args: readonly CheckerExpressionCallArgument[] | null;
     readonly localKey: string;
   };
 
@@ -96,11 +91,9 @@ export class CheckerExpressionArgumentContextProjector {
   contextualArgumentType(
     expression: CheckerExpressionArgumentContextExpression,
     argumentIndex: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerTypeReference | null {
-    const target = this.contextualArgumentTarget(expression, argumentIndex, scope, localKey, sourceAddressHandle);
+    const target = this.contextualArgumentTarget(expression, argumentIndex, context);
     if (target == null) {
       return null;
     }
@@ -110,64 +103,108 @@ export class CheckerExpressionArgumentContextProjector {
         target.argumentIndex,
         target.runtimeArgumentCount,
         target.localKey,
-        sourceAddressHandle,
+        context.sourceAddressHandle,
       )
       : this.calls.contextualCallArgumentType(
         target.callee.typeShape,
         target.signatureArgumentIndex,
         target.runtimeArgumentCount,
         target.localKey,
-        sourceAddressHandle,
+        context.sourceAddressHandle,
+      );
+  }
+
+  contextualArgumentParameterTypes(
+    expression: CheckerExpressionArgumentContextExpression,
+    argumentIndex: number,
+    parameterKinds: readonly CheckerExpressionCallableParameterKind[],
+    context: CheckerExpressionTypeEvaluationContext,
+  ): readonly CheckerTypeReference[] | null {
+    const target = this.contextualArgumentTarget(expression, argumentIndex, context);
+    if (target == null) {
+      return null;
+    }
+    if (target.args == null) {
+      return null;
+    }
+    return target.kind === 'construct'
+      ? this.calls.contextualConstructArgumentParameterTypes(
+        target.constructor.typeShape,
+        target.argumentIndex,
+        target.args,
+        context,
+        parameterKinds,
+        target.localKey,
+        context.sourceAddressHandle,
+      )
+      : this.calls.contextualCallArgumentParameterTypes(
+        target.callee.typeShape,
+        target.signatureArgumentIndex,
+        target.args,
+        context,
+        parameterKinds,
+        target.localKey,
+        context.sourceAddressHandle,
       );
   }
 
   private contextualArgumentTarget(
     expression: CheckerExpressionArgumentContextExpression,
     argumentIndex: number,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionArgumentContextTarget | null {
+    const localKey = context.projectionLocalKey();
     switch (expression.$kind) {
       case 'CallScope':
         return this.callTarget(
-          this.host.evaluateCallScopeCallee(expression, scope, localKey),
+          this.host.evaluateCallScopeCallee(expression, context),
           argumentIndex,
           expression.args.length,
+          checkerExpressionCallArguments(expression.args, `${localKey}:call-scope:${expression.name.name}:arg`),
           `${localKey}:call-scope:${expression.name.name}`,
         );
       case 'CallGlobal': {
-        const callee = this.host.evaluateCallGlobalCallee(expression, scope, localKey, sourceAddressHandle);
+        const callee = this.host.evaluateCallGlobalCallee(expression, context);
         return callee == null
           ? null
-          : this.callTarget(callee, argumentIndex, expression.args.length, `${localKey}:global-call:${expression.name.name}`);
+          : this.callTarget(
+            callee,
+            argumentIndex,
+            expression.args.length,
+            checkerExpressionCallArguments(expression.args, `${localKey}:global-call:${expression.name.name}:arg`),
+            `${localKey}:global-call:${expression.name.name}`,
+          );
       }
       case 'CallMember':
         return this.callTarget(
-          this.host.evaluateCallMemberCallee(expression, scope, localKey, sourceAddressHandle),
+          this.host.evaluateCallMemberCallee(expression, context),
           argumentIndex,
           expression.args.length,
+          checkerExpressionCallArguments(expression.args, `${localKey}:call-member:${expression.name.name}:arg`),
           `${localKey}:call-return:${expression.name.name}`,
         );
       case 'CallFunction':
         return this.callTarget(
-          this.host.evaluateCallFunctionCallee(expression, scope, localKey, sourceAddressHandle),
+          this.host.evaluateCallFunctionCallee(expression, context),
           argumentIndex,
           expression.args.length,
+          checkerExpressionCallArguments(expression.args, `${localKey}:call-function:arg`),
           `${localKey}:call-function-return`,
         );
       case 'New':
         return this.constructTarget(
-          this.host.evaluateNewConstructor(expression, scope, localKey, sourceAddressHandle),
+          this.host.evaluateNewConstructor(expression, context),
           argumentIndex,
           expression.args.length,
+          checkerExpressionCallArguments(expression.args, `${localKey}:construct:arg`),
           `${localKey}:construct-return`,
         );
       case 'TaggedTemplate':
         return this.callTarget(
-          this.host.evaluateTaggedTemplateTag(expression, scope, localKey, sourceAddressHandle),
+          this.host.evaluateTaggedTemplateTag(expression, context),
           argumentIndex + 1,
           expression.expressions.length + 1,
+          null,
           `${localKey}:tag-return`,
         );
     }
@@ -177,11 +214,12 @@ export class CheckerExpressionArgumentContextProjector {
     callee: CheckerExpressionTypeEvaluation,
     signatureArgumentIndex: number,
     runtimeArgumentCount: number,
+    args: readonly CheckerExpressionCallArgument[] | null,
     localKey: string,
   ): CheckerExpressionArgumentContextTarget | null {
     return callee.kind === CheckerExpressionTypeEvaluationResultKind.Type
       && !checkerTypeShapeIsDefinitelyNullish(callee.typeShape)
-      ? { kind: 'call', callee, signatureArgumentIndex, runtimeArgumentCount, localKey }
+      ? { kind: 'call', callee, signatureArgumentIndex, runtimeArgumentCount, args, localKey }
       : null;
   }
 
@@ -189,10 +227,11 @@ export class CheckerExpressionArgumentContextProjector {
     constructor: CheckerExpressionTypeEvaluation,
     argumentIndex: number,
     runtimeArgumentCount: number,
+    args: readonly CheckerExpressionCallArgument[] | null,
     localKey: string,
   ): CheckerExpressionArgumentContextTarget | null {
     return constructor.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? { kind: 'construct', constructor, argumentIndex, runtimeArgumentCount, localKey }
+      ? { kind: 'construct', constructor, argumentIndex, runtimeArgumentCount, args, localKey }
       : null;
   }
 }

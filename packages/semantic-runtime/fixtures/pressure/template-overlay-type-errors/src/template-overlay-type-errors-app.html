@@ -3,6 +3,9 @@
     <li repeat.for="item of items">
       ${item.missingLabel}
     </li>
+    <li repeat.for="unknownItem of unknownItems">
+      ${unknownItem.label}
+    </li>
   </ul>
 
   <section if.bind="selectedItem">

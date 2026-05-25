@@ -22,6 +22,9 @@ export class ContextualCallArgumentCompletionApp {
     return this.products.map(project).join(', ');
   }
 
+  readonly maybeProductLabel: ((project: (product: CatalogProduct) => string) => string) | null =
+    this.productLabel.bind(this);
+
   productLabelFromOptions(options: { readonly project: (product: CatalogProduct) => string }): string {
     return this.products.map(options.project).join(', ');
   }

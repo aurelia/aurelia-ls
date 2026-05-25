@@ -1,5 +1,11 @@
 import ts from 'typescript';
 
+import type {
+  BindingScope,
+} from '../configuration/scope.js';
+import {
+  localKeyPart,
+} from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   checkerSymbolMemberSourceProjection,
@@ -8,6 +14,15 @@ import {
   checkerPropertySymbol,
   checkerSymbolValueType,
 } from '../type-system/checker-node-helpers.js';
+import type {
+  CheckerExpressionTypeEvaluationContext,
+} from '../type-system/expression-type-context.js';
+import type {
+  CheckerExpressionTypeEvaluator,
+} from '../type-system/expression-type-evaluator.js';
+import {
+  RuntimeObservedDependencyKind,
+} from './runtime-binding-observation.js';
 import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
 
 export interface RuntimeObservedMemberSourceProjection {
@@ -63,6 +78,56 @@ export function observedDependencyWithMemberSourceForCheckerType<TDraft extends 
     };
 }
 
+/** Projects member source fields for a binding expression dependency through the active runtime BindingScope. */
+export function observedMemberSourceForBindingDependency(input: {
+  readonly dependency: RuntimeObservedDependencyDraft;
+  readonly checkerContext: CheckerExpressionTypeEvaluationContext;
+  readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly localKey: string;
+}): RuntimeObservedMemberSourceProjection | null {
+  const directProjection = directObservedMemberSourceProjection(input.dependency);
+  if (directProjection != null) {
+    return directProjection;
+  }
+  const memberNameSpanStart = input.dependency.memberNameSpanStart ?? null;
+  if (input.dependency.memberName == null || memberNameSpanStart == null) {
+    return input.dependency.keyExpression != null
+      ? observedOwnerSourceProjectionForDependency(
+        input.dependency,
+        input.checkerContext.scope,
+        input.evaluator,
+        input.localKey,
+      )
+      : observedScopeNameProjectionForDependency(
+        input.dependency,
+        input.checkerContext.scope,
+        input.evaluator,
+        input.localKey,
+      );
+  }
+  const access = input.evaluator.evaluateMemberValueAccessAtOffset(
+    input.checkerContext.child(
+      input.checkerContext.expression,
+      `observed-dependency:member:${input.dependency.spanStart ?? 'open'}:${localKeyPart(input.dependency.memberName)}`,
+    ),
+    memberNameSpanStart,
+    input.dependency.memberName,
+  );
+  const ownerSource = observedOwnerSourceProjectionForDependency(
+    input.dependency,
+    input.checkerContext.scope,
+    input.evaluator,
+    input.localKey,
+  );
+  if (access == null) {
+    return ownerSource;
+  }
+  return {
+    observedMemberKind: access.memberKind,
+    observedMemberSourceAddressHandle: access.sourceAddressHandle ?? ownerSource?.observedMemberSourceAddressHandle ?? null,
+  };
+}
+
 export function observedMemberSourceForCheckerPath(
   store: KernelStore,
   checker: ts.TypeChecker,
@@ -93,4 +158,94 @@ function simpleObservedDependencyPath(
   }
   const parts = sourceName.split('.');
   return parts[0] === 'this' ? parts.slice(1) : parts;
+}
+
+function directObservedMemberSourceProjection(
+  dependency: RuntimeObservedDependencyDraft,
+): RuntimeObservedMemberSourceProjection | null {
+  if (dependency.observedMemberKind == null && dependency.observedMemberSourceAddressHandle == null) {
+    return null;
+  }
+  return {
+    observedMemberKind: dependency.observedMemberKind ?? null,
+    observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle ?? null,
+  };
+}
+
+function observedScopeNameProjectionForDependency(
+  dependency: RuntimeObservedDependencyDraft,
+  scope: BindingScope,
+  evaluator: CheckerExpressionTypeEvaluator,
+  localKey: string,
+): RuntimeObservedMemberSourceProjection | null {
+  const name = dependency.sourceName ?? dependency.sourceRootName;
+  if (name == null) {
+    return null;
+  }
+  const isScopeExpression =
+    (dependency.expressionKind === 'AccessScope' || dependency.expressionKind === 'CallScope')
+    && dependency.scopeLookupAncestor != null;
+  const isDirectCollectionOwner =
+    dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
+    && dependency.memberName == null
+    && dependency.keyExpression == null
+    && dependency.sourceName === dependency.sourceRootName
+    && dependency.sourceName === name
+    && dependency.scopeLookupAncestor != null;
+  if (!isScopeExpression && !isDirectCollectionOwner) {
+    return null;
+  }
+  const lookup = scope.locate(name, dependency.scopeLookupAncestor ?? 0);
+  if (lookup.slot != null) {
+    const access = evaluator.memberValueAccessForReference(
+      lookup.context?.contextType ?? null,
+      name,
+      `${localKey}:observed-dependency:scope-slot:${dependency.spanStart ?? 'open'}:${localKeyPart(name)}`,
+    );
+    return {
+      observedMemberKind: access?.memberKind ?? null,
+      observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle ?? access?.sourceAddressHandle ?? null,
+    };
+  }
+  const access = evaluator.memberValueAccessForReference(
+    lookup.context?.contextType ?? null,
+    name,
+    `${localKey}:observed-dependency:scope-name:${dependency.spanStart ?? 'open'}:${localKeyPart(name)}`,
+  );
+  return access == null
+    ? null
+    : {
+      observedMemberKind: access.memberKind,
+      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+    };
+}
+
+function observedOwnerSourceProjectionForDependency(
+  dependency: RuntimeObservedDependencyDraft,
+  scope: BindingScope,
+  evaluator: CheckerExpressionTypeEvaluator,
+  localKey: string,
+): RuntimeObservedMemberSourceProjection | null {
+  const rootName = dependency.sourceRootName;
+  if (rootName == null || dependency.scopeLookupAncestor == null) {
+    return null;
+  }
+  const lookup = scope.locate(rootName, dependency.scopeLookupAncestor);
+  if (lookup.slot != null) {
+    return {
+      observedMemberKind: null,
+      observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle,
+    };
+  }
+  const access = evaluator.memberValueAccessForReference(
+    lookup.context?.contextType ?? null,
+    rootName,
+    `${localKey}:observed-dependency:owner-source:${dependency.spanStart ?? 'open'}:${localKeyPart(rootName)}`,
+  );
+  return access == null
+    ? null
+    : {
+      observedMemberKind: null,
+      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+    };
 }

@@ -1,8 +1,19 @@
 import {
-  RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
+import {
+  RuntimeBindingSourceValueEvaluationKind,
+} from '../observation/binding-source-value-evaluation.js';
+import {
+  projectRuntimeBindingSourceValueContextInScope,
+} from '../observation/binding-source-value-evaluation-context.js';
 import type { BindingScope } from '../configuration/scope.js';
+import type { TemplateResourceScope } from './compiler-world.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import type { RuntimeExpressionBinding } from '../observation/runtime-binding-expression.js';
+import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import {
   EvaluationArrayValue,
   EvaluationValueKind,
@@ -26,11 +37,27 @@ export function repeatStaticLocalValue(
   effect: IteratorBindingScopeEffect,
   localName: string,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
+  binding: RuntimeExpressionBinding | null = null,
+  runtimeBindings: RuntimeRenderingEmission | null = null,
+  bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null = null,
+  resourceScope: TemplateResourceScope | null = null,
 ): EvaluationValue | null {
   if (sourceValueEvaluator == null || parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
     return null;
   }
-  const evaluation = sourceValueEvaluator.evaluate(parse.result.ast.iterable, parent);
+  const contextProjection = projectRuntimeBindingSourceValueContextInScope({
+    runtimeBindings,
+    bindingExpressionScopes,
+    binding,
+    expression: parse.result.ast.iterable,
+    localKey: `repeat-static-local:${effect.productHandle}:${localName}:iterable`,
+    sourceScope: parent,
+    resourceScope,
+  });
+  if (contextProjection.context == null) {
+    return null;
+  }
+  const evaluation = sourceValueEvaluator.evaluate(contextProjection.context);
   if (evaluation.kind !== RuntimeBindingSourceValueEvaluationKind.Value || evaluation.value == null) {
     return null;
   }

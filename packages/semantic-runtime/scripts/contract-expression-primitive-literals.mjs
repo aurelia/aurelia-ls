@@ -6,6 +6,7 @@ import { SourceSpan } from '../out/expression/source-span.js';
 import { PrimitiveLiteralExpression } from '../out/expression/ast.js';
 import { CheckerTypeProjector, CheckerTypeMemberProjectionPolicy } from '../out/type-system/checker-projector.js';
 import { CheckerExpressionTypeEvaluator } from '../out/type-system/expression-type-evaluator.js';
+import { CheckerExpressionTypeEvaluationContext } from '../out/type-system/expression-type-context.js';
 import { CheckerExpressionTypeEvaluationResultKind } from '../out/type-system/expression-type-evaluation.js';
 import { CheckerTypeProjectionOrigin } from '../out/type-system/type-shape.js';
 
@@ -71,7 +72,11 @@ if (failures.length > 0) {
 
 function assertLiteralType(label, value, expectedDisplay) {
   const expression = new PrimitiveLiteralExpression(new SourceSpan(0, 0, null), value);
-  const result = evaluator.evaluateWithScope(expression, scope, `contract-expression-primitive-literals:${label}`);
+  const result = evaluator.evaluate(CheckerExpressionTypeEvaluationContext.knownScope(
+    expression,
+    scope,
+    `contract-expression-primitive-literals:${label}`,
+  ));
   if (result.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
     failures.push(`Expected ${label} to project a TypeChecker type, observed ${result.kind}.`);
     return;
@@ -85,8 +90,18 @@ function assertCacheDistinguishesSameLocalKeySourceSpans() {
   const sourceAddressHandle = 'contract-expression-primitive-literals:source-file-address';
   const first = new PrimitiveLiteralExpression(new SourceSpan(1, 2, null), 'first');
   const second = new PrimitiveLiteralExpression(new SourceSpan(3, 4, null), 'second');
-  const firstResult = evaluator.evaluateWithScope(first, scope, 'contract-expression-primitive-literals:shared-local-key', sourceAddressHandle);
-  const secondResult = evaluator.evaluateWithScope(second, scope, 'contract-expression-primitive-literals:shared-local-key', sourceAddressHandle);
+  const firstResult = evaluator.evaluate(CheckerExpressionTypeEvaluationContext.knownScope(
+    first,
+    scope,
+    'contract-expression-primitive-literals:shared-local-key',
+    sourceAddressHandle,
+  ));
+  const secondResult = evaluator.evaluate(CheckerExpressionTypeEvaluationContext.knownScope(
+    second,
+    scope,
+    'contract-expression-primitive-literals:shared-local-key',
+    sourceAddressHandle,
+  ));
   if (firstResult.kind !== CheckerExpressionTypeEvaluationResultKind.Type || secondResult.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
     failures.push('Expected shared-local-key primitive literals to project TypeChecker types.');
     return;

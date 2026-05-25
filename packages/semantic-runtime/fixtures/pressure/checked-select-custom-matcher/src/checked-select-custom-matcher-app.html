@@ -108,6 +108,10 @@
     <option repeat.for="item of items" model.bind="item">${item.label}</option>
   </select>
 
+  <select value.bind="selectedOption" matcher.bind="overloadedMatchItems">
+    <option repeat.for="item of items" model.bind="item">${item.label}</option>
+  </select>
+
   <select multiple value.bind="selectedOptions" matcher.bind="matchItems">
     <option repeat.for="item of items" model.bind="item">${item.label}</option>
   </select>

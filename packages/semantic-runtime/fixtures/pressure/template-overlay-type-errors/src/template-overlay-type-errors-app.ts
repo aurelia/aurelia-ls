@@ -16,6 +16,10 @@ export class TemplateOverlayTypeErrorsApp {
     { id: 'first', label: 'First', enabled: true },
   ];
 
+  readonly unknownItems: unknown = [
+    { id: 'mystery', label: 'Mystery', enabled: false },
+  ];
+
   readonly selectedItem: OverlayItem | null = this.items[0] ?? null;
   readonly maybeItem: OverlayItem | null = null;
 

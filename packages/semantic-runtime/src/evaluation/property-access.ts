@@ -1,9 +1,18 @@
 import ts from 'typescript';
+import {
+  aureliaArrayMethodSemanticsFor,
+} from '../expression/array-method-semantics.js';
 import type { ModuleEnvironmentRecord } from './environment.js';
+import {
+  staticStringPrototypeBoundaryMethods,
+} from './intrinsics/string-intrinsics.js';
 import {
   hasQuestionDotToken,
   isNullishEvaluationValue,
 } from './nullish-expression.js';
+import {
+  evaluationPropertyKeyString,
+} from './operators.js';
 import { EvaluationOpenSeamKind } from './seams.js';
 import {
   EvaluationBoundaryKind,
@@ -19,6 +28,55 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
+
+export const enum StaticValueMemberReadKind {
+  /** Member read closed to a concrete evaluator value without invoking host policy. */
+  Value = 'value',
+  /** Member read selected a getter function that needs evaluator-host invocation with the receiver as `this`. */
+  Getter = 'getter',
+  /** Member read needs host open-seam publication before it can become an evaluator value. */
+  Open = 'open',
+}
+
+export type StaticValueMemberRead =
+  | {
+    readonly kind: StaticValueMemberReadKind.Value;
+    readonly value: EvaluationValue;
+  }
+  | {
+    readonly kind: StaticValueMemberReadKind.Getter;
+    readonly getter: EvaluationFunctionValue;
+    readonly thisValue: EvaluationValue;
+  }
+  | {
+    readonly kind: StaticValueMemberReadKind.Open;
+    readonly reason: string;
+    readonly seamKind: EvaluationOpenSeamKind;
+  };
+
+export interface StaticValueMemberReadHandlers<TValue> {
+  /** Handles a concrete evaluator-local member value. */
+  readonly value: (value: EvaluationValue) => TValue;
+  /** Handles a getter that must be invoked by the active evaluator with the receiver as `this`. */
+  readonly getter: (getter: EvaluationFunctionValue, thisValue: EvaluationValue) => TValue;
+  /** Handles a member read that must stay open until a host/runtime consumer resolves it. */
+  readonly open: (reason: string, seamKind: EvaluationOpenSeamKind) => TValue;
+}
+
+/** Folds static member-read outcomes so evaluator and binding-source consumers cannot drift on new read kinds. */
+export function foldStaticValueMemberRead<TValue>(
+  read: StaticValueMemberRead,
+  handlers: StaticValueMemberReadHandlers<TValue>,
+): TValue {
+  switch (read.kind) {
+    case StaticValueMemberReadKind.Value:
+      return handlers.value(read.value);
+    case StaticValueMemberReadKind.Getter:
+      return handlers.getter(read.getter, read.thisValue);
+    case StaticValueMemberReadKind.Open:
+      return handlers.open(read.reason, read.seamKind);
+  }
+}
 
 export interface StaticPropertyAccessEvaluationHost {
   evaluateExpression(
@@ -84,28 +142,91 @@ export function evaluateStaticPropertyValue(
   depth: number,
   host: StaticPropertyAccessEvaluationHost,
 ): EvaluationValue {
+  return evaluateStaticValueMemberRead(
+    readStaticValueProperty(receiver, propertyName, node),
+    node,
+    moduleKey,
+    depth,
+    host,
+  );
+}
+
+export function evaluateStaticElementValue(
+  receiver: EvaluationValue,
+  argument: EvaluationValue,
+  node: ts.Node,
+  moduleKey: string,
+  depth: number,
+  host: StaticPropertyAccessEvaluationHost,
+): EvaluationValue {
+  return evaluateStaticValueMemberRead(
+    readStaticValueElement(receiver, argument, node),
+    node,
+    moduleKey,
+    depth,
+    host,
+  );
+}
+
+function evaluateStaticValueMemberRead(
+  read: StaticValueMemberRead,
+  node: ts.Node,
+  moduleKey: string,
+  depth: number,
+  host: StaticPropertyAccessEvaluationHost,
+): EvaluationValue {
+  return foldStaticValueMemberRead(read, {
+    value: (value) => value,
+    getter: (getter, thisValue) => host.evaluateFunctionWithArguments(
+      getter,
+      node,
+      [],
+      moduleKey,
+      depth + 1,
+      thisValue,
+    ),
+    open: (reason, seamKind) => host.unknown(reason, node, moduleKey, seamKind),
+  });
+}
+
+function staticValueMemberValue(value: EvaluationValue): StaticValueMemberRead {
+  return { kind: StaticValueMemberReadKind.Value, value };
+}
+
+function staticValueMemberGetter(
+  getter: EvaluationFunctionValue,
+  thisValue: EvaluationValue,
+): StaticValueMemberRead {
+  return { kind: StaticValueMemberReadKind.Getter, getter, thisValue };
+}
+
+function staticValueMemberOpen(
+  reason: string,
+  seamKind: EvaluationOpenSeamKind,
+): StaticValueMemberRead {
+  return { kind: StaticValueMemberReadKind.Open, reason, seamKind };
+}
+
+export function readStaticValueProperty(
+  receiver: EvaluationValue,
+  propertyName: string,
+  node: ts.Node | null,
+): StaticValueMemberRead {
   const ownProperty = readStaticOwnProperty(receiver, propertyName);
   if (ownProperty != null) {
     if (ownProperty.node != null && ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
-      return host.evaluateFunctionWithArguments(
-        ownProperty.value,
-        node,
-        [],
-        moduleKey,
-        depth + 1,
-        receiver,
-      );
+      return staticValueMemberGetter(ownProperty.value, receiver);
     }
-    return ownProperty.value;
+    return staticValueMemberValue(ownProperty.value);
   }
   if (receiver.kind === EvaluationValueKind.BoundaryObject) {
-    return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node);
+    return staticValueMemberValue(new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.BoundaryValue) {
-    return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node);
+    return staticValueMemberValue(new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.Object && !receiver.mayHaveUnknownProperties) {
-    return new EvaluationUndefinedValue(node);
+    return staticValueMemberValue(new EvaluationUndefinedValue(node));
   }
   if (
     receiver.kind === EvaluationValueKind.Object
@@ -113,31 +234,80 @@ export function evaluateStaticPropertyValue(
     || receiver.kind === EvaluationValueKind.Class
     || receiver.kind === EvaluationValueKind.Instance
   ) {
-    return host.unknown(`Object property '${propertyName}' was not known.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    return staticValueMemberOpen(
+      `Object property '${propertyName}' was not known.`,
+      EvaluationOpenSeamKind.UnresolvedIdentifier,
+    );
   }
   if (receiver.kind === EvaluationValueKind.ModuleNamespace) {
-    return receiver.exports.get(propertyName)
-      ?? host.unknown(`Module namespace export '${propertyName}' was not known.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    const value = receiver.exports.get(propertyName) ?? null;
+    return value == null
+      ? staticValueMemberOpen(
+          `Module namespace export '${propertyName}' was not known.`,
+          EvaluationOpenSeamKind.UnresolvedIdentifier,
+        )
+      : staticValueMemberValue(value);
   }
   if (receiver.kind === EvaluationValueKind.Array && isKnownArrayPrototypeFunction(propertyName)) {
-    return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `Array.prototype.${propertyName}`, node);
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `Array.prototype.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.String && isKnownStringPrototypeFunction(propertyName)) {
-    return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node);
+    return staticValueMemberValue(new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node));
   }
   if (receiver.kind === EvaluationValueKind.Array && propertyName === 'length') {
-    return new EvaluationNumberValue(receiver.elements.length, node);
+    return staticValueMemberValue(new EvaluationNumberValue(receiver.elements.length, node));
   }
   if (receiver.kind === EvaluationValueKind.Set && propertyName === 'size' && !receiver.weak) {
-    return new EvaluationNumberValue(receiver.elements.length, node);
+    return staticValueMemberValue(new EvaluationNumberValue(receiver.elements.length, node));
   }
   if (receiver.kind === EvaluationValueKind.Map && propertyName === 'size' && !receiver.weak) {
-    return new EvaluationNumberValue(receiver.entries.length, node);
+    return staticValueMemberValue(new EvaluationNumberValue(receiver.entries.length, node));
   }
   if (receiver.kind === EvaluationValueKind.String && propertyName === 'length') {
-    return new EvaluationNumberValue(receiver.value.length, node);
+    return staticValueMemberValue(new EvaluationNumberValue(receiver.value.length, node));
   }
-  return host.unknown(`Property access '${propertyName}' did not close over a known receiver.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+  return staticValueMemberOpen(
+    `Property access '${propertyName}' did not close over a known receiver.`,
+    EvaluationOpenSeamKind.UnresolvedIdentifier,
+  );
+}
+
+export function readStaticValueElement(
+  receiver: EvaluationValue,
+  argument: EvaluationValue,
+  node: ts.Node | null,
+): StaticValueMemberRead {
+  if (receiver.kind === EvaluationValueKind.Array && argument.kind === EvaluationValueKind.Number) {
+    if (receiver.mayHaveUnknownOrder) {
+      return staticValueMemberOpen(
+        `Array index ${argument.value} depends on an unknown element order.`,
+        EvaluationOpenSeamKind.UnresolvedIdentifier,
+      );
+    }
+    const index = Number.isInteger(argument.value) && argument.value >= 0
+      ? argument.value
+      : null;
+    const element = index == null ? null : receiver.elements[index] ?? null;
+    if (element != null) {
+      return staticValueMemberValue(element.value);
+    }
+    return receiver.mayHaveUnknownElements
+      ? staticValueMemberOpen(
+          `Array index ${argument.value} is not known.`,
+          EvaluationOpenSeamKind.UnresolvedIdentifier,
+        )
+      : staticValueMemberValue(new EvaluationUndefinedValue(node));
+  }
+
+  const propertyName = evaluationPropertyKeyString(argument);
+  if (propertyName != null) {
+    return readStaticValueProperty(receiver, propertyName, node);
+  }
+
+  return staticValueMemberOpen(
+    'Element access did not close over a known receiver and key.',
+    EvaluationOpenSeamKind.UnsupportedExpression,
+  );
 }
 
 export function evaluateStaticElementAccess(
@@ -163,43 +333,7 @@ export function evaluateStaticElementAccess(
   if (argument == null) {
     return host.unknown('Element access had no argument expression.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
-  if (receiver.kind === EvaluationValueKind.Array && argument.kind === EvaluationValueKind.Number) {
-    if (receiver.mayHaveUnknownOrder) {
-      return host.unknown(`Array index ${argument.value} depends on an unknown element order.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
-    }
-    return receiver.elements.at(argument.value)?.value
-      ?? host.unknown(`Array index ${argument.value} is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
-  }
-  if (argument.kind === EvaluationValueKind.String || argument.kind === EvaluationValueKind.Number) {
-    const name = String(argument.value);
-    const ownProperty = readStaticOwnProperty(receiver, name);
-    if (ownProperty != null) {
-      return ownProperty.value;
-    }
-    if (receiver.kind === EvaluationValueKind.BoundaryObject) {
-      return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}[${JSON.stringify(name)}]`, expression);
-    }
-    if (receiver.kind === EvaluationValueKind.BoundaryValue) {
-      return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}[${JSON.stringify(name)}]`, expression);
-    }
-    if (receiver.kind === EvaluationValueKind.Object && !receiver.mayHaveUnknownProperties) {
-      return new EvaluationUndefinedValue(expression);
-    }
-    if (
-      receiver.kind === EvaluationValueKind.Object
-      || receiver.kind === EvaluationValueKind.Function
-      || receiver.kind === EvaluationValueKind.Class
-      || receiver.kind === EvaluationValueKind.Instance
-    ) {
-      return host.unknown(`Object property '${name}' is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
-    }
-  }
-  if (receiver.kind === EvaluationValueKind.ModuleNamespace && (argument.kind === EvaluationValueKind.String || argument.kind === EvaluationValueKind.Number)) {
-    const name = String(argument.value);
-    return receiver.exports.get(name)
-      ?? host.unknown(`Module namespace export '${name}' is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
-  }
-  return host.unknown('Element access did not close over a known receiver and key.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
+  return evaluateStaticElementValue(receiver, argument, expression, moduleKey, depth + 1, host);
 }
 
 export function readStaticOwnProperty(
@@ -278,46 +412,9 @@ function readStaticRegularExpressionProperty(
 }
 
 function isKnownArrayPrototypeFunction(name: string): boolean {
-  switch (name) {
-    case 'concat':
-    case 'every':
-    case 'filter':
-    case 'fill':
-    case 'find':
-    case 'findIndex':
-    case 'flat':
-    case 'flatMap':
-    case 'forEach':
-    case 'includes':
-    case 'indexOf':
-    case 'join':
-    case 'map':
-    case 'reduce':
-    case 'reduceRight':
-    case 'slice':
-    case 'some':
-    case 'sort':
-      return true;
-    default:
-      return false;
-  }
+  return aureliaArrayMethodSemanticsFor(name) != null;
 }
 
 function isKnownStringPrototypeFunction(name: string): boolean {
-  switch (name) {
-    case 'endsWith':
-    case 'includes':
-    case 'indexOf':
-    case 'replace':
-    case 'replaceAll':
-    case 'slice':
-    case 'split':
-    case 'startsWith':
-    case 'toLowerCase':
-    case 'toUpperCase':
-    case 'trim':
-      return true;
-    default:
-      return false;
-  }
+  return staticStringPrototypeBoundaryMethods.has(name);
 }

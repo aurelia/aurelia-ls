@@ -4,7 +4,7 @@ import {
   type RuntimeBinding,
 } from './runtime-binding.js';
 
-/** Expression products owned by a runtime binding, including every interpolation hole. */
+/** Expression parse products owned by a runtime binding; interpolation bindings carry the full interpolation parse. */
 export function expressionProductHandlesForRuntimeBinding(
   binding: RuntimeBinding,
 ): readonly ProductHandle[] {

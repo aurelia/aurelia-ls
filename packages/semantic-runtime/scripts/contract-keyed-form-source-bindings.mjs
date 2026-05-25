@@ -33,6 +33,16 @@ expectDataFlow('Array-index checkbox should be a keyed boolean source that can r
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
 });
+expectDataFlow('Readonly array-index checkbox should remain runtime-assignable but carry TypeScript strictness.', {
+  sourceName: 'state.readonlyFlags[0]',
+  sourceKind: 'keyed',
+  valueChannelKind: 'checked-boolean',
+  targetValueType: 'boolean',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable-with-typescript-strictness',
+});
 expectDataFlow('Array-index select should preserve keyed source display and string-domain writeback.', {
   sourceName: 'state.itemNames[0]',
   sourceKind: 'keyed',
@@ -41,6 +51,16 @@ expectDataFlow('Array-index select should preserve keyed source display and stri
   sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
+});
+expectDataFlow('Readonly record-keyed checkbox should preserve runtime writeback and report readonly index strictness.', {
+  sourceName: 'state.readonlySelectedByTagId["expedite"]',
+  sourceKind: 'keyed',
+  valueChannelKind: 'checked-boolean',
+  targetValueType: 'boolean',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable-with-typescript-strictness',
 });
 expectDataFlow('Record-keyed checkbox should bind through the repeat local key expression.', {
   sourceName: 'state.selectedByTagId[tag.id]',
@@ -130,8 +150,8 @@ const keyedValueChannelRows = valueChannels.filter((row) =>
     || row.channelKind === 'select-single-option-value'
   )
 );
-if (keyedValueChannelRows.length !== 4) {
-  failures.push(`Expected 4 keyed form value-channel rows; observed ${keyedValueChannelRows.length}.`);
+if (keyedValueChannelRows.length !== 6) {
+  failures.push(`Expected 6 keyed form value-channel rows; observed ${keyedValueChannelRows.length}.`);
 }
 
 const summary = {

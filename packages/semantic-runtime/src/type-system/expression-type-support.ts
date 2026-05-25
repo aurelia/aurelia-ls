@@ -39,6 +39,8 @@ import {
   checkerPrimitiveType,
   type CheckerPrimitiveName,
 } from './checker-primitive-types.js';
+import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
+import { checkerBackedUnionTypeForReferences } from './checker-type-union.js';
 
 export type CheckerLookupCarrier = {
   readonly checker: ts.TypeChecker;
@@ -171,24 +173,23 @@ export class CheckerExpressionTypeSupport {
       ? null
       : checker.getSymbolsInScope(location, ts.SymbolFlags.Value).find((symbol) => symbol.getName() === name) ?? null;
     const symbol = scopedSymbol ?? checker.resolveName(name, location ?? undefined, ts.SymbolFlags.Value, false);
-    const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
-    if (symbol != null && declaration != null) {
+    const symbolType = symbol == null ? null : checkerSymbolValueType(checker, symbol, location);
+    if (symbolType != null) {
       return {
         checker,
-        type: checker.getTypeOfSymbolAtLocation(symbol, declaration),
+        type: symbolType,
       };
     }
 
     const globalThis = checker.resolveName('globalThis', location ?? undefined, ts.SymbolFlags.Value, false);
-    const globalDeclaration = globalThis?.valueDeclaration ?? globalThis?.declarations?.[0] ?? location;
-    if (globalThis != null && globalDeclaration != null) {
-      const globalType = checker.getTypeOfSymbolAtLocation(globalThis, globalDeclaration);
-      const property = checker.getPropertyOfType(globalType, name);
-      const propertyDeclaration = property?.valueDeclaration ?? property?.declarations?.[0] ?? globalDeclaration;
-      if (property != null && propertyDeclaration != null) {
+    const globalType = globalThis == null ? null : checkerSymbolValueType(checker, globalThis, location);
+    if (globalType != null) {
+      const property = checkerPropertySymbol(checker, globalType, name);
+      const propertyType = property == null ? null : checkerSymbolValueType(checker, property, location);
+      if (propertyType != null) {
         return {
           checker,
-          type: checker.getTypeOfSymbolAtLocation(property, propertyDeclaration),
+          type: propertyType,
         };
       }
     }
@@ -227,12 +228,27 @@ export class CheckerExpressionTypeSupport {
     sourceAddressHandle: AddressHandle | null,
     summary: string,
   ): CheckerExpressionTypeEvaluation {
+    const references = alternatives.map((alternative) => alternative.typeReference);
     const commonReference = commonTypeReference(
-      alternatives.map((alternative) => alternative.typeReference),
+      references,
       alternatives.length,
     );
     if (commonReference != null) {
       return alternatives[0]!;
+    }
+
+    const checkerBackedUnion = checkerBackedUnionTypeForReferences(this.store, references);
+    if (checkerBackedUnion != null) {
+      const typeShape = this.projector.ensureProjection({
+        localKey: `${localKey}:checker-union`,
+        checker: checkerBackedUnion.checker,
+        type: checkerBackedUnion.type,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
+        sourceAddressHandle,
+        display: checkerBackedUnion.checker.typeToString(checkerBackedUnion.type),
+        memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+      } satisfies CheckerTypeProjectionRequest);
+      return this.type(typeShape, summary, sourceAddressHandle);
     }
 
     const typeShape = this.synthesis.unionType(

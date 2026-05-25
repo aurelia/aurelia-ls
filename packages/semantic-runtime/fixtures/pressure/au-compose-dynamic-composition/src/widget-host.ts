@@ -1,5 +1,5 @@
 import { type Constructable } from '@aurelia/kernel';
-import { bindable, customElement } from '@aurelia/runtime-html';
+import { bindable, customElement, valueConverter } from '@aurelia/runtime-html';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
 import template from './widget-host.html';
@@ -25,10 +25,17 @@ export function resolveWidget(kit: WidgetKit, id: string): readonly [
   return [widget?.component, widget?.data];
 }
 
+@valueConverter('stableWidgetKit')
+export class WidgetHostStableWidgetKitValueConverter {
+  toView(_kit: WidgetKit): WidgetKit {
+    return { widgets: [] };
+  }
+}
+
 @customElement({
   name: 'widget-host',
   template,
-  dependencies: [ChartWidget, InventoryWidget],
+  dependencies: [ChartWidget, InventoryWidget, WidgetHostStableWidgetKitValueConverter],
 })
 export class WidgetHost {
   @bindable()

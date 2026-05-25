@@ -10,9 +10,13 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
+  checkerRawTypeAssignable,
+} from '../type-system/checker-type-assignability.js';
+import {
   arrayElementTypeFor,
+  checkerTypeHasAssignableArrayPart,
   isRuntimeArrayInstanceType,
-} from './checker-type-helpers.js';
+} from '../type-system/checker-collection-types.js';
 import type {
   BindingSourceTypeReader,
   BindingValueChannelDraftContext,
@@ -23,7 +27,6 @@ import type {
 import {
   RuntimeBindingValueChannelDraftSupport,
   isBroadTypeShape,
-  sourceTypeHasAssignableArrayPart,
   stringLiteralTypesForDomain,
   withCustomMatcherCoupling,
 } from './binding-value-channel-draft-support.js';
@@ -341,10 +344,10 @@ export class SelectValueObserverChannelDrafts {
       return false;
     }
     const acceptsSingleValue = optionTypes.every((optionType) =>
-      checker.isTypeAssignableTo(optionType, sourceCarrier.type)
+      checkerRawTypeAssignable(checker, optionType, sourceCarrier.type)
     );
     const acceptsArrayValues = optionTypes.every((optionType) =>
-      sourceTypeHasAssignableArrayPart(checker, sourceCarrier.type, optionType)
+      checkerTypeHasAssignableArrayPart(checker, sourceCarrier.type, optionType)
     );
     return acceptsSingleValue && acceptsArrayValues;
   }
@@ -358,8 +361,7 @@ export class SelectValueObserverChannelDrafts {
     if (literal != null) {
       return literal;
     }
-    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
-    const sourceType = this.owner.sourceTypeForBinding(binding, scope, context.evaluator);
+    const sourceType = this.owner.sourceTypeForBinding(binding, context);
     const literalValues = this.owner.types.booleanLiteralDomainForType(sourceType);
     return literalValues.length === 1 ? literalValues[0]! : null;
   }

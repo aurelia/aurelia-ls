@@ -418,6 +418,12 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
         "Print the detailed semantic-runtime pressure rows when compact output is not enough.",
     },
     {
+      id: "expression:coverage",
+      command: "pnpm --filter @aurelia-ls/atlas expression:coverage",
+      summary:
+        "Print semantic-runtime expression AST kind construction, overlay support, and evaluator/observer consumer coverage.",
+    },
+    {
       id: "pressure:framework-resources",
       command: "pnpm --filter @aurelia-ls/atlas pressure:framework-resources",
       summary:

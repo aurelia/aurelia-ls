@@ -126,11 +126,13 @@ static type surfaces rather than hydrated runtime values.
   methods add method-declaration dependency rows. Direct collection-read owners such as `items.map(...)` can point back
   to the `items` slot/member, while temporary
   call-result owners such as `items.map(...).join(...)` remain open instead of pretending the temporary array has a
-  declaration source. Collection-read rows and callback-body descent intentionally use separate framework sets:
+  declaration source. Collection-read rows and callback-body descent intentionally use separate framework sets
+  centralized behind `aureliaArrayMethodSemanticsFor(...)` in `expression/array-method-semantics.ts`:
   `autoObserveArrayMethods` drives collection-read rows, so `includes(...)` observes the array collection without
   inventing callback locals; callback-executing array methods drive inline arrow body descent, so `forEach(...)` and
-  newer methods such as `findLast(...)` can collect callback-local reads without becoming collection-read rows when
-  Aurelia does not list them in `autoObserveArrayMethods`. Both closed decisions are still array-owner gated: a
+  newer methods such as `findLast(...)` can collect callback-local reads. When a web-standard method is absent from
+  Aurelia's `autoObserveArrayMethods`, record that absence as a framework update gap rather than treating
+  semantic-runtime's callback/type support as a permanent observation policy. Both closed decisions are still array-owner gated: a
   non-array object with a method named `map`, `filter`, or `includes` does not borrow the framework's array semantics
   merely by name; arbitrary user method callback invocation remains a runtime-execution question until a lower evaluator
   can prove the callee calls the returned arrow closure. Nested callback collection keeps inherited callback locals as
@@ -218,8 +220,18 @@ static type surfaces rather than hydrated runtime values.
   orientation can distinguish object component handoff from scalar ID handoff without source-name guessing.
 - `binding-data-flow-materializer.ts` consumes target-access or target-operation products plus instruction `Scope`
   applications after template scope construction. The outer materializer owns product/seam publication; the draft
-  collaborators own target value type selection, source-expression projection, source write capability, shared
-  TypeChecker member access, and source/target assignability. It materializes flow rows for property bindings,
+  collaborators own target value type selection, source-expression projection, and shared TypeChecker member access.
+  `binding-data-flow-direction.ts` owns directional source-to-target/target-to-source transport checks, while
+  `binding-data-flow-assignability.ts` owns source/target assignability after observer value-channel policy is applied.
+  `binding-data-flow-source-info.ts` owns assignment-target source classification, source display names, spread-source
+  retargeting, and value-converter `fromView` writeback hints.
+  `binding-data-flow-source-assignment.ts` owns the final source-assignment classification that joins direction,
+  collection-mutation channel policy, source-write capability, and target-to-source TypeChecker assignability.
+  `binding-source-write-capability.ts` owns the source-write policy bridge from
+  TypeChecker member/index writability and Scope lookup into Aurelia `astAssign` facts before data-flow rows publish
+  diagnostics. Keyed writes spend finite-key and index-signature write access from the TypeChecker substrate, so
+  `readonly T[]` or `Readonly<Record<K, V>>` can remain runtime-assignable while surfacing TypeScript strictness.
+  It materializes flow rows for property bindings,
   attribute bindings, and interpolations with direction, source expression lane, source and target property type
   displays, source writability, TypeChecker assignability checks in each active direction, and a row-local open reason
   when the runtime data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing
@@ -294,12 +306,16 @@ static type surfaces rather than hydrated runtime values.
   future repair planning instead of falling back to the template expression whenever the source is `person[field]` or
   `state.items[index]`.
   Data-flow rows pass rendering-controller `strictBinding` into the TypeChecker evaluator because Aurelia only throws
-  nullish member/keyed/call access errors in strict expression-evaluation mode. The evaluator projects `undefined` for
-  optional and non-strict nullish reads, preserves open nullish results when strictness is unknown, and lets template
-  diagnostics spend `AUR0114`/`AUR0115` or strict call-target runtime codes only when the binding row's strictness is
-  known true.
+  nullish member/keyed/call access errors in strict expression-evaluation mode. Source-value evaluation carries the
+  same axis: optional and non-strict nullish member/keyed/call reads reduce to `undefined`, unknown strictness stays
+  open, and strict reads stay explicit runtime-error pressure. Template diagnostics can then spend `AUR0114`/`AUR0115`
+  or strict call-target runtime codes only when the binding row's strictness is known true.
   Source writeability uses the same strict gate for `astAssign`: member/keyed writes through a definitely nullish owner
   report `AUR0116` as runtime-unassignable source-assignment pressure instead of TypeScript assignment strictness.
+  Non-null keyed writes also spend the key expression type so readonly number/string index signatures become product
+  strictness facts instead of being rediscovered in API diagnostics.
+  Finite mapped-type properties from mutable `Record<K, V>` are writable even when TypeScript exposes no source
+  declarations for the synthetic property symbol; readonly mapped types stay TypeScript-strictness pressure.
   Public source-assignment diagnostics stay downstream of these data-flow rows. Template checker overlays may validate
   expression reads, converter call surfaces, and scope replay, but they should not become a second writeback authority
   for `from-view`/`two-way` assignment policy. The shared
@@ -308,12 +324,17 @@ static type surfaces rather than hydrated runtime values.
   user-facing source span while preserving the data-flow product as the semantic owner.
   Value converters still affect the value being assigned: target-to-source data-flow spends the converter chain in the
   same outer-to-inner order as Aurelia `astAssign`, projects each `fromView(value, ...args)` return through the
-  TypeChecker resource projector, and then compares the converted value against the unwrapped assignment target type.
+  shared `projectRuntimeAssignmentValueConverterWriteback(...)` helper, and then compares the converted value against
+  the unwrapped assignment target type.
   Literal converter `withContext = true` inserts the framework caller-context argument before authored converter
   arguments, so overload selection and target-to-source assignability match runtime-html `useConverter(...)`. Missing
   `fromView` methods are identity conversions; a two-way `input value.two-way="state.quantity | numberText"` can
   therefore read as `string` while writing back as `number`, whereas a converter with only `toView` leaves the raw
   observer `string` visible as assignment strictness pressure.
+  Runtime-assignment scope construction performs the same projection early because later expressions may read the
+  synthetic local before data-flow rows are queried. If the bindable member value type is a lazy checker reference,
+  scope construction materializes that type through the shared expression world before asking the converter projector
+  for `fromView`; otherwise overlays can degrade a valid source-local type to `any` while data-flow later knows better.
   Source-to-target flow evaluates expressions with a connectable evaluation context, so `++`, `--`, and compound
   assignment report `AUR0113` through the TypeChecker evaluator before the API maps it to a framework diagnostic. Target
   writes that call `astAssign` with no connectable stay out of that lane.
@@ -332,15 +353,31 @@ static type surfaces rather than hydrated runtime values.
   (`AUR0220`), and getter-only `ComputedObserver` target writes spend
   `assign_readonly_readonly_property_from_computed` (`AUR0221`). Keep these on the data-flow edge rather than the
   target-access row because `getObserver(...)` succeeds and the framework throws only when the binding writes.
-- `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
+- `binding-source-value-evaluation.ts` owns the closed/open result envelope shared by binding, router, template, and
+  composition consumers; `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
   binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including `$this`,
   `$parent`, and boundary `this` member reads through the same `BindingScope.locateThis(...)` / boundary traversal that
   framework `astEvaluate` uses. Guarded local class getter and evaluator-local function reads stay on this path too.
   Consumers such as router resources can ask for a static source value without moving binding lookup or getter
   execution into router-specific code. Host-dependent values stay open with evaluator reasons.
+  `binding-source-array-method-value.ts` owns native array method reduction for binding-source values, including safe
+  non-mutating methods such as at/concat/includes/indexOf/lastIndexOf/join/slice/flat/toReversed/toSorted and the framework
+  `Scope.fromParent(...)`-shaped callback parameter scope for map/filter/find/findLast/findIndex/
+  findLastIndex/quantifier/forEach/reduce/reduceRight families. It shares array iteration and reducer argument shapes
+  with the static evaluator through `evaluation/array-callback-values.ts`, including reverse iteration order, and generic string coercion / array index
+  math through `evaluation/value-coercion.ts`.
   `binding-source-evaluation-frame.ts` owns source-to-evaluated-module lookup and per-module
   `StaticEvaluator` reuse for one binding-source reduction, so follow-up property/getter/function reads keep the
   original module policy, runtime host, and evaluator guardrails instead of resetting them at each access.
+  `binding-source-member-value.ts` owns binding-source property/keyed member reads above that frame: it spends the
+  source module evaluator when a receiver retains source, and otherwise applies the source-independent static
+  property-access substrate with binding-owned open reasons.
+  Source-value property and keyed-member reads spend the shared `evaluation/property-access.ts`
+  `readStaticValueProperty(...)` / `readStaticValueElement(...)` substrate before falling back to open source-value
+  facts; do not recreate local object/array/member walkers in observation when the static evaluator already owns
+  getter invocation, host prototype boundaries, string length, collection size, or array index policy.
+  Source-independent reads also spend `foldStaticValueMemberRead(...)`, so binding-source open reasons and the
+  StaticEvaluator host path share one `StaticValueMemberRead` outcome algebra instead of maintaining parallel switches.
   Because the reused host carries Aurelia intrinsics, method-body reads can now reduce direct `resolve(ClassKey)` state
   fields during activation-like instance evaluation instead of degrading the helper import to an external-module
   boundary. `binding-source-activation-context.ts` is the DI-world join for registered/interface keys: when a
@@ -354,16 +391,42 @@ static type surfaces rather than hydrated runtime values.
   literal element/property traversal stays in `RuntimeBindingSourceValueEvaluator`, with binding-scope holes preserved
   as boundary values when the shape itself is static. Feature code such as router instruction materialization should
   consume the closed value shape instead of growing local array/object expression evaluators.
-  Primitive binary operators that do not need binding scope state reuse `evaluation/operators.ts`, while binding-source
-  `+` still has a local first step for string-pattern concatenation over runtime boundary holes. Conditional expressions
+  Primitive binary operators that do not need binding scope state reuse `evaluation/operators.ts`, including closed
+  `in` / `instanceof` checks over evaluator-known objects, arrays, namespaces, classes, and admitted host-global
+  constructors. Binding-source `+` still has a local first step for string-pattern concatenation over runtime boundary
+  holes. Conditional expressions
   with unknown truthiness may use the shared representative-value substrate to summarize both branches when their values
   can be safely merged; that keeps conditional route strings, state-backed labels, and object-shaped binding values on
   the binding-source value path without adding feature-local branch evaluators.
   Optional call forms (`name?.()`, `owner?.method()`, `owner.method?.()`, and equivalent call-function forms) follow the
   same runtime shape: once the callee or optional owner closes to `null`/`undefined`, binding-source value evaluation
   returns `undefined` so higher expressions such as `??` can select a static fallback.
-  `CallMember` passes the evaluated owner as the callee receiver, matching framework `astEvaluate`'s
-  `fn.apply(instance, ...)`; this matters for object-literal methods and state-service methods that read `this`.
+  Aurelia-admitted globals route through `evaluation/global-intrinsics.ts`: constants such as `Infinity`, pure calls
+  such as `parseInt(...)`, namespace calls such as `Math.max(...)`, and safe constructors such as `new RegExp(...)` can
+  close when their arguments close, while host-time or host-identity globals such as `Date()` and `Intl` remain explicit
+  runtime-open values. These globals are not observed; dependency collectors still ignore `AccessGlobal` and only visit
+  `CallGlobal` arguments, matching Aurelia framework behavior.
+  Value-converter reads use the compiler resource scope carried by `RuntimeBindingSourceValueEvaluationContext`: when
+  the converter resource, target class, input, and arguments close, the evaluator can instantiate the converter and call
+  `toView(...)` as a source-value reduction. Absent `withContext` is false, matching runtime-html's
+  `vc.withContext === true` branch through the shared value-converter call-surface helper; checker-visible unknown or
+  dynamic `withContext` stays open in source-value reduction because it changes the concrete call arity. Type-only surfaces can still model that case by projecting both runtime
+  branches. The value-converter source-value fixture proves both lanes: literal/static converter calls can publish
+  representative repeat locals, while dynamic `withContext: boolean` keeps the local type but does not publish a
+  representative static value.
+  `binding-source-value-expression-support.ts` is the source-value coverage map for the full Aurelia expression AST.
+  It distinguishes value-reduced forms from scope lookups, transparent lifecycle wrappers, owner-handled syntax, and
+  intentionally runtime-open forms such as assignments. Arrow callbacks are owner-handled by source-value call sites
+  that can supply the framework `Scope.fromParent` parameter scope. Keep Atlas expression coverage wired to
+  this matrix so a zero switch-case count can mean "not this lane's
+  owner" instead of "forgotten evaluator support."
+  `CallScope` and context-owned `CallMember` resolve the callee and Aurelia receiver together before entering the
+  static evaluator. The receiver is the modeled binding or override context selected by framework `Scope.getContext`;
+  view-model binding contexts can rehydrate an evaluator-local instance, while override/synthetic contexts stay explicit
+  binding-scope boundary objects with any closed static slots. Ordinary `CallMember` passes the evaluated owner as the
+  callee receiver, matching framework `astEvaluate`'s `fn.apply(instance, ...)`; this matters for object-literal methods
+  and state-service methods that read `this`. Context-owned `CallMember` keeps nullish owner and nullish callee separate
+  because `owner?.method()` and `owner.method?.()` protect different runtime operations.
   `New` expressions now close when the constructor reduces to an evaluator-local class. Constructor arguments are read
   from `NewExpression.args`; if a future parser path starts carrying them on the constructor target again, fix the
   expression parser rather than teaching this evaluator a second `new` dialect. Tagged templates close through
@@ -372,6 +435,11 @@ static type surfaces rather than hydrated runtime values.
   Binary `+` string concatenation preserves `BindingScope` boundary holes as `EvaluationStringPatternValue` when the
   other side is string-shaped, so consumers such as router resources can close authored static prefixes like
   `'/products/' + product.id` without inventing router-local expression evaluation.
+  State binding scopes can also supply initial store values on this path: when a `StateBinding` scope slot belongs to a
+  `StateStoreConfiguration` with an authored initial-state source, the evaluator reads that expression through the
+  shared `RuntimeBindingSourceEvaluationFrame` and then projects the requested store member. That keeps `& state`
+  static-value reads aligned with the same scope handoff used by TypeChecker data-flow, while action-driven later store
+  states remain outside this static reduction.
   Call expressions remain closed only for evaluator-local function values whose arguments reduce or can carry
   binding-scope boundary values; arbitrary host/userland runtime calls stay open with the binding-layer cause.
   Open reductions carry typed reason kinds such as runtime-only source value, missing static scope slot value, missing
@@ -390,11 +458,23 @@ static type surfaces rather than hydrated runtime values.
   how to reduce a specific binding-source expression in a specific scope. Template scope construction also spends this
   table when a child custom-element resource is analyzed after a parent has supplied an unambiguous bindable value. In
   that lane the value becomes an explicit child root `BindingContext` slot so TypeChecker overlays and ordinary scope
-  lookup can agree with runtime hydration instead of reading only the child class's default bindable initializer.
+  lookup can agree with runtime hydration instead of reading only the child class's default bindable initializer. Because
+  the table crosses from the parent resource into the child resource, it also carries the parent binding's strict/runtime
+  expression context; child analysis should not try to rediscover a parent binding through the child's
+  `RuntimeRenderingEmission`. Bound-controller source-value reads call back into
+  `RuntimeBindingSourceValueEvaluationContext.projectBindingSourceValueContext(...)` before evaluation, so parent
+  binding-behavior scope handoffs such as `& state` are spent even when the child property is read later through a
+  getter, composition value, or static source-value reduction. That same handoff carries the parent binding's
+  authored source address, strict-mode axis, compiler resource scope, and compiler-world container; a child-side
+  source-value read should not rederive provenance, resource visibility, `resolve(...)` visibility, or nullish runtime
+  behavior from the child controller.
 - `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
   and open seams between target-side products and data flow. Value-channel fields are generated from binding, target,
   observer, and checker facts, so they should not receive same-handle field provenance unless a future source product
-  gives an individual field a distinct authored span or contribution.
+  gives an individual field a distinct authored span or contribution. I18n `TranslationBinding` products remain
+  runtime expression bindings for source-expression, overlay, i18n lifecycle, and `t-params.bind` source-flow
+  consumers, but they do not enter the generic value-channel materializer; `TranslationBinding.create/bind` target
+  semantics are owned by the i18n grouping and issue lanes.
 - `binding-value-channel-drafts.ts` owns the per-binding draft frame for the value shape an observer/accessor or direct
   operation actually transports before publication. `RuntimeBindingValueChannelDraftFrame` caches the binding's lazy
   source-type reader and keeps the source-operation, direct target-operation, closed target-access, rejected
@@ -431,8 +511,10 @@ static type surfaces rather than hydrated runtime values.
   assignment no-ops, and runtime `astEvaluate` callable errors without reparsing or reclassifying the binding
   expression at the API boundary.
 - `product-details.ts` owns observation detail slots for those value-channel and data-flow products.
-- `checker-type-helpers.ts` owns shared TypeChecker helpers for string-literal domains, boolean-like lanes, and
-  collection/map element projection used by both value-channel and data-flow materializers.
+- `type-system/checker-collection-types.ts` owns shared TypeChecker helpers for string-literal domains and
+  collection/map element projection, while `type-system/checker-primitive-types.ts` owns broad primitive assignability
+  and callable-return primitive checks. Those callable checks spend `checker-signature-parameters.ts` when the
+  framework call site has a runtime argument shape, such as `matcher.bind` being invoked with two comparison values.
 - Class and style bindings are modeled as value channels too. `ClassAttributeAccessor` channels cover `class.bind` and
   class interpolations, `.class` bindings carry their toggled class-token domain, `StyleAttributeAccessor` channels
   cover `style.bind` and style interpolations, and `.style` bindings carry their targeted style-property domain.
@@ -550,6 +632,12 @@ and its child scope. That closes the common `option repeat.for="..." value.bind=
 without scanning source text. Deeper cases where a nested template controller produces descendant option nodes not
 owned by the parent select's authored children remain recursive rendering topology pressure.
 
+Listener value channels mirror framework `ListenerBinding.callSource(event)`: the binding expression is evaluated, and
+if the result is a function Aurelia invokes that function with the DOM event. Event-handler invocation typing therefore
+uses the same DOM event-map vocabulary as `$event` scope construction and generated overlay helpers, plus the shared
+checker signature substrate for runtime-argument overload narrowing. Do not unwrap listener handler references through first-signature
+`CheckerTypeShape.callReturnType`; checker-backed callable values need the runtime event argument before publication.
+
 Proxy observation is part of the same observation circuit as the ordinary binding lane above. Framework
 `ProxyObservable` wraps plain objects, arrays, maps, and sets so watcher/computed/trackable-method evaluation and nested
 collection reads can keep feeding dependency reads into the active connectable. Its object, array, and collection proxy
@@ -585,6 +673,61 @@ holes too: runtime-html binds each part as an `InterpolationPartBinding`, and ea
 expression before evaluation. Binding-behavior arguments are not collected as observed dependencies because Aurelia
 evaluates them from `astBind(...)` with no active connectable; value-converter arguments still participate because
 `astEvaluate(...)` evaluates them during source reads.
+`RuntimeBindingSourceExpressionContextProjector` is the binding-owned handoff from rendered binding products into
+expression consumers. It combines `RuntimeInstructionScopeLookup`, binding-behavior source-scope projection, and the
+rendering controller's `strict` flag before value channels, data-flow, source-value consumers, or router/composition
+materializers ask what a binding source means. This keeps select/checked/template-controller value-channel
+source-shape reads aligned with data-flow source typing and writeability, and it also keeps static source-value reads
+from accidentally evaluating a binding against the raw instruction scope after `& state` has called
+`binding.useScope(...)`. Consumers should use this projector before constructing `CheckerExpressionTypeEvaluationContext`
+or `RuntimeBindingSourceValueEvaluationContext` for a runtime binding source; otherwise public rows can silently
+disagree about store-backed scopes, recursive render-context scopes, or strict/non-strict nullish evaluation mode.
+When a caller already owns the exact source scope and lifecycle axes, use the shared lifecycle projection helper rather
+than reimplementing the `AstBindThenEvaluate`/`AstEvaluateOnly` switch. Bound-controller child root slots, ordinary
+runtime bindings, and source-value requests should all spend the same helper before entering checker or evaluator code.
+`sourceValueContextForRuntimeBindingSourceExpressionProjection(...)` and
+`projectRuntimeBindingSourceValueContextInScope(...)` live with the source-value context because that context owns DI
+visibility and bound-controller recursion state; keep the source-expression projector free of source-value evaluator
+ownership. The source-expression projection carries the same `RuntimeBindingExpressionScopeProjector` that created it,
+so source-value consumers do not re-supply a potentially different lifecycle projector after the scope/strictness
+handoff has already been proven. When a template/controller caller already owns the exact source scope, use
+`projectRuntimeBindingSourceValueContextInScope(...)` even when the source is not owned by a rendered runtime binding;
+the helper owns the binding-present projection and the known-scope fallback so callers do not reassemble
+binding-behavior lifecycle, strict mode, resource scope, and source-value recursion state locally. Use
+`RuntimeBindingSourceValueEvaluationContext.knownScope(...)` directly only when a consumer is deliberately outside the
+runtime-binding projection lane, such as a router resource with no binding-owned source. Raw construction is
+intentionally kept inside the context class so every source-value entry point names which lifecycle facts it owns. The
+context carries that lifecycle explicitly; do not use a missing binding-expression projector as a synonym for
+evaluate-only behavior, because nested bound-controller or composition reads may still need the projector while the
+current source expression must ignore bind-time behavior effects.
+The projector also carries the binding-behavior lifecycle policy. Most runtime bindings evaluate source expressions
+after `astBind(...)`, while i18n dynamic translation keys are evaluate-only and `t-params.bind` parameter bindings use
+the normal bind-time path. Keep that distinction here instead of adding i18n or overlay-local binding-behavior rules.
+That source-expression visibility does not make i18n translation keys ordinary value-channel or data-flow owners:
+generic binding flow starts from accessor/observer/direct-operation products, while i18n translation target writes are
+published by the i18n-specific lifecycle materializers. `t-params.bind` is the exception on the source side: it
+publishes source-only data-flow so TypeChecker/source-scope facts remain queryable without pretending there is a generic
+target accessor or observer channel.
+Template TypeScript overlays use the same projector for source-scope-changing binding behaviors, but only around the
+copied binding source expression. The child view created by a template controller keeps the framework parent scope that
+created the view; the state binding behavior changes the binding's source evaluation scope, not the synthetic view's
+ancestry.
+Observed-dependency collection also enters through this projector. `projectSourceExpressions(...)` preserves the same
+binding-behavior lifecycle choice while splitting interpolation holes and evaluating trackable method calls in the
+projected source scope. This keeps binding-owned dependency rows aligned with data-flow and overlay rows for
+`& state`, i18n evaluate-only keys, recursive render-context scopes, and strict/non-strict nullish policy.
+Member-source and collection-owner projection for those dependency rows spend the same
+`CheckerExpressionTypeEvaluationContext` produced from the source projection, so strict/nullish policy,
+source address, and binding-behavior lifecycle do not diverge after dependency collection has already selected the
+right source expression. `observed-dependency-member-source.ts` owns that best-known member/source projection for both
+checker-symbol drafts and binding-expression drafts; binding data-flow should call
+`observedMemberSourceForBindingDependency(...)` rather than keeping a private scope/member walker. Source
+write-capability checks and value-converter `fromView` writeback also spend that same context; each converter method is
+evaluated from a converter-expression child context instead of a locally reassembled scope/local/source/runtime bundle.
+Do not pass parallel expression/scope/source/runtime parameters into data-flow assignment checks when the binding-source
+projection already owns the runtime evaluator mode. The trackable-method dependency collector receives that same
+context too, so `@computed`/`@astTrack` method-owner reads cannot drift away from the source expression that the
+connectable pass selected.
 `RuntimeWatcherObservedDependency` is the sibling execution-product boundary for watcher reads: expression watchers reuse
 this connectable collector, while computed watchers use the first `ProxyObservable.collectObservedDependencyDrafts` pass over
 wrapped dependency function bodies, local aliases, and object destructuring. That proxy pass uses TypeChecker receiver
@@ -594,7 +737,9 @@ destructured values, and local aliases become proxy roots only when the projecte
 `ProxyObservable.canWrap(...)`; primitive strings/numbers/booleans and function values still spend their owner collection
 or property read without becoming downstream proxy carriers. `for...of` loops over arrays/maps/sets now publish iterator
 collection rows and treat proxy-wrappable loop variables as wrapped roots; explicit `keys()`, `values()`, and
-`entries()` iterator calls remain distinct from the bare `Symbol.iterator` path. Wrapped result chains are modeled for
+`entries()` iterator calls remain distinct from the bare `Symbol.iterator` path. The bare iterator method name lives in
+`runtime-collection-method-semantics.ts` with the other ProxyObservable method policy so for-of and spread coverage do
+not depend on a proxy-collector-local string. Wrapped result chains are modeled for
 framework-wrapped calls such as `find`, `filter`, `flatMap`, `slice`, `map.get`, `set`, and `add`, so later reads like
 `items.slice().map(...).join(...)` still spend the intermediate collection reads. Non-mutating collection methods such
 as `every`, `findIndex`, `has`, `flatMap`, and `slice` are covered by the proxy contract; mutating methods that the

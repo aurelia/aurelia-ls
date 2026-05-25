@@ -4349,30 +4349,36 @@ function semanticRuntimeTemplateExpressionTypeCacheSummary(
     entries: 0,
     hits: 0,
     misses: 0,
+    stale: 0,
     writes: 0,
     entriesByBucket: new Map<string, number>(),
     hitsByBucket: new Map<string, number>(),
     missesByBucket: new Map<string, number>(),
+    staleByBucket: new Map<string, number>(),
     writesByBucket: new Map<string, number>(),
   };
   for (const cache of caches) {
     aggregate.entries += cache.entries;
     aggregate.hits += cache.hits;
     aggregate.misses += cache.misses;
+    aggregate.stale += cache.stale;
     aggregate.writes += cache.writes;
     addCountRecordToMap(aggregate.entriesByBucket, cache.entriesByBucket);
     addCountRecordToMap(aggregate.hitsByBucket, cache.hitsByBucket);
     addCountRecordToMap(aggregate.missesByBucket, cache.missesByBucket);
+    addCountRecordToMap(aggregate.staleByBucket, cache.staleByBucket);
     addCountRecordToMap(aggregate.writesByBucket, cache.writesByBucket);
   }
   return {
     entries: aggregate.entries,
     hits: aggregate.hits,
     misses: aggregate.misses,
+    stale: aggregate.stale,
     writes: aggregate.writes,
     entriesByBucket: countMapToRecord(aggregate.entriesByBucket),
     hitsByBucket: countMapToRecord(aggregate.hitsByBucket),
     missesByBucket: countMapToRecord(aggregate.missesByBucket),
+    staleByBucket: countMapToRecord(aggregate.staleByBucket),
     writesByBucket: countMapToRecord(aggregate.writesByBucket),
   };
 }

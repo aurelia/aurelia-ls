@@ -16,6 +16,9 @@ import {
   checkerTypeReferenceAssignable,
 } from '../type-system/checker-type-assignability.js';
 import {
+  checkerBackedUnionTypeForReferences,
+} from '../type-system/checker-type-union.js';
+import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
 import {
@@ -27,6 +30,14 @@ import {
   type CheckerTypeShape,
   CheckerTypeProjectionOrigin,
 } from '../type-system/type-shape.js';
+import {
+  commonTypeReference,
+} from '../type-system/expression-type-synthesis.js';
+import {
+  checkerCallableContextSignatures,
+  checkerSignatureCandidateBasis,
+  checkerSignatureParameterType,
+} from '../type-system/checker-signature-parameters.js';
 import type { RuntimeBinding } from './runtime-binding.js';
 import {
   CompositionActivateMethodKind,
@@ -112,8 +123,8 @@ export function activationModelHandoffForType(
       'Resolved component activate member had no readable value type.',
     );
   }
-  const signature = activateType.getCallSignatures()[0] ?? null;
-  if (signature == null) {
+  const signatures = checkerCallableContextSignatures(targetCarrier.checker, activateType);
+  if (signatures.length === 0) {
     return openActivationHandoff(
       CompositionActivateMethodKind.Open,
       CompositionActivationModelHandoffKind.ActivationParameterOpen,
@@ -122,8 +133,24 @@ export function activationModelHandoffForType(
     );
   }
 
-  const parameter = signature.getParameters()[0] ?? null;
-  if (parameter == null) {
+  const parameterProjection = activationParameterTypeReference(
+    store,
+    targetCarrier.checker,
+    signatures,
+    localKey,
+    sourceAddressHandle,
+    ownerIdentityHandle,
+    location,
+  );
+  if (parameterProjection.kind === 'open') {
+    return openActivationHandoff(
+      CompositionActivateMethodKind.Present,
+      CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      model.sourceType,
+      parameterProjection.openReason,
+    );
+  }
+  if (parameterProjection.kind === 'parameterless') {
     return new CompositionActivationModelHandoff(
       CompositionActivateMethodKind.Present,
       CompositionActivationModelHandoffKind.ParameterlessActivate,
@@ -133,31 +160,7 @@ export function activationModelHandoffForType(
       null,
     );
   }
-
-  const parameterLocation = parameter.valueDeclaration
-    ?? parameter.declarations?.[0]
-    ?? location;
-  const parameterType = checkerSymbolValueType(targetCarrier.checker, parameter, parameterLocation);
-  if (parameterType == null) {
-    return openActivationHandoff(
-      CompositionActivateMethodKind.Present,
-      CompositionActivationModelHandoffKind.ActivationParameterOpen,
-      model.sourceType,
-      'Resolved component activate parameter had no readable value type.',
-    );
-  }
-  const parameterShape = new CheckerTypeProjector(store).ensureProjection({
-    localKey: `${localKey}:activate-parameter`,
-    checker: targetCarrier.checker,
-    type: parameterType,
-    origin: CheckerTypeProjectionOrigin.TypeChecker,
-    sourceNode: parameterLocation,
-    sourceAddressHandle,
-    ownerIdentityHandle,
-    display: targetCarrier.checker.typeToString(parameterType),
-    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
-  } satisfies CheckerTypeProjectionRequest);
-  const parameterReference = parameterShape.toReference();
+  const parameterReference = parameterProjection.parameterType;
 
   if (model.binding == null && model.value == null) {
     return new CompositionActivationModelHandoff(
@@ -195,6 +198,121 @@ export function activationModelHandoffForType(
       ? 'AuCompose model and activate parameter types did not share enough checker identity for assignability.'
       : null,
   );
+}
+
+type ActivationParameterProjection =
+  | {
+    readonly kind: 'parameterless';
+  }
+  | {
+    readonly kind: 'parameter';
+    readonly parameterType: CheckerTypeReference;
+  }
+  | {
+    readonly kind: 'open';
+    readonly openReason: string;
+  };
+
+function activationParameterTypeReference(
+  store: KernelStore,
+  checker: ts.TypeChecker,
+  signatures: readonly ts.Signature[],
+  localKey: string,
+  sourceAddressHandle: AddressHandle | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  fallbackLocation: ts.Node,
+): ActivationParameterProjection {
+  const candidates = checkerSignatureCandidateBasis(signatures, 1);
+  const parameterReferences = candidates
+    .map((candidate) => activateParameterReference(
+      store,
+      checker,
+      candidate.signature,
+      candidate.signatureIndex,
+      localKey,
+      sourceAddressHandle,
+      ownerIdentityHandle,
+      fallbackLocation,
+    ))
+    .filter((reference): reference is CheckerTypeReference => reference != null);
+
+  if (parameterReferences.length === 0) {
+    return candidates.every((candidate) => candidate.signature.getParameters().length === 0)
+      ? { kind: 'parameterless' }
+      : {
+        kind: 'open',
+        openReason: 'Resolved component activate parameter had no readable value type.',
+      };
+  }
+  if (parameterReferences.length !== candidates.length) {
+    return {
+      kind: 'open',
+      openReason: 'Resolved component activate overloads were only partially readable.',
+    };
+  }
+
+  const common = commonTypeReference(parameterReferences, parameterReferences.length);
+  if (common != null) {
+    return {
+      kind: 'parameter',
+      parameterType: common,
+    };
+  }
+
+  const checkerUnion = checkerBackedUnionTypeForReferences(store, parameterReferences);
+  if (checkerUnion == null) {
+    return {
+      kind: 'open',
+      openReason: 'Resolved component activate overload parameters did not share enough checker identity for assignability.',
+    };
+  }
+
+  const unionReference = new CheckerTypeProjector(store).ensureProjection({
+    localKey: `${localKey}:activate-parameter-union`,
+    checker: checkerUnion.checker,
+    type: checkerUnion.type,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: fallbackLocation,
+    sourceAddressHandle,
+    ownerIdentityHandle,
+    display: checkerUnion.checker.typeToString(checkerUnion.type),
+    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+  } satisfies CheckerTypeProjectionRequest).toReference();
+  return {
+    kind: 'parameter',
+    parameterType: unionReference,
+  };
+}
+
+function activateParameterReference(
+  store: KernelStore,
+  checker: ts.TypeChecker,
+  signature: ts.Signature,
+  signatureIndex: number,
+  localKey: string,
+  sourceAddressHandle: AddressHandle | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  fallbackLocation: ts.Node,
+): CheckerTypeReference | null {
+  const parameter = checkerSignatureParameterType(checker, signature, 0);
+  if (parameter == null) {
+    return null;
+  }
+  const parameterLocation = parameter.symbol.valueDeclaration
+    ?? parameter.symbol.declarations?.[0]
+    ?? fallbackLocation;
+  const parameterShape = new CheckerTypeProjector(store).ensureProjection({
+    localKey: `${localKey}:activate-parameter:${signatureIndex}`,
+    checker,
+    type: parameter.type,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: parameterLocation,
+    sourceAddressHandle,
+    ownerIdentityHandle,
+    display: checker.typeToString(parameter.type),
+    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+  } satisfies CheckerTypeProjectionRequest);
+  return parameterShape.toReference();
 }
 
 function activationTargetForCarrier(

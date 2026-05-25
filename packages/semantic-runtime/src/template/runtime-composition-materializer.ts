@@ -50,13 +50,24 @@ import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
 import {
-  RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
 import {
+  RuntimeBindingSourceValueEvaluationKind,
+} from '../observation/binding-source-value-evaluation.js';
+import {
+  sourceValueContextForRuntimeBindingSourceExpressionProjection,
+} from '../observation/binding-source-value-evaluation-context.js';
+import {
   instructionScopeLookup,
-  type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
+import {
+  RuntimeBindingExpressionScopeProjector,
+} from '../observation/runtime-binding-expression-scope.js';
+import {
+  RuntimeBindingSourceExpressionContextProjector,
+  RuntimeBindingSourceExpressionProjectionKind,
+} from '../observation/runtime-binding-source-expression-context.js';
 import type { RuntimeBindingDataFlowEmission } from '../observation/binding-data-flow-materializer.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
@@ -69,6 +80,7 @@ import {
 import {
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   TemplateProductDetails,
 } from './product-details.js';
@@ -109,6 +121,7 @@ import {
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
+import type { TemplateResourceScope } from './compiler-world.js';
 
 export class RuntimeCompositionMaterializationRequest {
   constructor(
@@ -117,8 +130,10 @@ export class RuntimeCompositionMaterializationRequest {
     readonly controllerBind: RuntimeControllerBindEmission,
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
     readonly scopes: TemplateScopeConstructionEmission,
+    readonly expressionWorld: CheckerExpressionTypeWorld,
     readonly projectContext: TemplateRuntimeAnalysisProjectContext,
     readonly resourceDefinitions: ResourceDefinitionIndex | null,
+    readonly resourceScope: TemplateResourceScope | null,
     readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
   ) {}
 }
@@ -223,6 +238,12 @@ export class RuntimeCompositionMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
     const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
+    const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
+    const sourceExpressionContexts = new RuntimeBindingSourceExpressionContextProjector(
+      input.runtimeRendering,
+      scopesByInstruction,
+      bindingExpressionScopes,
+    );
 
     input.runtimeRendering.controllers.forEach((controller, index) => {
       if (!isAuComposeController(controller)) {
@@ -231,12 +252,12 @@ export class RuntimeCompositionMaterializer {
       const local = `${input.localKey}:composition:${index}`;
       const bindings = auComposeBindings(input.controllerBind, controller, bindingsByProduct);
       const staticInputs = staticAuComposeInputs(this.store, controller);
-      const template = this.evaluateBinding(input, bindings.template, scopesByInstruction);
-      const component = this.evaluateBinding(input, bindings.component, scopesByInstruction);
-      const model = this.evaluateModelInput(input, bindings.model, scopesByInstruction, staticInputs.model);
-      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, scopesByInstruction);
-      const tag = this.evaluateBinding(input, bindings.tag, scopesByInstruction);
-      const flushMode = this.evaluateBinding(input, bindings.flushMode, scopesByInstruction);
+      const template = this.evaluateBinding(input, bindings.template, sourceExpressionContexts, bindingExpressionScopes);
+      const component = this.evaluateBinding(input, bindings.component, sourceExpressionContexts, bindingExpressionScopes);
+      const model = this.evaluateModelInput(input, bindings.model, sourceExpressionContexts, bindingExpressionScopes, staticInputs.model);
+      const scopeBehavior = this.evaluateBinding(input, bindings.scopeBehavior, sourceExpressionContexts, bindingExpressionScopes);
+      const tag = this.evaluateBinding(input, bindings.tag, sourceExpressionContexts, bindingExpressionScopes);
+      const flushMode = this.evaluateBinding(input, bindings.flushMode, sourceExpressionContexts, bindingExpressionScopes);
       const resolution = this.resolveComponent(local, input, controller, component, model, staticInputs);
       const context = this.createContext(local, controller, bindings, template, component, model, scopeBehavior, tag, flushMode, staticInputs, source.provenanceHandle);
       const controllerHandoff = this.materializeComposedChildControllers(
@@ -467,7 +488,8 @@ export class RuntimeCompositionMaterializer {
   private evaluateBinding(
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
-    scopesByInstruction: RuntimeInstructionScopeLookup,
+    sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
+    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
   ): EvaluatedBinding {
     if (!(binding instanceof PropertyBinding)) {
       return {
@@ -480,17 +502,36 @@ export class RuntimeCompositionMaterializer {
     }
     const flow = input.bindingDataFlow.readDataFlowsForBinding(binding.productHandle)[0] ?? null;
     const expression = bindingExpressionAstForProduct(this.store, binding.expressionProductHandle);
-    const scope = scopesByInstruction.scopeForBinding(input.runtimeRendering, binding);
-    if (expression == null || scope == null || input.sourceValueEvaluator == null) {
+    if (expression == null || input.sourceValueEvaluator == null) {
       return {
         binding,
         value: null,
         sourceType: flow?.sourceType ?? null,
-        openReason: 'AuCompose binding source could not be evaluated because expression, scope, or evaluator state is unavailable.',
+        openReason: 'AuCompose binding source could not be evaluated because expression or evaluator state is unavailable.',
         openReasonKinds: [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
       };
     }
-    const evaluated = input.sourceValueEvaluator.evaluate(expression, scope);
+    const projection = sourceExpressionContexts.projectSource({
+      binding,
+      expression,
+      localKey: `${input.localKey}:runtime-composition:${binding.productHandle}:source-value`,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return {
+        binding,
+        value: null,
+        sourceType: flow?.sourceType ?? null,
+        openReason: projection.openReason,
+        openReasonKinds: [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+      };
+    }
+    const evaluated = input.sourceValueEvaluator.evaluate(
+      sourceValueContextForRuntimeBindingSourceExpressionProjection(
+        projection,
+        undefined,
+        input.resourceScope,
+      ),
+    );
     return {
       binding,
       value: evaluated.value,
@@ -505,11 +546,12 @@ export class RuntimeCompositionMaterializer {
   private evaluateModelInput(
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
-    scopesByInstruction: RuntimeInstructionScopeLookup,
+    sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector,
+    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
     staticModel: string | null,
   ): EvaluatedBinding {
     if (binding != null || staticModel == null) {
-      return this.evaluateBinding(input, binding, scopesByInstruction);
+      return this.evaluateBinding(input, binding, sourceExpressionContexts, bindingExpressionScopes);
     }
     return {
       binding: null,

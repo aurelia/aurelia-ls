@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import type {
   BinaryExpression,
+  ExpressionPrimitiveLiteralValue,
   ExpressionAstNode,
 } from '../expression/ast.js';
 import {
@@ -30,10 +31,18 @@ import {
 } from './type-shape.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
 import { checkerNullishType } from './checker-related-types.js';
+import {
+  checkerPrimitiveLiteralType,
+  checkerPrimitiveType,
+  type CheckerPrimitiveName,
+} from './checker-primitive-types.js';
 import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembers } from './checker-type-member-surface.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
+import { checkerRawTypeAssignable } from './checker-type-assignability.js';
 import { checkerUnionTypeOrNever as checkerUnionType } from './checker-type-union.js';
+import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
+import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 
 export const enum CheckerExpressionScopeNarrowingPolarity {
   Truthy = 'truthy',
@@ -168,7 +177,22 @@ export class CheckerExpressionScopeNarrower {
       );
     }
 
-    return null;
+    const typeofNarrowing = this.narrowTypeofEquality(expression, scope, polarity, localKey, sourceAddressHandle);
+    if (typeofNarrowing != null) {
+      return typeofNarrowing;
+    }
+
+    const propertyPresence = this.narrowPropertyPresence(expression, scope, polarity, localKey, sourceAddressHandle);
+    if (propertyPresence != null) {
+      return propertyPresence;
+    }
+
+    const instance = this.narrowInstanceof(expression, scope, polarity, localKey, sourceAddressHandle);
+    if (instance != null) {
+      return instance;
+    }
+
+    return this.narrowStrictLiteralEquality(expression, scope, polarity, localKey, sourceAddressHandle);
   }
 
   private narrowAccessScope(
@@ -248,15 +272,331 @@ export class CheckerExpressionScopeNarrower {
       return {
         lookupKind: lookup.lookupKind,
         currentType: memberType,
-        narrowSlot: (targetType, sourceAddressHandle) => bindingContextSlotWithMemberType(
+        narrowSlot: (targetType, sourceAddressHandle) => this.bindingContextSlotWithMemberType(
           slot,
           expression.name.name,
           targetType,
+          `${localKey}:slot:${slot.name}:member:${expression.name.name}:owner-narrow`,
           sourceAddressHandle,
         ),
       };
     }
     return null;
+  }
+
+  private narrowStrictLiteralEquality(
+    expression: BinaryExpression,
+    scope: BindingScope,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    const comparison = strictLiteralEqualityComparison(expression);
+    if (comparison == null) {
+      return null;
+    }
+    const target = this.narrowableEqualityTarget(comparison.expression, scope, `${localKey}:equality-target`);
+    if (target == null) {
+      return null;
+    }
+    const literalType = this.literalTypeReference(
+      target.currentType,
+      comparison.literal,
+      `${localKey}:literal-equality:${String(comparison.literal)}`,
+      sourceAddressHandle,
+    );
+    if (literalType == null) {
+      return null;
+    }
+    const equalityBranch = expression.operation === '==='
+      ? CheckerExpressionScopeNarrowingPolarity.Truthy
+      : CheckerExpressionScopeNarrowingPolarity.Falsy;
+    const includeLiteral = polarity === equalityBranch;
+    const narrowedType = this.equalityDomainNarrowedType(
+      target.currentType,
+      includeLiteral ? [literalType] : [],
+      includeLiteral ? [] : [literalType],
+      `${localKey}:literal-equality-domain`,
+      sourceAddressHandle,
+    );
+    if (narrowedType == null || sameCheckerTypeReference(narrowedType, target.currentType)) {
+      return null;
+    }
+    const narrowedSlot = target.narrowSlot(narrowedType, sourceAddressHandle);
+    return target.lookupKind === BindingScopeLookupKind.OverrideContext
+      ? new CheckerExpressionScopeNarrowingResult([], [narrowedSlot])
+      : new CheckerExpressionScopeNarrowingResult([narrowedSlot], []);
+  }
+
+  private narrowTypeofEquality(
+    expression: BinaryExpression,
+    scope: BindingScope,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    const comparison = typeofEqualityComparison(expression);
+    if (comparison == null) {
+      return null;
+    }
+    const target = this.narrowableEqualityTarget(comparison.expression, scope, `${localKey}:typeof-target`);
+    if (target == null) {
+      return null;
+    }
+    const type = this.primitiveTypeReference(
+      target.currentType,
+      comparison.primitive,
+      `${localKey}:typeof:${comparison.primitive}`,
+      sourceAddressHandle,
+    );
+    if (type == null) {
+      return null;
+    }
+    const equalityBranch = expression.operation === '==='
+      ? CheckerExpressionScopeNarrowingPolarity.Truthy
+      : CheckerExpressionScopeNarrowingPolarity.Falsy;
+    const includeType = polarity === equalityBranch;
+    const narrowedType = this.equalityDomainNarrowedType(
+      target.currentType,
+      includeType ? [type] : [],
+      includeType ? [] : [type],
+      `${localKey}:typeof-domain`,
+      sourceAddressHandle,
+    );
+    if (narrowedType == null || sameCheckerTypeReference(narrowedType, target.currentType)) {
+      return null;
+    }
+    const narrowedSlot = target.narrowSlot(narrowedType, sourceAddressHandle);
+    return target.lookupKind === BindingScopeLookupKind.OverrideContext
+      ? new CheckerExpressionScopeNarrowingResult([], [narrowedSlot])
+      : new CheckerExpressionScopeNarrowingResult([narrowedSlot], []);
+  }
+
+  private narrowPropertyPresence(
+    expression: BinaryExpression,
+    scope: BindingScope,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    const comparison = propertyPresenceComparison(expression);
+    if (comparison == null) {
+      return null;
+    }
+    const target = this.narrowableEqualityTarget(comparison.expression, scope, `${localKey}:property-presence-target`);
+    if (target == null) {
+      return null;
+    }
+    const present = polarity === CheckerExpressionScopeNarrowingPolarity.Truthy;
+    const narrowedType = this.propertyPresenceNarrowedType(
+      target.currentType,
+      comparison.propertyName,
+      present,
+      `${localKey}:property-presence:${comparison.propertyName}`,
+      sourceAddressHandle,
+    );
+    if (narrowedType == null || sameCheckerTypeReference(narrowedType, target.currentType)) {
+      return null;
+    }
+    const narrowedSlot = target.narrowSlot(narrowedType, sourceAddressHandle);
+    return target.lookupKind === BindingScopeLookupKind.OverrideContext
+      ? new CheckerExpressionScopeNarrowingResult([], [narrowedSlot])
+      : new CheckerExpressionScopeNarrowingResult([narrowedSlot], []);
+  }
+
+  private narrowInstanceof(
+    expression: BinaryExpression,
+    scope: BindingScope,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    const comparison = instanceofComparison(expression);
+    if (comparison == null) {
+      return null;
+    }
+    const target = this.narrowableEqualityTarget(comparison.expression, scope, `${localKey}:instanceof-target`);
+    const constructorTarget = this.narrowableEqualityTarget(
+      comparison.constructorExpression,
+      scope,
+      `${localKey}:instanceof-constructor`,
+    );
+    if (target == null || constructorTarget == null) {
+      return null;
+    }
+    const instanceType = this.constructedInstanceTypeReference(
+      constructorTarget.currentType,
+      `${localKey}:instanceof-instance`,
+      sourceAddressHandle,
+    );
+    if (instanceType == null) {
+      return null;
+    }
+
+    const includeInstance = polarity === CheckerExpressionScopeNarrowingPolarity.Truthy;
+    const narrowedType = this.equalityDomainNarrowedType(
+      target.currentType,
+      includeInstance ? [instanceType] : [],
+      includeInstance ? [] : [instanceType],
+      `${localKey}:instanceof-domain`,
+      sourceAddressHandle,
+    );
+    if (narrowedType == null || sameCheckerTypeReference(narrowedType, target.currentType)) {
+      return null;
+    }
+    const narrowedSlot = target.narrowSlot(narrowedType, sourceAddressHandle);
+    return target.lookupKind === BindingScopeLookupKind.OverrideContext
+      ? new CheckerExpressionScopeNarrowingResult([], [narrowedSlot])
+      : new CheckerExpressionScopeNarrowingResult([narrowedSlot], []);
+  }
+
+  private literalTypeReference(
+    targetType: CheckerTypeReference,
+    value: ExpressionPrimitiveLiteralValue,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(targetType);
+    if (carrier == null) {
+      return null;
+    }
+    return this.projectType(
+      carrier,
+      checkerPrimitiveLiteralType(carrier.checker, value),
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  private constructedInstanceTypeReference(
+    constructorType: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(constructorType);
+    if (carrier == null) {
+      return null;
+    }
+    const constructed = checkerConstructReturnTypeUnion(carrier.checker, carrier.type);
+    if (constructed == null) {
+      return null;
+    }
+    return this.projectType(
+      carrier,
+      constructed,
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  private propertyPresenceNarrowedType(
+    source: CheckerTypeReference,
+    propertyName: string,
+    present: boolean,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(source);
+    if (carrier == null) {
+      return null;
+    }
+    const parts = unionConstituents(carrier.type);
+    const selected = parts.filter((part) =>
+      (checkerPropertyValueType(carrier.checker, part, propertyName, carrier.declarations[0] ?? null) != null) === present
+    );
+    if (selected.length === 0 || selected.length === parts.length) {
+      return null;
+    }
+    return this.projectType(
+      carrier,
+      checkerUnionType(carrier.checker, selected),
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  private primitiveTypeReference(
+    targetType: CheckerTypeReference,
+    primitive: CheckerPrimitiveName,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(targetType);
+    if (carrier == null) {
+      return null;
+    }
+    return this.projectType(
+      carrier,
+      checkerPrimitiveType(carrier.checker, primitive),
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  private bindingContextSlotWithMemberType(
+    slot: BindingContextSlot,
+    memberName: string,
+    memberType: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): BindingContextSlotDraft {
+    const ownerReference = slot.targetType == null
+      ? null
+      : this.ensureProjectedSlotType(slot, slot.targetType, `${localKey}:owner`);
+    const ownerType = this.ownerTypeNarrowedByMemberType(
+      ownerReference,
+      memberName,
+      memberType,
+      localKey,
+      sourceAddressHandle,
+    ) ?? ownerReference ?? slot.targetType;
+    const memberRefinement = new BindingContextSlotMemberType(memberName, memberType, sourceAddressHandle);
+    return new BindingContextSlotDraft(
+      slot.name,
+      slot.targetIdentityHandle,
+      slot.targetProductHandle,
+      ownerType,
+      slot.sourceAddressHandle,
+      slot.fieldProvenance,
+      slot.staticValue,
+      [
+        ...slot.memberTypes.filter((candidate) => candidate.name !== memberName),
+        memberRefinement,
+      ],
+    );
+  }
+
+  private ownerTypeNarrowedByMemberType(
+    ownerReference: CheckerTypeReference | null,
+    memberName: string,
+    memberType: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    if (ownerReference == null) {
+      return null;
+    }
+    const ownerCarrier = this.carrierForReference(ownerReference);
+    const memberCarrier = this.carrierForReference(memberType);
+    if (ownerCarrier == null || memberCarrier == null || ownerCarrier.checker !== memberCarrier.checker) {
+      return null;
+    }
+
+    const ownerParts = unionConstituents(ownerCarrier.type);
+    const selected = ownerParts.filter((part) => {
+      const propertyType = checkerPropertyValueType(ownerCarrier.checker, part, memberName, ownerCarrier.declarations[0] ?? null);
+      return propertyType != null && typeOverlaps(ownerCarrier.checker, propertyType, memberCarrier.type);
+    });
+    if (selected.length === 0 || selected.length === ownerParts.length) {
+      return null;
+    }
+
+    return this.projectType(
+      ownerCarrier,
+      checkerUnionType(ownerCarrier.checker, selected),
+      localKey,
+      sourceAddressHandle,
+    );
   }
 
   private ensureProjectedSlotType(
@@ -307,7 +647,19 @@ export class CheckerExpressionScopeNarrower {
     const member = readOrProjectCheckerTypeMembers(this.store, ownerShape, `${localKey}:members`)
       .find((candidate) => candidate.name === memberName) ?? null;
     if (member?.valueType != null) {
-      return member.valueType;
+      if (member.valueType.productHandle != null || member.carrier?.valueType == null) {
+        return member.valueType;
+      }
+      return this.projector.ensureProjection({
+        localKey: `${localKey}:projected-member-type`,
+        checker: member.carrier.checker,
+        type: member.carrier.valueType,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
+        sourceNode: member.carrier.declarations[0] ?? null,
+        sourceAddressHandle: member.sourceAddressHandle ?? slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+        ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
+        display: member.carrier.checker.typeToString(member.carrier.valueType),
+      } satisfies CheckerTypeProjectionRequest).toReference();
     }
     if (member?.carrier?.valueType == null) {
       return null;
@@ -577,6 +929,90 @@ function nullishComparisonNarrowing(
   };
 }
 
+function strictLiteralEqualityComparison(
+  expression: BinaryExpression,
+): { readonly expression: ExpressionAstNode; readonly literal: ExpressionPrimitiveLiteralValue } | null {
+  if (expression.operation !== '===' && expression.operation !== '!==') {
+    return null;
+  }
+  if (expression.left.$kind === 'PrimitiveLiteral') {
+    return {
+      expression: expression.right,
+      literal: expression.left.value,
+    };
+  }
+  if (expression.right.$kind === 'PrimitiveLiteral') {
+    return {
+      expression: expression.left,
+      literal: expression.right.value,
+    };
+  }
+  return null;
+}
+
+function typeofEqualityComparison(
+  expression: BinaryExpression,
+): { readonly expression: ExpressionAstNode; readonly primitive: CheckerPrimitiveName } | null {
+  if (expression.operation !== '===' && expression.operation !== '!==') {
+    return null;
+  }
+  const left = typeofOperand(expression.left);
+  const right = typeofOperand(expression.right);
+  if (left != null && expression.right.$kind === 'PrimitiveLiteral') {
+    const primitive = typeofPrimitiveName(expression.right.value);
+    return primitive == null ? null : { expression: left, primitive };
+  }
+  if (right != null && expression.left.$kind === 'PrimitiveLiteral') {
+    const primitive = typeofPrimitiveName(expression.left.value);
+    return primitive == null ? null : { expression: right, primitive };
+  }
+  return null;
+}
+
+function typeofOperand(expression: ExpressionAstNode): ExpressionAstNode | null {
+  return expression.$kind === 'Unary' && expression.operation === 'typeof'
+    ? expression.expression
+    : null;
+}
+
+function typeofPrimitiveName(value: ExpressionPrimitiveLiteralValue): CheckerPrimitiveName | null {
+  switch (value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'undefined':
+      return value;
+    default:
+      return null;
+  }
+}
+
+function propertyPresenceComparison(
+  expression: BinaryExpression,
+): { readonly expression: ExpressionAstNode; readonly propertyName: string } | null {
+  if (expression.operation !== 'in' || expression.left.$kind !== 'PrimitiveLiteral') {
+    return null;
+  }
+  const value = expression.left.value;
+  return typeof value === 'string' || typeof value === 'number'
+    ? {
+      expression: expression.right,
+      propertyName: String(value),
+    }
+    : null;
+}
+
+function instanceofComparison(
+  expression: BinaryExpression,
+): { readonly expression: ExpressionAstNode; readonly constructorExpression: ExpressionAstNode } | null {
+  return expression.operation === 'instanceof'
+    ? {
+      expression: expression.left,
+      constructorExpression: expression.right,
+    }
+    : null;
+}
+
 function isNullishLiteral(expression: ExpressionAstNode): boolean {
   return expression.$kind === 'PrimitiveLiteral' && (expression.value == null);
 }
@@ -661,28 +1097,6 @@ function bindingContextSlotWithTargetType(
   );
 }
 
-function bindingContextSlotWithMemberType(
-  slot: BindingContextSlot,
-  memberName: string,
-  targetType: CheckerTypeReference,
-  sourceAddressHandle: AddressHandle | null,
-): BindingContextSlotDraft {
-  const memberType = new BindingContextSlotMemberType(memberName, targetType, sourceAddressHandle);
-  return new BindingContextSlotDraft(
-    slot.name,
-    slot.targetIdentityHandle,
-    slot.targetProductHandle,
-    slot.targetType,
-    slot.sourceAddressHandle,
-    slot.fieldProvenance,
-    slot.staticValue,
-    [
-      ...slot.memberTypes.filter((candidate) => candidate.name !== memberName),
-      memberType,
-    ],
-  );
-}
-
 function sameCheckerCarriers(
   store: KernelStore,
   references: readonly CheckerTypeReference[],
@@ -712,11 +1126,11 @@ function equalityIncludedTypes(
   include: ts.Type,
 ): readonly ts.Type[] {
   const sourceParts = unionConstituents(source);
-  const selected = sourceParts.filter((part) => checker.isTypeAssignableTo(part, include));
+  const selected = sourceParts.filter((part) => checkerRawTypeAssignable(checker, part, include));
   if (selected.length > 0) {
     return selected;
   }
-  return checker.isTypeAssignableTo(include, source)
+  return checkerRawTypeAssignable(checker, include, source)
     ? unionConstituents(include)
     : [];
 }
@@ -726,9 +1140,19 @@ function typeOverlaps(
   left: ts.Type,
   right: ts.Type,
 ): boolean {
-  return checker.isTypeAssignableTo(left, right) || checker.isTypeAssignableTo(right, left);
+  return checkerRawTypeAssignable(checker, left, right) || checkerRawTypeAssignable(checker, right, left);
 }
 
 function unionConstituents(type: ts.Type): readonly ts.Type[] {
   return type.isUnion() ? type.types : [type];
+}
+
+function checkerPropertyValueType(
+  checker: ts.TypeChecker,
+  owner: ts.Type,
+  memberName: string,
+  fallbackLocation: ts.Node | null,
+): ts.Type | null {
+  const symbol = checkerPropertySymbol(checker, owner, memberName);
+  return symbol == null ? null : checkerSymbolValueType(checker, symbol, fallbackLocation);
 }

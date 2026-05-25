@@ -14,12 +14,26 @@ import {
 } from './type-shape.js';
 import {
   firstSymbolDeclaration,
+  checkerPropertySymbol,
+  checkerSymbolValueType,
 } from './checker-node-helpers.js';
 
 export const enum CheckerDomNodeTypeSource {
   TagNameMap = 'tag-name-map',
   GlobalFallback = 'global-fallback',
 }
+
+/** DOM event-map interfaces consulted for listener `$event` and handler-reference runtime arguments. */
+export const CHECKER_DOM_EVENT_MAP_TYPE_NAMES = [
+  'GlobalEventHandlersEventMap',
+  'HTMLElementEventMap',
+] as const;
+
+/** Fallback DOM event globals used after listener event-map lookup misses. */
+export const CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES = [
+  'CustomEvent',
+  'Event',
+] as const;
 
 export interface CheckerDomNodeTypeResolution {
   readonly checker: ts.TypeChecker;
@@ -102,6 +116,30 @@ export function globalDeclaredType(
   return symbol == null ? null : typeSystem.checker.getDeclaredTypeOfSymbol(symbol);
 }
 
+/** Resolves listener event names through DOM event maps before falling back to broad Event-like globals. */
+export function resolveCheckerDomEventType(
+  typeSystem: TypeSystemProject,
+  eventName: string,
+  location: ts.Node | null = checkerLookupLocation(typeSystem),
+): ts.Type | null {
+  if (location == null) {
+    return null;
+  }
+  for (const mapName of CHECKER_DOM_EVENT_MAP_TYPE_NAMES) {
+    const eventType = eventMapPropertyType(typeSystem, location, mapName, eventName);
+    if (eventType != null) {
+      return eventType;
+    }
+  }
+  for (const fallbackName of CHECKER_DOM_EVENT_FALLBACK_TYPE_NAMES) {
+    const fallbackType = globalDeclaredType(typeSystem, fallbackName, location);
+    if (fallbackType != null) {
+      return fallbackType;
+    }
+  }
+  return null;
+}
+
 export function checkerLookupLocation(typeSystem: TypeSystemProject): ts.SourceFile | null {
   return typeSystem.program.getSourceFiles().find((sourceFile) => !sourceFile.isDeclarationFile)
     ?? typeSystem.program.getSourceFiles()[0]
@@ -126,6 +164,20 @@ function projectDomNodeTypeReference(
     display: checker.typeToString(type),
     memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
   } satisfies CheckerTypeProjectionRequest).toReference();
+}
+
+function eventMapPropertyType(
+  typeSystem: TypeSystemProject,
+  location: ts.Node,
+  mapName: string,
+  eventName: string,
+): ts.Type | null {
+  const checker = typeSystem.checker;
+  const mapType = globalDeclaredType(typeSystem, mapName, location);
+  const property = mapType == null ? null : checkerPropertySymbol(checker, mapType, eventName);
+  return property == null
+    ? null
+    : checkerSymbolValueType(checker, property, location);
 }
 
 function tagNameMapNames(namespace: HtmlNamespaceKind): readonly string[] {

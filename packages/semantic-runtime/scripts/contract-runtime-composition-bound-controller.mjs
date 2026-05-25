@@ -21,6 +21,9 @@ const compositions = app.ask({
 const widgetHostRows = compositions.filter((row) =>
   row.source?.label?.includes('widget-host.html') === true
 );
+const overloadedChartRows = compositions.filter((row) =>
+  row.resolvedComponentClassNames?.includes('ChartWidget') === true
+);
 const openRows = compositions.filter((row) => row.openReason != null);
 const failures = [
   widgetHostRows.length === 2
@@ -48,6 +51,22 @@ const failures = [
         openReason: row.openReason,
       })}`
   ),
+  overloadedChartRows.length > 0
+    ? null
+    : 'Expected at least one ChartWidget composition row to prove overloaded activate(model) signature selection.',
+  ...overloadedChartRows.map((row) =>
+    row.activationHandoffKinds.includes('model-assignable')
+    && row.activationParameterTypes.some((type) =>
+      type.includes('DashboardWidgetModel') && type.includes('notTheDashboardModel')
+    )
+      ? null
+      : `ChartWidget row did not project overloaded activate(model) parameter candidates as an assignable union: ${JSON.stringify({
+        source: row.source?.label ?? null,
+        activationHandoffKinds: row.activationHandoffKinds,
+        activationParameterTypes: row.activationParameterTypes,
+        modelAssignableToActivationParameterCount: row.modelAssignableToActivationParameterCount,
+      })}`
+  ),
 ].filter(Boolean);
 
 const summary = {
@@ -60,6 +79,12 @@ const summary = {
     resolvedComponentNames: row.resolvedComponentNames,
     resolvedComponentClassNames: row.resolvedComponentClassNames,
     openReason: row.openReason,
+  })),
+  overloadedChartRows: overloadedChartRows.map((row) => ({
+    source: row.source?.label ?? null,
+    activationHandoffKinds: row.activationHandoffKinds,
+    activationParameterTypes: row.activationParameterTypes,
+    modelAssignableToActivationParameterCount: row.modelAssignableToActivationParameterCount,
   })),
   openRows: openRows.map((row) => ({
     renderingDefinitionName: row.renderingDefinitionName,

@@ -16,8 +16,11 @@
         "Inspect framework i18n TranslationBinding and translation renderers before changing this lane; the join point is TranslationBinding.useParameter(...).",
         "Keep translation-key catalog products separate from translation-binding lifecycle diagnostics: catalog completion comes from configuration resources, while lifecycle errors come from rendered binding products.",
         "Treat framework CustomExpression pressure in this lane as translation binding/key-expression pressure first: TranslationBindingCommand uses CustomExpression as an opaque carrier for static translation attribute raw values, and TranslationBinding.create reparses the value as interpolation.",
+        "Keep dynamic key and parameter expression lifecycles distinct while entering both through the shared runtime binding source-expression projector. TranslationBinding.bind evaluates the key expression without first calling astBind(...), so binding behaviors unwrap evaluate-only there; t-params.bind uses ParameterBinding.bind and can apply source-scope-changing binding behaviors such as & state.",
+        "Use i18n cursor/completion canaries when touching expression context: t.bind should complete through evaluate-only view-model scope even with & state, while t-params.bind should complete through bind-time state source-scope projection.",
         "Use api.I18nTranslationBindings and i18n-translation-binding expected effects when a recipe needs to prove successful rendered t/t.bind/t-params.bind lifecycles; rows expose normalized targetProperties/targetKinds because the compiler target for t itself is not the same as TranslationBinding's runtime write target.",
         "When i18n lifecycle diagnostics need a binding expression AST, use the shared template expression product helpers rather than re-owning expression product-detail reads in i18n.",
+        "Rendered TranslationBinding products are runtime expression bindings for source-expression, overlay, cursor, and i18n lifecycle consumers. Translation key bindings stay lifecycle-owned; t-params.bind also publishes source-only data-flow for parameter object typing. Neither form owns a generic value-channel, and generic open accessor/observer seams for t/t-params are a guard bug.",
         "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific diagnostic rows; the translation-key catalog has its own query/effect lane."
       ],
       "anchors": [
@@ -55,6 +58,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/fixtures/pressure/i18n-translation-binding-errors/src/i18n-translation-binding-errors-app.html",
           "summary": "Synthetic pressure fixture for i18n translation binding diagnostics."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:i18n-binding-lifecycle",
+          "summary": "Contract proving i18n dynamic keys are evaluate-only while t-params participates in source-scope-changing binding behavior flow."
         },
         {
           "kind": "script",

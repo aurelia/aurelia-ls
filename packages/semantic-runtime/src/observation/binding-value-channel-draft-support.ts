@@ -1,12 +1,10 @@
 import ts from 'typescript';
-import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type {
   AddressHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import { uniqueStrings } from '../kernel/collections.js';
-import { checkerExpressionTypeLocalKey } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   HtmlElement,
@@ -34,23 +32,30 @@ import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import {
-  CheckerExpressionTypeEvaluator,
-} from '../type-system/expression-type-evaluator.js';
-import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
 import {
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
 import {
+  checkerCallableReturnTypesForRuntimeArguments,
+} from '../type-system/checker-signature-parameters.js';
+import {
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
   type CheckerSyntheticTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import {
+  resolveCheckerDomEventType,
+} from '../type-system/dom-node-type.js';
+import {
   CheckerTypeShapeAccess,
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
+import {
+  checkerPrimitiveType,
+  checkerStringLiteralTypes,
+} from '../type-system/checker-primitive-types.js';
 import {
   checkerBackedUnionTypeForReferences,
 } from '../type-system/checker-type-union.js';
@@ -63,17 +68,21 @@ import {
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import {
-  arrayElementTypeFor,
   booleanLiteralValuesForType,
   collectionElementTypeFor,
   isBooleanLike,
   mapKeyTypeFor,
   mapValueTypeFor,
   stringLiteralValuesForType,
-} from './checker-type-helpers.js';
+} from '../type-system/checker-collection-types.js';
 import {
   expressionProductHandleForBinding,
 } from './runtime-binding-expression.js';
+import {
+  checkerContextForRuntimeBindingSourceExpressionProjection,
+  RuntimeBindingSourceExpressionProjectionKind,
+  type RuntimeBindingSourceExpressionContextProjection,
+} from './runtime-binding-source-expression-context.js';
 import type {
   BindingSourceTypeReader,
   BindingValueChannelDraftContext,
@@ -132,7 +141,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       return this.typeProjector.ensureProjection({
         localKey: local,
         checker: carrier.checker,
-        type: carrier.checker.getBooleanType(),
+        type: checkerPrimitiveType(carrier.checker, 'boolean'),
         origin: CheckerTypeProjectionOrigin.TypeChecker,
         sourceAddressHandle: binding.sourceAddressHandle,
         display: 'boolean',
@@ -166,7 +175,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       : this.projectCheckerType(
         `${local}:return`,
         sourceCarrier.checker,
-        sourceCarrier.checker.getBooleanType(),
+        checkerPrimitiveType(sourceCarrier.checker, 'boolean'),
         sourceAddressHandle,
       );
     return this.typeProjector.ensureSyntheticProjection({
@@ -190,7 +199,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       return this.projectCheckerType(
         local,
         carrier.checker,
-        carrier.checker.getStringType(),
+        checkerPrimitiveType(carrier.checker, 'string'),
         binding.sourceAddressHandle,
       );
     }
@@ -257,12 +266,49 @@ export class RuntimeBindingValueChannelTypeSupport {
   }
 
   eventHandlerInvocationValueType(
+    local: string,
     sourceType: CheckerTypeReference | null,
+    targetOperation: RuntimeBindingTargetOperation,
+    context: BindingValueChannelDraftContext,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const shape = this.readTypeShape(sourceType);
-    return shape?.callReturnType == null
-      ? sourceType
+    if (shape == null) {
+      return sourceType;
+    }
+    const shapeKind = shape.shapeKind ?? sourceType?.shapeKind ?? null;
+    if (shapeKind !== CheckerTypeShapeKind.Function) {
+      return sourceType;
+    }
+
+    const carrier = shape.carrier;
+    const eventType = context.typeSystem == null
+      ? null
+      : resolveCheckerDomEventType(context.typeSystem, targetOperation.targetProperty);
+    if (carrier != null) {
+      const returnTypes = checkerCallableReturnTypesForRuntimeArguments(
+        carrier.checker,
+        carrier.type,
+        [{ type: eventType }],
+      ).map((returnType) =>
+        this.projectCheckerType(
+          `${local}:event-handler-return:${returnType.signatureIndex}`,
+          carrier.checker,
+          returnType.type,
+          sourceAddressHandle,
+        )
+      );
+      const unionType = this.unionValueType(`${local}:event-handler-return`, returnTypes, sourceAddressHandle);
+      if (unionType != null) {
+        return unionType;
+      }
+      return shape.callReturnType == null
+        ? this.unknownRuntimeInputType(`${local}:event-handler-return:unknown`, sourceAddressHandle)
+        : checkerTypeReferenceWithSource(shape.callReturnType, sourceAddressHandle);
+    }
+
+    return shape.callReturnType == null
+      ? this.unknownRuntimeInputType(`${local}:event-handler-return:unknown`, sourceAddressHandle)
       : checkerTypeReferenceWithSource(shape.callReturnType, sourceAddressHandle);
   }
 
@@ -573,9 +619,8 @@ export class RuntimeBindingValueChannelDraftSupport {
     binding: PropertyBinding,
     context: BindingValueChannelDraftContext,
   ): BindingValueExpression {
-    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
     const ast = this.bindingExpressionAst(binding.expressionProductHandle);
-    if (scope == null || ast == null) {
+    if (ast == null) {
       return {
         valueType: null,
         valueDomain: [],
@@ -587,7 +632,10 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (stringDomain.length > 0 && stringDomain.length === primitiveDomain.length) {
       return this.literalDomainBindingValueExpression(local, binding, stringDomain, primitiveDomain);
     }
-    const evaluated = this.evaluatedBindingValueExpression(binding, scope, ast, context);
+    const site = this.bindingExpressionTypeSite(local, binding, ast, context);
+    const evaluated = site == null
+      ? { valueType: null, valueDomain: [], primitiveValueDomain: [] }
+      : this.evaluatedBindingValueExpression(site, context);
     return primitiveDomain.length === 0
       ? evaluated
       : {
@@ -618,10 +666,10 @@ export class RuntimeBindingValueChannelDraftSupport {
       return this.literalDomainBindingValueExpression(local, binding, stringDomain, runtimeBindingStringPrimitiveDomain(stringDomain));
     }
 
-    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
-    const evaluated = scope == null
+    const site = this.bindingExpressionTypeSite(local, binding, ast, context);
+    const evaluated = site == null
       ? null
-      : this.evaluatedBindingValueExpression(binding, scope, ast, context);
+      : this.evaluatedBindingValueExpression(site, context);
     const evaluatedStringDomain = this.types.stringLiteralDomainForType(evaluated?.valueType ?? null);
     if (evaluatedStringDomain.length > 0) {
       return this.literalDomainBindingValueExpression(
@@ -653,17 +701,13 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 
   private evaluatedBindingValueExpression(
-    binding: PropertyBinding,
-    scope: BindingScope,
-    ast: ExpressionAstNode,
+    site: RuntimeBindingSourceExpressionContextProjection,
     context: BindingValueChannelDraftContext,
   ): BindingValueExpression {
-    const evaluation = context.evaluator.evaluateWithScope(
-      ast,
-      scope,
-      checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, binding.expressionProductHandle),
-      binding.sourceAddressHandle,
-    );
+    const evaluation = context.evaluator.evaluate(checkerContextForRuntimeBindingSourceExpressionProjection(
+      site,
+      true,
+    ));
     if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return {
         valueType: null,
@@ -676,6 +720,22 @@ export class RuntimeBindingValueChannelDraftSupport {
       valueDomain: [],
       primitiveValueDomain: [],
     };
+  }
+
+  private bindingExpressionTypeSite(
+    local: string,
+    binding: PropertyBinding,
+    ast: ExpressionAstNode,
+    context: BindingValueChannelDraftContext,
+  ): RuntimeBindingSourceExpressionContextProjection | null {
+    const projection = context.sourceExpressionContexts.projectSource({
+      binding,
+      expression: ast,
+      localKey: `${local}:expression-type`,
+    });
+    return projection.kind === RuntimeBindingSourceExpressionProjectionKind.Context
+      ? projection
+      : null;
   }
 
   propertyBindingForNodeTarget(
@@ -755,8 +815,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (promiseValueBinding == null) {
       return null;
     }
-    const promiseValueScope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, promiseValueBinding);
-    const promiseType = this.sourceTypeForBinding(promiseValueBinding, promiseValueScope, context.evaluator, 'value');
+    const promiseType = this.sourceTypeForBinding(promiseValueBinding, context, 'value');
     return this.types.awaitedTypeReference(
       `${local}:promise-fulfilled-value`,
       promiseType,
@@ -766,23 +825,25 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   sourceTypeForBinding(
     binding: RuntimeValueChannelBinding,
-    scope: BindingScope | null,
-    evaluator: CheckerExpressionTypeEvaluator,
+    context: BindingValueChannelDraftContext,
     targetProperty: string | null = null,
   ): CheckerTypeReference | null {
-    if (scope == null) {
-      return null;
-    }
     const ast = this.bindingExpressionAst(expressionProductHandleForBinding(binding));
     if (ast == null) {
       return null;
     }
-    const evaluation = evaluator.evaluateWithScope(
-      ast,
-      scope,
-      checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandleForBinding(binding)),
-      binding.sourceAddressHandle,
-    );
+    const projection = context.sourceExpressionContexts.projectSource({
+      binding,
+      expression: ast,
+      localKey: `binding-value-channel:${binding.productHandle}:${expressionProductHandleForBinding(binding) ?? 'binding-expression'}:source-type`,
+    });
+    if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+      return null;
+    }
+    const evaluation = context.evaluator.evaluate(checkerContextForRuntimeBindingSourceExpressionProjection(
+      projection,
+      true,
+    ));
     if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
@@ -794,15 +855,14 @@ export class RuntimeBindingValueChannelDraftSupport {
 
   sourceTypeReaderForBinding(
     binding: RuntimeValueChannelBinding,
-    scope: BindingScope | null,
-    evaluator: CheckerExpressionTypeEvaluator,
+    context: BindingValueChannelDraftContext,
     targetProperty: string | null = null,
   ): BindingSourceTypeReader {
     let evaluated = false;
     let sourceType: CheckerTypeReference | null = null;
     return () => {
       if (!evaluated) {
-        sourceType = this.sourceTypeForBinding(binding, scope, evaluator, targetProperty);
+        sourceType = this.sourceTypeForBinding(binding, context, targetProperty);
         evaluated = true;
       }
       return sourceType;
@@ -924,24 +984,9 @@ export function isBroadTypeShape(
     || reference.display === 'unknown';
 }
 
-export function sourceTypeHasAssignableArrayPart(
-  checker: ts.TypeChecker,
-  sourceType: ts.Type,
-  optionValueType: ts.Type,
-): boolean {
-  return checkerTypeParts(sourceType).some((part) => {
-    const elementType = arrayElementTypeFor(checker, part);
-    return elementType != null && checker.isTypeAssignableTo(optionValueType, elementType);
-  });
-}
-
 export function stringLiteralTypesForDomain(
   checker: ts.TypeChecker,
   values: readonly string[],
 ): readonly ts.Type[] {
-  return uniqueStrings(values).map((value) => checker.getStringLiteralType(value));
-}
-
-function checkerTypeParts(type: ts.Type): readonly ts.Type[] {
-  return type.isUnion() ? type.types : [type];
+  return checkerStringLiteralTypes(checker, values);
 }

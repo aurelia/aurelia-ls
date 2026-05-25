@@ -57,6 +57,7 @@ import { CompletedInputTemplateCorridor } from "./completed-input-template-corri
 import { CompletedInputParserState } from "./completed-input-parser-state.js";
 import { CompletedInputPublication } from "./completed-input-publication.js";
 import { ExpressionFrameworkErrorCode } from "./framework-error-code.js";
+import { isAureliaExpressionGlobalName } from "./global-names.js";
 import {
   isParseCompanionFailure,
   isParseFailure,
@@ -179,7 +180,7 @@ export class CompletedInputParser {
       identifierFromToken: (token) => this.identifierFromToken(token),
       tokenToIdentifierName: (token) => this.tokenToIdentifierName(token),
       isIdentifierNameToken: (token) => this.isIdentifierNameToken(token),
-      isGlobalName: (name) => CompletedInputParser.globalNames.has(name),
+      isGlobalName: isAureliaExpressionGlobalName,
     });
     this.arrowCorridor = new CompletedInputArrowCorridor({
       state: this.state,
@@ -711,32 +712,4 @@ export class CompletedInputParser {
         );
     }
   }
-
-  // Global identifier allow-list for AccessGlobal.
-  private static readonly globalNames = new Set<string>([
-    "Infinity",
-    "NaN",
-    "isFinite",
-    "isNaN",
-    "parseFloat",
-    "parseInt",
-    "decodeURI",
-    "decodeURIComponent",
-    "encodeURI",
-    "encodeURIComponent",
-    "Array",
-    "BigInt",
-    "Boolean",
-    "Date",
-    "Map",
-    "Number",
-    "Object",
-    "RegExp",
-    "Set",
-    "String",
-    "JSON",
-    "Math",
-    "Intl",
-  ]);
 }
-

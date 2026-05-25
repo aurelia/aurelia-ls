@@ -54,6 +54,19 @@ export function effectivePropertyBindingMode(
   return effectiveTemplateBindingMode(store, binding.bindingMode, binding.expressionProductHandle, resourceScope);
 }
 
+/** True when a binding mode asks Aurelia to evaluate the source and write into the target. */
+export function templateBindingModeIncludesSourceToTarget(bindingMode: TemplateBindingMode): boolean {
+  return bindingMode === TemplateBindingMode.OneTime
+    || bindingMode === TemplateBindingMode.ToView
+    || bindingMode === TemplateBindingMode.TwoWay;
+}
+
+/** True when a binding mode asks Aurelia to observe the target and assign back into the source expression. */
+export function templateBindingModeIncludesTargetToSource(bindingMode: TemplateBindingMode): boolean {
+  return bindingMode === TemplateBindingMode.FromView
+    || bindingMode === TemplateBindingMode.TwoWay;
+}
+
 export function bindingModeAfterBindingBehaviors(
   initialMode: TemplateBindingMode,
   behaviors: readonly BindingBehaviorExpression[],

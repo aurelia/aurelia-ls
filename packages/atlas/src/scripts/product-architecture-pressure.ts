@@ -155,7 +155,12 @@ const checkerApiCalleeNames = [
   "getTypeFromTypeNode",
   "getApparentType",
   "getIndexTypeOfType",
+  "getTypeArguments",
+  "getBaseTypes",
+  "isArrayType",
+  "isTupleType",
   "getResolvedSignature",
+  "isTypeAssignableTo",
 ] as const;
 const sourceReadDisplayRows = detail ? 30 : 14;
 const sourceReadCalleeNames = [

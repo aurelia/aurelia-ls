@@ -15,6 +15,7 @@
       "rationale": "Cursor-locus inquiry is where HTML spans, attribute syntax, classification, value sites, expression parses, binding scopes, resource scopes, route/i18n context, and TypeChecker member-owner projection meet. This builder is the locus-to-query boundary and should not be bypassed by answer-local cursor heuristics.",
       "guidance": [
         "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
+        "The product-handle completion answer should spend supplied handles and report missing inputs; cursor member-owner derivation belongs in TemplateCompletionCursorContextBuilder where runtime-analysis expression world and rendered binding source context are available.",
         "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
         "Plain static attribute values may classify as attribute-value sites without a TemplateValueSite product; that is an expected empty completion surface, not an attribute-value-site missing input.",
         "If another LSP-like feature needs similar cursor context, consider extracting a shared cursor-context substrate before duplicating this builder."
@@ -44,7 +45,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-18"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "intent:lsp-edit-affordance-substrate",
@@ -586,6 +587,7 @@
         "Keep memory pressure visible. Prefer compact handles and existing row identities over recording more kernel products or field-level provenance merely because a continuation row wants richer explanation.",
         "Treat defensive fallbacks, optional source/provenance branches, surprising function input dimensions, duplicated TypeScript helpers, and ad hoc evaluator contexts as canaries for split-brain from different substrate-maturity eras.",
         "Generated addresses can be anchored to either addresses or identities. Source precision should follow the shared kernel source-address resolver so identity-backed generated products keep their authored TypeScript/template anchor instead of adding continuation-local fallback logic.",
+        "The mirrored address-kind switches in `api/source-reference.ts` and `kernel/source-address.ts` are intentional only because they answer different contracts: public API descriptions preserve carriers such as generated/template-node addresses, while kernel authored-source lookup collapses those carriers to the nearest authored source for internal locality.",
         "Continuation source-precision policy should use `semanticSourcePrecisionForReferences(...)` so authored template/source anchors, generated-address visibility, external dependency roles, and carrier spans share one evidence lattice with future diagnostics, hover, and edit surfaces.",
         "Treat public continuation `sourcePrecision` as a compact evidence summary, not an editability guarantee. Repair-intent diagnostic continuations must check every related source reference individually and carry blockers when any returned row source is carrier-only, generated, external, or missing an exact authored span.",
         "Parser-local SourceSpan values are intentionally not kernel addresses. Template/overlay consumers should use runtime-expression-source-address helpers to recover the source-file address handle from semantic-runtime-created parse contexts instead of scattering `span.file.id` casts.",

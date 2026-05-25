@@ -14,15 +14,23 @@ const checkerAccessMethods = new Set([
   'getPropertyOfType',
   'getResolvedSignature',
   'getSymbolAtLocation',
+  'getTypeArguments',
   'getTypeAtLocation',
   'getTypeFromTypeNode',
   'getTypeOfSymbolAtLocation',
+  'getBaseTypes',
+  'isArrayType',
+  'isTupleType',
+  'isTypeAssignableTo',
 ]);
 const allowedTypeSystemPrefix = 'packages/semantic-runtime/src/type-system/';
+const allowedRawAssignabilityFile = 'packages/semantic-runtime/src/type-system/checker-type-assignability.ts';
 const allowedObservationLocalContext = 'packages/semantic-runtime/src/observation/proxy-observable-dependency.ts';
 const allowedObservationMethods = new Set([
   'getApparentType',
   'getTypeAtLocation',
+  'isArrayType',
+  'isTupleType',
 ]);
 
 const violations = [];
@@ -37,7 +45,7 @@ for (const filePath of sourceFiles(sourceRoot)) {
 assert.deepEqual(
   violations,
   [],
-  `Checker value access must route through TypeSystemProject/checker helpers or documented local contexts:\n${violations.join('\n')}`,
+  `Checker value access and assignability must route through TypeSystemProject/checker helpers or documented local contexts:\n${violations.join('\n')}`,
 );
 
 console.log(JSON.stringify({
@@ -73,7 +81,9 @@ function record(sourceFile, node, method) {
 
 function isAllowed(row) {
   if (row.file.startsWith(allowedTypeSystemPrefix)) {
-    return true;
+    return row.method === 'isTypeAssignableTo'
+      ? row.file === allowedRawAssignabilityFile
+      : true;
   }
   return row.file === allowedObservationLocalContext && allowedObservationMethods.has(row.method);
 }

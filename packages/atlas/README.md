@@ -143,6 +143,21 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   The script wrapper accepts exact filter names only; use `--fromFilePath`, `--toFilePath`, `--filePath`, or
   `--pathPrefix` for file-scoped dependency/source questions. Unsupported flags fail fast so a mistyped filter cannot
   silently widen into a global architecture read.
+- Use `pnpm --filter @aurelia-ls/atlas expression:coverage` before treating a semantic-runtime expression AST kind as
+  live parser pressure. It joins AST class declarations, constructor spend, support-matrix ownership, and overlay,
+  evaluator, source-value, observed-dependency, and member-owner switch coverage. The source-value support matrix
+  distinguishes actual missing support from runtime-open or owner-handled expression kinds, so use flags such as
+  `source-value-intentional-runtime-open` and `source-value-runtime-open` before adding evaluator cases for value
+  converters, assignments, or function literals.
+  Parser-admitted globals now route through semantic-runtime's shared global intrinsic substrate, so check the
+  source-value support owner before treating `AccessGlobal` or `CallGlobal` as missing evaluator work. Run
+  `expression:coverage -- --query=DestructuringAssignment --detail` as the current canary for distinguishing a
+  dormant normalized class from parser-admitted statement syntax; a real gap should carry active
+  `statement-overlay-frontier` / `source-value-statement-frontier` flags rather than dormant statement-frontier flags.
+  Use `expression:coverage -- --projection=collection-methods --detail` when Array method pressure touches checker
+  projection, source-value reduction, astEvaluate collection reads, or ProxyObservable wrapping. That projection keeps
+  TypeScript-owned method availability separate from product-owned deterministic value closure and framework-owned
+  observation coverage, including modern Array observation gaps.
 - Use `pnpm --filter @aurelia-ls/atlas profile:product-architecture` when a product architecture query feels slow.
   The script prints structure, body+structure, compact-call core/full, exact-call core/full, and symbol cold phase
   timings so cache or split decisions start from measured cost instead of vibes. Function body fingerprints and switch

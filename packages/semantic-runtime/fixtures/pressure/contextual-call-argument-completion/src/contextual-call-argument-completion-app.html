@@ -1,10 +1,13 @@
 <section>
   <p>${productLabel(product => product.displayName)}</p>
+  <p>${maybeProductLabel?.(product => product.displayName)}</p>
   <p>${productLabelFromOptions({ project: product => product.displayName })}</p>
   <p>${productLabels([product => product.sku])}</p>
   <p>${productLabelRest((...products) => products[0].displayName)}</p>
   <p>${productLabelPair((...products) => products[1].sku)}</p>
   <p>${productLabel(showSku ? product => product.sku : product => product.displayName)}</p>
   <p>${products.map(product => product.sku).join(', ')}</p>
+  <p>${products.reduce((current, product) => product.price > current.price ? product : current, products[0]).displayName}</p>
+  <p>${[{ sku: 'inline-sku', displayName: 'Inline product', price: 1 }].map(product => product.sku).join(', ')}</p>
   <p>${formatTagged`Prices ${products.map(product => product.price).join(', ')}`.toUpperCase()}</p>
 </section>

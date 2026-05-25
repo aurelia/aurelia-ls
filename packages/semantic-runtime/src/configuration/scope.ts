@@ -628,6 +628,15 @@ export class BindingScope {
     );
   }
 
+  /** Locate the nearest boundary Scope visible from this Scope, matching Aurelia boundary `this` lookup. */
+  locateBoundary(): BindingScope | null {
+    let current: BindingScope | null = this;
+    while (current != null && !current.isBoundary) {
+      current = current.parent;
+    }
+    return current;
+  }
+
   toReference(): BindingScopeReference {
     return new BindingScopeReference(
       this.productHandle,
@@ -667,7 +676,8 @@ export function mergeBindingScopeCreators(
   return [...byKey.values()];
 }
 
-function bindingScopeCreatorKey(creator: BindingScopeCreator): string {
+/** Stable equality key for framework/runtime facts that directly created or transformed a modeled Scope. */
+export function bindingScopeCreatorKey(creator: BindingScopeCreator): string {
   return [
     creator.creatorKind,
     creator.productHandle,

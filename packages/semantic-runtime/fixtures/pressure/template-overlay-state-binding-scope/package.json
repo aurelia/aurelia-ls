@@ -1,0 +1,15 @@
+{
+  "name": "template-overlay-state-binding-scope",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aurelia/state": "^2.0.0-rc.1",
+    "aurelia": "^2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

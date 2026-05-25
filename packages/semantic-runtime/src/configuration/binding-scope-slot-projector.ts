@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerTypeMember,
@@ -12,6 +13,7 @@ import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-mem
 import {
   type BindingContextSlot,
   BindingContextSlotDraft,
+  type BindingScope,
   type BindingScopeConstructionRequest,
 } from './scope.js';
 import {
@@ -119,4 +121,60 @@ export function bindingContextSlotTargetTypeShape(
     display: slot.targetType?.display ?? member.valueType?.display ?? null,
     memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
   });
+}
+
+/** Projects an Aurelia source expression to the exact binding-context slot it names, when the path is statically slot-shaped. */
+export function bindingContextSlotDraftForExpressionAccess(
+  store: KernelStore,
+  projector: CheckerTypeProjector,
+  sourceScope: BindingScope,
+  expression: ExpressionAstNode,
+  localKey: string,
+): BindingContextSlotDraft | null {
+  switch (expression.$kind) {
+    case 'AccessScope':
+      return draftFromSlot(sourceScope.locate(expression.name.name, expression.ancestor).slot);
+    case 'AccessMember': {
+      if (expression.object.$kind === 'AccessThis') {
+        return draftFromSlot(sourceScope.locateThis(expression.object.ancestor).context?.lookup(expression.name.name) ?? null);
+      }
+      const owner = bindingContextSlotDraftForExpressionAccess(
+        store,
+        projector,
+        sourceScope,
+        expression.object,
+        `${localKey}:owner`,
+      );
+      return owner == null
+        ? null
+        : bindingContextSlotDraftForMemberAccess(store, projector, owner, expression.name.name, `${localKey}:member:${expression.name.name}`);
+    }
+    case 'BindingBehavior':
+      return bindingContextSlotDraftForExpressionAccess(store, projector, sourceScope, expression.expression, `${localKey}:binding-behavior`);
+    case 'Paren':
+      return bindingContextSlotDraftForExpressionAccess(store, projector, sourceScope, expression.expression, `${localKey}:paren`);
+    default:
+      return null;
+  }
+}
+
+function bindingContextSlotDraftForMemberAccess(
+  store: KernelStore,
+  projector: CheckerTypeProjector,
+  owner: BindingContextSlotDraft,
+  memberName: string,
+  localKey: string,
+): BindingContextSlotDraft | null {
+  const ownerTypeShape = bindingContextSlotTargetTypeShape(store, projector, owner, `${localKey}:owner:${owner.name}`);
+  const member = ownerTypeShape == null
+    ? null
+    : readOrProjectCheckerTypeMembers(store, ownerTypeShape, localKey)
+      .find((candidate) => candidate.name === memberName) ?? null;
+  return member == null
+    ? null
+    : bindingContextSlotDraftForTypeMember(store, member);
+}
+
+function draftFromSlot(slot: BindingContextSlot | null): BindingContextSlotDraft | null {
+  return slot == null ? null : BindingContextSlotDraft.fromSlot(slot);
 }

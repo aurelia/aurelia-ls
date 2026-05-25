@@ -4,6 +4,16 @@ import type {
   CheckerTypeReference,
   CheckerTypeShape,
 } from './type-shape.js';
+import type ts from 'typescript';
+
+/** Raw checker assignability for callers that already proved both `ts.Type` values belong to this checker epoch. */
+export function checkerRawTypeAssignable(
+  checker: ts.TypeChecker,
+  from: ts.Type,
+  to: ts.Type,
+): boolean {
+  return checker.isTypeAssignableTo(from, to);
+}
 
 /** Checker-backed assignability for two retained type references. */
 export function checkerTypeReferenceAssignable(
@@ -32,5 +42,5 @@ export function checkerTypeShapeAssignable(
       ? true
       : null;
   }
-  return fromCarrier.checker.isTypeAssignableTo(fromCarrier.type, toCarrier.type);
+  return checkerRawTypeAssignable(fromCarrier.checker, fromCarrier.type, toCarrier.type);
 }

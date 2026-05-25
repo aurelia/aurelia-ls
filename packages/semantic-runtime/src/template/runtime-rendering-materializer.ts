@@ -161,7 +161,8 @@ export interface RuntimeRenderingMaterializationRequest {
 }
 
 export class RuntimeRenderingEmission {
-  private readonly bindingsByInstruction = new Map<ProductHandle, RuntimeBinding>();
+  private readonly bindingsByInstruction = new Map<ProductHandle, RuntimeBinding[]>();
+  private readonly bindingsByProduct = new Map<ProductHandle, RuntimeBinding>();
   private readonly effectsByOwner = new Map<ProductHandle, RuntimeBindingScopeEffect[]>();
   private readonly renderContextsByBinding = new Map<ProductHandle, RuntimeBindingRenderContext>();
   private readonly controllersByInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
@@ -210,7 +211,10 @@ export class RuntimeRenderingEmission {
     readonly records: readonly KernelStoreRecord[],
   ) {
     for (const binding of bindings) {
-      this.bindingsByInstruction.set(binding.instructionProductHandle, binding);
+      const instructionBindings = this.bindingsByInstruction.get(binding.instructionProductHandle) ?? [];
+      instructionBindings.push(binding);
+      this.bindingsByInstruction.set(binding.instructionProductHandle, instructionBindings);
+      this.bindingsByProduct.set(binding.productHandle, binding);
     }
     for (const effect of scopeEffects) {
       let effects = this.effectsByOwner.get(effect.ownerInstructionProductHandle);
@@ -240,8 +244,19 @@ export class RuntimeRenderingEmission {
     }
   }
 
+  /** Returns the materialized runtime bindings for a lowered instruction across all recursive render contexts. */
+  readBindingsForInstruction(productHandle: ProductHandle): readonly RuntimeBinding[] {
+    return this.bindingsByInstruction.get(productHandle) ?? [];
+  }
+
   readBindingForInstruction(productHandle: ProductHandle): RuntimeBinding | null {
-    return this.bindingsByInstruction.get(productHandle) ?? null;
+    const bindings = this.readBindingsForInstruction(productHandle);
+    return bindings.length === 1 ? bindings[0]! : null;
+  }
+
+  /** Returns the materialized runtime binding for a binding product handle. */
+  readBinding(productHandle: ProductHandle): RuntimeBinding | null {
+    return this.bindingsByProduct.get(productHandle) ?? null;
   }
 
   readScopeEffectsForOwner(productHandle: ProductHandle): readonly RuntimeBindingScopeEffect[] {

@@ -70,7 +70,7 @@ const supportByKind = {
     owner: TemplateTypeSystemOverlayExpressionOwner.ValueConverterMaterializer,
     standaloneExpression: true,
     canContainGeneratedChildren: true,
-    summary: 'Value converters lower through modeled converter resources and the `__au_value_converter_to_view` helper.',
+    summary: 'Value converters lower through modeled converter resources, direct checker-visible toView calls, or an identity helper when no toView member is visible.',
   },
   Assign: {
     supportKind: TemplateTypeSystemOverlayExpressionSupportKind.TypeScriptSource,

@@ -853,8 +853,8 @@ function readProxyObservableCollectionMethods(
     { packageId: filters.packageId, surfaceKind: FrameworkObservationSurfaceKind.ProxyObservable },
   );
   return surfaceMethods.flatMap((method) => {
-    const descriptor = proxyCollectionMethodDescriptor(method.methodName);
-    if (descriptor === null) {
+    const descriptors = proxyCollectionMethodDescriptors(method.methodName);
+    if (descriptors.length === 0) {
       return [];
     }
     const declaration = functionDeclarations.get(method.methodName);
@@ -885,7 +885,7 @@ function readProxyObservableCollectionMethods(
       sourceFile,
       declaration,
     );
-    return [{
+    return descriptors.map((descriptor) => ({
       id: `runtime:proxy-observable:${descriptor.receiverKind}:${descriptor.methodName}:${method.methodName}`,
       packageId: method.packageId,
       packageName: method.packageName,
@@ -900,7 +900,7 @@ function readProxyObservableCollectionMethods(
       source,
       summary:
         `ProxyObservable exposes ${descriptor.receiverKind}.${descriptor.methodName} through ${method.methodName}; ${collectsCollection ? "the wrapper collects the collection" : "the wrapper does not collect the collection"}${callbackConnectable ? " and invokes the callback inside the active connectable turn" : ""}.`,
-    }];
+    }));
   });
 }
 
@@ -909,55 +909,85 @@ interface ProxyCollectionMethodDescriptor {
   readonly methodName: string;
 }
 
-function proxyCollectionMethodDescriptor(
+function proxyCollectionMethodDescriptors(
   sourceMethodName: string,
-): ProxyCollectionMethodDescriptor | null {
+): readonly ProxyCollectionMethodDescriptor[] {
   if (sourceMethodName.startsWith("wrappedArray")) {
-    return {
+    return [{
       receiverKind: FrameworkObservationCollectionReceiverKind.Array,
       methodName: lowerFirst(sourceMethodName.slice("wrappedArray".length)),
-    };
+    }];
   }
   switch (sourceMethodName) {
     case "wrappedReduce":
-      return {
+      return [{
         receiverKind: FrameworkObservationCollectionReceiverKind.Array,
         methodName: "reduce",
-      };
+      }];
     case "wrappedReduceRight":
-      return {
+      return [{
         receiverKind: FrameworkObservationCollectionReceiverKind.Array,
         methodName: "reduceRight",
-      };
+      }];
     case "wrappedForEach":
     case "wrappedHas":
     case "wrappedClear":
     case "wrappedDelete":
-      return {
+      return [{
         receiverKind: FrameworkObservationCollectionReceiverKind.MapOrSet,
         methodName: lowerFirst(sourceMethodName.slice("wrapped".length)),
-      };
+      }];
     case "wrappedGet":
     case "wrappedSet":
-      return {
+      return [{
         receiverKind: FrameworkObservationCollectionReceiverKind.Map,
         methodName: lowerFirst(sourceMethodName.slice("wrapped".length)),
-      };
+      }];
     case "wrappedAdd":
-      return {
+      return [{
         receiverKind: FrameworkObservationCollectionReceiverKind.Set,
         methodName: "add",
-      };
+      }];
     case "wrappedKeys":
+      return proxySharedIteratorDescriptors("keys");
     case "wrappedValues":
+      return [
+        ...proxySharedIteratorDescriptors("values"),
+        {
+          receiverKind: FrameworkObservationCollectionReceiverKind.Array,
+          methodName: "Symbol.iterator",
+        },
+        {
+          receiverKind: FrameworkObservationCollectionReceiverKind.Set,
+          methodName: "Symbol.iterator",
+        },
+      ];
     case "wrappedEntries":
-      return {
-        receiverKind: FrameworkObservationCollectionReceiverKind.Collection,
-        methodName: lowerFirst(sourceMethodName.slice("wrapped".length)),
-      };
+      return [
+        ...proxySharedIteratorDescriptors("entries"),
+        {
+          receiverKind: FrameworkObservationCollectionReceiverKind.Map,
+          methodName: "Symbol.iterator",
+        },
+      ];
     default:
-      return null;
+      return [];
   }
+}
+
+function proxySharedIteratorDescriptors(
+  methodName: "keys" | "values" | "entries",
+): readonly ProxyCollectionMethodDescriptor[] {
+  return [
+    {
+      receiverKind: FrameworkObservationCollectionReceiverKind.Array,
+      methodName,
+    },
+    {
+      receiverKind: FrameworkObservationCollectionReceiverKind.MapOrSet,
+      methodName,
+    },
+  ];
 }
 
 function findVariableDeclaration(

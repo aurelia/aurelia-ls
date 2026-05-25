@@ -1,6 +1,16 @@
 <template>
   <div t-params.bind="{ name: customerName }"></div>
   <p t.bind="numericKey"></p>
+  <p t.bind="numericKey & state"></p>
+  <p t.bind="objectKey.viewName & state"></p>
+  <p
+    t="greeting"
+    t-params.bind="{ name: parameterName } & state"
+  ></p>
+  <p
+    t="greeting"
+    t-params.bind="{ name: parameterObject.stateName } & state"
+  ></p>
   <section
     t="greeting"
     t-params.bind="{ name: customerName }"

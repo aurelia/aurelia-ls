@@ -8,7 +8,8 @@ errors have framework semantics that need their own products and diagnostics.
 from configuration recognition. It emits `StateStoreConfiguration` products for builder calls that would survive to the
 framework's creating `AppTask`, and `StateIssue` products for source-visible framework rejection paths. Store
 configuration also projects the TypeChecker type of the initial state argument so later template analysis can treat
-`store.getState()` as a typed binding context.
+`store.getState()` as a typed binding context, and retains the initial-state source address so static source-value
+consumers can reduce the configured initial value without pretending to execute store actions.
 
 `state-binding-scope.ts` owns the state-scope handoff into template expression typing. It mirrors the framework's
 `createStateBindingScope(state, scope)`: the new scope is a boundary, its parent is the original template scope, and its
@@ -22,6 +23,10 @@ before later source evaluation, while `astEvaluate(...)` simply unwraps binding 
 are evaluated during bind with no active connectable, so they are not ordinary observed source dependencies. Interpolation
 holes participate through runtime-html `InterpolationPartBinding`: each hole binds its own expression, so `& state`
 inside text interpolation can install the same store-backed scope as a bind-command expression.
+When binding-source value evaluation reads a slot from a modeled state binding scope, it may evaluate the configured
+initial-state expression through the shared static evaluator frame before falling back to type-only slot evaluation.
+This lets consumers such as dynamic composition or route-resource values reuse the same `& state` handoff while keeping
+dynamic store-name selection and later action-driven state changes explicit frontiers.
 
 Raw framework errors are linked through `StateRawErrorAuthority` because `@aurelia/state` currently throws plain
 `Error` instances instead of `ErrorNames`/AUR codes. Only add a raw authority constant when semantic-runtime has a

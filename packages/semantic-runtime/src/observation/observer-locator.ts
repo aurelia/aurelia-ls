@@ -10,8 +10,8 @@ import {
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  checkerCollectionSymbolName,
-} from '../type-system/checker-related-types.js';
+  checkerTypeExtendsCollection,
+} from '../type-system/checker-collection-types.js';
 import {
   checkerPropertySymbol,
   checkerSymbolValueType,
@@ -1372,27 +1372,6 @@ function observerStrategySupportsCallback(strategy: RuntimeBindingTargetAccessSt
 function observerStrategySupportsCoercer(strategy: RuntimeBindingTargetAccessStrategy): boolean {
   return strategy === RuntimeBindingTargetAccessStrategy.SetterObserver
     || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver;
-}
-
-function checkerTypeExtendsCollection(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-  collectionNames: readonly string[],
-  seen: Set<ts.Type> = new Set(),
-): boolean {
-  if (seen.has(type)) {
-    return false;
-  }
-  seen.add(type);
-  const names = new Set(collectionNames);
-  if (names.has(checkerCollectionSymbolName(type) ?? '')) {
-    return true;
-  }
-  if ((names.has('Array') || names.has('ReadonlyArray')) && (checker.isArrayType(type) || checker.isTupleType(type))) {
-    return true;
-  }
-  return checker.getBaseTypes(type as ts.InterfaceType)
-    ?.some((base) => checkerTypeExtendsCollection(checker, base, collectionNames, seen)) ?? false;
 }
 
 function isArrayIndexProperty(property: string): boolean {

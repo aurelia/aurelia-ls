@@ -90,3 +90,21 @@ export class RuntimeBindingExpressionScopeProjector {
     );
   }
 }
+
+/** True when the binding source can change Scope during `astBind(...)` under the modeled semantic-runtime rules. */
+export function runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior(
+  expression: ExpressionAstNode,
+): boolean {
+  const unwrapped = unwrapExpressionAstNodeParens(expression);
+  if (unwrapped.$kind === 'Interpolation') {
+    return unwrapped.expressions.some(runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior);
+  }
+  let current: ExpressionAstNode = unwrapped;
+  while (current.$kind === 'BindingBehavior') {
+    if (current.name.name === STATE_BINDING_BEHAVIOR_NAME) {
+      return true;
+    }
+    current = unwrapExpressionAstNodeParens(current.expression);
+  }
+  return false;
+}

@@ -56,10 +56,7 @@ export class CheckerExpressionScopeProjector {
     scope: BindingScope,
     localKey: string,
   ): CheckerExpressionTypeEvaluation {
-    let current: BindingScope | null = scope;
-    while (current != null && !current.isBoundary) {
-      current = current.parent;
-    }
+    const current = scope.locateBoundary();
     if (current == null) {
       return this.support.open(
         CheckerExpressionTypeOpenKind.MissingContext,

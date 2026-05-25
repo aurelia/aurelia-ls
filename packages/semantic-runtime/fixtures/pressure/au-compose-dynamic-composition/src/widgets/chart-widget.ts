@@ -17,7 +17,11 @@ export class ChartWidget {
     return this.model?.metric ?? 0;
   }
 
-  activate(model: DashboardWidgetModel): void {
-    this.model = model;
+  activate(model: { readonly notTheDashboardModel: true }): void;
+  activate(model: DashboardWidgetModel): void;
+  activate(model: DashboardWidgetModel | { readonly notTheDashboardModel: true }): void {
+    if ('metric' in model) {
+      this.model = model;
+    }
   }
 }

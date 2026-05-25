@@ -72,6 +72,12 @@ open seams, or inquiry answers.
   arrow parsing owns invalid arrow parameter lists, default/destructuring
   parameters, rest placement, and unsupported block bodies;
   broader API code should not retrofit those framework labels after publication.
+- `global-names.ts` owns the Aurelia expression-parser `AccessGlobal` allow-list. Keep it mirrored to the framework
+  parser/test list and reuse it from evaluator/type/source-value consumers instead of duplicating host-global names.
+- `array-method-semantics.ts` owns the shared native Array method descriptor for expression semantics. It keeps
+  framework `astEvaluate` collection observation, product-recognized callback execution, and synthetic Array type
+  projection visibly separate while letting TypeChecker projection, source-value reduction, and connectable observation
+  ask one classification question before adding method-specific behavior.
 - Parser publication enums are string-valued where they can escape into product
   records or inquiry payloads. Numeric bitmasks remain internal classifier
   helpers only.
@@ -100,6 +106,10 @@ open seams, or inquiry answers.
 - `parse-result-inspection.ts`
   Stable family/outcome inspection helpers for consumers. Member-owner and member-name reads share one AST traversal
   primitive so new expression kinds do not require parallel recursive switches in cursor, diagnostic, and hover paths.
+- `runtime-assignment.ts`
+  Expression-level `astAssign` target and value-converter chain helpers. Binding data-flow, template scope
+  construction, overlays, and diagnostics should share these transparent-wrapper rules instead of rediscovering
+  assignment targets through template-local parser helpers.
 - `completed-input-parser-state.ts`
   Parser state engine: scanner cursor, checkpoints, rebasing, and local/global
   offset translation.

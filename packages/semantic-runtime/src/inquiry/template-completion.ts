@@ -10,7 +10,6 @@ import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   ExpressionParseResultInspector,
-  expressionAstNodeContainsKind,
 } from '../expression/parse-result-inspection.js';
 import { expressionSpanContainsOffset } from '../expression/source-span.js';
 import type {
@@ -35,13 +34,19 @@ import {
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
-import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
+import {
+  bindingExpressionAstForProductAtOffset,
+  readTemplateExpressionParse,
+} from '../template/expression-parse-product.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
   type CheckerExpressionTypeOpenSubject,
   type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
+import {
+  CheckerExpressionTypeEvaluationContext,
+} from '../type-system/expression-type-context.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { checkerNullishType } from '../type-system/checker-related-types.js';
 import type {
@@ -88,11 +93,15 @@ import {
   frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
 import {
+  bindingSourceContextProjectionForTemplateExpressionParseAtOffset,
   bindingScopeForTemplateExpressionParse,
   templateExpressionParsesForResource,
   templateScopeRangeAddressHandle,
   templateValueSitesForResource,
 } from '../template/template-expression-selection.js';
+import {
+  checkerContextForRuntimeBindingSourceExpressionProjection,
+} from '../observation/runtime-binding-source-expression-context.js';
 import {
   InquiryAnswer,
   InquiryContinuation,
@@ -367,7 +376,9 @@ class TemplateCompletionCursorContextBuilder {
   ) {
     this.page = input.page ?? new InquiryPageRequest();
     this.projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
-    this.expressionWorld = input.expressionWorld ?? new CheckerExpressionTypeWorld(store);
+    this.expressionWorld = input.expressionWorld
+      ?? input.resource.runtimeAnalysis.expressionWorld
+      ?? new CheckerExpressionTypeWorld(store);
   }
 
   build(): TemplateCompletionCursorContext {
@@ -417,7 +428,13 @@ class TemplateCompletionCursorContextBuilder {
     const classification = this.classificationForCursorSyntax(syntax);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
-    const bindingScope = bindingScopeForCursor(this.store, this.input.resource, offset, expressionParse);
+    const bindingScope = bindingScopeForCursor(
+      this.store,
+      this.input.resource,
+      this.expressionWorld,
+      offset,
+      expressionParse,
+    );
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
     const selectedBindable = selectedBindableForCursor(classification, valueSite);
     const missingInputs: string[] = [];
@@ -539,13 +556,15 @@ class TemplateCompletionCursorContextBuilder {
     return siteKind === TemplateCompletionSiteKind.ExpressionMember
       && bindingScope != null
       && expressionParse != null
-      ? deriveMemberOwnerTypeForExpression(
+      ? deriveMemberOwnerTypeForCursorExpression(
         this.store,
         this.input.locus.key,
         expressionResult,
+        expressionParse,
         offset,
         expressionParse.sourceAddressHandle,
         bindingScope,
+        this.input.resource,
         this.input.resource.compilation.compilerWorld.resourceScope,
         valueSite == null ? null : bindableTypeMember(this.store, valueSite)?.valueType ?? null,
         this.expressionWorld,
@@ -591,11 +610,8 @@ function createTemplateCompletionAnswerFrame(
   const expressionFrontier = expressionResult == null
     ? null
     : expressionCompletionFrontier(expressionResult);
-  const needsMemberOwnerType = shouldDeriveMemberOwnerType(query, expressionResult);
-  const needsBindingScope = shouldReadBindingScope(query.siteKind, expressionFrontier)
-    || needsMemberOwnerType;
-  const needsResourceScope = shouldReadResourceScope(query.siteKind, expressionFrontier)
-    || shouldReadResourceScopeForMemberOwner(needsMemberOwnerType, expressionResult);
+  const needsBindingScope = shouldReadBindingScope(query.siteKind, expressionFrontier);
+  const needsResourceScope = shouldReadResourceScope(query.siteKind, expressionFrontier);
   const bindingScope = needsBindingScope
     ? readBindingScope(store, query.bindingScopeProductHandle, missingInputs)
     : null;
@@ -663,15 +679,10 @@ function collectExpressionMemberCandidates(
   if (frame.query.siteKind !== TemplateCompletionSiteKind.ExpressionMember) {
     return;
   }
-  frame.memberOwnerTypeProductHandle ??= deriveMemberOwnerTypeProductHandle(
-    frame.store,
-    frame.query,
-    frame.expressionParse,
-    frame.bindingScope,
-    frame.resourceScope,
-    frame.expressionWorld,
-    frame.missingInputs,
-  );
+  if (frame.memberOwnerTypeProductHandle == null) {
+    frame.missingInputs.push('member-owner-type');
+    return;
+  }
   const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
   if (members != null) {
     frame.candidates.push(...typeMemberCandidates(frame.store, members));
@@ -1235,16 +1246,6 @@ function bindableTypeMember(
   return members.find((member) => member.name === bindableName) ?? null;
 }
 
-function contextualExpressionTypeForQuery(
-  store: KernelStore,
-  query: TemplateCompletionQuery,
-): CheckerTypeReference | null {
-  const site = query.valueSiteProductHandle == null
-    ? null
-    : store.productDetails.read(TemplateProductDetails.ValueSite, query.valueSiteProductHandle);
-  return site == null ? null : bindableTypeMember(store, site)?.valueType ?? null;
-}
-
 function finiteStaticValueCandidatesForMember(
   member: CheckerTypeMember,
 ): readonly string[] {
@@ -1335,127 +1336,47 @@ function expressionMemberSurfaceMissingInput(
   return `expression-member-owner-type:no-members:${shapeKind}`;
 }
 
-function shouldDeriveMemberOwnerType(
-  query: TemplateCompletionQuery,
-  expressionResult: ExpressionParseResult | null,
-): boolean {
-  return query.siteKind === TemplateCompletionSiteKind.ExpressionMember
-    && query.memberOwnerTypeProductHandle == null
-    && expressionResult != null;
-}
-
-function shouldReadResourceScopeForMemberOwner(
-  needsMemberOwnerType: boolean,
-  expressionResult: ExpressionParseResult | null,
-): boolean {
-  if (!needsMemberOwnerType || expressionResult == null) {
-    return false;
-  }
-  const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
-  return owner != null && expressionAstNodeContainsKind(owner, 'ValueConverter');
-}
-
-function deriveMemberOwnerTypeProductHandle(
-  store: KernelStore,
-  query: TemplateCompletionQuery,
-  expressionParse: TemplateExpressionParse | null,
-  bindingScope: BindingScope | null,
-  resourceScope: TemplateResourceScope | null,
-  expressionWorld: CheckerExpressionTypeWorld,
-  missingInputs: string[],
-): ProductHandle | null {
-  if (expressionParse == null || bindingScope == null) {
-    return null;
-  }
-
-  const expressionResult = focusedExpressionResultForQuery(store, query, expressionParse);
-  if (expressionResult == null) {
-    missingInputs.push('expression-member-owner');
-    return null;
-  }
-
-  if (query.locus.kind === InquiryLocusKind.SourceCursor && query.locus.cursor.offset != null) {
-    return deriveMemberOwnerTypeForExpression(
-      store,
-      query.locus.key,
-      expressionResult,
-      query.locus.cursor.offset,
-      expressionParse.sourceAddressHandle,
-      bindingScope,
-      resourceScope,
-      contextualExpressionTypeForQuery(store, query),
-      expressionWorld,
-      missingInputs,
-    ).productHandle;
-  }
-
-  const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
-  if (owner == null) {
-    missingInputs.push('expression-member-owner');
-    return null;
-  }
-  return deriveMemberOwnerTypeProductHandleFromEvaluation(
-    evaluateMemberOwnerExpression(
-      store,
-      query.locus.key,
-      owner,
-      expressionParse.sourceAddressHandle,
-      bindingScope,
-      resourceScope,
-      contextualExpressionTypeForQuery(store, query),
-      expressionWorld,
-    ),
-    missingInputs,
-  );
-}
-
-function evaluateMemberOwnerExpression(
-  store: KernelStore,
-  locusKey: string,
-  owner: ExpressionAstNode,
-  sourceAddressHandle: AddressHandle | null,
-  bindingScope: BindingScope,
-  resourceScope: TemplateResourceScope | null,
-  contextualType: CheckerTypeReference | null = null,
-  expressionWorld: CheckerExpressionTypeWorld,
-): CheckerExpressionTypeEvaluation {
-  return expressionWorld.evaluator(resourceScope).evaluateWithScope(
-    owner,
-    bindingScope,
-    memberOwnerLocalKey(locusKey),
-    sourceAddressHandle,
-    contextualType,
-  );
-}
-
-function memberOwnerLocalKey(locusKey: string): string {
-  return `template-completion:${locusKey}:member-owner`;
-}
-
-function deriveMemberOwnerTypeForExpression(
+function deriveMemberOwnerTypeForCursorExpression(
   store: KernelStore,
   locusKey: string,
   result: ExpressionParseResult | null,
+  expressionParse: TemplateExpressionParse,
   offset: number,
   sourceAddressHandle: AddressHandle | null,
   bindingScope: BindingScope,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   resourceScope: TemplateResourceScope | null,
   contextualType: CheckerTypeReference | null,
   expressionWorld: CheckerExpressionTypeWorld,
   missingInputs: string[],
 ): DerivedMemberOwnerType {
-  const evaluation = evaluateMemberOwnerExpressionAtOffset(
+  const context = memberOwnerEvaluationContextForCursorExpression(
     store,
     locusKey,
-    result,
+    expressionParse,
     offset,
     sourceAddressHandle,
     bindingScope,
-    resourceScope,
+    resource,
     contextualType,
     expressionWorld,
-    missingInputs,
   );
+  if (context == null) {
+    missingInputs.push('expression-member-owner');
+    return missingDerivedMemberOwnerType();
+  }
+
+  const evaluator = expressionWorld.evaluator(resourceScope);
+  const evaluation = result != null && 'ast' in result
+    ? evaluator.evaluateMemberOwnerAtOffset(context, offset)
+    : evaluateMemberOwnerFrontierAtOffset(
+      evaluator,
+      result,
+      offset,
+      context,
+      contextualType,
+      missingInputs,
+    );
   if (evaluation == null) {
     return missingDerivedMemberOwnerType();
   }
@@ -1463,48 +1384,55 @@ function deriveMemberOwnerTypeForExpression(
   return deriveMemberOwnerTypeFromEvaluation(evaluation, missingInputs);
 }
 
-function evaluateMemberOwnerExpressionAtOffset(
+function memberOwnerEvaluationContextForCursorExpression(
   store: KernelStore,
   locusKey: string,
-  result: ExpressionParseResult | null,
+  expressionParse: TemplateExpressionParse,
   offset: number,
   sourceAddressHandle: AddressHandle | null,
   bindingScope: BindingScope,
-  resourceScope: TemplateResourceScope | null,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   contextualType: CheckerTypeReference | null,
   expressionWorld: CheckerExpressionTypeWorld,
-  missingInputs: string[],
-): CheckerExpressionTypeEvaluation | null {
-  const evaluator = expressionWorld.evaluator(resourceScope);
-  if (result != null && 'ast' in result) {
-    return evaluator.evaluateMemberOwnerAtOffset(
-      result.ast,
-      offset,
+): CheckerExpressionTypeEvaluationContext | null {
+  const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset);
+  if (expression == null) {
+    return null;
+  }
+
+  const projection = bindingSourceContextProjectionForTemplateExpressionParseAtOffset(
+    store,
+    resource,
+    expressionWorld,
+    expressionParse,
+    offset,
+    bindingScope,
+  );
+  return projection == null
+    ? CheckerExpressionTypeEvaluationContext.knownScope(
+      expression,
       bindingScope,
       memberOwnerLocalKey(locusKey),
       sourceAddressHandle,
       contextualType,
+    )
+    : checkerContextForRuntimeBindingSourceExpressionProjection(
+      projection,
+      false,
+      contextualType,
+      memberOwnerLocalKey(locusKey),
     );
-  }
-  return evaluateMemberOwnerFrontierAtOffset(
-    evaluator,
-    locusKey,
-    result,
-    offset,
-    sourceAddressHandle,
-    bindingScope,
-    contextualType,
-    missingInputs,
-  );
+}
+
+function memberOwnerLocalKey(locusKey: string): string {
+  return `template-completion:${locusKey}:member-owner`;
 }
 
 function evaluateMemberOwnerFrontierAtOffset(
   evaluator: TemplateCompletionExpressionEvaluator,
-  locusKey: string,
   result: ExpressionParseResult | null,
   offset: number,
-  sourceAddressHandle: AddressHandle | null,
-  bindingScope: BindingScope,
+  context: CheckerExpressionTypeEvaluationContext,
   contextualType: CheckerTypeReference | null,
   missingInputs: string[],
 ): CheckerExpressionTypeEvaluation | null {
@@ -1513,20 +1441,7 @@ function evaluateMemberOwnerFrontierAtOffset(
     missingInputs.push('expression-member-owner');
     return null;
   }
-  return evaluator.evaluateWithScope(
-    owner,
-    bindingScope,
-    memberOwnerLocalKey(locusKey),
-    sourceAddressHandle,
-    contextualType,
-  );
-}
-
-function deriveMemberOwnerTypeProductHandleFromEvaluation(
-  evaluation: CheckerExpressionTypeEvaluation,
-  missingInputs: string[],
-): ProductHandle | null {
-  return deriveMemberOwnerTypeFromEvaluation(evaluation, missingInputs).productHandle;
+  return evaluator.evaluate(context.child(owner, 'frontier', contextualType));
 }
 
 function deriveMemberOwnerTypeFromEvaluation(
@@ -2307,12 +2222,14 @@ function isBindingCommandNameOffset(
 function bindingScopeForCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionWorld: CheckerExpressionTypeWorld,
   offset: number,
   expressionParse: TemplateExpressionParse | null,
 ): BindingScope | null {
   const instructionScope = expressionParse == null
     ? null
-    : bindingScopeForTemplateExpressionParse(resource, expressionParse);
+    : bindingSourceScopeForTemplateExpressionParse(store, resource, expressionWorld, expressionParse, offset)
+      ?? bindingScopeForTemplateExpressionParse(resource, expressionParse);
   if (instructionScope != null) {
     return instructionScope;
   }
@@ -2333,6 +2250,22 @@ function bindingScopeForCursor(
     }
   }
   return best?.scope ?? root;
+}
+
+function bindingSourceScopeForTemplateExpressionParse(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionWorld: CheckerExpressionTypeWorld,
+  expressionParse: TemplateExpressionParse,
+  offset: number,
+): BindingScope | null {
+  return bindingSourceContextProjectionForTemplateExpressionParseAtOffset(
+    store,
+    resource,
+    expressionWorld,
+    expressionParse,
+    offset,
+  )?.scope ?? null;
 }
 
 function scopeDepth(scope: BindingScope): number {

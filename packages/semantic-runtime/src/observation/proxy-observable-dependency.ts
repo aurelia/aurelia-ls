@@ -16,6 +16,17 @@ import {
 } from '../evaluation/ts-syntax.js';
 import { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
 import {
+  RuntimeProxyCollectionMethodSet,
+  RuntimeProxyCollectionReceiverKind,
+  runtimeProxyCollectionCallbackObservationPolicy,
+  runtimeProxyCollectionReceiverCanUseMethod,
+  runtimeProxyInterceptedCollectionMethods,
+  runtimeProxyIteratorMethodName,
+  runtimeProxyObservedCollectionMethods,
+  runtimeProxyWrappedCallResultMethods,
+} from './runtime-collection-method-semantics.js';
+import {
+  checkerArrayOrTupleType,
   checkerCollectionSymbolName,
   checkerNullishType,
 } from '../type-system/checker-related-types.js';
@@ -63,116 +74,6 @@ export interface RuntimeProxyObservedDependencyCollectionOptions {
   readonly trackableMethodStack?: ReadonlySet<ts.MethodDeclaration>;
 }
 
-type ProxyObservedCollectionReceiverKind = 'array' | 'map' | 'set' | 'unknown' | 'none';
-type ProxyConcreteCollectionReceiverKind = Exclude<ProxyObservedCollectionReceiverKind, 'unknown' | 'none'>;
-
-interface ProxyCollectionMethodPolicy {
-  readonly observedMethods: ReadonlySet<string>;
-  readonly interceptedMethods: ReadonlySet<string>;
-  readonly wrappedResultMethods: ReadonlySet<string>;
-}
-
-const proxyObservedArrayMethods = new Set([
-  'map',
-  'every',
-  'filter',
-  'includes',
-  'indexOf',
-  'lastIndexOf',
-  'find',
-  'findIndex',
-  'flat',
-  'flatMap',
-  'join',
-  'reduce',
-  'reduceRight',
-  'slice',
-  'some',
-  'sort',
-  'keys',
-  'values',
-  'entries',
-]);
-
-const proxyObservedMapMethods = new Set([
-  'forEach',
-  'has',
-  'get',
-  'keys',
-  'values',
-  'entries',
-]);
-
-const proxyObservedSetMethods = new Set([
-  'forEach',
-  'has',
-  'keys',
-  'values',
-  'entries',
-]);
-
-const proxyCollectionMethodPolicies: Readonly<Record<ProxyConcreteCollectionReceiverKind, ProxyCollectionMethodPolicy>> = {
-  array: {
-    observedMethods: proxyObservedArrayMethods,
-    interceptedMethods: new Set([
-      ...proxyObservedArrayMethods,
-      'push',
-      'pop',
-      'reverse',
-      'shift',
-      'unshift',
-      'splice',
-    ]),
-    wrappedResultMethods: new Set([
-      'map',
-      'filter',
-      'find',
-      'flat',
-      'flatMap',
-      'pop',
-      'reduce',
-      'reduceRight',
-      'reverse',
-      'shift',
-      'slice',
-      'sort',
-      'splice',
-    ]),
-  },
-  map: {
-    observedMethods: proxyObservedMapMethods,
-    interceptedMethods: new Set([
-      ...proxyObservedMapMethods,
-      'clear',
-      'delete',
-      'set',
-    ]),
-    wrappedResultMethods: new Set([
-      'get',
-      'set',
-    ]),
-  },
-  set: {
-    observedMethods: proxyObservedSetMethods,
-    interceptedMethods: new Set([
-      ...proxyObservedSetMethods,
-      'clear',
-      'delete',
-      'add',
-    ]),
-    wrappedResultMethods: new Set([
-      'add',
-    ]),
-  },
-};
-
-// Mirrors ProxyObservable wrapper methods that call observeCollection(...). Mutating wrappers such as push/splice/set
-// stay out of this set even when their return value can become a downstream proxy carrier.
-const proxyObservedCollectionMethods = proxyCollectionMethodUnion('observedMethods');
-const proxyInterceptedCollectionMethods = proxyCollectionMethodUnion('interceptedMethods');
-const proxyWrappedCallResultMethods = proxyCollectionMethodUnion('wrappedResultMethods');
-
-const proxyIteratorMethodName = 'Symbol.iterator';
 const proxyOwnKeysLengthMemberName = 'length';
 const aureliaNowrapDecoratorModules = new Set([
   'aurelia',
@@ -182,18 +83,6 @@ const aureliaNowrapDecoratorExports = new Set([
   'nowrap',
 ]);
 const nowrapImportBindings = new WeakMap<ts.SourceFile, SourceImportBindings>();
-
-function proxyCollectionMethodUnion(
-  methodSet: keyof ProxyCollectionMethodPolicy,
-): ReadonlySet<string> {
-  const methods = new Set<string>();
-  for (const policy of Object.values(proxyCollectionMethodPolicies)) {
-    for (const methodName of policy[methodSet]) {
-      methods.add(methodName);
-    }
-  }
-  return methods;
-}
 
 /** Conservative TypeScript-body projection of ProxyObservable property and collection dependency reads. */
 @auLink('runtime:ProxyObservable')
@@ -434,7 +323,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       if (
         receiver != null &&
         propertyChainValueCanBeProxyWrapped(receiver) &&
-        proxyObservedCollectionMethods.has(callee.name.text) &&
+        runtimeProxyObservedCollectionMethods.has(callee.name.text) &&
         this.receiverCanUseProxyObservedCollectionMethod(callee.expression, callee.name.text)
       ) {
         this.recordCollectionRead(receiver, callee.name.text, callee);
@@ -773,11 +662,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
     methodName: string,
   ): boolean {
     if (this.typeContext == null) {
-      return proxyInterceptedCollectionMethods.has(methodName);
+      return runtimeProxyInterceptedCollectionMethods.has(methodName);
     }
     const type = proxyTypeAtNode(this.typeContext, receiver);
     if (type == null) {
-      return proxyInterceptedCollectionMethods.has(methodName);
+      return runtimeProxyInterceptedCollectionMethods.has(methodName);
     }
     return checkerTypeCanUseProxyInterceptedCollectionMethod(this.typeContext.checker, type, methodName);
   }
@@ -786,41 +675,18 @@ class RuntimeProxyObservedDependencyDraftCollector {
     methodName: string,
     receiver: ts.Expression,
   ): { readonly visitCallback: boolean; readonly wrappedParameterIndexes: readonly number[] } {
-    switch (methodName) {
-      case 'map':
-      case 'every':
-      case 'filter':
-      case 'find':
-      case 'findIndex':
-      case 'flatMap':
-      case 'some':
-        return { visitCallback: true, wrappedParameterIndexes: [0] };
-      case 'reduce':
-      case 'reduceRight':
-        return { visitCallback: true, wrappedParameterIndexes: [1] };
-      case 'sort':
-        return { visitCallback: true, wrappedParameterIndexes: [] };
-      case 'forEach': {
-        const receiverKind = this.receiverProxyObservedCollectionKind(receiver);
-        const wrappedParameterIndexes = receiverKind === 'map' || receiverKind === 'set' || receiverKind === 'unknown'
-          ? [0, 1]
-          : [0];
-        return { visitCallback: true, wrappedParameterIndexes };
-      }
-      default:
-        return { visitCallback: false, wrappedParameterIndexes: [] };
-    }
+    return runtimeProxyCollectionCallbackObservationPolicy(methodName, this.receiverProxyObservedCollectionKind(receiver));
   }
 
   private receiverProxyObservedCollectionKind(
     receiver: ts.Expression,
-  ): ProxyObservedCollectionReceiverKind {
+  ): RuntimeProxyCollectionReceiverKind {
     if (this.typeContext == null) {
-      return 'unknown';
+      return RuntimeProxyCollectionReceiverKind.Unknown;
     }
     const type = proxyTypeAtNode(this.typeContext, receiver);
     if (type == null) {
-      return 'unknown';
+      return RuntimeProxyCollectionReceiverKind.Unknown;
     }
     return checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type);
   }
@@ -851,12 +717,12 @@ class RuntimeProxyObservedDependencyDraftCollector {
     return receiver != null
       && propertyChainValueCanBeProxyWrapped(receiver)
       && this.receiverCanUseProxyObservedForOf(unwrapped)
-      ? {
-        receiver,
-        receiverExpression: unwrapped,
-        methodName: proxyIteratorMethodName,
-        spanNode: unwrapped,
-      }
+        ? {
+          receiver,
+          receiverExpression: unwrapped,
+          methodName: runtimeProxyIteratorMethodName,
+          spanNode: unwrapped,
+        }
       : null;
   }
 
@@ -891,7 +757,11 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (type == null) {
       return true;
     }
-    return checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type) !== 'none';
+    return runtimeProxyCollectionReceiverCanUseMethod(
+      checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type),
+      runtimeProxyIteratorMethodName,
+      RuntimeProxyCollectionMethodSet.Observed,
+    );
   }
 
   private receiverCanUseProxyObservedArrayOwnKeys(
@@ -905,7 +775,8 @@ class RuntimeProxyObservedDependencyDraftCollector {
       return true;
     }
     const kind = checkerTypeProxyObservedCollectionKind(this.typeContext.checker, type);
-    return kind === 'array' || kind === 'unknown';
+    return kind === RuntimeProxyCollectionReceiverKind.Array
+      || kind === RuntimeProxyCollectionReceiverKind.Unknown;
   }
 
   private expressionCanBeProxyWrapped(
@@ -1315,7 +1186,7 @@ function proxyWrappedCallResultChainForExpression(
     return null;
   }
   const methodName = callee.name.text;
-  if (!proxyWrappedCallResultMethods.has(methodName)) {
+  if (!runtimeProxyWrappedCallResultMethods.has(methodName)) {
     return null;
   }
   const receiver = propertyChainForExpression(callee.expression, rootNames, aliases, typeContext);
@@ -1363,8 +1234,7 @@ function receiverCanUseProxyWrappedCallResultMethod(
     typeContext.checker,
     type,
     methodName,
-    'wrappedResultMethods',
-    proxyWrappedCallResultMethods,
+    RuntimeProxyCollectionMethodSet.WrappedResult,
   );
 }
 
@@ -1433,8 +1303,7 @@ function checkerTypeCanUseProxyObservedCollectionMethod(
     checker,
     type,
     methodName,
-    'observedMethods',
-    proxyObservedCollectionMethods,
+    RuntimeProxyCollectionMethodSet.Observed,
   );
 }
 
@@ -1447,8 +1316,7 @@ function checkerTypeCanUseProxyInterceptedCollectionMethod(
     checker,
     type,
     methodName,
-    'interceptedMethods',
-    proxyInterceptedCollectionMethods,
+    RuntimeProxyCollectionMethodSet.Intercepted,
   );
 }
 
@@ -1456,61 +1324,40 @@ function checkerTypeCanUseProxyCollectionMethod(
   checker: ts.TypeChecker,
   type: ts.Type,
   methodName: string,
-  methodSet: keyof ProxyCollectionMethodPolicy,
-  unknownMethods: ReadonlySet<string>,
+  methodSet: RuntimeProxyCollectionMethodSet,
 ): boolean {
   const kind = checkerTypeProxyObservedCollectionKind(checker, type);
-  return proxyCollectionReceiverCanUseMethod(
-    kind,
-    methodName,
-    methodSet,
-    unknownMethods,
-  );
-}
-
-function proxyCollectionReceiverCanUseMethod(
-  kind: ProxyObservedCollectionReceiverKind,
-  methodName: string,
-  methodSet: keyof ProxyCollectionMethodPolicy,
-  unknownMethods: ReadonlySet<string>,
-): boolean {
-  if (kind === 'unknown') {
-    return unknownMethods.has(methodName);
-  }
-  if (kind === 'none') {
-    return false;
-  }
-  return proxyCollectionMethodPolicies[kind][methodSet].has(methodName);
+  return runtimeProxyCollectionReceiverCanUseMethod(kind, methodName, methodSet);
 }
 
 function checkerTypeProxyObservedCollectionKind(
   checker: ts.TypeChecker,
   type: ts.Type,
-): ProxyObservedCollectionReceiverKind {
+): RuntimeProxyCollectionReceiverKind {
   if (type.isUnion()) {
     const relevant = type.types.filter((part) => !checkerNullishType(checker, part));
     const kinds = new Set(relevant.map((part) => checkerTypeProxyObservedCollectionKind(checker, part))
-      .filter((kind) => kind !== 'none'));
+      .filter((kind) => kind !== RuntimeProxyCollectionReceiverKind.None));
     return kinds.size === 0
-      ? 'none'
+      ? RuntimeProxyCollectionReceiverKind.None
       : kinds.size === 1
-        ? [...kinds][0] ?? 'none'
-        : 'unknown';
+        ? [...kinds][0] ?? RuntimeProxyCollectionReceiverKind.None
+        : RuntimeProxyCollectionReceiverKind.Unknown;
   }
   if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)) !== 0) {
-    return 'unknown';
+    return RuntimeProxyCollectionReceiverKind.Unknown;
   }
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
-    return 'array';
+  if (checkerArrayOrTupleType(checker, type)) {
+    return RuntimeProxyCollectionReceiverKind.Array;
   }
   const symbolName = checkerCollectionSymbolName(type);
   if (symbolName === 'Map' || symbolName === 'ReadonlyMap') {
-    return 'map';
+    return RuntimeProxyCollectionReceiverKind.Map;
   }
   if (symbolName === 'Set' || symbolName === 'ReadonlySet') {
-    return 'set';
+    return RuntimeProxyCollectionReceiverKind.Set;
   }
-  return 'none';
+  return RuntimeProxyCollectionReceiverKind.None;
 }
 
 function checkerTypeCanBeProxyWrapped(
@@ -1528,7 +1375,7 @@ function checkerTypeCanBeProxyWrapped(
   if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)) !== 0) {
     return true;
   }
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
+  if (checkerArrayOrTupleType(checker, type)) {
     return true;
   }
   const symbolName = checkerCollectionSymbolName(type);

@@ -1,8 +1,6 @@
 import ts from 'typescript';
-import type { BindingScope } from '../configuration/scope.js';
 import type {
   ExpressionAstNode,
-  ForOfStatement,
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
@@ -22,6 +20,7 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
 } from './expression-type-evaluation.js';
+import { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 import { CheckerExpressionTypeSynthesizer } from './expression-type-synthesis.js';
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
@@ -30,12 +29,7 @@ import {
 } from './type-shape.js';
 
 export interface CheckerExpressionIterableProjectorHost {
-  evaluateNode(
-    expression: ExpressionAstNode,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): CheckerExpressionTypeEvaluation;
+  evaluateNode(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation;
 }
 
 export class CheckerExpressionIteratorProjection {
@@ -69,52 +63,51 @@ export class CheckerExpressionIterableProjector {
   }
 
   evaluateForOfStatement(
-    expression: ForOfStatement,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    return this.host.evaluateNode(expression.iterable, scope, `${localKey}:iterable`, sourceAddressHandle);
+    const expression = context.expression;
+    return expression.$kind === 'ForOfStatement'
+      ? this.host.evaluateNode(context.child(expression.iterable, 'iterable'))
+      : this.support.open(
+        CheckerExpressionTypeOpenKind.UnsupportedExpression,
+        expression,
+        `Expression kind '${expression.$kind}' is not a repeat.for expression.`,
+      );
   }
 
   evaluateIteratorElement(
-    expression: ForOfStatement,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null = null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    return this.evaluateIteratorProjection(expression, scope, localKey, sourceAddressHandle).element;
+    return this.evaluateIteratorProjection(context).element;
   }
 
   evaluateIteratorLocals(
-    expression: ForOfStatement,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null = null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
-    return this.evaluateIteratorProjection(expression, scope, localKey, sourceAddressHandle).locals;
+    return this.evaluateIteratorProjection(context).locals;
   }
 
   evaluateIteratorProjection(
-    expression: ForOfStatement,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null = null,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionIteratorProjection {
-    const iterable = this.host.evaluateNode(
-      expression.iterable,
-      scope,
-      `${localKey}:iterator-source`,
-      sourceAddressHandle,
-    );
+    const expression = context.expression;
+    if (expression.$kind !== 'ForOfStatement') {
+      const open = this.support.open(
+        CheckerExpressionTypeOpenKind.UnsupportedExpression,
+        expression,
+        `Expression kind '${expression.$kind}' is not a repeat.for expression.`,
+      );
+      return new CheckerExpressionIteratorProjection(open, open, open);
+    }
+    const iterable = this.host.evaluateNode(context.child(expression.iterable, 'iterator-source'));
     if (iterable.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return new CheckerExpressionIteratorProjection(iterable, iterable, iterable);
     }
-    const iteratorSourceAddressHandle = iterable.sourceAddressHandle ?? sourceAddressHandle;
+    const iteratorSourceAddressHandle = iterable.sourceAddressHandle ?? context.sourceAddressHandle;
     const element = this.evaluateIterableElementType(
       expression,
       iterable.typeShape,
-      `${localKey}:iterator-element`,
+      `${context.projectionLocalKey()}:iterator-element`,
       iteratorSourceAddressHandle,
     );
     if (element.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
@@ -123,7 +116,7 @@ export class CheckerExpressionIterableProjector {
     const locals = this.bindingPatternLocals.projectBindingPattern(
       expression.declaration,
       element.typeShape,
-      `${localKey}:iterator-local`,
+      `${context.projectionLocalKey()}:iterator-local`,
       element.sourceAddressHandle ?? iteratorSourceAddressHandle,
     );
     return new CheckerExpressionIteratorProjection(iterable, element, locals);
@@ -142,13 +135,12 @@ export class CheckerExpressionIterableProjector {
     const checker = iterableType.carrier?.checker ?? null;
     const type = iterableType.carrier?.type ?? null;
     if (checker == null || type == null) {
-      if (iterableType.iteratedValueType?.productHandle != null) {
-        return this.support.resolveReference(
-          expression,
-          iterableType.iteratedValueType,
-          localKey,
-          CheckerExpressionTypeOpenKind.MissingIterableElementType,
-          `Iterated value type for '${iterableType.display}' could not be hydrated.`,
+      const iteratedValueType = this.typeAccess.iteratedValueType(iterableType, localKey, sourceAddressHandle);
+      if (iteratedValueType != null) {
+        return this.support.type(
+          iteratedValueType,
+          `Projected ${expression.$kind} repeat element type through the product-owned iterated type.`,
+          sourceAddressHandle,
         );
       }
       return this.support.open(

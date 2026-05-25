@@ -8,7 +8,8 @@ import type {
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import {
-  checkerTypeShapeIsDefinitelyNullish,
+  CheckerTypeNullishPresence,
+  checkerTypeShapeNullishPresence,
 } from './checker-related-types.js';
 import {
   CheckerTypeShapeAccess,
@@ -19,6 +20,7 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
 } from './expression-type-evaluation.js';
+import type { CheckerExpressionTypeEvaluationContext } from './expression-type-context.js';
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
   type CheckerTypeReference,
@@ -27,16 +29,7 @@ import {
 } from './type-shape.js';
 
 export interface CheckerExpressionAccessProjectorHost {
-  evaluateNode(
-    expression: ExpressionAstNode,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): CheckerExpressionTypeEvaluation;
-}
-
-export interface CheckerExpressionAccessRuntimeContext {
-  readonly strict: boolean | null;
+  evaluateNode(context: CheckerExpressionTypeEvaluationContext): CheckerExpressionTypeEvaluation;
 }
 
 /**
@@ -55,39 +48,50 @@ export class CheckerExpressionAccessProjector {
 
   evaluateAccessMember(
     expression: AccessMemberExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    runtimeContext: CheckerExpressionAccessRuntimeContext,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
+    const localKey = context.projectionLocalKey();
     const slotMember = this.evaluateSlotMemberRefinement(
       expression,
-      scope,
+      context.scope,
       `${localKey}:member:${expression.name.name}:slot-refinement`,
     );
     if (slotMember != null) {
       return slotMember;
     }
 
-    const owner = this.host.evaluateNode(
+    const owner = this.host.evaluateNode(context.child(
       expression.object,
-      scope,
-      `${localKey}:owner:${expression.name.name}`,
-      sourceAddressHandle,
-    );
+      `owner:${expression.name.name}`,
+    ));
     if (owner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return owner;
     }
-    if (checkerTypeShapeIsDefinitelyNullish(owner.typeShape)) {
+    const nullishPresence = checkerTypeShapeNullishPresence(owner.typeShape);
+    if (nullishPresence === CheckerTypeNullishPresence.Definitely) {
       return this.evaluateNullishAccess(
         expression,
-        scope,
+        context.scope,
         `${localKey}:member:${expression.name.name}:nullish`,
-        sourceAddressHandle,
+        context.sourceAddressHandle,
         expression.optional,
-        runtimeContext,
+        context.runtimeContext,
         CheckerExpressionTypeOpenKind.NullishMemberAccess,
         `Member access '${expression.name.name}' reached definitely nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
+        owner.typeReference,
+      );
+    }
+    if (nullishPresence === CheckerTypeNullishPresence.Maybe) {
+      return this.evaluatePossiblyNullishMemberAccess(
+        expression,
+        context,
+        owner.typeShape,
+        expression.name.name,
+        `${localKey}:member:${expression.name.name}:maybe-nullish`,
+        owner.sourceAddressHandle,
+        expression.optional,
+        CheckerExpressionTypeOpenKind.NullishMemberAccess,
+        `Member access '${expression.name.name}' can reach nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
         owner.typeReference,
       );
     }
@@ -103,42 +107,62 @@ export class CheckerExpressionAccessProjector {
 
   evaluateAccessKeyed(
     expression: AccessKeyedExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    runtimeContext: CheckerExpressionAccessRuntimeContext,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    const owner = this.host.evaluateNode(
+    const localKey = context.projectionLocalKey();
+    const owner = this.host.evaluateNode(context.child(
       expression.object,
-      scope,
-      `${localKey}:keyed-owner`,
-      sourceAddressHandle,
-    );
+      'keyed-owner',
+    ));
     if (owner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return owner;
     }
-    if (checkerTypeShapeIsDefinitelyNullish(owner.typeShape)) {
+    const nullishPresence = checkerTypeShapeNullishPresence(owner.typeShape);
+    if (nullishPresence === CheckerTypeNullishPresence.Definitely) {
       return this.evaluateNullishAccess(
         expression,
-        scope,
+        context.scope,
         `${localKey}:keyed:nullish`,
-        sourceAddressHandle,
+        context.sourceAddressHandle,
         expression.optional,
-        runtimeContext,
+        context.runtimeContext,
         CheckerExpressionTypeOpenKind.NullishKeyedAccess,
         `Keyed access reached definitely nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
         owner.typeReference,
       );
     }
+    if (nullishPresence === CheckerTypeNullishPresence.Maybe) {
+      return this.evaluatePossiblyNullishKeyedAccess(
+        expression,
+        context,
+        owner.typeShape,
+        `${localKey}:keyed:maybe-nullish`,
+        owner.sourceAddressHandle,
+        expression.optional,
+        CheckerExpressionTypeOpenKind.NullishKeyedAccess,
+        `Keyed access can reach nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
+        owner.typeReference,
+      );
+    }
 
+    return this.evaluateKeyedOnType(expression, context, owner.typeShape, owner.sourceAddressHandle, localKey);
+  }
+
+  private evaluateKeyedOnType(
+    expression: AccessKeyedExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+    ownerType: CheckerTypeShape,
+    ownerSourceAddressHandle: AddressHandle | null,
+    localKey: string,
+  ): CheckerExpressionTypeEvaluation {
     const literalKey = literalPropertyKey(expression.key);
     if (literalKey != null) {
       const literalMember = this.evaluateMemberOnType(
         expression,
-        owner.typeShape,
+        ownerType,
         literalKey,
         `${localKey}:keyed-member:${literalKey}`,
-        owner.sourceAddressHandle,
+        ownerSourceAddressHandle,
       );
       if (
         literalMember.kind === CheckerExpressionTypeEvaluationResultKind.Type
@@ -148,43 +172,43 @@ export class CheckerExpressionAccessProjector {
       }
     }
 
-    const key = this.host.evaluateNode(expression.key, scope, `${localKey}:key`, sourceAddressHandle);
+    const key = this.host.evaluateNode(context.child(expression.key, 'key'));
     if (key.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return key;
     }
 
     const finiteKeyAccess = this.evaluateFiniteKeyedAccess(
       expression,
-      owner.typeShape,
+      ownerType,
       key.typeShape,
       `${localKey}:finite-key`,
-      sourceAddressHandle,
-      owner.sourceAddressHandle,
+      context.sourceAddressHandle,
+      ownerSourceAddressHandle,
     );
     if (finiteKeyAccess != null) {
       return finiteKeyAccess;
     }
 
-    const indexedValueType = this.typeAccess.indexedValueReferenceForKeyType(owner.typeShape, key.typeShape);
+    const indexedValueType = this.typeAccess.indexedValueReferenceForKeyType(ownerType, key.typeShape);
     if (indexedValueType?.productHandle != null) {
       return this.support.resolveReference(
         expression,
         indexedValueType,
         `${localKey}:keyed-index`,
         CheckerExpressionTypeOpenKind.MissingMemberValueType,
-        `Indexed value type for '${owner.typeShape.display}' could not be hydrated.`,
+        `Indexed value type for '${ownerType.display}' could not be hydrated.`,
         null,
-        owner.sourceAddressHandle ?? indexedValueType.sourceAddressHandle,
+        ownerSourceAddressHandle ?? indexedValueType.sourceAddressHandle,
       );
     }
 
     const indexSignature = this.evaluateIndexSignatureAccess(
       expression,
-      owner.typeShape,
+      ownerType,
       key.typeShape,
       localKey,
-      sourceAddressHandle,
-      owner.sourceAddressHandle,
+      context.sourceAddressHandle,
+      ownerSourceAddressHandle,
     );
     if (indexSignature != null) {
       return indexSignature;
@@ -199,30 +223,41 @@ export class CheckerExpressionAccessProjector {
 
   evaluateCallMemberCallee(
     expression: CallMemberExpression,
-    scope: BindingScope,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    runtimeContext: CheckerExpressionAccessRuntimeContext,
+    context: CheckerExpressionTypeEvaluationContext,
   ): CheckerExpressionTypeEvaluation {
-    const owner = this.host.evaluateNode(
+    const localKey = context.projectionLocalKey();
+    const owner = this.host.evaluateNode(context.child(
       expression.object,
-      scope,
-      `${localKey}:call-owner:${expression.name.name}`,
-      sourceAddressHandle,
-    );
+      `call-owner:${expression.name.name}`,
+    ));
     if (owner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return owner;
     }
-    if (checkerTypeShapeIsDefinitelyNullish(owner.typeShape)) {
+    const nullishPresence = checkerTypeShapeNullishPresence(owner.typeShape);
+    if (nullishPresence === CheckerTypeNullishPresence.Definitely) {
       return this.evaluateNullishAccess(
         expression,
-        scope,
+        context.scope,
         `${localKey}:call-member:${expression.name.name}:nullish-owner`,
-        sourceAddressHandle,
+        context.sourceAddressHandle,
         expression.optionalMember,
-        runtimeContext,
+        context.runtimeContext,
         CheckerExpressionTypeOpenKind.NullishMemberAccess,
         `Member call '${expression.name.name}' reached definitely nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
+        owner.typeReference,
+      );
+    }
+    if (nullishPresence === CheckerTypeNullishPresence.Maybe) {
+      return this.evaluatePossiblyNullishMemberAccess(
+        expression,
+        context,
+        owner.typeShape,
+        expression.name.name,
+        `${localKey}:call-member:${expression.name.name}:maybe-nullish-owner`,
+        owner.sourceAddressHandle,
+        expression.optionalMember,
+        CheckerExpressionTypeOpenKind.NullishMemberAccess,
+        `Member call '${expression.name.name}' can reach nullish owner type '${owner.typeShape.display ?? 'unknown'}'.`,
         owner.typeReference,
       );
     }
@@ -318,6 +353,99 @@ export class CheckerExpressionAccessProjector {
     );
   }
 
+  private evaluatePossiblyNullishMemberAccess(
+    expression: ExpressionAstNode,
+    context: CheckerExpressionTypeEvaluationContext,
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+    ownerSourceAddressHandle: AddressHandle | null,
+    optional: boolean,
+    openKind: CheckerExpressionTypeOpenKind.NullishMemberAccess,
+    openSummary: string,
+    partialTypeReference: CheckerTypeReference,
+  ): CheckerExpressionTypeEvaluation {
+    if (!optional && context.runtimeContext.strict !== false) {
+      return this.support.open(openKind, expression, openSummary, partialTypeReference);
+    }
+    const nonNullishOwner = this.typeAccess.nonNullishTypeShape(
+      ownerType,
+      `${localKey}:non-nullish-owner`,
+      ownerSourceAddressHandle,
+    );
+    if (nonNullishOwner == null) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingTypeDetail,
+        expression,
+        `Non-nullish lane for '${ownerType.display}' could not be projected before member access '${memberName}'.`,
+        partialTypeReference,
+      );
+    }
+    const member = this.evaluateMemberOnType(
+      expression,
+      nonNullishOwner,
+      memberName,
+      `${localKey}:member`,
+      ownerSourceAddressHandle,
+    );
+    if (member.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return member;
+    }
+    return this.unionWithUndefined(
+      expression,
+      context,
+      member,
+      `${localKey}:result`,
+      `Non-strict/optional member access '${memberName}' can return the reached member value or undefined.`,
+    );
+  }
+
+  private evaluatePossiblyNullishKeyedAccess(
+    expression: AccessKeyedExpression,
+    context: CheckerExpressionTypeEvaluationContext,
+    ownerType: CheckerTypeShape,
+    localKey: string,
+    ownerSourceAddressHandle: AddressHandle | null,
+    optional: boolean,
+    openKind: CheckerExpressionTypeOpenKind.NullishKeyedAccess,
+    openSummary: string,
+    partialTypeReference: CheckerTypeReference,
+  ): CheckerExpressionTypeEvaluation {
+    if (!optional && context.runtimeContext.strict !== false) {
+      return this.support.open(openKind, expression, openSummary, partialTypeReference);
+    }
+    const nonNullishOwner = this.typeAccess.nonNullishTypeShape(
+      ownerType,
+      `${localKey}:non-nullish-owner`,
+      ownerSourceAddressHandle,
+    );
+    if (nonNullishOwner == null) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingTypeDetail,
+        expression,
+        `Non-nullish lane for '${ownerType.display}' could not be projected before keyed access.`,
+        partialTypeReference,
+      );
+    }
+    const keyed = this.evaluateKeyedOnType(
+      expression,
+      context,
+      nonNullishOwner,
+      ownerSourceAddressHandle,
+      `${localKey}:keyed`,
+    );
+    if (keyed.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return keyed;
+    }
+    return this.unionWithUndefined(
+      expression,
+      context,
+      keyed,
+      `${localKey}:result`,
+      'Non-strict/optional keyed access can return the reached value or undefined.',
+    );
+  }
+
   private evaluateFiniteKeyedAccess(
     expression: AccessKeyedExpression,
     ownerType: CheckerTypeShape,
@@ -349,7 +477,7 @@ export class CheckerExpressionAccessProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
     optional: boolean,
-    runtimeContext: CheckerExpressionAccessRuntimeContext,
+    runtimeContext: Pick<CheckerExpressionTypeEvaluationContext['runtimeContext'], 'strict'>,
     openKind: CheckerExpressionTypeOpenKind.NullishMemberAccess | CheckerExpressionTypeOpenKind.NullishKeyedAccess,
     openSummary: string,
     partialTypeReference: CheckerTypeReference,
@@ -358,6 +486,30 @@ export class CheckerExpressionAccessProjector {
       return this.support.projectPrimitive(expression, scope, `${localKey}:undefined`, 'undefined', sourceAddressHandle);
     }
     return this.support.open(openKind, expression, openSummary, partialTypeReference);
+  }
+
+  private unionWithUndefined(
+    expression: ExpressionAstNode,
+    context: CheckerExpressionTypeEvaluationContext,
+    value: CheckerExpressionTypeEvaluation & { readonly kind: CheckerExpressionTypeEvaluationResultKind.Type },
+    localKey: string,
+    summary: string,
+  ): CheckerExpressionTypeEvaluation {
+    const undefinedValue = this.support.projectPrimitive(
+      expression,
+      context.scope,
+      `${localKey}:undefined`,
+      'undefined',
+      context.sourceAddressHandle,
+    );
+    return undefinedValue.kind === CheckerExpressionTypeEvaluationResultKind.Open
+      ? undefinedValue
+      : this.support.evaluateTypeUnion(
+        [value, undefinedValue],
+        localKey,
+        context.sourceAddressHandle,
+        summary,
+      );
   }
 }
 

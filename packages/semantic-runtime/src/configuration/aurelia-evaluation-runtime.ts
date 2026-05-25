@@ -119,6 +119,7 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       case 'window':
       case 'self':
       case 'globalThis':
+      case 'document':
       case 'customElements':
       case 'console':
         return ambientObject(identifier.text, identifier);

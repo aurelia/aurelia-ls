@@ -1,4 +1,5 @@
-import { AuCompose, customElement } from '@aurelia/runtime-html';
+import { AuCompose, customElement, valueConverter } from '@aurelia/runtime-html';
+import type { IActionHandler } from '@aurelia/state';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
 import { WidgetHost, type WidgetKit } from './widget-host';
@@ -17,10 +18,48 @@ class SummaryPanel {
   }
 }
 
+export interface DashboardState {
+  readonly kit: WidgetKit;
+}
+
+const dashboardKit: WidgetKit = {
+  widgets: [
+    {
+      id: 'sales',
+      component: ChartWidget,
+      data: { title: 'Sales trend' },
+      isApplicable(id: string): boolean {
+        return id === this.id;
+      },
+    },
+    {
+      id: 'stock',
+      component: InventoryWidget,
+      data: { title: 'Inventory' },
+      isApplicable(id: string): boolean {
+        return id === this.id;
+      },
+    },
+  ],
+};
+
+export const initialDashboardState: DashboardState = {
+  kit: dashboardKit,
+};
+
+export const dashboardStateHandler: IActionHandler<DashboardState> = (state) => state;
+
+@valueConverter('stableWidgetKit')
+export class StableWidgetKitValueConverter {
+  toView(kit: WidgetKit): WidgetKit {
+    return kit;
+  }
+}
+
 @customElement({
   name: 'compose-dashboard-app',
   template,
-  dependencies: [ChartWidget, InventoryWidget, WidgetHost],
+  dependencies: [ChartWidget, InventoryWidget, WidgetHost, StableWidgetKitValueConverter],
 })
 export class ComposeDashboardApp {
   readonly summaryTemplate = '<p>Selected widget summary</p>';
@@ -33,26 +72,7 @@ export class ComposeDashboardApp {
   readonly selectedWidgetId = 'stock';
   composition: AuCompose['composition'] | null = null;
 
-  readonly kit: WidgetKit = {
-    widgets: [
-      {
-        id: 'sales',
-        component: ChartWidget,
-        data: { title: 'Sales trend' },
-        isApplicable(id: string): boolean {
-          return id === this.id;
-        },
-      },
-      {
-        id: 'stock',
-        component: InventoryWidget,
-        data: { title: 'Inventory' },
-        isApplicable(id: string): boolean {
-          return id === this.id;
-        },
-      },
-    ],
-  };
+  readonly kit: WidgetKit = dashboardKit;
 
   readonly widgets: readonly DashboardWidgetModel[] = [
     {

@@ -44,9 +44,9 @@ const serviceInteractions = topology.serviceInteractionBindings.filter((row) =>
 );
 
 const failures = [
-  listenerChannels.length === 4
+  listenerChannels.length === 5
     ? null
-    : `Expected 4 click listener event-handler invocation channels; observed ${listenerChannels.length}.`,
+    : `Expected 5 click listener event-handler invocation channels; observed ${listenerChannels.length}.`,
   listenerChannels.every((row) => row.runtimeValueType === 'boolean')
     ? null
     : `Expected every listener runtime value type to unwrap to boolean; observed ${JSON.stringify(listenerChannels.map((row) => ({
@@ -60,6 +60,9 @@ const failures = [
   sourceNames.has('state.makeSubmitHandler()')
     ? null
     : 'Expected a handler-factory listener flow for state.makeSubmitHandler().',
+  sourceNames.has('state.overloadedSubmit')
+    ? null
+    : 'Expected an overloaded method-reference listener flow for state.overloadedSubmit.',
   sourceNames.has('state.submitWithEvent($event)')
     ? null
     : 'Expected an explicit event-call listener flow for state.submitWithEvent($event).',

@@ -11,6 +11,8 @@ import {
   SpreadValueBinding,
   StateBinding,
   StateDispatchBinding,
+  TranslationBinding,
+  RuntimeBindingKind,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
@@ -27,8 +29,13 @@ export type RuntimeExpressionBinding =
   | ContentBinding
   | RefBinding
   | SpreadValueBinding
+  | TranslationBinding
   | StateBinding
   | StateDispatchBinding;
+
+export type RuntimeValueChannelBinding = Exclude<RuntimeExpressionBinding, TranslationBinding>;
+
+export type RuntimeDataFlowBinding = RuntimeValueChannelBinding | TranslationBinding;
 
 export function isRuntimeExpressionBinding(
   binding: RuntimeBinding,
@@ -41,13 +48,35 @@ export function isRuntimeExpressionBinding(
     || binding instanceof ContentBinding
     || binding instanceof RefBinding
     || binding instanceof SpreadValueBinding
+    || binding instanceof TranslationBinding
     || binding instanceof StateBinding
     || binding instanceof StateDispatchBinding;
+}
+
+/** Narrows expression bindings to generic binding value-channel owners; i18n TranslationBinding has its own lifecycle lane. */
+export function isRuntimeValueChannelBinding(
+  binding: RuntimeBinding,
+): binding is RuntimeValueChannelBinding {
+  return isRuntimeExpressionBinding(binding) && !(binding instanceof TranslationBinding);
+}
+
+/** Narrows expression bindings to data-flow owners; i18n parameter bindings are source-only flow while keys stay lifecycle-owned. */
+export function isRuntimeDataFlowBinding(
+  binding: RuntimeBinding,
+): binding is RuntimeDataFlowBinding {
+  return isRuntimeValueChannelBinding(binding)
+    || (binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters);
+}
+
+/** Identifies binding data-flow rows that expose source expression reads without generic accessor/observer targets. */
+export function isRuntimeSourceOnlyDataFlowBinding(binding: RuntimeDataFlowBinding): boolean {
+  return binding instanceof TranslationBinding && binding.bindingKind === RuntimeBindingKind.TranslationParameters;
 }
 
 export function expressionProductHandleForBinding(
   binding: RuntimeExpressionBinding,
 ): ProductHandle | null {
+  // Interpolation lowering currently stores the interpolation parse product, not one product per hole.
   if (binding instanceof InterpolationBinding) {
     return binding.expressionProductHandles[0] ?? null;
   }

@@ -89,6 +89,18 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'value-converter',
+    'template',
+  ], 'contract-binding-source-value-converters.mjs', 'Binding-source value reduction invokes evaluator-local value converter toView for static repeat locals.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'callback',
+    'template',
+  ], 'contract-binding-source-arrow-callbacks.mjs', 'Binding-source value reduction evaluates Aurelia arrow callbacks with Scope.fromParent-shaped parameter scopes.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'data-flow',
     'diagnostics',
     'type-system',
@@ -128,6 +140,13 @@ const contractSuites = [
     'type-system',
     'mcp',
   ], 'contract-typescript-diagnostics.mjs', 'Ordinary TypeScript Program diagnostics exposed through focused and unified app diagnostic queries.'),
+  contract('i18n', 'fast', [
+    'i18n',
+    'binding',
+    'state',
+    'type-system',
+    'diagnostics',
+  ], 'contract-i18n-binding-lifecycle.mjs', 'Translation key and t-params expressions follow their distinct framework binding-behavior lifecycles.'),
   contract('type-system', 'fast', [
     'type-system',
     'kernel',
@@ -144,6 +163,24 @@ const contractSuites = [
     'expression',
     'checker',
   ], 'contract-expression-primitive-literals.mjs', 'Primitive literal expressions preserve TypeScript literal types instead of widening to broad primitives.'),
+  contract('type-system', 'fast', [
+    'type-system',
+    'expression',
+    'checker',
+    'template',
+  ], 'contract-expression-synthetic-unions.mjs', 'Synthetic array/object expression unions preserve repeat-local member surfaces.'),
+  contract('type-system', 'fast', [
+    'type-system',
+    'expression',
+    'checker',
+    'branch-scope',
+  ], 'contract-expression-branch-narrowing.mjs', 'Expression-local conditional and short-circuit branches share checker-backed scope narrowing.'),
+  contract('type-system', 'fast', [
+    'type-system',
+    'expression',
+    'template',
+    'binding',
+  ], 'contract-expression-context-usage.mjs', 'Aurelia expression evaluation contexts stay behind documented fallback owners or runtime binding-source projection.'),
   contract('inquiry', 'fast', [
     'inquiry',
     'api',
@@ -184,6 +221,18 @@ const contractSuites = [
   ], 'contract-type-system-overlays.mjs', 'Program-owned TypeScript overlay roots and template-adjacent semantic source segments with hidden ordinary diagnostic eligibility.'),
   contract('template', 'fast', [
     'template',
+    'completion',
+    'state',
+    'type-system',
+  ], 'contract-template-completion-source-scope.mjs', 'Template completions spend runtime binding source scopes without leaking state-backed controller conditions into child scopes.'),
+  contract('template', 'fast', [
+    'template',
+    'completion',
+    'callback',
+    'type-system',
+  ], 'contract-contextual-call-argument-completion.mjs', 'Template completions spend contextual callback scopes for checker-backed calls and synthetic array methods.'),
+  contract('template', 'fast', [
+    'template',
     'controller',
     'type-system',
     'overlay',
@@ -193,6 +242,11 @@ const contractSuites = [
     'type-system',
     'template',
   ], 'contract-expression-object-literal-shorthand.mjs', 'Expression object-literal shorthand semantics.'),
+  contract('expression', 'fast', [
+    'expression',
+    'evaluation',
+    'template',
+  ], 'contract-expression-global-intrinsics.mjs', 'Aurelia parser-admitted globals and shared host intrinsic value reduction.'),
   contract('authoring.app-shell', 'route', [
     'authoring',
     'fixtures',

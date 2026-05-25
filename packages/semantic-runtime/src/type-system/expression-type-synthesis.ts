@@ -1,9 +1,11 @@
 import type { ArrowFunction } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import {
   type CheckerSyntheticTypeMemberRequest,
   type CheckerTypeProjector,
 } from './checker-projector.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import {
   CheckerIndexedAccessKeyKind,
   CheckerTypeMember,
@@ -12,7 +14,6 @@ import {
   CheckerTypeReference,
   CheckerTypeShape,
   CheckerTypeShapeKind,
-  sameCheckerTypeReference,
 } from './type-shape.js';
 
 export interface CheckerTupleElementRequest {
@@ -46,12 +47,17 @@ export class CheckerExpressionTypeSynthesizer {
 
   arrayLiteralType(
     members: readonly CheckerSyntheticTypeMemberRequest[],
-    elementTypes: readonly CheckerTypeReference[],
+    elementTypes: readonly CheckerTypeShape[],
     elementCount: number,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeShape {
-    const commonElementType = commonTypeReference(elementTypes, elementCount);
+    const commonElementType = this.commonOrUnionTypeReferenceForShapes(
+      elementTypes,
+      elementCount,
+      `${localKey}:array-element`,
+      sourceAddressHandle,
+    );
     return this.projector.ensureSyntheticProjection({
       localKey: `${localKey}:array-literal`,
       shapeKind: CheckerTypeShapeKind.Object,
@@ -89,14 +95,30 @@ export class CheckerExpressionTypeSynthesizer {
       localKey: `${localKey}:union`,
       shapeKind: CheckerTypeShapeKind.Union,
       display: displayUnionType(shapes),
-      members: commonMembersForUnion(shapes),
-      indexedValueType: commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)),
+      members: this.commonMembersForUnion(shapes, `${localKey}:member`, sourceAddressHandle),
+      indexedValueType: this.commonOrUnionNullableTypeReference(
+        shapes.map((shape) => shape.indexedValueType),
+        `${localKey}:indexed`,
+        sourceAddressHandle,
+      ),
       indexedAccessKeyKind: commonNullableIndexedAccessKeyKind(shapes),
-      iteratedValueType: commonNullableTypeReference(shapes.map((shape) => shape.iteratedValueType)),
+      iteratedValueType: this.commonOrUnionNullableTypeReference(
+        shapes.map((shape) => shape.iteratedValueType),
+        `${localKey}:iterated`,
+        sourceAddressHandle,
+      ),
       origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-      callReturnType: commonNullableTypeReference(shapes.map((shape) => shape.callReturnType)),
-      constructReturnType: commonNullableTypeReference(shapes.map((shape) => shape.constructReturnType)),
+      callReturnType: this.commonOrUnionNullableTypeReference(
+        shapes.map((shape) => shape.callReturnType),
+        `${localKey}:call-return`,
+        sourceAddressHandle,
+      ),
+      constructReturnType: this.commonOrUnionNullableTypeReference(
+        shapes.map((shape) => shape.constructReturnType),
+        `${localKey}:construct-return`,
+        sourceAddressHandle,
+      ),
     });
   }
 
@@ -185,9 +207,10 @@ export class CheckerExpressionTypeSynthesizer {
     origin: CheckerTypeProjectionOrigin = CheckerTypeProjectionOrigin.SyntheticExpressionType,
   ): CheckerTypeShape {
     const fixedElements = elements.filter((element) => !element.isRest);
-    const indexedValueType = commonTypeReference(
+    const indexedValueType = this.commonOrUnionNullableTypeReference(
       fixedElements.map((element) => element.valueType),
-      fixedElements.length,
+      `${localKey}:indexed`,
+      sourceAddressHandle,
     );
     const members: CheckerSyntheticTypeMemberRequest[] = fixedElements.map((element, index) => ({
       name: String(index),
@@ -210,6 +233,93 @@ export class CheckerExpressionTypeSynthesizer {
       sourceAddressHandle,
     });
   }
+
+  private commonMembersForUnion(
+    shapes: readonly CheckerTypeShape[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): readonly CheckerSyntheticTypeMemberRequest[] {
+    const [first, ...rest] = shapes;
+    if (first == null) {
+      return [];
+    }
+
+    const members: CheckerSyntheticTypeMemberRequest[] = [];
+    for (const member of first.members) {
+      const matches = rest.map((shape) => shape.members.find((candidate) => candidate.name === member.name) ?? null);
+      if (matches.some((candidate) => candidate == null)) {
+        continue;
+      }
+      const allMembers = [member, ...(matches as CheckerTypeMember[])];
+      const memberLocalKey = `${localKey}:${localKeyPart(member.name)}`;
+      members.push({
+        name: member.name,
+        valueType: this.commonOrUnionNullableTypeReference(
+          allMembers.map((candidate) => candidate.valueType),
+          memberLocalKey,
+          sourceAddressHandle,
+        ),
+        memberKind: allMembers.every((candidate) => candidate.memberKind === member.memberKind)
+          ? member.memberKind
+          : CheckerTypeMemberKind.Unknown,
+        isOptional: allMembers.some((candidate) => candidate.isOptional),
+        isReadonly: allMembers.every((candidate) => candidate.isReadonly),
+        sourceAddressHandle: commonAddressHandle(allMembers.map((candidate) => candidate.sourceAddressHandle)),
+      });
+    }
+    return members;
+  }
+
+  private commonOrUnionNullableTypeReference(
+    references: readonly (CheckerTypeReference | null)[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    if (references.some((reference) => reference == null)) {
+      return null;
+    }
+    return this.commonOrUnionTypeReference(
+      references as readonly CheckerTypeReference[],
+      references.length,
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  private commonOrUnionTypeReference(
+    references: readonly CheckerTypeReference[],
+    expectedCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const common = commonTypeReference(references, expectedCount);
+    if (common != null) {
+      return common;
+    }
+    const shapes = references
+      .map((reference) => this.readTypeShape(reference))
+      .filter((shape): shape is CheckerTypeShape => shape != null);
+    return this.commonOrUnionTypeReferenceForShapes(shapes, expectedCount, localKey, sourceAddressHandle);
+  }
+
+  private commonOrUnionTypeReferenceForShapes(
+    shapes: readonly CheckerTypeShape[],
+    expectedCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    if (shapes.length !== expectedCount || shapes.length === 0) {
+      return null;
+    }
+    const common = commonTypeReference(shapes.map((shape) => shape.toReference()), expectedCount);
+    return common ?? this.unionType(shapes, localKey, sourceAddressHandle).toReference();
+  }
+
+  private readTypeShape(reference: CheckerTypeReference): CheckerTypeShape | null {
+    return reference.productHandle == null
+      ? null
+      : this.projector.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+  }
 }
 
 export function commonTypeReference(
@@ -228,52 +338,11 @@ export function commonTypeReference(
     : null;
 }
 
-function commonNullableTypeReference(
-  references: readonly (CheckerTypeReference | null)[],
-): CheckerTypeReference | null {
-  if (references.some((reference) => reference == null)) {
-    return null;
-  }
-  return commonTypeReference(references as readonly CheckerTypeReference[], references.length);
-}
-
 function commonNullableIndexedAccessKeyKind(
   shapes: readonly CheckerTypeShape[],
 ): CheckerIndexedAccessKeyKind | null {
-  if (commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)) == null) {
-    return null;
-  }
   const [first, ...rest] = shapes.map((shape) => shape.indexedAccessKeyKind);
   return first != null && rest.every((kind) => kind === first) ? first : null;
-}
-
-function commonMembersForUnion(
-  shapes: readonly CheckerTypeShape[],
-): readonly CheckerSyntheticTypeMemberRequest[] {
-  const [first, ...rest] = shapes;
-  if (first == null) {
-    return [];
-  }
-
-  const members: CheckerSyntheticTypeMemberRequest[] = [];
-  for (const member of first.members) {
-    const matches = rest.map((shape) => shape.members.find((candidate) => candidate.name === member.name) ?? null);
-    if (matches.some((candidate) => candidate == null)) {
-      continue;
-    }
-    const allMembers = [member, ...(matches as CheckerTypeMember[])];
-    members.push({
-      name: member.name,
-      valueType: commonNullableTypeReference(allMembers.map((candidate) => candidate.valueType)),
-      memberKind: allMembers.every((candidate) => candidate.memberKind === member.memberKind)
-        ? member.memberKind
-        : CheckerTypeMemberKind.Unknown,
-      isOptional: allMembers.some((candidate) => candidate.isOptional),
-      isReadonly: allMembers.every((candidate) => candidate.isReadonly),
-      sourceAddressHandle: commonAddressHandle(allMembers.map((candidate) => candidate.sourceAddressHandle)),
-    });
-  }
-  return members;
 }
 
 function commonAddressHandle(
