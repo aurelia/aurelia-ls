@@ -37,20 +37,6 @@ import {
   type SemanticApplicationTopologyResult,
 } from './app-topology.js';
 import {
-  readSemanticAuthoringCatalogAnswer,
-  readSemanticAuthoringCatalogView,
-} from './authoring-catalog.js';
-import {
-  readSemanticAuthoringOrientation,
-  semanticAuthoringOrientationResultForDetail,
-} from './authoring-orientation.js';
-import {
-  readSemanticAuthoringGuidance,
-} from './authoring-guidance.js';
-import {
-  readSemanticAuthoringRecipePlan,
-} from './authoring-plan.js';
-import {
   readSemanticAppSummary,
   sourceRoleCounts,
 } from './app-summary.js';
@@ -85,8 +71,6 @@ import {
   semanticRuntimeAppWorldFreeQueryBatchKey,
   semanticRuntimeAppWorldFreeQueryKey,
   semanticRuntimeAppQueryCatalogKey,
-  semanticRuntimeAuthoringGuidanceKey,
-  semanticRuntimeAuthoringRecipePlanKey,
   semanticRuntimeRoutedAppQueryBatchEpochKeys,
   semanticRuntimeRoutedAppQueryBatchKey,
   semanticRuntimeRoutedAppQueryBatchLocusKey,
@@ -254,14 +238,6 @@ import {
   type SemanticRuntimeTypeSystemProgramSourceFileGroupStats,
   type SemanticTypeSystemDependencyCacheSourceBucket,
   type SemanticTypeSystemDependencyCacheClearPolicy,
-  type SemanticAuthoringCatalogResult,
-  type SemanticAuthoringCatalogViewRequest,
-  type SemanticAuthoringCatalogViewResult,
-  type SemanticAuthoringGuidanceRequest,
-  type SemanticAuthoringGuidanceResult,
-  type SemanticAuthoringOrientationResult,
-  type SemanticAuthoringRecipePlanRequest,
-  type SemanticAuthoringRecipePlanResult,
   type SemanticBindingDataFlowResult,
   type SemanticBindingDataFlowSummaryResult,
   type SemanticBindingObservedDependencyResult,
@@ -654,20 +630,6 @@ export class SemanticRuntime {
         (strategy.inquiryProfile == null ? '.' : ` in inquiry profile '${strategy.inquiryProfile}'.`),
     };
     return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
-  }
-
-  authoringCatalog(
-    request: SemanticRuntimeStaticCatalogRequest = {},
-  ): SemanticRuntimeAnswer<SemanticAuthoringCatalogResult> {
-    return this.answerRuntimeQuery(
-      {
-        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
-        queryKind: 'authoring-catalog',
-        queryKey: 'authoring-catalog:full',
-        materializationPolicy: 'static-catalog',
-      },
-      () => readSemanticAuthoringCatalogAnswer(),
-    );
   }
 
   appQueryCatalog(request: SemanticAppQueryCatalogRequest = {}): SemanticRuntimeAnswer<SemanticAppQueryCatalogResult> {
@@ -1172,48 +1134,6 @@ export class SemanticRuntime {
       materializationPolicy: semanticAppQueryMaterializationPolicy(childQuery, catalogRow.materializationPolicy),
       answer: app.ask(childQuery),
     };
-  }
-
-  authoringCatalogView(
-    request: SemanticAuthoringCatalogViewRequest = {},
-  ): SemanticRuntimeAnswer<SemanticAuthoringCatalogResult | SemanticAuthoringCatalogViewResult> {
-    return this.answerRuntimeQuery(
-      {
-        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
-        queryKind: 'authoring-catalog-view',
-        queryKey: `authoring-catalog-view:${request.view ?? 'overview'}`,
-        materializationPolicy: 'static-catalog',
-      },
-      () => readSemanticAuthoringCatalogView(request),
-    );
-  }
-
-  authoringGuidance(
-    request: SemanticAuthoringGuidanceRequest = {},
-  ): SemanticRuntimeAnswer<SemanticAuthoringGuidanceResult | null> {
-    return this.answerRuntimeQuery(
-      {
-        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
-        queryKind: 'authoring-guidance',
-        queryKey: semanticRuntimeAuthoringGuidanceKey(request),
-        materializationPolicy: 'static-catalog',
-      },
-      () => readSemanticAuthoringGuidance(request),
-    );
-  }
-
-  authoringRecipePlan(
-    request: SemanticAuthoringRecipePlanRequest,
-  ): SemanticRuntimeAnswer<SemanticAuthoringRecipePlanResult | null> {
-    return this.answerRuntimeQuery(
-      {
-        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
-        queryKind: 'authoring-recipe-plan',
-        queryKey: semanticRuntimeAuthoringRecipePlanKey(request),
-        materializationPolicy: 'static-catalog',
-      },
-      () => readSemanticAuthoringRecipePlan(request),
-    );
   }
 
   async openApp(options: OpenSemanticAppOptions = {}): Promise<SemanticApp> {
@@ -2157,15 +2077,7 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.overview({
           diagnosticPageSize: query.diagnosticPageSize,
           openSeamPageSize: query.openSeamPageSize,
-          includeAuthoringOrientation: query.includeAuthoringOrientation,
         }));
-      case SemanticAppQueryKind.AuthoringCatalog:
-        return answerCurrentQuery(() => this.authoringCatalog());
-      case SemanticAppQueryKind.AuthoringOrientation:
-        return answerCurrentQuery(() => this.authoringOrientation(
-          query.page,
-          query.detail ?? SemanticRuntimeDetail.Compact,
-        ));
       case SemanticAppQueryKind.SourceFiles:
         return answerCurrentQuery(() => this.sourceFiles(query.page, query.detail));
       case SemanticAppQueryKind.UnresolvedModules:
@@ -2438,7 +2350,6 @@ export class SemanticApp {
       kind: SemanticAppQueryKind.AppOverview,
       diagnosticPageSize: request.diagnosticPageSize,
       openSeamPageSize: request.openSeamPageSize,
-      includeAuthoringOrientation: request.includeAuthoringOrientation,
     });
     if (claimed != null) {
       return claimed;
@@ -2469,52 +2380,6 @@ export class SemanticApp {
       return claimed;
     }
     return readSemanticRouterOverview((query) => this.ask(query), request);
-  }
-
-  authoringCatalog(): SemanticRuntimeAnswer<SemanticAuthoringCatalogResult> {
-    const claimed = this.answerPublicQueryIfNeeded<SemanticAuthoringCatalogResult>({
-      kind: SemanticAppQueryKind.AuthoringCatalog,
-    });
-    if (claimed != null) {
-      return claimed;
-    }
-    return this.runtime.authoringCatalog({
-      inquiryProfile: this.activeInquiryProfileStack[this.activeInquiryProfileStack.length - 1]
-        ?? this.emission.profile.inquiryProfile,
-    });
-  }
-
-  authoringOrientation(
-    page?: SemanticRuntimePageInput,
-    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
-  ): SemanticRuntimeAnswer<SemanticAuthoringOrientationResult> {
-    const claimed = this.answerPublicQueryIfNeeded<SemanticAuthoringOrientationResult>({
-      kind: SemanticAppQueryKind.AuthoringOrientation,
-      page,
-      detail,
-    });
-    if (claimed != null) {
-      return claimed;
-    }
-    const orientation = semanticAuthoringOrientationResultForDetail(
-      readSemanticAuthoringOrientation(this.project, this.emission, this.runtime.workspace.store),
-      detail,
-    );
-    const pagedRepairClusters = page == null
-      ? null
-      : pageRows(orientation.repairClusters, page);
-    const value = pagedRepairClusters == null
-      ? orientation
-      : {
-          ...orientation,
-          repairClusters: pagedRepairClusters.rows,
-        };
-    return answer(
-      pagedRepairClusters == null ? SemanticRuntimeAnswerOutcome.Hit : outcomeForPagedRows(pagedRepairClusters),
-      `Oriented authoring for '${value.project.projectKey}' across ${value.coverage.length} coverage row(s), ${value.capabilities.length} capability row(s), ${value.openReasons.length} open reason kind(s), and ${value.repairClusters.length}${pagedRepairClusters == null ? '' : ` of ${pagedRepairClusters.page.totalRows}`} repair cluster(s).`,
-      value,
-      pagedRepairClusters?.page ?? null,
-    );
   }
 
   sourceFiles(

@@ -85,7 +85,7 @@ export type FrameworkCorpusExpectedEffectSeedPolicy =
   | "corpus-pattern"
   /** The effect verifies that an authored project reopened, but does not need its own corpus seed. */
   | "reopen-baseline"
-  /** The effect verifies AuthoringOrientation rows, not framework docs/tests source patterns. */
+  /** The effect verifies app-building guidance/taste rows, not framework docs/tests source patterns. */
   | "orientation-contract"
   /** The effect verifies absence of open seams after reopen, so source snippets are indirect pressure only. */
   | "closure-contract";
@@ -332,7 +332,7 @@ interface BindingSurfaceHint {
 const FRAMEWORK_DOCS_ROOT = "aurelia/docs/user-docs";
 const FRAMEWORK_TESTS_ROOT = "aurelia/packages/__tests__";
 const SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH =
-  "packages/semantic-runtime/src/authoring/expected-effect.ts";
+  "packages/semantic-runtime/src/fixture-verification/expected-effect.ts";
 
 const legacyPackages = [
   "packages/compiler",
@@ -831,48 +831,103 @@ function expectedEffectDescriptorRows(
   );
   const rows: FrameworkCorpusExpectedEffectDescriptorRow[] = [];
   visit(sourceFile, (node) => {
-    if (
-      !ts.isTypeAliasDeclaration(node) ||
-      (node.name.text !== "ExpectedSemanticEffectKind" && node.name.text !== "ExpectedSemanticEffectRole") ||
-      !ts.isUnionTypeNode(node.type)
-    ) {
+    if (ts.isEnumDeclaration(node)) {
+      rows.push(...expectedEffectDescriptorRowsForEnum(node, text, sourceFile));
       return;
     }
-    const contractKind = node.name.text === "ExpectedSemanticEffectKind"
-      ? "effect-kind"
-      : "effect-role";
-    for (const member of node.type.types) {
-      if (
-        !ts.isLiteralTypeNode(member) ||
-        !ts.isStringLiteral(member.literal)
-      ) {
-        continue;
-      }
-      const key = member.literal.text;
-      rows.push({
-        id: `semantic-runtime-expected-effect:${contractKind}:${key}`,
-        contractKind,
-        key,
-        effectKind: contractKind === "effect-kind" ? key : null,
-        effectRole: contractKind === "effect-role" ? key : null,
-        seedPolicy: contractKind === "effect-kind"
-          ? expectedEffectSeedPolicy(key)
-          : null,
-        source: sourceRangeForOffsets(
-          SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH,
-          text,
-          member.getStart(sourceFile),
-          member.getEnd(),
-        ),
-        summary: expectedEffectCommentSummary(text, member, sourceFile) ??
-          `Semantic authoring ${contractKind} ${key}.`,
-      });
+    if (ts.isTypeAliasDeclaration(node)) {
+      rows.push(...expectedEffectDescriptorRowsForTypeAlias(node, text, sourceFile));
     }
   });
   return rows.sort((left, right) =>
     left.contractKind.localeCompare(right.contractKind) ||
     left.key.localeCompare(right.key)
   );
+}
+
+function expectedEffectDescriptorRowsForEnum(
+  node: ts.EnumDeclaration,
+  text: string,
+  sourceFile: ts.SourceFile,
+): readonly FrameworkCorpusExpectedEffectDescriptorRow[] {
+  const contractKind = expectedEffectDescriptorContractKindForName(node.name.text);
+  if (contractKind == null) {
+    return [];
+  }
+  return node.members.flatMap((member) => {
+    if (member.initializer == null || !ts.isStringLiteral(member.initializer)) {
+      return [];
+    }
+    return [expectedEffectDescriptorRow(
+      contractKind,
+      member.initializer.text,
+      text,
+      sourceFile,
+      member,
+    )];
+  });
+}
+
+function expectedEffectDescriptorRowsForTypeAlias(
+  node: ts.TypeAliasDeclaration,
+  text: string,
+  sourceFile: ts.SourceFile,
+): readonly FrameworkCorpusExpectedEffectDescriptorRow[] {
+  const contractKind = expectedEffectDescriptorContractKindForName(node.name.text);
+  if (contractKind == null || !ts.isUnionTypeNode(node.type)) {
+    return [];
+  }
+  return node.type.types.flatMap((member) => {
+    if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal)) {
+      return [];
+    }
+    return [expectedEffectDescriptorRow(
+      contractKind,
+      member.literal.text,
+      text,
+      sourceFile,
+      member,
+    )];
+  });
+}
+
+function expectedEffectDescriptorContractKindForName(
+  name: string,
+): "effect-kind" | "effect-role" | null {
+  if (name === "ExpectedSemanticEffectKind") {
+    return "effect-kind";
+  }
+  if (name === "ExpectedSemanticEffectRole") {
+    return "effect-role";
+  }
+  return null;
+}
+
+function expectedEffectDescriptorRow(
+  contractKind: "effect-kind" | "effect-role",
+  key: string,
+  text: string,
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): FrameworkCorpusExpectedEffectDescriptorRow {
+  return {
+    id: `semantic-runtime-expected-effect:${contractKind}:${key}`,
+    contractKind,
+    key,
+    effectKind: contractKind === "effect-kind" ? key : null,
+    effectRole: contractKind === "effect-role" ? key : null,
+    seedPolicy: contractKind === "effect-kind"
+      ? expectedEffectSeedPolicy(key)
+      : null,
+    source: sourceRangeForOffsets(
+      SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH,
+      text,
+      node.getStart(sourceFile),
+      node.getEnd(),
+    ),
+    summary: expectedEffectCommentSummary(text, node, sourceFile) ??
+      `Semantic verification ${contractKind} ${key}.`,
+  };
 }
 
 function expectedEffectCommentSummary(

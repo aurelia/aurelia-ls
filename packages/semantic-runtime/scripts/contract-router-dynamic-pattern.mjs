@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AuthoringVerificationRequest,
+  FixtureVerificationRequest,
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
   SemanticAppQueryKind,
-  readAuthoringVerificationSnapshot,
-  verifyAuthoringEffects,
+  readFixtureVerificationSnapshot,
+  verifyFixtureEffects,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -190,9 +190,9 @@ const expectedEffects = [
   ),
 ];
 
-const snapshot = readAuthoringVerificationSnapshot(app);
-const verification = verifyAuthoringEffects(
-  new AuthoringVerificationRequest(null, expectedEffects),
+const snapshot = readFixtureVerificationSnapshot(app);
+const verification = verifyFixtureEffects(
+  new FixtureVerificationRequest(null, expectedEffects),
   snapshot,
 );
 const failures = verification.effectResults
@@ -206,11 +206,6 @@ const openSeams = app.ask({
   kind: SemanticAppQueryKind.OpenSeams,
   page: { size: 20 },
 }).value;
-const authoringOrientation = app.ask({
-  kind: SemanticAppQueryKind.AuthoringOrientation,
-  detail: 'handles',
-  page: { size: 20 },
-}).value;
 const unresolvedVendorModuleDiagnostic = typeScriptDiagnostics.rows.find((row) =>
   row.diagnosticKind === 'TS2307'
   && row.message.includes('router-pressure-vendor-links')
@@ -218,19 +213,12 @@ const unresolvedVendorModuleDiagnostic = typeScriptDiagnostics.rows.find((row) =
 const targetOpenReasonSource = openSeams.rows
   .flatMap((row) => row.reasonSources)
   .find((source) => source.reasonKind === 'router-href-click-interception-target-open');
-const targetOpenRepair = authoringOrientation.repairs.find((repair) =>
-  repair.evidenceKind === 'open-seam'
-  && repair.openSeamReasonKinds.includes('router-href-click-interception-target-open')
-);
 
 if (unresolvedVendorModuleDiagnostic != null) {
   failures.push('Expected no-tsconfig fallback checker roots to include local ambient module declarations.');
 }
 if (targetOpenReasonSource == null || targetOpenReasonSource.source == null) {
   failures.push('Expected router href target-open reason to preserve a source-bearing reasonSource row.');
-}
-if (targetOpenRepair?.suggestion?.actionTarget?.source == null) {
-  failures.push('Expected router href target-open repair planning to use a source-bearing action target.');
 }
 
 const summary = {
@@ -240,11 +228,6 @@ const summary = {
   targetOpenReasonSource: targetOpenReasonSource == null ? null : {
     reasonKind: targetOpenReasonSource.reasonKind,
     hasSource: targetOpenReasonSource.source != null,
-  },
-  targetOpenRepair: targetOpenRepair == null ? null : {
-    repairKind: targetOpenRepair.repairKind,
-    actionTargetKind: targetOpenRepair.suggestion?.actionTarget?.targetKind ?? null,
-    hasActionTargetSource: targetOpenRepair.suggestion?.actionTarget?.source != null,
   },
   expectedEffects: expectedEffects.length,
   verification: verification.effectResults.map((result) => ({

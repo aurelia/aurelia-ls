@@ -7,11 +7,6 @@ export {
 } from './app-query-policy.js';
 export * from './app-overview.js';
 export * from './app-topology.js';
-export * from './authoring-catalog.js';
-export * from './authoring-effect-contracts.js';
-export * from './authoring-guidance.js';
-export * from './authoring-orientation.js';
-export * from './authoring-plan.js';
 export * from './contracts.js';
 export * from './i18n-projections.js';
 export * from './runtime.js';

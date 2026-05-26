@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "app-builder-golden.v1",
+  "workflowId": "new-app-starter",
+  "stageId": "generate-starter",
+  "selection": {
+    "workflowId": "new-app-starter",
+    "seedProfileId": "minimal-runnable",
+    "intentId": "minimal-app-starter",
+    "compositionId": "minimal-app-shell.convention"
+  },
+  "preview": {
+    "seedProfileId": "minimal-runnable",
+    "starterIntentId": "minimal-app-starter",
+    "compositionId": "minimal-app-shell.convention",
+    "domainPresetId": null,
+    "seedDataSetId": null,
+    "patternIds": [
+      "single-app-package",
+      "minimal-app-shell"
+    ],
+    "aureliaLoweringChoiceIds": [
+      "conventions-enabled",
+      "convention-resource",
+      "view-model-local-state",
+      "no-router",
+      "light-dom"
+    ],
+    "sourcePolicy": "apply-as-source-start",
+    "sourceFiles": [
+      {
+        "path": "src/main.ts",
+        "role": "entrypoint",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/my-app.ts",
+        "role": "root-component",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/my-app.html",
+        "role": "template",
+        "language": "html",
+        "editKind": "create",
+        "hasText": true
+      }
+    ],
+    "expectedEffectKinds": [
+      "resource-definition",
+      "runtime-controller",
+      "template-compilation",
+      "open-seam-closure"
+    ]
+  }
+}

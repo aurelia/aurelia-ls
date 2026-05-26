@@ -103,7 +103,7 @@ function fixtureRootsForName(name, config) {
   const candidates = fixtureRootCandidatesForName(name, config);
   const roots = candidates.filter((candidate) => existsSync(candidate) && fixtureRootHasFiles(candidate));
   if (roots.length === 0) {
-    throw new Error(`No pressure fixture matched '${name}'. Use pressure:<name>, authoring:<name>, or --root <path>.`);
+    throw new Error(`No pressure fixture matched '${name}'. Use pressure:<name> or --root <path>.`);
   }
   return roots;
 }
@@ -112,22 +112,10 @@ function fixtureRootCandidatesForName(name, config) {
   if (name.startsWith('pressure:')) {
     return [path.join(config.pressureFixtureRoot, name.slice('pressure:'.length))];
   }
-  if (name.startsWith('authoring:')) {
-    return [path.join(config.authoringFixtureRoot, name.slice('authoring:'.length))];
-  }
-  return [
-    path.join(config.pressureFixtureRoot, name),
-    path.join(config.authoringFixtureRoot, name),
-  ];
+  return [path.join(config.pressureFixtureRoot, name)];
 }
 
 function fixtureCollectionRootsFor(root, config) {
-  if (samePath(root, config.authoringFixtureRoot)) {
-    return fixtureChildRoots(
-      config.authoringFixtureRoot,
-      config.includeAuthoringFixtureName,
-    );
-  }
   if (samePath(root, config.pressureFixtureRoot)) {
     return fixtureChildRoots(config.pressureFixtureRoot);
   }

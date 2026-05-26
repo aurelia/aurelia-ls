@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AuthoringVerificationRequest,
+  FixtureVerificationRequest,
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
-  readAuthoringVerificationSnapshot,
-  verifyAuthoringEffects,
+  readFixtureVerificationSnapshot,
+  verifyFixtureEffects,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -28,24 +28,6 @@ const app = await runtime.openApp({
 });
 
 const expectedEffects = [
-  ExpectedSemanticEffect.signatureTaste(
-    'Authoring orientation should recognize local typed object component inputs.',
-    'component-interface',
-    'object-inputs',
-    'component',
-  ),
-  ExpectedSemanticEffect.signatureTaste(
-    'Authoring orientation should recognize direct state/domain template reads beside object handoff.',
-    'template-model-access',
-    'direct-state-domain-template-binding',
-    'template-binding',
-  ),
-  ExpectedSemanticEffect.signatureTaste(
-    'Authoring orientation should recognize plain getter observation through the object boundary.',
-    'template-model-access',
-    'source-backed-getter-observation',
-    'component',
-  ),
   ExpectedSemanticEffect.signatureFact(
     'Object boundary should flow a repeated Product into the child bindable.',
     'binding-data-flow',
@@ -111,9 +93,9 @@ const expectedEffects = [
   ),
 ];
 
-const snapshot = readAuthoringVerificationSnapshot(app);
-const verification = verifyAuthoringEffects(
-  new AuthoringVerificationRequest(null, expectedEffects),
+const snapshot = readFixtureVerificationSnapshot(app);
+const verification = verifyFixtureEffects(
+  new FixtureVerificationRequest(null, expectedEffects),
   snapshot,
 );
 const failures = verification.effectResults

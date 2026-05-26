@@ -1,26 +1,27 @@
 # Pressure Fixtures
 
-This folder is for hand-authored analyzer pressure fixtures that are intentionally not authoring recommendations.
+This folder is for analyzer pressure fixtures, including hand-authored edge cases and migrated app-pattern fixtures that
+should remain as semantic contracts rather than app-builder recipes.
 
 Use these fixtures to preserve shapes that real Aurelia projects may contain, including weak type surfaces, mixed state
 ownership, callback bindables, object bindables on non-leaf components, dynamic form controls, and partially inconsistent
 template conventions.
 
-Keep ideal, recommendable app output in [../authoring](../authoring). Pressure fixtures can be mixed or intentionally
-non-recommendation, but they should
-still be realistic app code rather than artificial parser torture cases.
+Pressure fixtures can be mixed or non-recommendation, but they should still be realistic app code rather than artificial
+parser torture cases. Future recommendable generation belongs in app-builder goldens and app-builder APIs, not in this
+folder's contract descriptions.
 
 ## Fixtures
 
 - `mixed-form-surfaces` captures a form-heavy app surface with mixed ID/object component inputs, callback bindables,
   weak metadata bags, dynamic native controls, a custom two-way picklist, and an authored member access on a known
-  primitive owner. It exists to pressure diagnostics, authoring orientation, binding observer inference, missing-member
-  policy, and weak-type explanations without teaching the authoring API to generate the same shape.
+  primitive owner. It exists to pressure diagnostics, diagnostics-to-action and app-builder policy, binding observer inference, missing-member
+  policy, and weak-type explanations without teaching the app-builder API to generate the same shape.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics` protects its target-to-source assignment
   strictness diagnostics, including the declaration source used as the future repair/code-action target.
 - `module-loader-invalid-transform-input` captures `aliasedResourcesRegistry(...)` being given a statically closed
   primitive module input. It preserves kernel `ModuleLoader` `invalid_module_transform_input` / `AUR0021` pressure in
-  the evaluation issue lane without teaching authoring recipes to generate invalid registry module inputs.
+  the evaluation issue lane without making recommendable generators emit invalid registry module inputs.
 - `computed-decorator-contexts` captures valid getter/method `@computed(...)` usage, including direct and config-object
   getter dependency functions plus `deep: true` explicit dependency keys, beside field, setter, and auto-accessor
   call-form targets. It preserves runtime `computed_not_getter` / `AUR0228` as an observation source issue while
@@ -56,7 +57,7 @@ still be realistic app code rather than artificial parser torture cases.
   style-registry call pressure without turning bundler CSS imports into ordinary TypeScript diagnostic noise.
 - `proxy-observable-escapes` captures direct source calls to `ProxyObservable.getRaw(...)` and
   `ProxyObservable.unwrap(...)`. It preserves neutral source-level facts about raw/proxy boundary crossings so later
-  authoring or diagnostic policy can reason about external-library handoff and unnecessary escapes without baking that
+  app-builder or diagnostic policy can reason about external-library handoff and unnecessary escapes without baking that
   judgment into the observation substrate.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observable-escapes` is the focused semantic contract for
   this fixture.
@@ -79,25 +80,25 @@ still be realistic app code rather than artificial parser torture cases.
   It preserves controller-flow rows, link hooks, child-view cardinality, `with.bind` non-nullish scope projection,
   promise-result locals, repeat locals over arrays, maps, sets, and numeric counts, scalar and array-valued `case`
   values, static multi-attribute `fall-through` branch unions, `default-case` discriminant exclusion, durable branch
-  `BindingScope` slot narrowing, and generated overlay type inference without treating the fixture as an authoring
+  `BindingScope` slot narrowing, and generated overlay type inference without treating the fixture as an app-building
   recommendation.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins` is the focused semantic contract
   for this fixture.
 - `template-overlay-value-converter` captures modeled value-converter overlay calls, chained converters, contextual
   converter arguments, converter argument diagnostics, repeat iterable converter sources, and the low-level generated
   child splice contract used by `template-type-system-overlay-expression-support.ts`. The splice source is a projector
-  substrate proof, not a template-authoring recommendation for nested value-converter syntax.
+  substrate proof, not a template-app-building recommendation for nested value-converter syntax.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays` is the focused semantic contract for this
   fixture family.
 - `one-hop-forwarding-accessor` captures a component getter that only returns a property chain rooted at a DI-injected
   state class, beside a meaningful presentation getter, an unused getter, and a direct `state.*` template binding. It
-  exists to pressure authoring orientation toward low-boilerplate guidance without treating every getter as suspect or
+  exists to pressure diagnostics-to-action and app-builder policy toward low-boilerplate guidance without treating every getter as suspect or
   every source-observer candidate as a template-read observation.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:one-hop-forwarding-accessor` is the focused semantic contract
   for this fixture.
 - `component-object-boundary` captures a local typed component boundary where a repeated `Product` instance flows into a
   nullable object-shaped bindable, and the child template reads the object directly. It keeps direct object binding
-  visible as valid authoring pressure beside scalar-ID recipes: semantic-runtime must preserve the effective
+  visible as valid app-building pressure beside scalar-ID recipes: semantic-runtime must preserve the effective
   non-nullable bindable shape, binding data-flow, binding observed-dependency, and plain getter ComputedObserver rows
   without turning object handoff into either a universal recommendation or a diagnostic.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:component-object-boundary` is the focused semantic contract for
@@ -123,25 +124,25 @@ still be realistic app code rather than artificial parser torture cases.
   nullish observer values written into required source members, and unannotated component bindables initialized with
   empty arrays that TypeScript infers as `never[]`. It exists so MCP/LSP clients can route from
   `binding-data-flow-summary` issue rows to source typing, source narrowing, optional receiving-side contracts, or
-  target-type repair before opening exact raw binding rows, without teaching authoring recipes to generate those weak
+  target-type repair before opening exact raw binding rows, without making recommendable generators emit those weak
   surfaces.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-data-flow-summary` is the focused semantic contract for
   these issue rollups.
 - `di-resource-duplicates` captures two source-registered runtime-html resources with the same custom-element name. It
   preserves the runtime-html definition registrar duplicate warning (`element_existed` / `AUR0153`) as a
-  resource-registration issue without teaching authoring recipes to generate colliding resource names. Kernel
+  resource-registration issue without making recommendable generators emit colliding resource names. Kernel
   `resource_already_exists` (`AUR0007`) remains the separate static `$au` resource/resolver-publication path.
 - `di-resolve-contexts` captures ambient `resolve(...)` calls in module/static contexts that cannot have Aurelia's
   current container, alongside instance activation calls where nullish keys are validated by the active container and
   caller-dependent calls that should not be claimed as exact framework diagnostics. It preserves
   `no_active_container_for_resolve` / `AUR0016` and `null_undefined_key` / `AUR0014` pressure without teaching
-  authoring recipes to use module-level service lookup or invalid keys.
+  recommendable generators to use module-level service lookup or invalid keys.
 - `di-inject-decorator-contexts` captures valid class/field `@inject` metadata carriers next to invalid
   method/getter/setter targets. It preserves `invalid_inject_decorator_usage` / `AUR0022` pressure without teaching
-  authoring recipes to put injection decorators on rejected TC39 decorator contexts.
+  recommendable generators to put injection decorators on rejected TC39 decorator contexts.
 - `dynamic-keyed-validation` captures `& validate` bindings whose writable source expressions use repeat-local keyed
   access and nested TypeChecker-visible keys, such as `person[field]` and `person[addressField][line1Field]`. It
-  preserves framework-test-shaped validation binding pressure without teaching generated authoring recipes to prefer
+  preserves framework-test-shaped validation binding pressure without making recommendable generators prefer
   dynamic keyed form fields.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation` is the focused semantic contract for
   validate binding behavior rows, keyed writable data-flow rows, observed dependencies, and the absence of false
@@ -149,22 +150,22 @@ still be realistic app code rather than artificial parser torture cases.
 - `keyed-form-source-bindings` captures ordinary checked/select form bindings whose source expressions are array-index
   or record-keyed writes, such as `state.flags[0]`, `state.itemNames[0]`, and
   `state.selectedByTagId[tag.id]`. It preserves the handoff between checked/select value channels, keyed source display,
-  TypeChecker-backed write capability, and runtime assignability without teaching authoring recipes to prefer indexed
+  TypeChecker-backed write capability, and runtime assignability without making recommendable generators prefer indexed
   state over named domain properties.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:keyed-form-source-bindings` is the focused semantic contract for
   this fixture.
 - `contextual-call-argument-completion` captures cursor member-owner projection inside callback arguments whose
   parameter type comes from a view-model method signature or a TypeChecker-visible collection method. It preserves
-  contextual call-argument typing for completions without teaching authoring recipes to prefer callback-heavy template
+  contextual call-argument typing for completions without making recommendable generators prefer callback-heavy template
   expressions.
 - `class-style-interpolation-boundaries` captures class and style attributes with multiple interpolation holes and
   JavaScript template expressions inside those holes. It preserves interpolation boundary, class/style accessor, and
   value-channel pressure without treating the fixture as a recommended styling pattern.
 - `i18n-translation-binding-errors` captures invalid rendered i18n translation binding lifecycles: missing translation
   keys, duplicate parameter bindings on one target element, and non-string dynamic key expressions. It preserves
-  `AUR4000`, `AUR4001`, and `AUR4002` diagnostic pressure without teaching generated authoring recipes to emit invalid
+  `AUR4000`, `AUR4001`, and `AUR4002` diagnostic pressure without making recommendable generators emit invalid
   translation bindings. Static translation catalogs and positive rendered binding groups are now covered separately by
-  the generated localized authoring fixture through `api.I18nTranslationKeys` and `api.I18nTranslationBindings`.
+  the migrated localized app-pattern fixture through `api.I18nTranslationKeys` and `api.I18nTranslationBindings`.
 - `i18n-configuration-option-shape-errors` captures source-authored plugin option-shape mistakes, including the
   tempting but invalid top-level `resources` assignment on `I18nConfigurationOptions`. It preserves the split between
   framework configuration shape, TypeScript diagnostics, and semantic-runtime i18n catalog admission, where translation
@@ -178,10 +179,10 @@ still be realistic app code rather than artificial parser torture cases.
   the observation source-issue lane without treating `@observable` as resource metadata.
 - `ast-track-decorator-contexts` captures a valid method `@astTrack` next to an invalid field decorator form. It
   preserves runtime `ast_track_decorator_not_a_method` / `AUR0117` pressure in the observation source-issue lane without
-  teaching authoring recipes to decorate non-method members.
+  making recommendable generators decorate non-method members.
 - `checked-select-custom-matcher` captures `matcher.bind` on checked and select observers with object-valued
-  `model.bind` options. It preserves the observer comparison handoff as value-channel facts and authoring
-  `custom-matcher-comparison` taste across the exhaustive checked/select matrix. Generated authoring forms carry one
+  `model.bind` options. It preserves the observer comparison handoff as value-channel facts and app-building
+  `custom-matcher-comparison` policy across the exhaustive checked/select matrix. Migrated form app-pattern fixtures carry one
   deliberate object-select matcher example; this pressure fixture still owns the broader behavior-grounding surface. It
   is also part of `contract:select-checked-value-channels`, which protects checked array/set membership, map keyed-boolean
   membership, radio object values, select object values, and boolean checkbox matcher non-use from collapsing into
@@ -204,31 +205,31 @@ still be realistic app code rather than artificial parser torture cases.
   raw-property value-channel/data-flow rows, and ordinary `active.class` class-toggle rows.
 - `router-eager-path-generation-errors` captures an object navigation instruction whose routeable component resolves to
   a child route with a missing required parameter. It preserves `RouteConfigContext._generateViewportInstruction`
-  `rcEagerPathGenerationFailed` / `AUR3166` pressure without teaching authoring recipes to omit route params.
+  `rcEagerPathGenerationFailed` / `AUR3166` pressure without making recommendable generators omit route params.
 - `router-invalid-paths` captures route config paths that the framework route recognizer rejects during registration:
   reserved `$$residue` parameter usage and an invalid dynamic-parameter regex constraint. It preserves issue-product
-  pressure without teaching the authoring API to generate those paths.
+  pressure without teaching the app-builder API to generate those paths.
 - `router-redirect-expression-errors` captures a redirect route whose `redirectTo` uses a sibling RouteExpression.
   Aurelia's route tree redirect-parameter migration rejects non-segment/non-scoped-segment expression nodes
-  (`exprUnexpectedKind` / `AUR3502`), so this fixture preserves router issue-product pressure without teaching
-  authoring recipes to generate ambiguous redirect expressions.
+  (`exprUnexpectedKind` / `AUR3502`), so this fixture preserves router issue-product pressure without making
+  recommendable generators emit ambiguous redirect expressions.
 - `router-route-config-validation-errors` captures route config inputs that Aurelia's router validation rejects before
   route-context or route-recognizer materialization: a non-string `path` value and a null decorator config. It preserves
-  `rtInvalidConfigProperty` / `AUR3554` and `rtInvalidConfig` / `AUR3555` pressure without teaching authoring recipes
-  to generate invalid route metadata.
+  `rtInvalidConfigProperty` / `AUR3554` and `rtInvalidConfig` / `AUR3555` pressure without making recommendable generators
+  emit invalid route metadata.
 - `router-routeable-alias` captures a child route whose string routeable resolves through a side-effect-imported custom
   element and class-level `@alias(...)` metadata. It preserves evaluator side-effect import execution, resource alias
-  convergence, and router string routeable lookup without teaching authoring recipes to prefer implicit side-effect
+  convergence, and router string routeable lookup without making recommendable generators prefer implicit side-effect
   registration over explicit routeable class references.
 - `router-contextual-string-routeable` captures a parent route component whose `dependencies` array disambiguates a
   string child routeable when multiple custom elements share the same resource name. It preserves Aurelia's
   `resolveCustomElementDefinition(...)` dependency-scope lookup before root-container fallback without teaching
-  authoring recipes to create duplicate custom-element names.
+  recommendable generators to create duplicate custom-element names.
 - `router-route-parameter-aggregation` captures nested routed components where parent and child route configs both use
   the same `:id` parameter name. It preserves `IRouteContext.getRouteParameters()` child-first/parent-first aggregation
   pressure, append/by-route strategy projection, recursive residual-route recognition, nested `RouteNode` /
   `ComponentAgent` projection, closed static query parameter inclusion with duplicate query keys, fragment propagation,
-  and active route-node parameter value projection without teaching generated authoring recipes to prefer ambiguous
+  and active route-node parameter value projection without making recommendable generators prefer ambiguous
   repeated parameter names.
 - `repeat-keyed-iterables` captures nested `repeat.for` locals whose iterable comes from nullable arrays and finite
   keyed records such as `Record<'one' | 'two', Item[]>`. It preserves the TypeChecker handoff needed for public plugin
@@ -241,11 +242,11 @@ still be realistic app code rather than artificial parser torture cases.
   option syntax rejected by the `Repeat` constructor. It preserves the handoff from checker
   expression projection, compiler resource scope, repeat local/source projection, and runtime controller construction to
   exact Aurelia runtime `astEvaluate`/`astAssign`, runtime-html binding-utils, and runtime-html repeat diagnostics
-  without teaching authoring recipes to generate those expressions.
+  without making recommendable generators emit those expressions.
 - `runtime-observer-write-errors` captures target-side observer writes that Aurelia rejects after ObserverLocator has
   already selected a framework observer: source-to-target binding into a getter-only computed target (`AUR0221`) and a
   Map/Set `size` observer (`AUR0220`). It preserves the data-flow distinction between target observer selection and
-  write-time framework failure without teaching authoring recipes to create readonly bindable targets. The same fixture
+  write-time framework failure without making recommendable generators create readonly bindable targets. The same fixture
   now includes a setter-only target to prove that only getter descriptors enter the computed-observer branch; setter-only
   accessors remain runtime `SetterObserver` targets. It also carries a small SVG namespace-attribute target-access case:
   Aurelia's `xlink:*`/selected `xml:*` namespace table must route through `AttributeNSAccessor`, while SVG XML attributes
@@ -296,7 +297,7 @@ still be realistic app code rather than artificial parser torture cases.
   `contract:recursive-rendering`.
 - `runtime-html-spread-renderer-errors` captures a valid custom-element bindable spread beside `$element.spread` on the
   same custom element. It preserves the `SpreadValueRenderer` dispatch failure for `spreading_invalid_target` /
-  `AUR0820` without making invalid spread targets part of generated authoring recipes.
+  `AUR0820` without making invalid spread targets part of generated recommendable generators.
 - `runtime-html-ref-renderer-errors` captures valid `element.ref`, same-node custom-attribute ref, and same-node
   custom-element ref targets beside unsupported `view.ref`, controller ref on an ordinary element, named ref on an
   ordinary element, and a missing named target on a custom-element host. It preserves `RefBindingRenderer` target
@@ -305,7 +306,7 @@ still be realistic app code rather than artificial parser torture cases.
   runtime-html creates a `RefBinding`.
 - `runtime-html-view-factory-provider-errors` captures an ordinary custom attribute that resolves `IViewFactory`
   beside a template controller that resolves the same key legitimately. It preserves the runtime-html
-  `ViewFactoryProvider.resolve()` not-ready branch (`AUR0755`) without teaching authoring recipes to inject
+  `ViewFactoryProvider.resolve()` not-ready branch (`AUR0755`) without making recommendable generators inject
   template-controller-only context services into ordinary resources. The ordinary attribute also contains a nested
   class expression that resolves `IViewFactory`; that nested class is not activation-time execution and must not create
   a second provider-not-ready diagnostic.
@@ -325,7 +326,7 @@ still be realistic app code rather than artificial parser torture cases.
 - `template-compiler-errors` captures malformed classification, root `<template>` surrogate failures,
   projection/shadow-DOM slot failures, local-template shape failures, custom-attribute multi-binding, `<let>`, and
   command-owned template syntax that maps to exact Aurelia template-compiler `ErrorNames` authority. It preserves
-  framework-error-code diagnostic and repair pressure without teaching authoring recipes to generate malformed syntax.
+  framework-error-code diagnostic and repair pressure without making recommendable generators emit malformed syntax.
 - `typescript-project-diagnostics` captures ordinary TypeScript semantic errors in project-local source, including an
   overload/DOM API mismatch, and a `tsconfig.json` option diagnostic so the semantic-runtime diagnostic surface reports
   `tsc`-equivalent failures beside Aurelia diagnostics. It preserves the MCP repair-loop pressure where lint or
@@ -335,37 +336,36 @@ still be realistic app code rather than artificial parser torture cases.
   while keeping `diagnosticProjection=available-products` cheap.
 - `update-trigger-binding-behavior` captures valid and invalid built-in binding-behavior bind-time usage. It preserves
   runtime-html errors for `& updateTrigger`, `& signal`, `& self`, `& attr`, and double throttle/debounce rate limiting
-  without teaching authoring recipes to generate those mistakes. It deliberately does not claim the custom
+  without making recommendable generators emit those mistakes. It deliberately does not claim the custom
   `INodeObserverLocator` service-replacement failure.
 - `target-subscriber-binding-behavior` captures two visible custom binding behaviors whose bind methods directly call
   `PropertyBinding.useTargetSubscriber(...)` on the same binding. It preserves the runtime-html
-  `binding_already_has_target_subscriber` / `AUR9995` path without teaching authoring recipes to write custom target
+  `binding_already_has_target_subscriber` / `AUR9995` path without making recommendable generators write custom target
   subscriber behaviors.
 - `validation-rule-source-errors` captures source-authored validation rule mistakes: a `PropertyRule` modifier before
   any rule has been added, an accessor function that `parsePropertyName` cannot reduce, a group rule result that names
   a property outside the group, and default model-based rules with an unsupported rule key and an empty property name.
-  It preserves validation `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` pressure without teaching authoring
-  recipes to generate invalid validation DSL inputs.
+  It preserves validation `AUR4101`, `AUR4102`, `AUR4105`, `AUR4106`, and `AUR4108` pressure without making recommendable generators emit invalid validation DSL inputs.
 - `fetch-client-config-errors` captures closed @aurelia/fetch-client configuration mistakes: invalid
   `HttpClient.configure(...)` input and callback returns, `Headers` defaults, duplicate or non-tail retry interceptors,
   and invalid retry strategies/intervals. It preserves fetch-client `AUR5001`, `AUR5002`, `AUR5003`, `AUR5004`,
-  `AUR5005`, `AUR5007`, and `AUR5008` pressure without teaching authoring recipes to generate invalid HTTP client
+  `AUR5005`, `AUR5007`, and `AUR5008` pressure without making recommendable generators emit invalid HTTP client
   configuration.
 - `dialog-source-errors` captures source-visible @aurelia/dialog mistakes: registering bare `DialogConfiguration`
   without a renderer-providing customization, and opening a dialog with settings that provide neither `component` nor
   `template`, and resolving a child dialog service key that has no visible `withChild(...)` settings registration. It
-  preserves dialog `AUR0904`, `AUR0903`, and `AUR0910` pressure without teaching authoring recipes to generate invalid
+  preserves dialog `AUR0904`, `AUR0903`, and `AUR0910` pressure without making recommendable generators emit invalid
   dialog configuration or service calls.
 - `sanitize-value-converter-default` captures the built-in `sanitize` value converter used without an app-provided
   `ISanitizer` resolver. It preserves the runtime-html default sanitizer `method_not_implemented` / `AUR0099` path
-  without teaching authoring recipes to rely on the throwing default sanitizer.
+  without making recommendable generators rely on the throwing default sanitizer.
 - `sanitize-value-converter-custom` captures the same built-in converter with an app-provided `ISanitizer` resolver.
   It preserves the DI suppression side of the sanitize diagnostic so semantic-runtime does not report the default
   sanitizer error after a modeled interface registration.
 - `resource-metadata-errors` captures source-proved resource and controller-hydration failures, including bindable
   decorator misuse, process-content hook misuse, watch metadata errors, containerless shadow/slot conflicts, and
   bindable observer setup against collection observer branches. It preserves exact runtime-html controller/resource
-  framework-code pressure without making those shapes authoring ideals.
+  framework-code pressure without making those shapes app-building ideals.
 - `resource-definition-api-errors` captures direct runtime-html resource API calls that the framework rejects:
   `CustomElementDefinition.create(...)` with only a string name, and `getDefinition(...)` calls against a project-local
   non-resource class. It preserves the resource API issue lane for `AUR0151`, `AUR0152`, `AUR0759`, `AUR0760`, and

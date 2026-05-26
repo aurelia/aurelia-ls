@@ -21,7 +21,6 @@ import {
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const authoringFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring');
 const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure');
 const queryDefaultAnalysisDepth = 'query-default';
 
@@ -1065,10 +1064,9 @@ function queryPresetForProfile(profile) {
       ];
     case 'mcp-authoring':
       return [
-        query(SemanticAppQueryKind.AuthoringCatalog),
-        query(SemanticAppQueryKind.AuthoringOrientation),
         query(SemanticAppQueryKind.AppOverview),
         query(SemanticAppQueryKind.ResourceDefinitions),
+        query(SemanticAppQueryKind.BindingDataFlowSummary),
         query(SemanticAppQueryKind.AppDiagnostics),
       ];
     case 'aot':
@@ -3112,8 +3110,8 @@ function telemetryRoots(options) {
     return uniqueResolvedRoots(raw.split(path.delimiter));
   }
   return [
-    path.join(authoringFixtureRoot, 'generated-state-backed-form'),
-    path.join(authoringFixtureRoot, 'generated-routed-state-backed-form'),
+    path.join(pressureFixtureRoot, 'app-pattern-state-backed-form'),
+    path.join(pressureFixtureRoot, 'app-pattern-routed-state-backed-form'),
     path.join(pressureFixtureRoot, 'mixed-form-surfaces'),
     path.join(pressureFixtureRoot, 'router-viewport-resolution-errors'),
   ].filter((root) => existsSync(root));
@@ -3165,7 +3163,7 @@ function telemetryFixtureRoots(rawFixture) {
     return [telemetryFixtureRoot(lane, fixtureName)];
   }
 
-  const candidates = ['pressure', 'authoring']
+  const candidates = ['pressure']
     .map((lane) => telemetryFixtureRoot(lane, rawFixture, false))
     .filter((root) => root != null);
   if (candidates.length === 0) {
@@ -3177,11 +3175,9 @@ function telemetryFixtureRoots(rawFixture) {
 function telemetryFixtureRoot(lane, fixtureName, failOnMissing = true) {
   const baseRoot = lane === 'pressure'
     ? pressureFixtureRoot
-    : lane === 'authoring'
-      ? authoringFixtureRoot
-      : null;
+    : null;
   if (baseRoot == null) {
-    throw new Error(`Unsupported app telemetry fixture lane '${lane}'. Use pressure:<name> or authoring:<name>.`);
+    throw new Error(`Unsupported app telemetry fixture lane '${lane}'. Use pressure:<name>.`);
   }
   const root = path.join(baseRoot, fixtureName);
   if (!existsSync(root)) {
@@ -3202,9 +3198,6 @@ function uniqueResolvedRoots(rawRoots) {
 }
 
 function expandFixtureCollection(root) {
-  if (samePath(root, authoringFixtureRoot)) {
-    return fixtureChildRoots(authoringFixtureRoot, (name) => name.startsWith('generated-') || name === 'storefront');
-  }
   if (samePath(root, pressureFixtureRoot)) {
     return fixtureChildRoots(pressureFixtureRoot);
   }
@@ -3239,9 +3232,6 @@ function fixtureRootHasFiles(rootDir) {
 
 function telemetryRootLabel(root, index) {
   const resolvedRoot = path.resolve(root);
-  if (isPathAtOrUnder(resolvedRoot, authoringFixtureRoot)) {
-    return `authoring:${fixtureRootName(resolvedRoot, authoringFixtureRoot)}`;
-  }
   if (isPathAtOrUnder(resolvedRoot, pressureFixtureRoot)) {
     return `pressure:${fixtureRootName(resolvedRoot, pressureFixtureRoot)}`;
   }

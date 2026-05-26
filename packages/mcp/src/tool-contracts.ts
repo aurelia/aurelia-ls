@@ -1,8 +1,5 @@
 import type {
   OpenSemanticAppOptions,
-  SemanticAuthoringCatalogViewRequest,
-  SemanticAuthoringGuidanceRequest,
-  SemanticAuthoringRecipePlanRequest,
   SemanticAppQuery,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticRuntimeAppQueryRequest,
@@ -21,15 +18,11 @@ export const aureliaMcpToolNames = {
   workspaceOverview: 'aurelia_workspace_overview',
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
-  authoringCatalog: 'aurelia_authoring_catalog',
-  authoringGuidance: 'aurelia_app_building_guidance',
-  authoringRecipePlan: 'aurelia_authoring_recipe_plan',
   appQueryCatalog: 'aurelia_app_query_catalog',
   appOverview: 'aurelia_app_overview',
   routerOverview: 'aurelia_router_overview',
   appQuery: 'aurelia_app_query',
   appQueryBatch: 'aurelia_app_query_batch',
-  authoringOrientation: 'aurelia_authoring_orientation',
   openSeamOverview: 'aurelia_open_seam_overview',
   diagnosticOverview: 'aurelia_diagnostic_overview',
   appDiagnostics: 'aurelia_app_diagnostics',
@@ -75,23 +68,6 @@ export interface AureliaMcpClearAnalysisCacheInput {
   readonly typeSystemDependencyCacheClearPolicy?: SemanticRuntimeAnalysisCacheClearRequest['typeSystemDependencyCacheClearPolicy'];
 }
 
-export interface AureliaMcpAuthoringCatalogInput {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
-  /** Defaults to `overview`; use `full` only for local debugging or export. */
-  readonly catalogView?: SemanticAuthoringCatalogViewRequest['view'];
-}
-
-export interface AureliaMcpAuthoringGuidanceInput extends SemanticAuthoringGuidanceRequest {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
-}
-
-export interface AureliaMcpAuthoringRecipePlanInput extends SemanticAuthoringRecipePlanRequest {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
-}
-
 export interface AureliaMcpAppQueryCatalogInput {
   /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
   readonly workspaceRoot?: string | null;
@@ -117,15 +93,12 @@ export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
 export interface AureliaMcpAppOverviewInput extends AureliaMcpOpenAppInput {
   readonly diagnosticPageSize?: number | null;
   readonly openSeamPageSize?: number | null;
-  readonly includeAuthoringOrientation?: boolean | null;
 }
 
 export interface AureliaMcpRouterOverviewInput extends AureliaMcpOpenAppInput {
   readonly rowPageSize?: number | null;
   readonly detail?: SemanticAppQuery['detail'] | null;
 }
-
-export interface AureliaMcpAuthoringOrientationInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {}
 
 export interface AureliaMcpAppDiagnosticsInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;

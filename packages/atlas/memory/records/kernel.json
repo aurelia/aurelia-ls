@@ -165,9 +165,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/authoring-orientation.ts",
-          "symbolName": "repairActionTargetSourceForOpenSeam",
-          "summary": "Authoring repair target selection spends OpenSeam reasonSources before falling back to the seam primary source."
+          "filePath": "packages/semantic-runtime/src/diagnostic-action/action.ts",
+          "symbolName": "DiagnosticActionKind",
+          "summary": "Diagnostics-to-action owns future repair/action classification before host edit planning spends OpenSeam source evidence."
         },
         {
           "kind": "fixture",

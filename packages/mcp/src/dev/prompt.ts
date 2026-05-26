@@ -144,10 +144,10 @@ function readBooleanStringOption(
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:prompt -- <prompt-name> [json-or-flags]',
-    'Prompts: aurelia_orient_workspace, aurelia_plan_authoring_recipe, aurelia_build_app_feature',
+    'Prompts: aurelia_orient_workspace, aurelia_inspect_app_feature, aurelia_build_app_feature',
     'Examples:',
     '  pnpm --filter @aurelia-ls/mcp dev:prompt -- aurelia_build_app_feature --featureGoal "Add a routed form" --focus forms --includeRouter',
-    '  pnpm --filter @aurelia-ls/mcp dev:prompt -- aurelia_plan_authoring_recipe {"recipeKey":"state-backed-form"} --json',
+    '  pnpm --filter @aurelia-ls/mcp dev:prompt -- aurelia_inspect_app_feature --workspaceRoot . --featureGoal "Fix template diagnostics" --includeDiagnostics --json',
     'Boolean prompt arguments such as --includeRouter and --includeDiagnostics accept a bare flag or an explicit true/false value.',
     'Use --output json for raw MCP prompt JSON; text is the default for prompt review.',
   ].join('\n');

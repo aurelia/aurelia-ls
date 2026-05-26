@@ -15,10 +15,8 @@ import { answer } from './answer-helpers.js';
 
 const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.Summary, 'overview', 'Compact project app-world counts and app shape summary.', 'overview'),
-  queryRow(SemanticAppQueryKind.AppOverview, 'overview', 'Composed compact app answer for available diagnostics, open seams, topology counts, and opt-in authoring fit.', 'overview'),
+  queryRow(SemanticAppQueryKind.AppOverview, 'overview', 'Composed compact app answer for available diagnostics, open seams, and topology counts.', 'overview'),
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview'),
-  queryRow(SemanticAppQueryKind.AuthoringCatalog, 'authoring', 'Static authoring ontology, operations, taste axes, and recipe contracts.', 'static-catalog', { materializationPolicy: 'static-catalog', runtimeBoundary: 'runtime-static' }),
-  queryRow(SemanticAppQueryKind.AuthoringOrientation, 'authoring', 'Opened-app authoring evidence, capability fit, recipe fit, repairs, and repair clusters; compact detail omits per-recipe expected-effect rows and repair loci, use detail=handles for row-level contracts or repair planning.', 'overview', { minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation, pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
   queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
@@ -164,7 +162,6 @@ export function semanticAppQueryCatalogShape(
     ...(query.kind !== SemanticAppQueryKind.AppTopology || query.includeTypeSurfaces == null ? {} : { includeTypeSurfaces: query.includeTypeSurfaces }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.diagnosticPageSize == null ? {} : { diagnosticPageSize: query.diagnosticPageSize }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.openSeamPageSize == null ? {} : { openSeamPageSize: query.openSeamPageSize }),
-    ...(query.kind !== SemanticAppQueryKind.AppOverview || query.includeAuthoringOrientation == null ? {} : { includeAuthoringOrientation: query.includeAuthoringOrientation }),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
     ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
@@ -217,9 +214,8 @@ function queryRow(
   };
 }
 
-function supportsContinuationIntentFilter(queryKind: SemanticAppQueryKind): boolean {
-  return queryKind !== SemanticAppQueryKind.AuthoringCatalog
-    && queryKind !== SemanticAppQueryKind.AuthoringOrientation;
+function supportsContinuationIntentFilter(_queryKind: SemanticAppQueryKind): boolean {
+  return true;
 }
 
 function groupRows(rows: readonly SemanticAppQueryCatalogRow[]): SemanticAppQueryCatalogResult['groups'] {

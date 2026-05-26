@@ -1,7 +1,8 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
+  ExpectedSemanticEffectRouteProductKind,
   expectedSemanticRouteFactRowsFor,
-} from '../authoring/effect-observation.js';
+} from '../fixture-verification/effect-observation.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { SemanticApplicationTopologyResult } from './app-topology.js';
 import {
@@ -21,7 +22,7 @@ export function readSemanticRouteEffectFactRows(
   topology: SemanticApplicationTopologyResult,
 ): readonly object[] {
   return [
-    ...expectedSemanticRouteFactRowsFor('topology-route', topology.routes),
+    ...expectedSemanticRouteFactRowsFor(ExpectedSemanticEffectRouteProductKind.TopologyRoute, topology.routes),
     ...semanticRouteQueryDescriptors.flatMap((reader) =>
       expectedSemanticRouteFactRowsFor(
         reader.routeProductKind,

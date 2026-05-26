@@ -10,10 +10,6 @@ import {
   appQueryBatchInputSchema,
   appQueryInputSchema,
   analysisCacheOverviewInputSchema,
-  authoringCatalogInputSchema,
-  authoringGuidanceInputSchema,
-  authoringOrientationInputSchema,
-  authoringRecipePlanInputSchema,
   clearAnalysisCacheInputSchema,
   diagnosticOverviewInputSchema,
   openSeamOverviewInputSchema,
@@ -30,10 +26,6 @@ import type {
   AureliaMcpAppQueryInput,
   AureliaMcpAppQueryCatalogInput,
   AureliaMcpAnalysisCacheOverviewInput,
-  AureliaMcpAuthoringCatalogInput,
-  AureliaMcpAuthoringGuidanceInput,
-  AureliaMcpAuthoringOrientationInput,
-  AureliaMcpAuthoringRecipePlanInput,
   AureliaMcpClearAnalysisCacheInput,
   AureliaMcpDiagnosticOverviewInput,
   AureliaMcpOpenSeamOverviewInput,
@@ -47,15 +39,11 @@ const commandInputSchemas = {
   'workspace-overview': z.object(workspaceOverviewInputSchema).strict(),
   'analysis-cache-overview': z.object(analysisCacheOverviewInputSchema).strict(),
   'clear-analysis-cache': z.object(clearAnalysisCacheInputSchema).strict(),
-  'authoring-catalog': z.object(authoringCatalogInputSchema).strict(),
-  'app-building-guidance': z.object(authoringGuidanceInputSchema).strict(),
-  'authoring-recipe-plan': z.object(authoringRecipePlanInputSchema).strict(),
   'app-query-catalog': z.object(appQueryCatalogInputSchema).strict(),
   'app-overview': z.object(appOverviewInputSchema).strict(),
   'router-overview': z.object(routerOverviewInputSchema).strict(),
   'app-query': z.object(appQueryInputSchema).strict(),
   'app-query-batch': z.object(appQueryBatchInputSchema).strict(),
-  'authoring-orientation': z.object(authoringOrientationInputSchema).strict(),
   'open-seam-overview': z.object(openSeamOverviewInputSchema).strict(),
   'diagnostic-overview': z.object(diagnosticOverviewInputSchema).strict(),
   'app-diagnostics': z.object(appDiagnosticsInputSchema).strict(),
@@ -68,15 +56,11 @@ const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas>
   [aureliaMcpToolNames.workspaceOverview]: 'workspace-overview',
   [aureliaMcpToolNames.analysisCacheOverview]: 'analysis-cache-overview',
   [aureliaMcpToolNames.clearAnalysisCache]: 'clear-analysis-cache',
-  [aureliaMcpToolNames.authoringCatalog]: 'authoring-catalog',
-  [aureliaMcpToolNames.authoringGuidance]: 'app-building-guidance',
-  [aureliaMcpToolNames.authoringRecipePlan]: 'authoring-recipe-plan',
   [aureliaMcpToolNames.appQueryCatalog]: 'app-query-catalog',
   [aureliaMcpToolNames.appOverview]: 'app-overview',
   [aureliaMcpToolNames.routerOverview]: 'router-overview',
   [aureliaMcpToolNames.appQuery]: 'app-query',
   [aureliaMcpToolNames.appQueryBatch]: 'app-query-batch',
-  [aureliaMcpToolNames.authoringOrientation]: 'authoring-orientation',
   [aureliaMcpToolNames.openSeamOverview]: 'open-seam-overview',
   [aureliaMcpToolNames.diagnosticOverview]: 'diagnostic-overview',
   [aureliaMcpToolNames.appDiagnostics]: 'app-diagnostics',
@@ -119,12 +103,6 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
       return adapter.analysisCacheOverview(input as unknown as AureliaMcpAnalysisCacheOverviewInput);
     case 'clear-analysis-cache':
       return adapter.clearAnalysisCache(input as unknown as AureliaMcpClearAnalysisCacheInput);
-    case 'authoring-catalog':
-      return adapter.authoringCatalog(input as unknown as AureliaMcpAuthoringCatalogInput);
-    case 'app-building-guidance':
-      return adapter.authoringGuidance(input as unknown as AureliaMcpAuthoringGuidanceInput);
-    case 'authoring-recipe-plan':
-      return adapter.authoringRecipePlan(input as unknown as AureliaMcpAuthoringRecipePlanInput);
     case 'app-query-catalog':
       return adapter.appQueryCatalog(input as unknown as AureliaMcpAppQueryCatalogInput);
     case 'app-query':
@@ -135,8 +113,6 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
       return adapter.appOverview(input as unknown as AureliaMcpAppOverviewInput);
     case 'router-overview':
       return adapter.routerOverview(input as unknown as AureliaMcpRouterOverviewInput);
-    case 'authoring-orientation':
-      return adapter.authoringOrientation(input as unknown as AureliaMcpAuthoringOrientationInput);
     case 'open-seam-overview':
       return adapter.openSeamOverview(input as unknown as AureliaMcpOpenSeamOverviewInput);
     case 'app-diagnostics':
@@ -233,87 +209,6 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
-    if (key === '--recipeKey') {
-      input.recipeKey = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--focus') {
-      input.focus = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--featureGoal') {
-      input.featureGoal = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--recipeLimit') {
-      input.recipeLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
-      index += 1;
-      continue;
-    }
-    if (key === '--principleLimit') {
-      input.principleLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
-      index += 1;
-      continue;
-    }
-    if (key === '--decisionLimit') {
-      input.decisionLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
-      index += 1;
-      continue;
-    }
-    if (key === '--catalogView') {
-      input.catalogView = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--rootDir') {
-      input.rootDir = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--appName') {
-      input.appName = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--includeText') {
-      const option = readBooleanOption(rest, index, key);
-      input.includeText = option.value;
-      index = option.nextIndex;
-      continue;
-    }
-    if (key === '--recipeSourceFile' || key === '--sourceFilePaths') {
-      addStringListValues(input, 'sourceFilePaths', requireValue(rest, index, key));
-      index += 1;
-      continue;
-    }
-    if (key === '--sourceTextRequestHint' || key === '--sourceTextRequestHintKey' || key === '--sourceTextRequestHintKeys') {
-      addStringListValues(input, 'sourceTextRequestHintKeys', requireValue(rest, index, key));
-      index += 1;
-      continue;
-    }
-    if (key === '--sourceParameterValues') {
-      addSourceParameterValues(input, parseSourceParameterValues(requireValue(rest, index, key), key));
-      index += 1;
-      continue;
-    }
-    if (key === '--sourceParameterValue') {
-      addSourceParameterValues(input, [parseSourceParameterAssignment(requireValue(rest, index, key), key)]);
-      index += 1;
-      continue;
-    }
-    if (key === '--effectDetail') {
-      input.effectDetail = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
-    if (key === '--usage') {
-      input.usage = requireValue(rest, index, key);
-      index += 1;
-      continue;
-    }
     if (key === '--includeKernelBreakdowns') {
       const option = readBooleanOption(rest, index, key);
       input.includeKernelBreakdowns = option.value;
@@ -357,12 +252,6 @@ function parseInvocation(args: readonly string[]): {
     if (key === '--includeAuthoringTemplates') {
       const option = readBooleanOption(rest, index, key);
       input.includeAuthoringTemplates = option.value;
-      index = option.nextIndex;
-      continue;
-    }
-    if (key === '--includeAuthoringOrientation') {
-      const option = readBooleanOption(rest, index, key);
-      input.includeAuthoringOrientation = option.value;
       index = option.nextIndex;
       continue;
     }
@@ -554,10 +443,10 @@ function readBooleanOption(
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:invoke -- <command> --workspaceRoot <path> [options]',
-    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, authoring-catalog, app-building-guidance, authoring-recipe-plan, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, authoring-orientation, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
-    'Public tool names such as aurelia_app_building_guidance and aurelia_authoring_recipe_plan are accepted as aliases.',
+    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
+    'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeText [true|false], --includeAuthoringTemplates [true|false], --includeAuthoringOrientation [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --focus, --featureGoal, --recipeLimit, --principleLimit, --decisionLimit, --group, --queryKind, --sourceFile, --sourceFilePath, --recipeSourceFile, --sourceFilePaths <comma-separated paths>, --sourceTextRequestHintKey <hint>, --sourceParameterValue key=value, --sourceParameterValues <json-array or semicolon-separated key=value list>, --cursor file:line:character[:offset], --diagnosticProjection, --continuationIntent, --appRetention, --effectDetail, --usage, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 
@@ -585,91 +474,13 @@ function addStringListValue(input: Record<string, unknown>, key: string, value: 
 
 function addStringListValues(input: Record<string, unknown>, key: string, value: string): void {
   // PowerShell can hand pnpm an unquoted comma-separated path list as one space-joined token.
-  // Recipe source paths are repo-relative and should not contain spaces, so accept both separators here.
+  // Continuation intent lists are symbolic values and should not contain spaces, so accept both separators here.
   for (const part of value.split(/[,\s]+/u)) {
     const trimmed = part.trim();
     if (trimmed !== '') {
       addStringListValue(input, key, trimmed);
     }
   }
-}
-
-function addSourceParameterValues(
-  input: Record<string, unknown>,
-  values: readonly { readonly key: string; readonly value: string }[],
-): void {
-  const existing = input.sourceParameterValues;
-  if (Array.isArray(existing)) {
-    existing.push(...values);
-    return;
-  }
-  input.sourceParameterValues = [...values];
-}
-
-function parseSourceParameterValues(
-  value: string,
-  key: string,
-): readonly { readonly key: string; readonly value: string }[] {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('[')) {
-    return parseSourceParameterValuesJson(trimmed, key);
-  }
-  return trimmed
-    .split(/[\r\n;]+/u)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map((part) => parseSourceParameterAssignment(part, key));
-}
-
-function parseSourceParameterValuesJson(
-  value: string,
-  key: string,
-): readonly { readonly key: string; readonly value: string }[] {
-  const parsed: unknown = JSON.parse(value);
-  if (!Array.isArray(parsed)) {
-    throw new Error(`${key} JSON must be an array of { key, value } objects.`);
-  }
-  return parsed.map((row, index) => {
-    if (row == null || Array.isArray(row) || typeof row !== 'object') {
-      throw new Error(`${key}[${index}] must be an object.`);
-    }
-    const candidate = row as { readonly key?: unknown; readonly value?: unknown };
-    if (typeof candidate.key !== 'string' || typeof candidate.value !== 'string') {
-      throw new Error(`${key}[${index}] must contain string key and value fields.`);
-    }
-    return normalizeSourceParameterValue(candidate.key, candidate.value, `${key}[${index}]`);
-  });
-}
-
-function parseSourceParameterAssignment(
-  value: string,
-  key: string,
-): { readonly key: string; readonly value: string } {
-  const separatorIndex = value.indexOf('=');
-  if (separatorIndex <= 0) {
-    throw new Error(`${key} expects key=value.`);
-  }
-  return normalizeSourceParameterValue(
-    value.slice(0, separatorIndex),
-    value.slice(separatorIndex + 1),
-    key,
-  );
-}
-
-function normalizeSourceParameterValue(
-  rawKey: string,
-  rawValue: string,
-  source: string,
-): { readonly key: string; readonly value: string } {
-  const parameterKey = rawKey.trim();
-  const parameterValue = rawValue.trim();
-  if (parameterKey.length === 0 || parameterValue.length === 0) {
-    throw new Error(`${source} must contain a non-empty key and value.`);
-  }
-  return {
-    key: parameterKey,
-    value: parameterValue,
-  };
 }
 
 function parseBoolean(value: string, key: string): boolean {
@@ -739,12 +550,6 @@ function formatZodError(error: z.ZodError): string {
         }
         if (path === 'appRetention') {
           return 'appRetention: unsupported policy; use profile-default, retain-app, or dispose-app.';
-        }
-        if (path === 'catalogView') {
-          return 'catalogView: unsupported view; use overview, operations, recipes, or full.';
-        }
-        if (path === 'recipeKey') {
-          return 'recipeKey: unsupported recipe; run authoring-catalog --catalogView recipes for supported values.';
         }
         return `${path}: invalid value.`;
       }

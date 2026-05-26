@@ -10,9 +10,6 @@ import {
   answer,
 } from './answer-helpers.js';
 import {
-  readSemanticAuthoringCatalogAnswer,
-} from './authoring-catalog.js';
-import {
   readSemanticSourceFiles,
 } from './source-files.js';
 import {
@@ -24,16 +21,11 @@ export type SemanticAppWorldFreeEvaluationReader = () => StaticProjectEvaluation
 export function answerRuntimeStaticAppQuery(
   query: SemanticAppQuery,
 ): SemanticRuntimeAnswer<unknown> {
-  switch (query.kind) {
-    case SemanticAppQueryKind.AuthoringCatalog:
-      return readSemanticAuthoringCatalogAnswer();
-    default:
-      return answer(
-        SemanticRuntimeAnswerOutcome.Unsupported,
-        `Semantic app query '${query.kind}' is not a runtime-static query.`,
-        { query },
-      );
-  }
+  return answer(
+    SemanticRuntimeAnswerOutcome.Unsupported,
+    `Semantic app query '${query.kind}' is not a runtime-static query.`,
+    { query },
+  );
 }
 
 export function answerAppWorldFreeQuery(
@@ -42,8 +34,6 @@ export function answerAppWorldFreeQuery(
   readEvaluation: SemanticAppWorldFreeEvaluationReader,
 ): SemanticRuntimeAnswer<unknown> {
   switch (query.kind) {
-    case SemanticAppQueryKind.AuthoringCatalog:
-      return answerRuntimeStaticAppQuery(query);
     case SemanticAppQueryKind.SourceFiles:
       return readSemanticSourceFiles(project, query.page, query.detail);
     case SemanticAppQueryKind.UnresolvedModules:

@@ -203,10 +203,6 @@ function semanticAppQueryContinuationRows(
   result: SemanticRuntimeAnswer<unknown>,
   catalogRow: SemanticAppQueryCatalogRow,
 ): readonly SemanticRuntimeContinuationRow[] {
-  if (isAuthoringQuery(query.kind)) {
-    return [];
-  }
-
   const seeds: ContinuationSeed[] = [];
   const locusQuery = semanticAppQueryCatalogShape(query);
   const sourceFile = semanticAppQuerySourceFileLocus(locusQuery);
@@ -1413,8 +1409,4 @@ function continuationKey(row: SemanticRuntimeContinuationRow): string {
 
 function publicAppQueryBase(query: SemanticAppQuery): SemanticAppQuery {
   return semanticAppQueryCatalogShape(query);
-}
-
-function isAuthoringQuery(kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`): boolean {
-  return kind === SemanticAppQueryKind.AuthoringCatalog || kind === SemanticAppQueryKind.AuthoringOrientation;
 }

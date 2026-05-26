@@ -870,7 +870,7 @@
         },
         {
           "kind": "doc",
-          "path": "packages/semantic-runtime/src/authoring/README.md",
+          "path": "packages/semantic-runtime/src/app-builder/README.md",
           "summary": "Authoring guidance for direct DI state exposure and sparse view-model adaptation getters."
         },
         {
@@ -1788,16 +1788,16 @@
         "diagnostics",
         "authoring"
       ],
-      "summary": "Form authoring, diagnostics, and repair work should reuse observer locator and binding value-channel semantics before adding feature-local form logic.",
-      "rationale": "Form pressure appears in authoring fixtures, stress pressure fixtures, and external apps. The reusable substrate is observer/value-channel/data-flow modeling, not a generator-specific form model.",
+      "summary": "Form analysis, diagnostics, and repair work should reuse observer locator and binding value-channel semantics before adding feature-local form logic.",
+      "rationale": "Form pressure appears in app-pattern fixtures, stress pressure fixtures, and external apps. The reusable substrate is observer/value-channel/data-flow modeling, not a generator-specific form model.",
       "guidance": [
         "For compact form/control explanation, inspect `BindingValueChannelSummary` before paging raw value-channel rows; it groups channel kinds and `observerCouplings` for MCP/LSP answers that need low-token observer mechanism context, with capped representative sets plus counts.",
         "Pair `BindingDataFlowSummary` with `BindingValueChannelSummary` when the question is source/target flow, assignment strictness, source roots, or framework error-code pressure rather than observer-channel mechanism alone; use `page.size=0` on summary queries for rollup-only first reads. Data-flow issue rows split unresolved source typing, nullish source/target write-direction mismatches, and empty-array inferred targets so MCP/LSP repair routing can pick source narrowing, optional receiving-side contracts, or explicit target typing before opening exact rows.",
         "For form completions or diagnostics, inspect value-channel rows, binding data-flow rows, and observer locator rows together.",
-        "Binding value-channel API rows carry `targetKind`; AuthoringOrientation uses that to split native element `value` observers from custom element/component `value`/`model`/`checked` APIs instead of inferring custom controls from target names alone. Null target channels are open/unknown, not native DOM observer evidence.",
+        "Binding value-channel API rows carry `targetKind`; Binding value-channel summaries use that to split native element `value` observers from custom element/component `value`/`model`/`checked` APIs instead of inferring custom controls from target names alone. Null target channels are open/unknown, not native DOM observer evidence.",
         "When a form target-to-source diagnostic is only TypeScript strictness, guide by the observer channel: single select/radio `value` attributes write strings, `model.bind` preserves app domain values, checked collections/maps need element/key type alignment, and native value observers usually write strings.",
         "If weakly typed app code prevents autocomplete, preserve the weakness and surface repair/diagnostic guidance instead of guessing.",
-        "Keep leaf user-control exceptions as authoring taste policy; do not turn them into universal semantic truth."
+        "Keep leaf user-control exceptions as app-building taste policy; do not turn them into universal semantic truth."
       ],
       "anchors": [
         {

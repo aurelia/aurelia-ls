@@ -121,15 +121,15 @@ batch, and the applicability metadata declares which next-move intents it serves
 crosses. Public app-query ownership lives in `targetQueryKind` and the shaped target query rather than target-specific
 continuation kind members.
 Pass `continuationIntents` when a caller only wants moves for a
-current task such as `diagnose` or `repair`; leave it unset for the full menu. Current authoring answers intentionally
-omit this surface until the app-builder algebra replaces fixture-like recipes with a cleaner authoring ontology.
+current task such as `diagnose` or `repair`; leave it unset for the full menu. App-builder generation answers are not
+part of this public API yet; do not keep legacy recipe surfaces alive just to expose continuation rows.
 Continuation evidence `coverage` is a proof posture, not a confidence score. Paged row tables, overviews, and summary
 tables report `partial-known-gaps`; exact cursor-locus follow-ups can report `complete-for-locus`; future or
 insufficiently modeled families should stay `unknown` instead of implying completeness.
 When phase-kernel telemetry is enabled, those same phase rows also carry compact kernel deltas and optional product/detail
 breakdown rows, so disposed-app answers can explain which template or runtime phase created the answer-local products
 that the claim graph later reclaimed.
-Static app-query answers that do not require app-world construction, such as `AuthoringCatalog`, use a runtime-level
+Static and project-frame app-query answers that do not require app-world construction use a runtime-level
 query-claim graph. That keeps small answer reuse behind the same inquiry-profile policy as opened-app answers
 without forcing an app epoch into the cache. Routed app-query claims use the same runtime-level graph to retain answer
 shape and cost telemetry after `answerAppQuery(...)` has disposed the opened app; the app-owned query graph still owns
@@ -139,7 +139,7 @@ query-claim graph enforces both a per-answer byte limit and a total retained-ans
 is exceeded, claim rows remain available for reuse diagnostics and invalidation, but old public DTO objects are dropped
 so a long MCP-style orientation session does not turn the graph into an unbounded answer cache.
 App-world-free app-query answers stay at the runtime boundary. `SourceFiles` can answer from the booted project frame,
-`AuthoringCatalog` can answer from static catalog data, and `UnresolvedModules` can answer from read-only Aurelia
+and `UnresolvedModules` can answer from read-only Aurelia
 static evaluation without emitting kernel records or opening an app epoch. `answerAppQuery(...)` and
 all-app-world-free `answerAppQueries(...)` batches therefore avoid TypeSystem construction, template compilation, and
 app-epoch disposal. When every child query is runtime-static, the batch stays workspace-level too: it does not select a
@@ -167,41 +167,14 @@ hook as app-epoch disposal and is counted on the runtime query claim, so MCP-sty
 kernel/app-world retention and dependency-cache retention without adding an adapter-local `finally` cleanup.
 Conversely, `appRetention: 'retain-app'` disables retained-answer reuse when no compatible app epoch is already cached,
 because the caller is asking to warm the app world for follow-up tools, not merely to receive the same DTO again.
-Direct static facade answers such as `runtime.authoringCatalogView(...)`, `runtime.authoringGuidance(...)`,
-`runtime.authoringRecipePlan(...)`, and `runtime.appQueryCatalog(...)` are also claim-backed. Public adapters should use those runtime methods rather than the
-raw `readSemantic*` catalog functions when the answer crosses a transport boundary, so retention, reuse, and cache
-overview all observe the same query-outcome layer. Inside an already-entered claim boundary, use the focused raw answer
-builder instead of calling another public facade method; otherwise an implementation detail can create an unrelated
-default-profile claim even though only one public answer crossed the API boundary.
-`AuthoringGuidance` is the public app-building bridge over the authoring catalog. Its compact result includes
-bounded principle rows, bounded decision rows, focused recipe rows, and follow-up semantic-runtime surfaces, so MCP-style callers can answer
-common code-economy questions without exposing Atlas memory or re-reading recipe plans. Feature-goal matching and
-recipe choreography live in `authoring-guidance-feature-goals.ts`; keep matching/ranking policy there instead of growing
-the main guidance reader. Decision rows should stay
-framework-grounded and taste-keyed: use them for choices such as DI state versus service ownership, direct
-state/domain template access versus view-model adaptation, ID versus object component handoff, ordinary getter
-observation versus `@computed` metadata, form value-channel ownership, route-selected state, and router `activeClass`
-versus `load.active` state handoff. External-library, host-object, worker, and serialization boundaries belong in the
-same guidance layer: keep app state inside Aurelia observation by default, then use `ProxyObservable` escape facts only
-for explicit raw-object handoff boundaries. Decision follow-up surfaces are normalized so `app-query-batch` appears
-before app-query-kind rows such as binding summaries, route-context rows, or state rows; public adapters should batch
-those related reads instead of issuing transport-local one-off query chains. Compact answers default to the same principle/decision row counts used by
-the text channel; pass `principleLimit` or `decisionLimit` when a caller needs more rows without switching to
-`detail: "recipes"`. Compact rows keep code-shape summaries, stable keys, counts, and follow-up surfaces, while recipe
-membership arrays, expanded operation families, expected-effect kind arrays, source-role arrays, and preference rows stay
-behind `detail: "recipes"` or `AuthoringRecipePlan`.
-`AuthoringCatalog` has separate public-cost tiers. `catalogView: "overview"` is the default map: it keeps recipe
-titles, summaries, support state, specificity, and scalar counts, but omits operation-kind arrays, lineage arrays,
-taste-value keys, expected-effect kind arrays, and source-plan summaries. `catalogView: "recipes"` is the recipe
-comparison surface and expands those recipe contract fields while still omitting row-level preference and expected-effect
-contracts. `catalogView: "full"` is for local export/debugging, not a default public MCP answer.
-The compact catalog views also own `displayText`, so public adapters can show recipe keys, file/effect counts, and the
-right next tool without reconstructing authoring policy outside semantic-runtime.
-`AuthoringRecipePlan` keeps concrete source text and row-level expected-effect contracts opt-in, but compact answers
-still expose `expectedEffectHighlights` at plan and step level. Those highlights are the small semantic promises an MCP
-client can use before asking for full contracts, such as plain getter observation, direct state reads, state-method
-lookup observation, service handoffs, form value-channel/matcher facts, and route topology. Highlight selection should preserve breadth across effect
-kinds, so routed recipes include a route promise in compact text instead of being dominated by binding or getter rows.
+Direct static facade answers such as `runtime.appQueryCatalog(...)` are also claim-backed. Public adapters should use
+runtime facade methods rather than raw catalog readers when the answer crosses a transport boundary, so retention,
+reuse, and cache overview all observe the same query-outcome layer. Inside an already-entered claim boundary, use the
+focused raw answer builder instead of calling another public facade method; otherwise an implementation detail can
+create an unrelated default-profile claim even though only one public answer crossed the API boundary.
+The retired legacy recipe-authoring catalog, guidance, and recipe-plan answers have been removed. Public app generation
+should return through app-builder once that algebra has a stable API instead of preserving recipe-shaped compatibility
+surfaces here.
 For component handoff, keep the declared type and the effective TypeChecker shape separate. A nullable object bindable
 such as `Product | null` should still surface as an object-shaped input for orientation while preserving the nullable
 declared type for assignability, diagnostics, and code actions.
@@ -336,9 +309,7 @@ many unrelated issues. Both raw seam and summary answers own compact `displayTex
 reason-kind rollups plus a few samples, while summary rows report dominant clusters and source-file coverage. Public
 adapters should forward that text before asking for handle detail.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
-diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. Compact
-authoring-orientation fit is available through `includeAuthoringOrientation: true`, but it is opt-in because real apps
-can have many repair clusters and capability rows. The topology child read uses a compact summary projection instead of
+diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or
 bindable value type surfaces are needed; those surfaces remain opt-in through `includeTypeSurfaces`, keeping overview
 answers from spending answer-local TypeChecker member projections or retaining broad topology DTOs.
@@ -347,9 +318,6 @@ availability, pressure status, and the next low-token query family. Public adapt
 rewriting app-orientation guidance locally. At `runtime-topology` depth, binding text should report runtime binding
 presence without presenting zero value-channel/data-flow rows as absence; callers that need those facts should reopen at
 `binding-observation`.
-When authoring orientation is included, overview repair clusters preserve planning readiness, action-target source
-coverage, and runtime boundary/intent kind buckets. That keeps first-read AI adapters from flattening router/evaluator
-runtime-policy seams into ordinary app-source fixes.
 `RouterOverview` does the same for route/viewport-oriented hand-tests: it groups route config, route context,
 viewport/agent, typed navigation, route tree, recognized route, and router issue rows behind one semantic-runtime
 answer while preserving the individual child-query summaries. Because it can sample several independent row families,
@@ -379,7 +347,6 @@ import {
 } from '@aurelia-ls/semantic-runtime';
 
 const runtime = await createSemanticRuntime({ workspaceRoot: 'path/to/app' });
-const authoringCatalog = runtime.authoringCatalog();
 const routedOverview = await runtime.answerAppQuery({
   kind: SemanticAppQueryKind.AppOverview,
 });
@@ -462,9 +429,6 @@ const appDiagnostics = app.ask({
 const appDiagnosticSummary = app.ask({
   kind: SemanticAppQueryKind.AppDiagnosticSummary,
   page: { size: 20 },
-});
-const authoringOrientation = app.ask({
-  kind: SemanticAppQueryKind.AuthoringOrientation,
 });
 const controllerRows = app.ask({
   kind: SemanticAppQueryKind.RuntimeControllers,
@@ -563,11 +527,9 @@ value-site target type can honestly be inferred. Missing coverage is still usefu
 interpolation or a weak/null target observer just to make an autofix look complete. Pressure scripts must summarize
 those dimensions without printing app-specific member names or paths, but the API keeps them available for future
 code-action planning, such as proposing an interface shape from repeated weak-owner member reads or deciding which
-member hints still need value-type inference. Compact authoring orientation keeps app-specific coverage, taste,
-capability, applicable recipe-fit, open-reason, and paged repair-cluster classifications, but omits operation rows,
-not-applicable recipe rows, repeated ontology prose, individual repair rows, action targets, member hints, and
-type-display arrays; request `detail: "handles"` when a repair planner or local diagnostic investigation needs those
-editable loci.
+member hints still need value-type inference. Keep repair/edit planning outside diagnostic row projection: diagnostics
+should expose structured targets and evidence, while a future edit-planning surface decides which target becomes a safe
+source operation.
 Repair rows and action-target rows also carry source roles, following `SemanticSourceReference.anchor` when a diagnostic
 points at a generated/template-node carrier and reading `SemanticSourceReference.sourceFileRole` when a checker or
 dependency source address owns the file role directly. Keep these roles separate from `SemanticSourceReference.role`,
@@ -862,341 +824,22 @@ query-time type products or full Program diagnostics. Explicit `AppDiagnostics`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair
 surface because those are deliberate diagnostic reads.
 Public transport adapters should expose this projection as a caller choice instead of hiding it behind local defaults:
-summary/orientation flows can request `available-products`, while deeper repair or authoring flows can request
-`type-projection` and accept the measured CPU/memory cost.
+summary/orientation flows can request `available-products`, while deeper repair, verification, or IDE-like flows can
+request `type-projection` and accept the measured CPU/memory cost.
 The policy for turning weak owner and binding assignment pressure into cursor/file diagnostic rows lives in
 `template-diagnostic-policy.ts`. Keep that boundary honest: cursor/template readers should locate source and semantic
 context, while the policy module owns severity, suggestion kind, action target, and product-policy wording.
-`SemanticRuntime.authoringCatalog()` and the equivalent `AuthoringCatalog` app query expose the static authoring
-vocabulary and recipe contract projection. They return operation families, taste axes and values, profiles,
-capabilities, operation descriptors, and recipe expected-effect contracts before those contracts are mixed with an
-opened app. Use this when the question is "what authoring vocabulary exists?" or "what does this recipe expect?", then
-use `AuthoringOrientation` when the question is "what does this opened app currently satisfy?". Catalog taste-axis rows
-also split their common values by `primitive-policy`, `observed-shape`, and `derived-reading`, so callers can see
-whether an axis has policy-bearing values or only source/framework observations without reopening `ontology.ts`.
-`SemanticRuntime.authoringCatalogView({ view })` is the compact public view used by the MCP shell and other
-token-budgeted callers. `overview` keeps counts, operation families, compact taste axes, capabilities, and recipe
-summaries; `operations` adds operation summaries; `recipes` adds recipe preference counts and taste-value keys while
-keeping expected-effect detail to counts and kind sets; `full` returns the complete catalog including row-level recipe
-preferences and expected-effect contracts. Keep that projection here rather than reconstructing catalog slices in
-adapters.
-Capability catalog rows also expose product-level open reasons that are true before app inspection, and operation
-catalog rows inherit those reasons from their required capabilities. Use those fields to separate global product gaps
-such as package-tooling/source-edit policy from app-specific evidence gaps reported by `AuthoringOrientation`.
-Profile rows carry explicit taste preferences for profiles that have a policy-bearing shape, rather than leaving
-decorator/convention/registration choices only in prose.
-`SemanticRuntime.authoringGuidance({ focus, featureGoal, recipeKey, detail })` is the public app-building bridge for MCP-like callers that
-need compact code-shape guidance before generating source. It is still a static authoring answer: it selects principles,
-recipe rows, taste-value keys, expected-effect counts, source-plan summaries, and follow-up semantic-runtime surfaces
-from the same catalog contracts instead of letting a transport adapter compose product advice or rebuild recipe plans.
-`displayText` is the short text channel for MCP clients; it includes principle summaries, concrete prefer cues, and the
-first code-shape line for returned recipes so a caller can start with low-boilerplate Aurelia structure before asking
-for file text. The structured rows keep the underlying recipe and taste facts available for agents that need more
-precision. Use this before `authoringRecipePlan(...)` when the caller asks broadly how to build a clean Aurelia app;
-use `recipeKey` when the caller has already selected a concrete recipe. Broad `app-building` guidance defaults to a
-small breadth-weighted first-screen recipe set that covers ordinary state-backed forms, searchable table state, route
-shells, and routed table/detail structure, then reports candidate/returned recipe counts. Use `featureGoal` to steer
-larger catalog, plugin-backed route/form, service-boundary, or mixed app surfaces without broadening the default payload. Pass
-`recipeLimit` when a caller needs to compare more recipe rows without jumping to the catalog. Compact answers also
-report candidate/returned principle and decision counts; when `featureGoal` matches authored signals, the default
-compact budget is intentionally tighter than broad catalog browsing: up to three recipe rows, three principle rows, and
-four decision rows, with `recipePlanSequence` carrying source-plan choreography. Matched feature goals filter recipe
-comparison rows to requested-signal coverage; call the catalog when comparing the full recipe set. Pass `principleLimit`
-or `decisionLimit` for wider guidance
-rows without opting into expanded recipe details. Focused compact answers use semantic-runtime-owned principle and
-decision order tables rather than fuzzy text matching, so a tiny `focus: "routing"` answer spends its budget on
-route-selected state and active-navigation policy before generic app-shape advice, `focus: "forms"` leads with
-framework value-channel policy, and selected recipes can preserve their own code-shape priorities. Compact focused
-recipe rows are capped too; use `detail: "recipes"` or `recipeLimit` for wider comparison. The default
-selected-recipe policy rows are filtered from the selected recipe's explicit principle/decision order tables; row-level
-`recipeKeys` remain focus-matching evidence and should not be treated as the selected recipe authority.
-`featureGoal` path uses a small explicit signal table over authored words such as route/routes/routed, searchable, translated, and
-validation to reorder recipe, principle, and decision rows; terms are matched as normalized token/phrase sequences or
-explicit token conjunctions, not substrings, so this remains deterministic recipe policy rather than fuzzy search. Keep capability terms high-signal:
-`validation messages` and `translated labels` are useful, while bare `messages` or `labels` are too domain-generic for
-recipe selection. Ordinary form/data-entry words such as `form`, native control terms such as `select`, `checkbox`,
-`radio`, `toggle`, and `switch`, editable settings, API key fields, profile editor/fields, account settings,
-signup/password, and address/payment phrases are feature-surface signals, so a profile form, settings form,
-checkout-adjacent address/payment surface, or onboarding flow can start from the form lane without treating read-only
-profile/details wording, a route-only settings screen, or generic `labels` as localization pressure.
-Composition signals should require compose/widget language; a bare dashboard can be an ordinary routed or state-backed
-surface and should not imply `au-compose` or the composed-dashboard recipe.
-Search/list signals should use search/filter/sort/table/list/directory or explicit data/user/record/item-grid wording;
-bare layout-grid wording should not imply a data-table recipe. Catalog-product signals should use storefront,
-cart/checkout, or product catalog/list/table/grid/card/detail wording rather than bare product or catalog nouns, so product setup
-forms can remain forms/wizards until storefront intent is named. Product/admin table and editable-detail wording should
-stay on the searchable-table/form path unless the caller also names storefront/catalog/card/cart/checkout/pricing/compare
-intent. If ordinary list/detail surfaces start over-selecting the full searchable-data-table recipe, add a
-framework/docs/test-grounded simple collection recipe rather than weakening the current table guidance.
-Service-boundary signals should require explicit integration language such as service-backed/service-layer, API
-service/client/call, HTTP, repository pattern/class or data-repository, or loading data. A bare submit button,
-customer-service domain wording, repository-browser domain wording, or an `API keys` settings field belongs to ordinary
-form/value-channel guidance unless the caller names a service boundary.
-When searchable/list management and edit-form language are both present, the searchable-list surface should lead and
-the form recipe should be a companion pattern unless a more specific routed/form recipe covers both.
-When a caller supplies a `featureGoal` and no authored signal matches, the display text says `none matched` before using
-the focus/default recipe order, so public clients do not confuse fallback ordering with specific semantic confidence.
-Those fallback rows are broad orientation context, not a confident scaffold choice; the next action should refine the
-feature goal, inspect an existing app, or compare catalog rows before requesting source text.
-Signal rows also carry a planning layer such as architecture-choice, feature-surface, navigation-frame,
-framework-capability, or integration-boundary, plus a `primaryWeight` that makes the main surface explicit when several
-feature surfaces match. Architecture-choice signals such as explicit `@aurelia/state` requests can lead the source path
-before ordinary list/form companions, because the plugin choice changes the app state model rather than merely adding a
-capability.
-Bare todo/list wording stays on ordinary DI state/list guidance unless the caller asks for `@aurelia/state`,
-state-store, or store-backed-state architecture explicitly. When the caller does ask for plugin-backed state,
-`state-store-list` can now suggest and apply `store-item`/`store-collection` source parameters for a caller-named
-store-list item and collection identity while leaving reducer action details, sample data, and presentation as explicit
-host-adapted slots.
-Mixed goals use those rows to publish a compact `recipePlanSequence`: start with the recipe that owns the main surface
-set, then add companion recipe plans for remaining capabilities such as validation or localization. Ranking uses
-covered feature-surface breadth and feature-surface weight before navigation and summed capability weight, so a
-routed catalog/search/cart goal can start from the routed catalog recipe and borrow checkout/wizard patterns instead of
-letting one `checkout flow` phrase overtake the larger app surface.
-When a goal contains multiple instances of the same surface, such as a teams list and an audit-log table, sequence rows
-can carry `instanceLabel` so repeated recipe applications stay visible without inventing a new recipe key.
-For searchable table source parameters, the collection surface owns the table entity when it is explicit, which keeps
-nearby detail/copy phrases such as `profile detail` or `cart summary` from renaming the generated list model.
-When a mixed plugin/list prompt gives the collection in a `for ...` clause and later names field filters, such as
-`for project tasks with status filters`, the for-clause domain owns the table entity while the filter phrase stays in
-`table-filter-fields`. Surface/context words such as `admin` or field-control words such as `status` can yield early
-domain candidates, but a valid for-clause should override only those lightweight candidates instead of replacing an
-already explicit entity phrase.
-Sequence rows can carry deterministic `suggestedSourceParameterValues`. These are reviewable hints, not authority:
-route identity/title parameters for routed table/form recipes may be source-applicable only when the row newly owns the
-navigation-frame signal. Searchable table recipe rows can also apply `table-entity` and `table-collection` to source
-model identity when those suggestions match the caller domain, can apply supported `table-filter-fields` as
-normalized field descriptors such as `name, assignee select` instead of raw prompt phrases such as `assignee filters`,
-and can apply `table-options` option domains when generated select filters need caller-owned values and labels.
-Table field-schema suggestions require row-field/filter/sort/column context; controls such as a repository `branch select`
-or surfaces such as `searchable file list` stay outside row-field generation, and surface chunks such as `searchable table`
-do not become fake table fields. Those descriptors generate row fields,
-filters, columns, service records, table cells, and routed detail rows. Catalog
-recipes can apply `catalog-entity`, `catalog-collection`, and supported `catalog-fields` to core product/item/tier-like
-storefront identity, item constructor fields, sample records, and routed detail field rows. Catalog field suggestions
-seed the stable card contract with `name, description` plus detected `select`, `number`, `date`, or `toggle`
-descriptors such as `category select`, `price number`, or `available toggle`. Type-compatible natural fields such as
-`name`, `summary`, `price`, and `inStock` can own the stable contract member directly; derived contract slots such as
-`badge` and `availability` stay behind generated getters so fallback values and card semantics remain explicit. Catalog
-recipes also accept `catalog-options` for select-domain values, so prompts such as `category select for Basic, Premium`
-can rewrite option union types, labels, and sample records instead of leaking synthetic `category-one` values.
-suggestions stay conservative because the source remains a scenario reference around card/list state, selection, and presentation; action models,
-broader copy, and presentation remain host-adapted. Standard request-form rows can
-apply `request-entity`, `request-selection-id`, and supported `request-fields` to the core request/domain class, scalar
-ID, state/service method names, component bindable name, template-local object handoff, field properties, control
-bindings, validation targets, and expected effects. Request field generation currently covers text, email, secret,
-textarea, number, checkbox, and single-select controls inferred from normalized explicit field/control wording. Number
-inputs use Aurelia's `value-as-number.bind` convention rather than a string-valued `value.bind`. Option-domain labels and
-values, sample-data, copy, action-model, validation-message, and presentation parameters can remain advisory until the
-domain-schema source generator owns that layer. When an explicit editable-detail goal also owns a searchable/table
-schema, the companion form may reuse the table field descriptors so a prompt that says `status filters`, `category
-select`, and `editable product details` can produce both table filters and editable detail fields without treating every
-filter UI as a form.
-The structured `recipePlanSequence` rows also expose `suggestedSourceParameterContracts` with
-`valueShape/applicationPolicy` for each suggestion. The compact text mirrors those rows by keeping copyable
-`sourceParameterValues` as plain `key=value`, then adding a separate contract line. Public clients should use the
-structured contract rows first, and the display line as a human-readable echo, to distinguish source-applied
-route/entity/member/table-form/catalog field schema from advisory action-model or presentation hints before requesting
-recipe source text.
-The sequence distinguishes `usage: "source-plan-start"` from `usage: "pattern-reference"` so clients do not apply two
-complete app scaffolds when a companion recipe is only needed for plugin/capability structure.
-`routed-app-shell` is the generic routing companion for that sequence: it covers RouterConfiguration, static route
-config, named `au-viewport`, route params/query/fragment handoff, and routeable components without pulling in a
-form/catalog/table model. Mixed feature goals such as a routed dashboard should start from the feature recipe and use
-`routed-app-shell` as a `pattern-reference`; route-owned list/detail or form features should use the richer routed
-recipes directly.
-Route-owned recipes should not win a non-routing feature goal merely because they cover the same domain surface as their
-non-routed sibling. For example, a product list with card/detail components should start from `catalog-storefront` unless
-the caller asks for routing, navigation-owned selection, route params, links, or viewports; the routed catalog recipe
-becomes the source-plan start only when a navigation-frame signal is present.
-Catalog-specific surfaces such as storefront/product/card/detail/compare/pricing tiers keep catalog recipes in the
-product domain instead of treating the same words as a generic searchable table. Product-tier wording is an exact
-catalog signal even without the word catalog, so `pricing page with product tiers` can select the catalog lane and
-suggest `Product Tier`/`productTiers` source parameters. Non-contiguous product/item/tier catalog wording does the same
-for routed catalog prompts. Board/detail wording is also part of domain extraction for task/workspace-like goals, so filter
-phrases such as `assignee filters` can become `assignee select` field-schema suggestions rather than accidentally
-becoming the entity name.
-Browser/tree/viewer surfaces help list-like developer tooling goals infer the actual listed entity, such as `File` from
-a repository browser with a file tree and code viewer. Control words such as select/dropdown/checkbox/radio/toggle/switch
-are domain boundaries for this extractor, so `branch select, file tree` does not become a `Select File` domain.
-The same specialization guard applies to wider form recipes. A validated profile form should start from
-`validated-state-backed-form`; `multi-step-state-backed-form` should become the source-plan start only when the caller
-asks for wizard/stepper/multi-step/onboarding form structure, and localized recipes should not win unless localization is requested.
-When a mixed route/form goal asks for validation but not localization, the sequence should start from the routed form
-source plan and borrow validation as a companion pattern rather than using the translated validated route recipe as the
-baseline.
-Bare native-control words are intentionally not enough to activate form-entry, because list/table/browser features often
-use select, checked, and toggle channels for filters. Form-entry should come from explicit form/settings/editor/profile,
-preferences, onboarding/wizard, address/payment, API-key, or field-as-field wording; once a form lane is selected,
-control phrases may still become advisory field-schema suggestions.
-Service integration wording is split between read/load and write/submit intent. Generic API/service loading language may
-activate `service-boundary`, while `API-backed save`, backend submit/save, or persist-through-API phrasing activates the
-write-oriented service companion. A form that merely has an API-key field and a save button should remain plain
-form-entry guidance unless integration wording is explicit.
-Compact recipe candidate comparison first requires at least one authored signal match, then treats unrequested
-specialization as more costly than extra feature breadth. Returned comparison rows should be the source path plus
-relevant unspecialized comparisons, not unrelated generic recipes or larger source shapes merely because a specialized
-recipe happens to cover adjacent capabilities. Matched feature-goal answers keep a tighter compact budget by default
-so the source choreography stays visible without turning the first response into a catalog dump.
-`detail: "compact"` leaves inline `tasteValues`, expanded choose/avoid lists, operation-kind arrays, and expected-effect
-kind arrays empty while keeping stable keys, counts, code-shape summaries, and the first prefer cue where it helps the
-text channel. Pass `detail: "recipes"` only when expanded recipe and guidance rows are needed inside the same answer.
-`SemanticRuntime.authoringRecipePlan({ recipeKey, usage })` defaults to compact expected-effect and intent detail: callers
-receive a short `displayText`, preference counts, taste-value keys, expected-effect counts, and kind sets on the plan
-and each step, while row-level preference rows, per-step highlights, and expected-effect contracts are empty. Top-level
-effect highlights carry the compact public semantic promises. The display text is owned here rather than in MCP so
-transport clients can show recipe intent, top operation steps, source-file plan, and text/contract opt-ins without
-rephrasing product policy. Public effect highlights prioritize source-backed observation, route identity, and
-form value-channel/data-flow specifics such as custom matchers, select option coupling, nullable model values, and
-checked collection mutation before lower-signal style/class facts. Pass `usage: "pattern-reference"` when a recipe came
-from a companion `recipePlanSequence`
-row; the plan still exposes the full source shape, but its text tells clients to borrow relevant steps and semantic
-promises instead of applying a second complete scaffold. In pattern-reference usage, the file preview says "Pattern file
-shapes" and labels entrypoints/components/state files as patterns, while the structured `sourcePlan` remains complete for
-agents that need exact paths or selected source text. Pass `effectDetail: "contracts"` when a verification, repair,
-or fixture workflow needs the exact contract rows. Keep that opt-in boundary intact for MCP and other public app-building
-callers, where the concrete recipe source plan is more important than transporting every semantic verification row by
-default.
-Pass `includeText: true` only when all concrete file contents are needed; `sourceFilePaths` and
-`sourceTextRequestHintKeys` include selected file text by default while preserving the complete source-plan manifest.
-Pass `includeText: false` with either selector only when a caller wants to record the selection without returning text.
-That gives MCP clients a low-token way to request one file at a time or a role-driven file cluster without losing the
-recipe's total source-plan shape. `sourcePlan.textSelection` reports the normalized requested, matched, unmatched, and
-included hint keys and paths so stale client-side picks are visible without expanding the whole recipe source tree.
-`sourcePlan.textRequestHints` groups generated artifact paths into role-driven request clusters such as
-`implementation-source`, `entry-shell`, `templates`, `state-domain-service`, `presentation`, and `project-tooling`.
-Public clients should prefer `sourceTextRequestHintKeys` over guessing at paths from fixture names: request
-`implementation-source` when emitting or adapting app source without reference CSS, pair it with `project-tooling` for a
-new project, request `state-domain-service` when adapting data/state shape, request `templates` when adapting binding
-structure, and request `presentation` only when the caller wants the reference CSS or visual shell. Exact
-`sourceFilePaths` remain useful for custom smaller selections after a caller has inspected the manifest.
-The generated table and catalog recipes keep reference presentation/source-pattern declarations in dedicated authoring
-modules so architecture/source-shape files stay focused on state, routing, and binding semantics while `presentation`
-remains an opt-in reference asset. Shared list/detail route identity slots live in one routed source-pattern helper so
-`detail-route-parameter`, `list-route-path`, and `list-route-title` stay a coherent adaptation group across routed
-recipes instead of becoming recipe-local token replacement rules. Routed catalog plans derive omitted route path/title
-and default detail navigation identity from the applied catalog entity/collection values, while explicit route-identity
-parameters still override those defaults as one group.
-`sourcePlan.pattern` is the compact boundary between a reusable recipe shape and a concrete reference instantiation.
-Domain-neutral app shells and caller-applied starts can be read as direct source plans when `usePolicy` is
-`apply-as-source-start`. Reference instantiations include sample names, records, copy, and CSS so generated fixtures can
-be reopened and verified; public clients should adapt those details before emitting caller-specific code. Pattern
-`role`, `dataPolicy`, and `codeEconomyPolicy` make that boundary structured: `recommendable-recipe` rows are app-start
-candidates, `caller-applied` domain rows already reflect source parameters, `starter-sample-data` marks small runnable
-seed records, and `scenario-reference` rows with synthetic data and reference-complete source are transfer/verification
-examples rather than a mandate to copy their nouns or verbosity.
-The current low-boilerplate direct-start canaries are compact searchable table/list rows and compact catalog rows:
-they use `caller-applied` + `starter-sample-data` + `production-terse`, keep text authority on semantic-runtime recipe
-source, and omit reference CSS, selection state, and richer value channels unless the requested feature profile asks
-for them. Richer table/catalog and routed catalog plans remain scenario references so analyzer pressure can still
-exercise selection, routing, class/style, checked/select, and presentation semantics.
-`sourcePlan.pattern.usePolicy` is the primary public-client action: `apply-as-source-start` can be emitted as the
-starting scaffold, `adapt-before-emitting` must be translated into the caller domain before code is written,
-`merge-selectively` should be borrowed into another source plan, and `analysis-pressure-only` should stay out of public
-app output.
-`sourcePlan.pattern.parameters` names the main adaptation slots, including domain
-entities, field schemas, collections, scalar selection IDs, route identities, sample data, feature copy, and presentation defaults.
-Each parameter also carries an `applicationPolicy`: `source-text-input` means a caller may pass
-`sourceParameterValues` to `authoringRecipePlan(...)` and semantic-runtime will apply that value to generated source;
-`advisory-only` means the value is a clean adaptation marker for the host or AI, but concrete source rewriting is not
-implemented there yet. Each parameter also carries a `valueShape` so callers can distinguish title-like domain nouns,
-source-member names, route paths, route parameter names, route titles, route-section lists, workflow-step lists,
-workflow-section field-schema lists, field-schema lists, option-schema lists, collection/action summaries, sample-data summaries, and presentation summaries
-without deriving syntax from fixture nouns. `sourcePlan.sourceParameterApplications` reports which requested values were applied, advisory,
-not applied despite being source-applicable, or unknown, so public clients do not have to guess whether a
-reference-instantiation noun was actually rewritten. `applied-to-source-plan` requires the requested value to appear in
-the built pattern parameter row and generated source/tooling text; a `not-applied-to-source-plan` row is
-recipe-mapping/product pressure, not a value the host should silently trust. Compact guidance and recipe-plan display
-text also names host-adapted slots so public clients can see unresolved sample-data, copy, action-model,
-validation-message, or presentation work without diffing source text.
-Source-parameter application checks are `valueShape` aware: domain titles are searched through title, lower-title,
-Pascal, camel, kebab, and snake forms, while route/member shapes preserve their identifier/text expectations. This keeps
-`applied-to-source-plan` from depending on a lucky raw substring when a recipe derives several source identifiers from a
-single caller-domain value.
-`sourcePlan.pattern.adaptationGroups` names parameter clusters that should move together. This keeps partial rewriting
-visible: a route-identity group may be fully source-applicable, while the searchable table domain-schema group is mixed
-because table entity/collection identity and supported table field schema can be source-applied but sample records, copy,
-and presentation still need caller-domain adaptation. Catalog domain-schema groups are also mixed for product/item-like storefronts:
-core item/collection identity and supported catalog field schema can be source-applied, while selection/action model,
-broader copy, and presentation still need caller-domain adaptation. Request-form domain groups are mixed too: request entity/selection
-identity and the supported `request-fields` schema can be source-applied across class names, selected-ID properties,
-state/service read/load/submit methods, component bindables, template-local object names, domain fields, control
-bindings, and validation targets, while options, sample records, copy, validation-message copy, and presentation still
-need caller-domain adaptation. Wizard forms, dashboards, and state-store examples also
-publish grouped slots so clients can preserve coherent value-channel, validation, composition, or plugin-store contracts
-when adapting sample source. Wizard `workflow-step-list` values are source-applicable for step ids, progress labels, and
-conditional section wrappers. Wizard `workflow-section-field-schema-list` values such as
-`shipping: shipping address; payment: payment method select` are source-applicable for named section fields, raw
-controls, validation error rows, and option-domain source when paired with `wizard-options`.
-State-store `store-item` and `store-collection` values are source-applicable for the generated store item interface,
-state interface, collection property, repeat source, action type names, reducer helper names, and small copy/CSS class
-identity, while `store-actions`, sample data, and presentation stay host-adapted until broader reducer-shape generation
-exists.
-Source patterns also expose `modules`: compact reusable architecture capabilities such as app shell, router admission,
-route-context selection, route parameter selection, route-link navigation, DI state, service loading/submission, native
-text/checked/select/matcher value channels, capture-based field shells, collection search/filter/sort/page/selection
-controls, list rendering, template-controller flow, class/style channels, plugin integration, dynamic composition, and
-state store. MCP clients should use modules to understand the recipe shape before looking at fixture nouns in generated
-source text.
-Recipe catalog rows carry the same preference row shape from their seed plans, so callers can compare recipe policy,
-profile policy, and opened-app taste observations without reading recipe source. They also expose the recipe source-plan
-contract without file text: conflict, formatting, package-tooling policy, file roles, languages, edit kinds, and text
-authority. Domain entity/value-object files should use the `domain-model` source file role rather than falling through to
-`other`, so model source can be adapted separately from state and service boundaries. Source-plan rows now carry a
-project-tooling subrow for package dependencies, scripts, package/config file
-kinds, and build-tool policy without exposing file text. Use that shape to decide whether a recipe is genuinely editable
-or whether a host/generator policy is still missing; current recipes provide package/typecheck baselines while leaving
-build-tool profile selection open. Recipe preference rows also carry `build-tool-profile:host-selected-build-tool`, so
-callers can see that open policy without interpreting `buildToolPolicy: not-modeled` as an accidental omission.
-Recipe catalog and orientation rows also expose direct base recipes, transitive lineage, and `specificityRank`; use
-those fields when several recipes are satisfied, because richer recipes intentionally contain the app-shell and
-state-backed shapes they build on.
-Generated recipe expected effects also verify the observed `build-tool-profile:typecheck-only-tooling` taste after
-reopen, and `AuthoringOrientation` reports `package-tooling` as partial or observable rather than fully open while
-package-manager/build execution remains an explicit product-open reason.
-`AuthoringOrientation` also owns a compact `displayText` for public transports. That text highlights the project shape,
-the most app-building-relevant taste axes, current recipe fit, repair pressure, and open-reason keys without asking MCP
-or another adapter to interpret ontology rows locally. Recipe-fit text prioritizes satisfied recipe identities and
-summarizes partial cross-family candidates instead of presenting them as coequal app identity. Keep the structured taste,
-recipe, repair, and open-reason rows as the precise source of truth; the display text is only the low-token first read.
-`AuthoringOrientation` lifts the same diagnostic/open-seam pressure into `repairs` rows. Those rows are semantic repair
-intents, not edits: they classify whether the next move is to declare a member, strengthen an owner type, rewrite a
-binding source, resolve a runtime boundary, inspect an open seam, or improve semantic-runtime substrate. Concrete edit
-application and formatting policy stay outside this API until the source-edit boundary is designed.
-Expected-effect filters understand nested object arrays such as `actionTargets.sourceRole`; use that shape when a
-fixture needs to prove that a repair cluster kept a structured target role instead of relying on key text.
-Taste rows in the same orientation answer keep durable vocabulary separate from the opened app reading:
-`ontologySummary` explains the stable taste value, while `summary` / `observedSummary` explain the current evidence
-that made the value appear. Recipes should check value-level layer, confidence, and evidence before turning taste into
-an edit preference. Axis rows report primitive-policy, observed-shape, and derived-reading value counts; `policyState`
-is inferred only when at least one primitive-policy value is present, so observed framework/source facts can satisfy a
-recipe signature without pretending a user or product policy was declared.
-Keep the axis key itself narrow. Template source ownership, template rendering boundaries, form value channels,
-validation ownership, form type-surface trust, stylesheet/resource ownership, and dynamic style binding are separate
-orientation axes because they come from different semantic substrates and often fail independently. Dynamic style
-binding rows are read from observer value-channel semantics, so class tokens, per-class toggles, whole style rules, and
-per-property style bindings remain visible as distinct observed shapes.
-Validation ownership is read from validation-html `& validate` binding-behavior applications, validation package
-configuration admissions, validation service resolve sites, and source-rule validation issue rows. Keep those positive
-ownership signals separate from `ValidationIssues`, which remains the source-backed diagnostic lane for invalid
-validation rule construction or hydration. The `binding-behavior-applications` query is the fact-level API surface for
-the `& validate` part of that reading; the authoring taste row is the interpreted ownership summary.
-Recipe rows expose `expectedEffectKinds`, `expectedEffectCount`, and compact `expectedEffects` rows from their concrete
-plan builders after compressing duplicate semantic targets across step-local and final verification effects. The same
-compression is exported as `expectedSemanticEffectsForPlan(plan)` for concrete fixture and repair verification. The row
-form preserves a compact `semanticTargetKey`, effect kind, scope, cardinality, count, filter fields, capability/taste
-targets, filter values, role, taste value layer/ontology summary, and summary, then evaluates each effect against the currently
-opened app with the same observation primitive used by closed-loop verification. `baseline` effects are general app-health checks; `signature` effects are the facts that make
-a recipe recognizable in an existing app; `discriminator` effects are required recipe-identifying facts that keep a
-router- or service-specific recipe from looking applicable only because a generic form/app shell matched. Each
-expected-effect row reports `currentObservedCount` and `currentOutcome`; each recipe row summarizes all effects,
-signature-like effects, and discriminators separately, then derives `currentFitState`. A recipe with no satisfied
-signature-like effects, or with an unsatisfied discriminator, is `not-applicable` rather than a failed verification.
-When multiple recipe rows are `satisfied`, prefer the highest `specificityRank` before treating the app as a generic
-base recipe match.
-`project-tooling` expected effects are backed by project source-role rows, so generated recipe checks can verify package
-manifests, TypeScript config files, local module declarations, and the typecheck-only tooling taste without comparing
-file text.
+The legacy recipe-authoring catalog, guidance, orientation, and recipe-plan answers have been removed from this API.
+Do not add compatibility wrappers for them in `runtime.ts`, MCP, or query catalog rows. The preserved source artifacts
+now live as neutral fixture pressure and source-plan/app-builder substrate. Future public app-generation answers should
+grow from `app-builder` once its pattern algebra is stable enough to expose, while diagnostics-to-action and future edit
+planning should grow from diagnostic/open-seam rows rather than from the old recipe/orientation shape.
+Fixture manifests can still carry neutral expected effects. Verification belongs to
+`fixture-verification`, not to the public app-query API: callers reopen a fixture, read the row-backed projections needed
+by the manifest, and compare facts such as project tooling, topology, route products, binding flows, validation/i18n
+products, and composition rows without treating any old recipe identity as public generation policy.
+`project-tooling` expected effects are backed by project source-role rows, so fixture checks can verify package
+manifests, TypeScript config files, and local module declarations without comparing file text.
 `runtime-composition` expected effects are backed by `RuntimeCompositions` rows, so generated recipe checks can verify
 dynamic `AuCompose` component resolution, compiled-template closure, static or bound model presence, aggregate
 composed-child controller handoff for closed branches, and activation model handoff without treating a composition host
@@ -1216,13 +859,11 @@ parent-to-child value flow.
 component-name presence, input fulfillment, rendering context, template-binding, composition-binding, composing-binding,
 and composed child-controller buckets so these context lanes stay visible during fixture sweeps without exposing
 concrete component names.
-This lets fixture expansion ask "what does this app already satisfy?" before opening recipe source files or running a
-separate verifier pass.
-Closed-loop callers should derive expected effects with `expectedSemanticEffectsForPlan(plan)` and build verifier input
-with `readAuthoringVerificationSnapshot(app)`. The helper paginates the
+This lets fixture expansion ask "what does this app already satisfy?" before running a separate verifier pass.
+Closed-loop fixture callers should build verifier input with `readFixtureVerificationSnapshot(app)`. The helper paginates the
 row-backed projections used by filtered effects instead of relying on each smoke or host to remember that behavior
 applications, runtime watcher rows, watcher observed-dependency rows, runtime composition rows, target-access rows,
-value-channel rows, and data-flow rows must travel together with summary, topology, orientation, and open seams.
+value-channel rows, and data-flow rows must travel together with summary, topology, source files, and open seams.
 Unsupported row-backed projections fail at snapshot construction time, so callers do not mistake a too-shallow analysis
 depth for absence of the expected semantic facts.
 `runtime-watcher`, `runtime-watcher-observed-dependency`, `binding-observed-dependency`,
@@ -1414,9 +1055,9 @@ definition objects, static fields, metadata, and project conventions before app-
 This is the right query for plugin-library and monorepo package pressure where a package can define resources without
 booting an app root. Rows include resource kind, declaration modes, name/key/aliases, target name/source, bindables,
 dependencies, template shape, watch metadata, attribute-pattern entries, custom-element/custom-attribute flags, and
-optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so authoring orientation can
-distinguish decorator, static, definition-object/factory, and current convention resource styles without re-reading
-source.
+optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so public analysis and future
+generation policy can distinguish decorator, static, definition-object/factory, and current convention resource styles
+without re-reading source.
 Watch rows expose the metadata shape that resource convergence can statically close: expression kind/property key,
 callback kind/property key, flush mode, and source references for the expression/callback carriers when known.
 `ResourceIssues` exposes known framework failures in that same resource metadata lane. It is for closed static errors,
@@ -1599,32 +1240,6 @@ value-converter/repeat local that lost element specificity. For member writes wh
 Public binding projections use the same combined template basis as diagnostics: app-runtime resources plus any
 source-selected authoring resources opened for resource-library/package pressure. Keep those bases aligned; otherwise
 diagnostic rows and binding data-flow rows count different template worlds in monorepo/resource-library pressure.
-
-Authoring guidance keeps plugin-backed recipe selection compact for MCP callers. `localized-validated-state-backed-form`
-is the combined i18n plus validation form lane: it proves static translation resources, rendered translation bindings,
-validation-html setup, validate binding behavior rows, validation-errors handoff, and standard form data flow over the
-same DI-owned request model while leaving localized-only and validated-only recipes available for narrower features.
-`multi-step-state-backed-form` is the wizard/progress form lane: DI-owned state owns the profile object and step
-progress, repeat/if template-controller rows render the wizard, templates bind directly to `state.profile.*`, and
-expected effects prove validation-html, native value/checked/select channels, checked collection membership, class/style
-progress presentation, state-composition, and getter observation.
-`routed-localized-validated-state-backed-form` adds router admission, route-param selected state, static route
-navigation/query/fragment rows, route-node aggregation, and component-agent handoff to that plugin form without changing
-the direct state-backed form binding policy.
-`routed-validated-state-backed-form` is the narrower routed validation lane for edit/create forms that need router-owned
-identity plus validation-html, but not i18n or service loading. Feature-goal choreography should prefer it over the plain
-routed form when validation is an explicit signal, and over the localized routed form when no localization signal is
-present.
-`routed-app-shell` is the generic route-shell lane: RouterConfiguration, decorator route config, static load links,
-named `au-viewport`, route params/query/fragment handoff, route recognizer products, RouteContext topology, route-node
-aggregation, and routeable component handoff without a form, catalog, or table domain model. Use it as the companion
-recipe for routed features whose primary surface belongs to another non-routed recipe.
-`routed-service-backed-form` is the route-owned service-boundary form lane: it keeps route-param selected state and
-direct template-local request binding while proving background state loading, state-to-service calls, template-to-state
-read interactions, router products, and standard form channels.
-`routed-searchable-data-table` is the route-owned list/detail management lane: it keeps the low-boilerplate data-table
-state and value-channel shape while proving list/detail routes, static and row-driven profile navigation, route-context
-parameter/query adaptation, viewport/component-agent products, and shared DI-owned state across list and detail routes.
 
 `RuntimeControllers` exposes controller frames created or reached during runtime `Rendering`, including the resource
 definition, creating instruction, parent/child counts, binding count, scope presence, template-controller flow/cardinality
@@ -1855,11 +1470,10 @@ wording policy.
 
 ## Fixture Pressure
 
-Authoring fixtures live under `../../fixtures/authoring`. They should look like code we would be comfortable
-recommending to Aurelia users, even when that makes the semantic runtime work harder. See
-[../authoring/README.md](../authoring/README.md) and [../application/README.md](../application/README.md) for the
-authoring/topology boundaries behind those fixtures.
+Pressure fixtures live under `../../fixtures/pressure`. They include hand-authored analyzer pressure and migrated
+app-pattern fixtures whose source remains useful for reopening and verification even though the legacy recipe APIs are
+gone. App-builder goldens live under `../../fixtures/app-builder/goldens` and should be generated by the app-builder
+algebra as that surface matures.
 
-Analyzer stress fixtures should be separate from authoring fixtures. Avoid adding brittle golden snapshots around either
-kind of fixture; the valuable signal is whether the API can expose precise, navigable open seams and compact high-level
-answers after the app is reopened.
+Avoid brittle golden snapshots around either kind of fixture; the valuable signal is whether the API can expose precise,
+navigable open seams and compact high-level answers after the app is reopened.

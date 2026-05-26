@@ -1,52 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import process from 'node:process';
-import {
-  type SemanticAuthoringCatalogViewKind,
-} from '@aurelia-ls/semantic-runtime';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 
 export function registerAureliaSemanticRuntimeResources(
   server: McpServer,
   adapter: AureliaMcpSemanticRuntimeAdapter = new AureliaMcpSemanticRuntimeAdapter(),
 ): void {
-  registerCatalogResource(
-    server,
-    adapter,
-    'aurelia_authoring_catalog_overview',
-    'aurelia://authoring/catalog',
-    'Aurelia Authoring Catalog Overview',
-    'Compact overview of semantic-runtime authoring capabilities, recipes, taste axes, and product-open reasons.',
-    'overview',
-  );
-  registerCatalogResource(
-    server,
-    adapter,
-    'aurelia_authoring_recipes',
-    'aurelia://authoring/recipes',
-    'Aurelia Authoring Recipes',
-    'Recipe contracts, preferences, expected effects, and source-plan metadata without concrete source text.',
-    'recipes',
-  );
-  registerCatalogResource(
-    server,
-    adapter,
-    'aurelia_authoring_operations',
-    'aurelia://authoring/operations',
-    'Aurelia Authoring Operations',
-    'Authoring operation families, actions, target kinds, and product-open reason hints.',
-    'operations',
-  );
-  registerStaticJsonResource(
-    server,
-    'aurelia_app_building_guidance',
-    'aurelia://authoring/guidance',
-    'Aurelia App Building Guidance',
-    'Compact public guidance for low-boilerplate Aurelia app building through semantic-runtime recipe contracts.',
-    async () => (await adapter.authoringGuidance({
-      workspaceRoot: process.cwd(),
-      focus: 'app-building',
-    })).value,
-  );
   registerStaticJsonResource(
     server,
     'aurelia_app_query_catalog',
@@ -54,28 +13,6 @@ export function registerAureliaSemanticRuntimeResources(
     'Aurelia App Query Catalog',
     'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
     async () => (await adapter.appQueryCatalog({ workspaceRoot: process.cwd() })).value,
-  );
-}
-
-function registerCatalogResource(
-  server: McpServer,
-  adapter: AureliaMcpSemanticRuntimeAdapter,
-  name: string,
-  uri: string,
-  title: string,
-  description: string,
-  catalogView: Exclude<SemanticAuthoringCatalogViewKind, 'full'>,
-): void {
-  registerStaticJsonResource(
-    server,
-    name,
-    uri,
-    title,
-    description,
-    async () => (await adapter.authoringCatalog({
-      workspaceRoot: process.cwd(),
-      catalogView,
-    })).value,
   );
 }
 

@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AuthoringVerificationRequest,
+  FixtureVerificationRequest,
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
-  readAuthoringVerificationSnapshot,
+  readFixtureVerificationSnapshot,
   SemanticAppQueryKind,
-  verifyAuthoringEffects,
+  verifyFixtureEffects,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -146,21 +146,6 @@ const contracts = [
           effectFilter('selectedMemberName', 'missing'),
           effectFilter('suggestion.suggestionKind', 'inspect-owner-type'),
           effectFilter('suggestion.actionKind', 'inspect-owner-type'),
-        ],
-        'signature',
-      ),
-      ExpectedSemanticEffect.exactly(
-        'Weak owner repair clustering should preserve one scope-slot target with both observed member hints.',
-        'authoring-repair',
-        'authoring',
-        1,
-        null,
-        [
-          effectFilter('planKind', 'template-scope-slot-typing'),
-          effectFilter('actionTargetKind', 'scope-slot'),
-          effectFilter('actionTargets.sourceRole', 'template'),
-          effectFilter('targetMemberNames', 'label'),
-          effectFilter('targetMemberNames', 'status'),
         ],
         'signature',
       ),
@@ -381,8 +366,7 @@ const mixedFormCursorProbe = await readMixedFormAssignmentCursorProbe();
 
 const failures = contracts.flatMap((contract) => contract.verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
-  .map((result) => `${contract.fixture}: ${result.summary}`)
-  .concat(contract.repairClusterKeyFailures.map((failure) => `${contract.fixture}: ${failure}`)));
+  .map((result) => `${contract.fixture}: ${result.summary}`));
 if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
 }
@@ -394,7 +378,6 @@ const summary = {
   contracts: contracts.map((contract) => ({
     fixture: contract.fixture,
     expectedEffects: contract.expectedEffects,
-    repairClusterKeyFailures: contract.repairClusterKeyFailures,
     verification: contract.verification.effectResults.map((result) => ({
       effectKind: result.expectedEffect.effectKind,
       outcome: result.outcome,
@@ -423,16 +406,15 @@ async function verifyFixture(fixtureRoot, storeKey, expectedEffects) {
   const app = await runtime.openApp({
     analysisDepth: 'binding-observation',
   });
-  const snapshot = readAuthoringVerificationSnapshot(app);
-  const verification = verifyAuthoringEffects(
-    new AuthoringVerificationRequest(null, expectedEffects),
+  const snapshot = readFixtureVerificationSnapshot(app);
+  const verification = verifyFixtureEffects(
+    new FixtureVerificationRequest(null, expectedEffects),
     snapshot,
   );
   return {
     fixture: path.basename(fixtureRoot),
     expectedEffects: expectedEffects.length,
     verification,
-    repairClusterKeyFailures: repairClusterKeyContractFailures(snapshot.authoringOrientation.repairClusters),
   };
 }
 
@@ -490,24 +472,4 @@ function positionForOffset(text, offset) {
     line,
     character: offset - lineStart,
   };
-}
-
-function repairClusterKeyContractFailures(repairClusters) {
-  const failures = [];
-  for (const cluster of repairClusters) {
-    if (typeof cluster.key !== 'string' || cluster.key.length === 0) {
-      failures.push('Repair cluster keys should be non-empty strings.');
-      continue;
-    }
-    if (cluster.key.length > 180) {
-      failures.push(`Repair cluster key should stay compact. Observed ${cluster.key.length} characters.`);
-    }
-    if (/[\\/]|%2f|%5c|\.ts|sourceAddress|source-span/i.test(cluster.key)) {
-      failures.push(`Repair cluster key should not transport source paths or encoded source spans: ${cluster.key}`);
-    }
-    if (!Array.isArray(cluster.actionTargets) || cluster.actionTargets.length === 0) {
-      failures.push(`Repair cluster ${cluster.key} should carry structured action targets instead of encoding the target in the key.`);
-    }
-  }
-  return failures;
 }

@@ -125,7 +125,7 @@ Consumer profiles may also choose query-policy knobs. For example, the MCP-orien
 with `diagnosticProjection=available-products` because orientation should not spend answer-time TypeChecker projection
 unless the caller opts into the richer diagnostic surface.
 `SEMANTIC_RUNTIME_TELEMETRY_MODE` selects the public-query entry shape. The default `opened-app` mode opens one app
-epoch and asks queries against `SemanticApp`, which is useful for fixture/authoring lanes that intentionally inspect a
+epoch and asks queries against `SemanticApp`, which is useful for fixture/app-builder lanes that intentionally inspect a
 retained app world. `routed-query` mode calls `SemanticRuntime.answerAppQuery(...)` with `appRetention=dispose-app` for
 each sampled query, which is the MCP-style one-off path: final kernel growth should be small or zero, while query-claim
 totals still show the app-world work spent and reclaimed for each answer.

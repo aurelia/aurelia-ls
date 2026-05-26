@@ -1,16 +1,10 @@
 import type {
   SemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
-import {
-  defaultAuthoringRecipeAppName,
-  isAuthoringRecipeKey,
-} from '../authoring/recipe.js';
 import type {
   SemanticAppQuery,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticAppQueryCatalogRequest,
-  SemanticAuthoringGuidanceRequest,
-  SemanticAuthoringRecipePlanRequest,
 } from './contracts.js';
 import { semanticAppQueryCatalogShape } from './app-query-catalog.js';
 
@@ -39,62 +33,6 @@ export function semanticRuntimeSummaryKey(
     `project-page-size:${request.projectPage?.size ?? 0}`,
     `project-page-cursor:${request.projectPage?.cursor ?? 'start'}`,
   ].map((part) => queryKeyPart(part)).join('|');
-}
-
-export function semanticRuntimeAuthoringRecipePlanKey(
-  request: SemanticAuthoringRecipePlanRequest,
-): string {
-  return [
-    'authoring-recipe-plan',
-    `recipe:${queryKeyPart(request.recipeKey)}`,
-    `usage:${queryKeyPart(request.usage ?? 'source-plan-start')}`,
-    `root:${queryKeyPart(request.rootDir ?? '.')}`,
-    `app:${queryKeyPart(authoringRecipePlanAppNameForKey(request))}`,
-    request.includeText === true ? 'with-text' : 'without-text',
-    `source-files:${queryKeyPart((request.sourceFilePaths ?? []).slice().sort().join(','))}`,
-    `source-parameters:${queryKeyPart(authoringRecipeSourceParameterKey(request))}`,
-    `effects:${queryKeyPart(request.effectDetail ?? 'compact')}`,
-  ].join('|');
-}
-
-function authoringRecipeSourceParameterKey(
-  request: SemanticAuthoringRecipePlanRequest,
-): string {
-  const values = request.sourceParameterValues ?? [];
-  if (values.length === 0) {
-    return 'none';
-  }
-  return values
-    .map((value) => `${value.key.trim()}=${value.value.trim()}`)
-    .filter((value) => value !== '=')
-    .sort()
-    .join(',');
-}
-
-function authoringRecipePlanAppNameForKey(
-  request: SemanticAuthoringRecipePlanRequest,
-): string {
-  if (request.appName != null) {
-    return request.appName;
-  }
-  return isAuthoringRecipeKey(request.recipeKey)
-    ? defaultAuthoringRecipeAppName(request.recipeKey)
-    : 'Aurelia App';
-}
-
-export function semanticRuntimeAuthoringGuidanceKey(
-  request: SemanticAuthoringGuidanceRequest,
-): string {
-  return [
-    'authoring-guidance',
-    `focus:${queryKeyPart(request.focus ?? 'app-building')}`,
-    `feature-goal:${queryKeyPart(request.featureGoal ?? 'none')}`,
-    `detail:${queryKeyPart(request.detail ?? 'compact')}`,
-    `recipe:${queryKeyPart(request.recipeKey ?? 'all')}`,
-    `recipe-limit:${request.recipeLimit ?? 'default'}`,
-    `principle-limit:${request.principleLimit ?? 'default'}`,
-    `decision-limit:${request.decisionLimit ?? 'default'}`,
-  ].join('|');
 }
 
 export function semanticRuntimeRoutedAppQueryKey(
@@ -207,7 +145,6 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
     shapedQuery.diagnosticPageSize ?? 'default-diagnostic-page',
     shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
-    shapedQuery.includeAuthoringOrientation === true ? 'with-authoring-orientation' : 'no-authoring-orientation',
     shapedQuery.rowPageSize ?? 'default-row-page',
     shapedQuery.page?.size ?? 'all',
     shapedQuery.page?.cursor ?? 'start',

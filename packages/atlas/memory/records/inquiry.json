@@ -145,7 +145,6 @@
         "semantic-runtime",
         "app-builder",
         "fixtures",
-        "authoring",
         "inquiry",
         "lsp",
         "mcp",
@@ -159,7 +158,7 @@
         "Treat editing fixtures as a bridge between app-builder ontology and the Semantic IDE Affordance Algebra. Do not create a separate MCP-only or IDE-only fixture language.",
         "Use tiered fixture lanes: small reference-contract fixtures for exact semantic subjects, medium edit-plan fixtures for multi-file expected edits, generated app fixtures for realistic pattern compositions, and contrast fixtures for analyzable shapes that should not become recommendable source.",
         "Generated editing fixtures should declare expected definition targets, reference sets, source roles, editability blockers, rename plans or preview edits, diagnostics-to-repair facts, and exact source spans where possible.",
-        "When an editing fixture requires larger source, generate it from app-builder pattern compositions plus expected semantic effects rather than hard-coding another example domain in authoring.",
+        "When an editing fixture requires larger source, generate it from app-builder pattern compositions plus expected semantic effects rather than hard-coding another example domain in app-builder.",
         "App-builder expected effects should grow beyond app facts when needed: reference families and edit-plan expectations are semantic effects too, even if their first implementation lives in an IDE/edit contract layer.",
         "Use TypeSystemProject, template overlays, binding/data-flow products, router/i18n/resource products, and SemanticSourceReference provenance as inputs. Overlay segments are evidence, not the authoritative edit surface by themselves.",
         "A broad carrier span should fail an edit contract or report missing precision; it should not be silently used as a patch range.",
@@ -186,9 +185,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect",
-          "summary": "Current authoring verification primitive that future edit/reference effects can extend or parallel."
+          "summary": "Current fixture verification primitive that future edit/reference effects can extend or parallel."
         },
         {
           "kind": "source",
@@ -204,8 +203,8 @@
         },
         {
           "kind": "fixture",
-          "path": "packages/semantic-runtime/fixtures/authoring",
-          "summary": "Generated recommendable fixture lane that should eventually include app-builder-generated IDE pressure apps."
+          "path": "packages/semantic-runtime/fixtures/app-builder/goldens",
+          "summary": "Generated app-builder golden lane that should eventually include IDE pressure apps."
         },
         {
           "kind": "fixture",
@@ -226,7 +225,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-05-26"
     },
     {
       "id": "frontier:query-claim-graph",
@@ -446,16 +445,16 @@
         "framework-corpus"
       ],
       "summary": "Semantic contract verification should provide route-scoped regression witnesses without turning Aurelia framework tests or public DTOs into one large snapshot suite.",
-      "rationale": "auLink has been valuable as fast framework grounding, but inquiry policy, query-claim retention, invalidation, authoring expected effects, and public MCP answers now need behavior-level regression confidence. The durable shape should assert semantic products and expected effects selected by Work Router routes, while preserving the ability to refactor Atlas and semantic-runtime boldly when an ontology is wrong.",
+      "rationale": "auLink has been valuable as fast framework grounding, but inquiry policy, query-claim retention, invalidation, fixture expected effects, and public MCP answers now need behavior-level regression confidence. The durable shape should assert semantic products and expected effects selected by Work Router routes, while preserving the ability to refactor Atlas and semantic-runtime boldly when an ontology is wrong.",
       "guidance": [
         "Start here when testing strategy, semantic-runtime regression coverage, fixture verification, or public query budget checks are under discussion.",
-        "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, authoring, inquiry, or MCP surfaces.",
+        "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, app-builder, inquiry, or MCP surfaces.",
         "Assert semantic effects and product facts rather than source snapshots or whole DTO dumps: resources, routes, bindings, controller topology, value channels, diagnostics, expected effects, retention policy, and answer budgets.",
         "Runtime watcher, watcher observed-dependency, binding-owned trackable method dependency, template collection observation, computed-observer-source, and computed-observer-observed-dependency rows are now expected-effect targets. Use the proxy-observation, trackable-method-observation, template-collection-observation, and computed-observer-source contracts as the first patterns for row-backed observation witnesses.",
         "Use Aurelia framework docs as promoted-pattern seeds and framework tests as behavior-grounding seeds; do not copy the full framework suite into the default lane.",
-        "Keep generated/recommendable fixtures and contrastive analysis fixtures distinct so authoring quality and analyzer robustness can both be checked.",
+        "Keep app-builder/generated fixtures and contrastive analysis fixtures distinct so app-builder output quality and analyzer robustness can both be checked.",
         "Treat auLink as framework grounding, not behavior coverage. A link can show where semantic-runtime should mirror Aurelia; a contract should show what an answer or fixture must prove.",
-        "Give query/inquiry contracts cost and retention expectations when the consumer is MCP, LSP, diagnostics, authoring, AOT, or another profile with different budget needs.",
+        "Give query/inquiry contracts cost and retention expectations when the consumer is MCP, LSP, diagnostics, app-builder, AOT, or another profile with different budget needs.",
         "Prefer a fast route-health/schema lane, a route-scoped semantic lane, a selected framework-corpus witness lane, and a slower confidence lane over one mandatory all-in suite.",
         "Use `pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --list` or a route/domain filter before manually assembling contract scripts. The current suite is a first harness, not the final Atlas-selected contract algebra; it keeps child output compact on success and exposes `--verbose` for debugging."
       ],
@@ -463,14 +462,14 @@
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect",
-          "summary": "Expected semantic effects are the contract vocabulary already used by authoring fixtures."
+          "summary": "Expected semantic effects are the contract vocabulary used by fixture verification."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
-          "symbolName": "readAuthoringVerificationSnapshot",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/verification.ts",
+          "symbolName": "readFixtureVerificationSnapshot",
           "summary": "Opened-app verification snapshot collector for row-backed expected effects."
         },
         {
@@ -525,13 +524,13 @@
       "liveChecks": [
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect"
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
-          "symbolName": "readAuthoringVerificationSnapshot"
+          "filePath": "packages/semantic-runtime/src/fixture-verification/verification.ts",
+          "symbolName": "readFixtureVerificationSnapshot"
         },
         {
           "kind": "source-file-exists",
@@ -557,10 +556,17 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ExpectedSemanticEffect",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-05-26"
     },
     {
       "id": "frontier:evidence-gated-continuations",

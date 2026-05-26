@@ -48,10 +48,10 @@
       "domains": [
         "semantic-runtime",
         "api",
-        "authoring",
         "mcp",
         "lsp",
-        "app-opening"
+        "app-opening",
+        "app-builder"
       ],
       "summary": "SemanticRuntime and SemanticApp are intentionally the in-process boot/open-app facade, not a second materialization layer.",
       "rationale": "The API README explicitly keeps runtime.ts as the boot/app facade while pushing public contracts, row projections, and query-family answerers into focused modules. Future authoring or LSP expansion should preserve that boundary rather than letting runtime.ts become another private summary table.",
@@ -60,50 +60,11 @@
         "Use SemanticApp for public query dispatch and compact app-level query methods; move substrate-family answerers into focused modules when the facade starts owning projection logic.",
         "MCP and IDE/LSP should consume the same semantic-runtime public API and catalog surfaces. Treat MCP as an IDE-for-AI adapter over semantic-runtime, not as a lower-fidelity or separate reasoning layer.",
         "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
-        "Keep `SemanticRuntime.authoringCatalog()` / `AuthoringCatalog` as the static ontology/recipe-contract projection and `AuthoringOrientation` as the opened-app evidence projection; callers should not need to spelunk ontology.ts or infer catalog contracts from an arbitrary app.",
+        "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
         "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
-        "Public adapters should call claim-backed runtime catalog methods (`authoringCatalogView`, `authoringRecipePlan`, and `appQueryCatalog`) instead of raw readSemantic* helpers when the result crosses a transport boundary.",
-        "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile. Scripts that iterate project rows must request a page size explicitly instead of assuming the default summary returns rows.",
-        "SemanticRuntime summary answers should carry semantic-runtime-owned `displayText` for workspace-level orientation: shape/analysis counts, default app, app candidates, project-row paging, and the next app-opening tool belong in the API result, not MCP adapter prose.",
-        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and compact authoring orientation is opt-in through `includeAuthoringOrientation`. When authoring orientation is included, repair-cluster summaries should preserve planning readiness, action-target source coverage, and runtime boundary/intent kind buckets so public adapters do not flatten runtime-policy seams into ordinary source edits.",
-        "Repair rows and action-target rows should carry source roles in addition to exact span/source references. Compact repair clusters should retain action-target source-role counts so MCP can route a repair to app-source, template, tooling-config, declaration, external-source, or inspection without parsing paths or reopening detailed rows.",
-        "AppOverview and RouterOverview answers should carry semantic-runtime-owned `displayText` for MCP first reads: app shape, route counts, depth-aware binding projection availability, pressure status, router runtime tree counts, issue state, and row-sampling guidance should not be recomposed in public adapters. Runtime-topology app overviews should not present zero value-channel/data-flow rows as semantic absence; tell callers to reopen at binding-observation when those rows matter.",
-        "App diagnostics and open-seam answers should carry semantic-runtime-owned `displayText` with severity/domain/framework-code rollups or seam-kind/reason-kind clusters. Public adapters should use that text to route follow-up before paging raw rows or handles.",
-        "Use app-query catalog `minimumAnalysisDepth` when a generic public adapter opens an app; topology-owned queries should not accidentally pay for binding-observation.",
-        "Use app-query catalog `pagingKind` before exposing a paged-looking adapter control; offset row cursors, router row-sample sizing, and cursor-locus continuations are intentionally different public affordances.",
-        "Use app-query catalog `runtimeBoundary` before routing a public query: runtime-static, project-frame, and static-evaluation answers should stay below app-world construction, while app-world queries should make their construction cost visible.",
-        "App-query catalog answers should expose semantic-runtime-owned `displayText` so MCP can show returned query kinds, result roles, depth/boundary costs, and batch/summary-first hints without adapter-local query-selection prose.",
-        "Prefer `SemanticRuntime.answerAppQuery(...)` for thin public adapters that need a single app answer: it centralizes catalog depth, locus-derived inquiry profile, query-claim recording, runtime-level static catalog reuse, and profile-default app-epoch disposal instead of making MCP/LSP shells rediscover those policies.",
-        "Keep app-query identity, locus, epoch, and routed-policy helpers in focused API modules. Runtime facade code should call those helpers rather than rebuilding private query keys, default profiles, authoring-template switches, or app-retention decisions inline.",
-        "Routed app answers should leave a runtime-level lightweight query claim through optional app-epoch disposal; that claim records answer shape, observed cost, and reclaimed app/query-claim records without retaining app-world products.",
-        "Use `SemanticRuntime.answerAppQueries(...)` for public multi-answer app orientation. Keep `includeAppProfile` and `includeAppQueryClaimProfiles` unset for low-token MCP/LSP answers; opt in only when profiling construction cost or retained query-claim shape is the task.",
-        "App-query batch results should carry semantic-runtime-owned `displayText` that lists child query kinds, materialization policy, and child answer summaries; MCP text should remain useful even when child row pages are intentionally `page.size=0`.",
-        "Binding summary answers should carry semantic-runtime-owned `displayText` whose first line names the useful aggregate for empty-row pages: value-channel observer couplings, data-flow issue kinds, or observed-dependency member-source states. That keeps binding-triad batches actionable without paging raw rows.",
-        "Keep routed-batch `appProfile` opt-in but rich enough for retention-safe memory attribution: include nested construction phase summaries, static-evaluation source-host/source-composition counters, TypeSystem compiler-option shape, Program root/source-file composition, and compiler-host cache counters so one-off profiling calls can explain evaluator/checker/dependency cost after app-epoch disposal.",
-        "App-world-free routed answers should stay at the runtime boundary. AuthoringCatalog can use static catalog data, SourceFiles can use the booted project frame, and UnresolvedModules can use read-only Aurelia project evaluation. Single calls and all-app-world-free batches should not open an app epoch; their batch result uses appWorldOpened=false and appProfile=null intentionally.",
-        "Runtime-static app-query batches should stay workspace-level: do not select a project or app analysis depth when every child query is runtime-static. Project-frame and static-evaluation batches still need project selection because they depend on admitted source files or static project evaluation.",
-        "Public transport shells such as MCP should use the routed answer path with an explicit consumer profile and retention posture instead of leaving app-world epochs cached by manual `openApp(...).ask(...)` calls.",
-        "Inside an already-entered public claim boundary, use a focused raw answer builder rather than calling another public facade method. Public adapters should call claim-backed facades, but facade internals should not create unrelated default-profile query claims as an implementation detail.",
-        "Expose appRetention as an explicit adapter policy when hand-testing MCP-scale apps. Default dispose-app keeps retained app-kernel memory flat; retain-app is useful when several tools should share one app epoch and the cache overview will be inspected or cleared deliberately.",
-        "Expose diagnosticProjection through public adapters for diagnostic query families. Do not force every MCP/LSP diagnostic read through answer-time TypeChecker projection when available-products is enough for orientation.",
-        "TemplateCursorInfo also accepts diagnosticProjection. Type-projection cursor reads should surface mapped template overlay TypeScript diagnostics at the active authored span through the shared template diagnostic policy; available-products reads should remain cheaper and stay on already materialized semantic rows.",
-        "Keep router overview summary-first by default; row samples from many router families are an opt-in orientation cost, not the default MCP answer.",
-        "Use `SemanticRuntime.analysisCacheOverview()` for long-lived adapter retention questions: it is the public x-ray for cached app epochs, query-claim retention, process memory, dependency cache density, and workspace kernel density; do not infer those facts from MCP-local session maps.",
-        "Analysis-cache overview and clear answers should carry semantic-runtime-owned `displayText` for app epochs, workspace kernel mass, process memory, dependency-cache policy, compiler-options counters, query claims, and reclaimed records/details/handles. Transport session registries may add wrapper text for their own retained server sessions, but should forward nested semantic-runtime text rather than recomposing cache telemetry.",
-        "Read the project compiler-options cache row in analysis-cache overview before assuming repeated static-evaluation/type-system setup is unavoidable. That cache is boot/input wiring by project root, returns cloned options plus config root-file and diagnostic counts, and is separate from TypeScript Program or app-world retention.",
-        "Use `SemanticRuntime.disposeQueryClaims(...)` profileDisposals rows to verify which runtime-level and cached-app query-claim graphs were pruned by source, query, profile, or materialization-policy invalidation.",
-        "Use `includeQueryClaimRows` with a small `rowLimit` when aggregate query-claim counters are not enough; do not add a transport-local query ledger before checking the graph-owned retained rows.",
-        "Use the TypeSystem dependency-cache density fields in analysis-cache overview before treating TypeScript SourceFile retention as generic semantic-runtime memory pressure.",
-        "Use `includeTypeSystemDependencyEntries` only for a deliberate cache frontier read; ordinary adapter status should prefer dependency bucket density and clear-policy advice over path-level SourceFile rows.",
-        "Use `SemanticRuntime.clearAnalysisCache()` as the app-world reclaim boundary: it disposes cached app epochs and kernel records/details back to the first app-construction marker while keeping boot/source discovery available.",
-        "Use `typeSystemDependencyCacheClearPolicy` when clearing analysis cache so dependency SourceFile cache reclamation is an explicit CPU-vs-memory choice: preserve by default, clear all under pressure, or target node_modules, default libraries, or external declarations after reading cache density.",
-        "For one-off public routed calls, pass `typeSystemDependencyCacheClearPolicy` to `answerAppQuery(...)` or `answerAppQueries(...)` so dependency SourceFile cache disposal is recorded on the runtime-level query claim instead of happening as adapter-local cleanup.",
-        "Default `openApp()` should stay at `runtime-topology`; cursor/diagnostic convenience methods may explicitly default to `binding-observation` because those LSP-style surfaces need observer/data-flow pressure.",
-        "Template cursor, completion, and diagnostic answers should own compact `displayText`: site/value/resource/member facts, candidate previews, diagnostic severity/kind/code rollups, and next tool hints belong in semantic-runtime so MCP/LSP adapters stay thin.",
-        "Use `pressure:cursor-loci -- --fixture ...` or `--root ...` for focused LSP-style canaries. The script accepts the same pressure/authoring fixture selectors as app API pressure, so do not fall back to env-only root overrides when comparing overlay, router, and form cursor behavior.",
-        "Until app-world handles are salted by request shape, opening a non-compatible app epoch for a project with cached app records clears cached app epochs before rebuilding; do not reintroduce duplicate app epochs in one workspace kernel by accident.",
-        "Keep app-world cache identity semantic-shape based rather than inquiry-profile based: project, analysis depth, and authoring-template scope define the cached app epoch, while `SemanticApp.ask(...)` records profile-specific answer retention in separate query-claim graphs at the API boundary.",
-        "When an answer feels awkward, improve underlying product records or add a narrow query projection before adding compatibility glue to runtime.ts."
+        "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
+        "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
+        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO."
       ],
       "anchors": [
         {
@@ -119,12 +80,6 @@
           "symbolName": "SemanticApp",
           "line": 392,
           "summary": "Opened app-world query facade."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/authoring-catalog.ts",
-          "symbolName": "readSemanticAuthoringCatalog",
-          "summary": "Static authoring ontology and recipe contract projection."
         },
         {
           "kind": "source",
@@ -185,6 +140,12 @@
           "path": "packages/semantic-runtime/src/api/README.md",
           "heading": "Semantic Runtime API",
           "summary": "API boundary intent and split guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/starter.ts",
+          "symbolName": "buildAppBuilderStarter",
+          "summary": "Future public generation should grow through app-builder, not the retired recipe-authoring facade."
         }
       ],
       "liveChecks": [
@@ -504,63 +465,25 @@
         "mcp",
         "api",
         "semantic-runtime",
-        "authoring",
+        "app-builder",
         "app-building",
         "token-economy",
         "observation",
         "router",
         "plugins"
       ],
-      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia guidance over fringe API completeness.",
+      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia answers and leave app generation to app-builder until that algebra is ready.",
       "rationale": "A not-yet-complete au-compose or router/viewport model can be explained for an early preview, but a tool that repeatedly guides AI toward verbose or suboptimal Aurelia code undermines the product thesis. Aurelia's short-term MCP value is trust: low-token answers that help agents write small, readable, object-oriented Aurelia apps using core observation, common routing, plugins, and advertised patterns.",
       "guidance": [
-        "Use this decision before expanding public MCP authoring or app-generation output.",
-        "Prioritize guidance and recipes that reduce boilerplate: DI-owned state classes, direct `state.member` template reads where appropriate, sparse bindables, IDs over non-leaf object handoff, local typed object handoff when that is clearer, and expected-effect verification.",
+        "Use this decision before expanding public MCP prompts, tools, or app-generation output.",
+        "Keep the MCP package a thin adapter over semantic-runtime query families; do not classify diagnostics, app-building taste, or source-plan policy in the transport layer.",
+        "For current public preview behavior, prioritize analysis answers that help agents write compact Aurelia: diagnostics including ordinary TypeScript diagnostics, app/router/template/binding facts, continuations, and concise prompt workflows.",
+        "Prioritize low-boilerplate Aurelia guidance in future app-builder outputs: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by domain shape, and expected-effect verification.",
         "Keep core observation high priority: ordinary template reads, proxy-observed domain state, value channels, binding data-flow, and the patterns that make forwarding getters unnecessary.",
         "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
         "Treat au-compose as lower priority for the first public cut unless it blocks a common advertised pattern or an existing semantic-runtime query surface.",
-        "Expose plugins and commonly advertised patterns when they help agents avoid generic SPA or older-Aurelia advice.",
         "When a public MCP answer would be verbose, improve the semantic-runtime summary query or structuredContent shape before accepting token-heavy guidance as the preview behavior.",
-        "`aurelia_app_building_guidance` should stay a first-screen guide: broad app-building calls return a small breadth-weighted default recipe set with candidate/returned counts, covering state-backed forms, searchable table state, route shells, and routed table/detail structure. Use `featureGoal` to steer larger catalog, plugin-backed route/form, service-boundary, or mixed app surfaces without broadening the default payload.",
-        "`aurelia_app_building_guidance.featureGoal` should use a tighter compact default once authored signals match: up to three recipe rows, three principle rows, and four decision rows, while `recipePlanSequence` remains the authoritative source choreography. Matched feature-goal recipe rows are compact comparison context filtered to requested-signal coverage; use `aurelia_authoring_catalog` for the full recipe set and `principleLimit` or `decisionLimit` for wider guidance rows.",
-        "`aurelia_app_building_guidance` compact detail should withhold expanded choose/avoid arrays, full operation-kind arrays, and row-level expected-effect kind arrays from structuredContent while preserving displayText, stable keys, counts, and code-shape summaries. Use `detail=recipes` for expanded rows.",
-        "`aurelia_app_building_guidance` compact detail should cap focused recipe rows too; use `detail=recipes` or `recipeLimit` when the caller is intentionally comparing the wider focused recipe set.",
-        "`aurelia_authoring_catalog` overview view should stay the default low-token map: include recipe titles, summaries, support state, specificity, and scalar counts while omitting expanded operation, lineage, taste, expected-effect, and source-plan arrays.",
-        "`aurelia_authoring_catalog` compact views should expose semantic-runtime-owned `displayText` so MCP can show recipe keys, file/effect counts, and the next authoring tool without interpreting catalog rows locally.",
-        "`aurelia_authoring_catalog` recipes view should stay a recipe comparison surface: include preference counts, taste-value keys, source-plan summaries, expected-effect counts, and expected-effect kind sets, but keep row-level preference ontology summaries and expected-effect contracts in `catalogView=full` or `aurelia_authoring_recipe_plan` with `effectDetail=contracts`.",
-        "`aurelia_app_building_guidance` decision rows are the public code-economy layer over taste keys and recipe contracts. Keep choices such as DI state versus service ownership, direct state/domain template access versus view-model adaptation, ID versus object handoff, nullable object bindable type surfaces, ordinary getter observation versus `@computed` metadata, form value-channel ownership, route-selected state, router `activeClass` versus `load.active` state handoff, and proxy exit boundaries for external-library/host/serialization handoff in semantic-runtime guidance rather than MCP-local prose.",
-        "`aurelia_app_building_guidance.featureGoal` should stay a semantic-runtime-owned explicit signal table, not fuzzy adapter search. Use authored signals such as routing (including ordinary route/routes/route-parameter wording), searchable-list, localization, validation, service-boundary, catalog-product, composition, state-plugin, and app-shell to reorder recipe, principle, and decision rows for mixed feature goals.",
-        "Feature-goal signal terms should match normalized high-signal token/phrase sequences or explicit token conjunctions rather than substrings. This keeps authored signals deterministic and avoids search-like false positives such as matching `list` inside an unrelated word or treating generic domain nouns like `messages` and `labels` as validation/localization.",
-        "Form/data-entry terms such as `form`, native control words such as `select`/`checkbox`/`radio`/`toggle`/`switch`, editable settings, API key fields, profile editor/fields, account settings, signup/password, and address/payment phrases should activate a `form-entry` feature-surface signal, while read-only profile/detail wording, generic route-only settings pages, and surrounding words such as `labels` should not imply form or localization pressure unless the caller asks for those surfaces.",
-        "Composition feature-goal signals should require compose/widget language. A bare dashboard can be an ordinary routed or state-backed surface and should not imply `au-compose` or the composed-dashboard recipe.",
-        "Search/list feature-goal signals should use search/filter/sort/table/list/directory or explicit data/user/record/item-grid wording, not bare layout-grid wording. Catalog-product signals should use storefront, cart/checkout, or product catalog/list/table/grid/card/detail wording, not bare product or catalog nouns; product/admin table plus editable-detail wording should stay on the searchable-table/form path unless storefront/catalog/card/cart/checkout/pricing/compare intent is also present. If ordinary list/detail surfaces start over-selecting the full searchable-data-table recipe, add a framework/docs/test-grounded simple collection recipe instead of weakening the current table guidance.",
-        "Service-boundary feature-goal signals should require explicit integration language such as service-backed/service-layer, API service/client/call, HTTP, repository pattern/class or data-repository, or loading data. Bare submit/save button language, customer-service domain wording, repository-browser domain wording, and settings fields such as API keys should stay on the ordinary form/value-channel path unless the caller names a service boundary.",
-        "State-plugin feature-goal signals should require explicit `@aurelia/state`, state-store, or store-backed-state language. Bare todo/list wording should stay on ordinary DI state/list guidance unless the caller asks for the plugin architecture.",
-        "When searchable/list management and edit-form language are both present, the searchable-list surface should lead and the form recipe should be a companion pattern unless a more specific routed/form recipe covers both.",
-        "If a caller supplies `featureGoal` and no authored signal matches, semantic-runtime guidance should say `none matched` in displayText before falling back to focus/default recipe ordering. Treat fallback rows as broad orientation context rather than a confident scaffold choice, and steer the next action toward refining the goal, catalog comparison, or existing-app inspection before recipe source text is requested.",
-        "Feature-goal signals carry planning layers and `primaryWeight` so public guidance can publish `recipePlanSequence`: start with the recipe that owns the main architecture/feature/navigation surface set, then add companion recipe plans for remaining framework capabilities or app patterns such as validation, localization, service boundaries, or checkout/wizard flow. Architecture-choice signals such as explicit `@aurelia/state` requests can lead before ordinary list/form companion patterns because they change the app state model. Ranking should use covered feature-surface breadth and feature-surface weight before navigation and summed capability weight, so a routed catalog/search/cart goal starts from `routed-catalog-storefront` and a routed inbox/table/reply-form goal starts from `routed-searchable-data-table` before borrowing form/plugin patterns. MCP should forward that sequence rather than choosing recipe choreography locally.",
-        "Feature-goal ranking should penalize route-owned recipes when no navigation-frame signal is present. A product list/card/detail goal should start with `catalog-storefront` unless the caller asks for routing, navigation-owned selection, route params, links, or viewports; `routed-catalog-storefront` remains the primary recipe when routing is actually part of the goal.",
-        "Feature-goal ranking should also penalize specialized recipe scaffolds when their specialization signal is absent. A validated form should start with `validated-state-backed-form`, while `multi-step-state-backed-form` requires a multi-step/wizard/stepper/onboarding signal and localized recipes require a localization signal. The same guard applies to companion rows: a routed validated form without localization should start from `routed-state-backed-form` and borrow `validated-state-backed-form`, not the translated validated route recipe.",
-        "Compact feature-goal recipe comparison should first require at least one requested signal match, then rank unrequested specialization as more costly than extra feature breadth. Returned rows should include the published source path plus relevant unspecialized comparisons, so a route-only dashboard does not compare against catalog, table, form, or widget scaffolds and a settings form does not show unrelated list/catalog recipes.",
-        "`recipePlanSequence` rows must distinguish the usage of each recipe. The primary row can be a `source-plan-start`; companion rows are `pattern-reference` guidance to merge relevant plugin/capability steps, not permission to apply multiple complete app scaffolds.",
-        "`recipePlanSequence.suggestedSourceParameterValues` should stay conservative, reviewable, and role-aware. Route identity/title values for routed table/form recipes can be suggested when feature-goal domain tokens are obvious and that recipe row newly owns a navigation-frame signal; companion pattern rows should not advertise a second route identity when the primary row already owns navigation. Searchable table rows may also suggest `table-entity` and `table-collection` values, which semantic-runtime can apply to source model identity, plus supported `table-filter-fields` when exact filter/search/sort chunks are present; table field schemas now generate row fields, filter state, sortable columns, service records, table cells, routed detail rows, and table value-channel coverage. Field-schema suggestions should normalize prompt chunks into source-shaped descriptors and avoid surface-only pseudo-fields such as `table select`. Standard request-form rows may suggest `request-entity`, `request-selection-id`, and supported `request-fields`; semantic-runtime can apply those values to core request/domain class identity, scalar ID/bindable names, state/service read/load/submit method names, service class/property names, template-local object handoff, field properties, control bindings, validation targets, expected effects, and source-pattern modules. Request field suggestions should normalize explicit field/control chunks and can include text, email, secret, textarea, number, checkbox/toggle, and single-select controls; number fields generate Aurelia `value-as-number.bind`. Explicit editable-detail companion forms may reuse source-shaped table field descriptors from the same feature goal, while ordinary filter controls stay off the form lane unless a data-entry surface is present. Suggested values should line up with each parameter's `valueShape`, such as domain titles for entities, source-member names for scalar IDs or collection members, route paths/parameters/titles for route identity, and field-schema lists for field/control chunks. Multi-step/wizard rows may suggest advisory `wizard-entity` and exact-token `wizard-steps` values for checkout/flow/wizard prompts, but `wizard-domain-flow` remains host-adapted until semantic-runtime owns richer domain/field/schema generation. Catalog rows should suggest `catalog-entity`, `catalog-collection`, and supported `catalog-fields` values only for product/item-like domains; semantic-runtime can apply those values to core item/collection identity, item constructor fields, sample records, and routed detail field rows, preserving natural contract fields such as `name`, `summary`, `price`, and `inStock` when their inferred type matches the card/list contract. The current source plan remains a scenario reference around card/list state, selection, and presentation rather than a generic collection generator. Broader catalog action-model, validation-message, copy, and presentation values can remain advisory until semantic-runtime owns deeper caller-domain source generation.",
-        "Feature-goal field-schema suggestions should be normalized source descriptors, not raw prompt chunks: table filters such as `assignee filters` should become `name, assignee select`, and product/item/tier catalog hints should seed `name, description` plus descriptors such as `category select`, `price number`, or `available toggle`. Table field suggestions require row-field/filter/sort/column context, so global controls like repository branch selectors are not row-field schema. Editable-detail companion forms may reuse the table descriptors because the user usually states the domain fields once; keep that bridge gated to explicit editable-detail intent so list filters do not become form fields. Product/item/tier catalog wording and exact product-tier/pricing-tier prompts may suggest catalog source parameters; keep broader non-commerce catalog domains conservative until the recipe owns a truly generic collection generator.",
-        "Feature-goal domain extraction is only a source-parameter suggestion aid, not a semantic classifier. Keep it exact-token and deterministic; prefer selected route/detail/form/list/table entity surfaces over broad container surfaces such as inbox/dashboard/settings, and treat UI/control words such as filters/search/pagination as boundaries so they do not become generated domain nouns.",
-        "`aurelia_authoring_recipe_plan` accepts the same usage values. Pattern-reference calls should keep the complete recipe shape available while making the display text explicit that the plan is a capability pattern to merge into a primary app plan.",
-        "Pattern-reference recipe-plan display text should preview `Pattern file shapes` and label entrypoint/component/state files as patterns, while leaving the structured `sourcePlan` complete for exact source-file selection.",
-        "Decision follow-up surfaces should route app-query-kind rows through `app-query-batch` first, so public MCP clients learn one app-open orientation move for binding, route, state, and observation facts instead of transport-local one-off query chains.",
-        "`aurelia_authoring_recipe_plan` should stay compact by default: use semantic-runtime-owned displayText plus expected-effect counts/kinds for app-building planning, and request `effectDetail=contracts` only for verification, repair, or fixture work that needs row-level expected-effect contracts.",
-        "Compact recipe-plan semantic promises should prioritize source-backed observation, route identity, and high-signal form value-channel/data-flow facts such as custom matchers, select option coupling, nullable model values, and checked collection mutation before lower-signal style/class value channels.",
-        "`aurelia_authoring_orientation` should expose a semantic-runtime-owned displayText for opened-app code-shape reads. MCP should forward that text so direct state/domain access, one-hop forwarding pressure, source-backed getter observation, recipe fit, repair pressure, and open reasons are visible without MCP interpreting ontology rows locally. Recipe-fit text should prioritize satisfied recipe identities and summarize partial cross-family candidates instead of presenting them as coequal app identity.",
-        "`localized-validated-state-backed-form` should stay available through public guidance as the common plugin-backed form recipe, but narrower localized-only and validated-only recipes should remain distinct to avoid over-scaffolding features that only need one plugin lane.",
-        "`routed-localized-validated-state-backed-form` should stay available through public guidance for route-owned translated validated forms; it is the compact common-path example for composing router, i18n, validation, direct state-backed bindings, and route-selected identity.",
-        "Use `pnpm --filter @aurelia-ls/mcp dev:prompt` when changing public MCP prompt wording. It starts the built stdio server and reads a prompt directly, so app-building call choreography and low-boilerplate guidance can be reviewed without modifying the broad stdio probe.",
-        "`aurelia_build_app_feature` may orchestrate public MCP tool calls for source-editing agents, but it should stay a prompt shell: semantic-runtime owns the facts and source edits happen outside the read-only MCP tools.",
-        "`aurelia_build_app_feature` should tell agents to treat `recipePlanSequence` as source choreography and the returned recipe rows as comparison context, not as a checklist of scaffolds to apply.",
-        "Public MCP authoring clients should treat `sourcePlan.pattern.usePolicy` as the first source-text action: apply `apply-as-source-start` plans directly, adapt `adapt-before-emitting` reference scenarios into caller-domain code before emitting, merge `merge-selectively` companion patterns by capability, and keep `analysis-pressure-only` source out of app output.",
-        "Use `sourcePlan.pattern.modules` as the reusable architecture list when adapting reference scenarios, and use `sourcePlan.pattern.parameters` for explicit adaptation slots such as domain entities, field schemas, collections, selection IDs, route identities, sample data, and presentation. Use each parameter's `valueShape` before constructing `sourceParameterValues`; do not infer whether a value is a domain title, source member, route parameter, route path, route title, field-schema list, sample-data summary, or presentation summary from sample source text. Compact guidance and recipe-plan text should also name host-adapted slots so unresolved field/schema/data/presentation work stays visible without diffing source text. Preserve framework mechanisms such as route parameter selection, route-link navigation, service-backed loading/submission, value channels, select/checked channels, capture-attribute field shells, and collection controls, while replacing sample nouns, fields, records, copy, and presentation.",
-        "`sourcePlan.sourceParameterApplications` should only report `applied-to-source-plan` for source-text inputs when the requested value is reflected in the built pattern parameter row and generated source/tooling text. Treat `not-applied-to-source-plan` as recipe-mapping pressure and `advisory-only` as host/source adaptation work.",
-        "Do not expose Atlas memory, Work Router, or internal corpus rows through MCP; use those internally to improve semantic-runtime and then forward compact public answers."
+        "Do not expose app-builder as an MCP generation tool until its typed menus, source-plan previews, generated source, and verification promises are coherent enough to save tokens rather than produce fixture-shaped code."
       ],
       "anchors": [
         {
@@ -573,7 +496,7 @@
           "kind": "source",
           "filePath": "packages/mcp/src/prompts.ts",
           "symbolName": "registerAureliaSemanticRuntimePrompts",
-          "summary": "Public workflow prompts such as aurelia_build_app_feature orchestrate tool calls without owning product facts or source edits."
+          "summary": "Public workflow prompts orchestrate stable tools without owning product facts or source edits."
         },
         {
           "kind": "source",
@@ -583,85 +506,24 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/authoring-guidance.ts",
-          "symbolName": "readSemanticAuthoringGuidance",
-          "summary": "Semantic-runtime-owned compact app-building guidance for MCP-like callers."
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "readSemanticAppQueryCatalog",
+          "summary": "Public query vocabulary and paging affordance source for MCP generic query tools."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/authoring-guidance-feature-goals.ts",
-          "symbolName": "guidanceRecipePlanSequence",
-          "summary": "Feature-goal matching, primary-weight recipe ranking, and source-plan choreography."
+          "filePath": "packages/semantic-runtime/src/app-builder/README.md",
+          "summary": "Future app-generation direction and AI-first app-builder algebra."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/authoring-plan.ts",
-          "symbolName": "readSemanticAuthoringRecipePlan",
-          "summary": "Recipe-plan API keeps expected-effect contracts opt-in for public token economy."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/recipe.ts",
-          "symbolName": "AuthoringRecipeDescriptor",
-          "summary": "Recipe plans and expected effects are the preferred authoring guidance substrate."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
-          "symbolName": "sourcePatternUsePolicy",
-          "summary": "Derived public source-text action that separates direct starts from reference scenarios and pressure fixtures."
-        },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
-          "symbolName": "SourcePatternModules",
-          "summary": "Reusable architecture capability labels carried by source plans for MCP adaptation."
-        },
-        {
-          "kind": "lens",
-          "lensId": "atlas.work-router",
-          "projection": "route-plan",
-          "summary": "MCP delivery work should route to public shell, authoring, observation, router, and semantic-contract routes as needed."
-        },
-        {
-          "kind": "doc",
-          "path": "packages/mcp/README.md",
-          "summary": "Public shell boundary and current read-only developer preview shape."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/mcp-preview-and-testing-alignment-2026-05-18.md",
-          "summary": "Scratch alignment for first-preview delivery cuts."
-        }
-      ],
-      "liveChecks": [
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/mcp/src/runtime-adapter.ts",
-          "symbolName": "AureliaMcpSemanticRuntimeAdapter"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
-          "symbolName": "SemanticRuntime"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/api/authoring-guidance-feature-goals.ts",
-          "symbolName": "guidanceRecipePlanSequence"
-        },
-        {
-          "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
-          "symbolName": "sourcePatternUsePolicy"
-        },
-        {
-          "kind": "source-file-exists",
-          "filePath": "packages/mcp/README.md"
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan",
+          "summary": "Source artifact boundary app-builder should emit before any host write policy."
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-21"
+      "updatedAt": "2026-05-26"
     },
     {
       "id": "reuse:runtime-resource-local-binding-ownership",

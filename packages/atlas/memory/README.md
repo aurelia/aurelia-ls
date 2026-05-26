@@ -150,7 +150,7 @@ Free-text query matching deliberately ignores storage-envelope fields such as sh
 Query-filtered rows are ranked by where the match came from: ids, exact domains, anchors, source paths, and summaries
 outrank incidental mentions in rationale or guidance. Use `--domain=` when the workstream is already known and you want
 exact domain membership instead of broad text relevance; repeat it when future-you needs records/actions that sit at an
-intersection such as semantic-runtime authoring.
+intersection such as semantic-runtime app-builder or fixture verification.
 
 Use `--surfaceRole=` to focus untracked product-class pressure by Atlas'
 coarse role classifier. Current roles are `product-owner`, `publisher`,

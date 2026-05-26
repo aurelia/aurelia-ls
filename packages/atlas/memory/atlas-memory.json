@@ -14,8 +14,8 @@
       "summary": "application memory records."
     },
     {
-      "path": "packages/atlas/memory/records/authoring.json",
-      "summary": "authoring memory records."
+      "path": "packages/atlas/memory/records/app-builder.json",
+      "summary": "app-builder memory records."
     },
     {
       "path": "packages/atlas/memory/records/configuration.json",
@@ -28,6 +28,10 @@
     {
       "path": "packages/atlas/memory/records/docs.json",
       "summary": "docs memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/framework-capabilities.json",
+      "summary": "framework capability terrain memory records."
     },
     {
       "path": "packages/atlas/memory/records/evaluation.json",

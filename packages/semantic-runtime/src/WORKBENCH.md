@@ -8,10 +8,11 @@ Product-pressure grounding lives in [../../atlas/workbench/product-specific-pres
 Use that note when deciding whether a semantic concept belongs in product records, claims, provenance, inquiry answers,
 or Atlas-only navigation.
 
-Durable package boundaries live in [README.md](./README.md). Authoring durable context lives in
-[authoring/README.md](./authoring/README.md), [authoring/ONTOLOGY.md](./authoring/ONTOLOGY.md), and
-[authoring/CAPABILITY_CHECKLIST.md](./authoring/CAPABILITY_CHECKLIST.md). Keep this workbench focused on live context
-that should not be mistaken for stable contract.
+Durable package boundaries live in [README.md](./README.md). App-builder durable context lives in
+[app-builder/README.md](./app-builder/README.md), source artifact policy lives in
+[source-plan/README.md](./source-plan/README.md), and fixture verification lives in
+[fixture-verification/README.md](./fixture-verification/README.md). Keep this workbench focused on live context that
+should not be mistaken for stable contract.
 
 ## Standing Context
 
@@ -28,8 +29,9 @@ The broad horizontal substrate is present but not finished end to end. The activ
 
 - `kernel` for handles, vocabulary, records, claims, provenance, materialization, product details, and auLink.
 - `boot` for source admission before semantic interpretation.
-- `application` for framework-normal app topology shared by analysis and authoring.
-- `authoring` for semantic app-creation intent, operation, plan, capability, and verification contracts.
+- `application` for framework-normal app topology shared by analysis, fixtures, and future app-building.
+- `app-builder`, `source-plan`, and `fixture-verification` for AI-first app-building intent, neutral source artifact
+  plans, and row-backed fixture pressure.
 - `evaluation` for static module/value evaluation and explicit open seams.
 - `resources`, `configuration`, `registration`, and `di` for Aurelia world construction.
 - `i18n` for translation-key products admitted from static i18n configuration resources.
@@ -66,7 +68,7 @@ User-directed product taste:
   conceptual clarity and framework correspondence.
 - Treat `runtime.ts` growth as pressure. If it starts compensating for missing semantic products, add or reshape the
   product layer instead.
-- Use ordinary DI-injectable state classes and ID-shaped component boundaries in authoring fixtures where that better
+- Use ordinary DI-injectable state classes and ID-shaped component boundaries in app-pattern fixtures where that better
   reflects idiomatic app design; do not lean on function bindables as an app composition pattern.
 - Do not infer custom elements from cross-framework heuristics such as dash-cased tag names. Follow Aurelia runtime
   semantics and generated framework data instead.
@@ -421,11 +423,11 @@ source-shipped plugin can contribute its actual registry body and resources inst
 registry.
 
 The previous analyzer-shaped fixture was removed because it optimized for current recognizer closure rather than
-idiomatic app authoring. Future fixtures should split stress coverage from authoring examples: stress fixtures can be
-dense, while `../fixtures/authoring` should contain framework-normal app shapes once the substrate can analyze them.
-
-The authoring spine is intentionally non-operational for the moment. It exists to make future codegen land inside a
-typed plan/verification structure instead of drifting into ad hoc scaffold templates.
+idiomatic app-building pressure. Future fixtures should split stress coverage from app-pattern examples: stress fixtures
+can be dense, while `../fixtures/pressure/app-pattern-*` and `../fixtures/app-builder/goldens` should carry
+framework-normal app shapes once the substrate can analyze them. The legacy authoring spine has now been retired; future
+codegen should land through app-builder plus neutral source-plan and fixture-verification layers instead of ad hoc
+scaffold templates.
 
 Recent observer work clarified that `CheckedObserver` value channels are source-shape driven. Plain checkbox bindings
 can close as boolean flows without requiring `model`/`value` element closure, while array/set membership sources still
@@ -532,10 +534,10 @@ large roots still pay TypeChecker construction, resource recognition, and static
 only need a narrower resource/router slice. Generic adapters should choose app depth from the query catalog's
 `minimumAnalysisDepth` instead of defaulting to deepest analysis.
 Query-claim retention is the first per-consumer memory/CPU policy layer below app-world depth. `lsp-diagnostics` now
-keeps lightweight session claim records but disposes answer-local TypeChecker products; fixture and authoring lanes may
-retain those products for app-epoch inspection. Keep this split intentional when adding query-local projections: cursor
-queries need fast follow-up, diagnostics can spend more CPU, and fixture/authoring pressure often needs to inspect the
-generated kernel shape. Session profiles have retained-record budgets so repeated cursor/diagnostic/MCP queries do not
+keeps lightweight session claim records but disposes answer-local TypeChecker products; fixture and app-builder pressure
+lanes may retain those products for app-epoch inspection. Keep this split intentional when adding query-local
+projections: cursor queries need fast follow-up, diagnostics can spend more CPU, and fixture/app-builder pressure often
+needs to inspect the generated kernel shape. Session profiles have retained-record budgets so repeated cursor/diagnostic/MCP queries do not
 make the claim graph another unbounded cache; budget disposal is graph-owned and prunes answered/failed nodes only.
 `profile:app-telemetry` aggregate output now preserves root/depth/profile groups before global totals. Use that view for
 depth-policy comparisons; if a global aggregate points at memory pressure, first check the grouped row to see whether
@@ -588,15 +590,15 @@ fallback path-probe retry resolved no modules in the large canary and should not
 evidence.
 
 `pressure:app-api` defaults to checkpoint-friendly compact aggregate output: request shape, fixture lanes, timing
-buckets, expression-type cache buckets, and one-line pressure buckets for authoring, router, binding, observation,
+buckets, expression-type cache buckets, and one-line pressure buckets for app-patterns, router, binding, observation,
 diagnostics, and open seams. Use compact first during fixture flywheel work, then open
 summary/raw detail only for the pressure family being changed. Treat `inputs.fixture-lanes` as part of the reading:
-generated authoring fixtures, hand-authored authoring fixtures, and stress pressure fixtures intentionally answer
-different questions. The same compact output carries safe `inputs.fixture-keys` and fixture-owner cross-tabs for
+app-pattern fixtures, app-builder goldens, and stress pressure fixtures intentionally answer different questions. The
+same compact output carries safe `inputs.fixture-keys` and fixture-owner cross-tabs for
 source-assignment reasons, framework error codes, template missing inputs, and open-seam reasons; internal fixtures use
-`authoring:<folder>` / `pressure:<folder>`, while custom roots collapse to `custom-root`. Use those rows to choose the
-next public fixture to open before doing isolated per-fixture runs. The error-code fixture rows are the preferred first
-read when a broad diagnostic count such as `AUR0654`, `AUR0813`, or a router code needs a concrete owner.
+`pressure:<folder>` or `app-builder:<folder>`, while custom roots collapse to `custom-root`. Use those rows to choose
+the next public fixture to open before doing isolated per-fixture runs. The error-code fixture rows are the preferred
+first read when a broad diagnostic count such as `AUR0654`, `AUR0813`, or a router code needs a concrete owner.
 
 Cursor/LSP pressure has its own script now: `pressure:cursor-loci`. It samples bounded template cursor positions and
 prints aggregate site kinds, outcomes, completion pressure classes, value-site kinds, candidate lanes, public API
@@ -1170,9 +1172,9 @@ non-anchor hosts, non-current-window targets, or a co-located `load` custom attr
 while `HrefCustomAttribute.valueChanged(...)` still classifies non-external values into viewport instructions. Future
 repair/diagnostic work should use the binding value span to explain or propose intent, not close the seam without
 proving external URL or internal route semantics.
-External app pressure confirmed that this needs to survive authoring orientation: source-bearing router open seams now
-publish `runtime-boundary:source` action targets, so repair clusters can point at the value boundary while still
-requiring runtime intent.
+External app pressure confirmed that this needs to survive diagnostics-to-action planning: source-bearing router open
+seams now publish `runtime-boundary:source` action targets, so future repair/edit planners can point at the value
+boundary while still requiring runtime intent.
 `fixtures/pressure/router-dynamic-pattern` now covers that same repair handoff without external app dependency by
 including an internal string-pattern href, an external-link-like field href, and an unresolved bare-module href.
 

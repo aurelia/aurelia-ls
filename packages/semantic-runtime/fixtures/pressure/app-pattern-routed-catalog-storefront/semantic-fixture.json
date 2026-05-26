@@ -1,0 +1,2572 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "routed-catalog-storefront",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Router should expose routed catalog facts after reopen.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "router",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog router options should be visible after RouterConfiguration is registered.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog router options should configure low-boilerplate active link styling.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        },
+        {
+          "field": "activeClass",
+          "value": "active-route"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog state source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "CatalogState"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog state should expose composed state objects.",
+      "effectKind": "state-composition",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "ownerClassName",
+          "value": "CatalogState"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog items collection should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "visibleItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog service source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "role",
+          "value": "service-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemCatalogService"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog list route config should be visible.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog route config should be visible as a source-backed router product.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list route should target the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog Item list route should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog route config should close as an authored decorator object.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog nested route config should close as child route objects.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "child-routes-property"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog detail route pattern should expose itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog detail endpoint should carry itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog detail route-context read should align to itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context-parameter-read"
+        },
+        {
+          "field": "routePathParameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog static detail link should recognize the concrete itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=item-1"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog cards should recognize data-driven detail links.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=__au_dynamic_0__"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog viewport instruction tree should carry the source query value.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "queryParamPairs",
+          "value": "ref=featured"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog viewport instruction tree should carry the route fragment.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "fragment",
+          "value": "details"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog root template should expose the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        },
+        {
+          "field": "name",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog Item card should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog list should expose list-renderer component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "list-renderer"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should bind local Item objects into a local card.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item"
+        },
+        {
+          "field": "sourceType",
+          "value": "Item"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "item"
+        },
+        {
+          "field": "targetValueType",
+          "value": "Item | null"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should observe direct DI state items without VM forwarding getters.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.items.visibleItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose native filter value target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose native filter value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose native filter value data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose in-stock checked target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose in-stock checked value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose in-stock checked data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose badge select option-list observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-option-list-mutation-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should expose debounce binding behavior for search.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "debounce"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should observe direct DI state search filter reads.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.items.searchText"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should materialize repeat template-controller hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list should materialize repeat synthetic-view hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog list card target property should stay item.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetProperty",
+          "value": "item"
+        },
+        {
+          "field": "targetValueType",
+          "value": "Item | null"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability switch owner template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability switch owner synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability case branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-case"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "switch-case-to-switch"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "switch"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability case branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-case"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability default branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-default"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "switch-case-to-switch"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "switch"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog availability default branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-default"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog storefront has root, list route, detail route, and card custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog storefront has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has a routed-component role.",
+      "effectKind": "component-role",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "routed-component"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has a component-composition host role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "component-composition-host"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has an event-surface component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "event-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog storefront has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog storefront has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed catalog storefront has RouteContext topology products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has au-viewport products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has ViewportAgent products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has route-recognizer pattern products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has route-recognizer endpoint products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has route-recognizer state products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-recognizer-state"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has TypedNavigationInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "typed-navigation-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has ViewportInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has ViewportInstructionTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has RecognizedRoute products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront recognizes the entity route parameter from static navigation.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has RouteTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has RouteNode products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront route node carries the concrete entity route parameter value.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=item-1"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront route node exposes child-first entity route parameters.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "childFirstParameterValuePairs",
+          "value": "itemId=item-1"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront route node exposes include-query source values.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "childFirstParameterAndQueryValuePairs",
+          "value": "ref=featured"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront route node carries the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has ComponentAgent handoff products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "component-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has class interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "strategy",
+          "value": "class-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has class-token value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-attribute-tokens"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has class interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has style interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "strategy",
+          "value": "style-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has style-rule value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-attribute-rules"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has style interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-attribute-rules"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has class-toggle value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has class-toggle data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has style-property value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has style-property data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has conditional template-controller rows.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "conditional"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has else template-controller rows.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "conditional-else"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status promise owner template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status promise owner synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status pending branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-pending"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status pending branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-pending"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status fulfilled branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-fulfilled"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status fulfilled branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-fulfilled"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status rejected branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-rejected"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has catalog-status rejected branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-rejected"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has truthiness value channels for conditional controllers.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-truthiness"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "boolean"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront preserves boolean truthiness inputs for conditional controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "boolean"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-truthiness"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has switch owner value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-switch-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "ItemAvailability"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront preserves availability enum inputs for switch controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.availability"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "ItemAvailability"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-switch-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has promise owner value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-promise-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "Promise<unknown>"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "Promise<string>"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront preserves promise inputs for promise controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "catalogStatus"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "Promise<unknown>"
+        },
+        {
+          "field": "targetValueType",
+          "value": "Promise<string>"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-promise-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has fulfilled promise branch value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-promise-branch-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "string"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront unwraps fulfilled promise branch values into template scope.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "notice"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "string"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-promise-branch-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront exposes items collection getter dependency rows.",
+      "effectKind": "computed-observer-observed-dependency",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "visibleItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "proxy-collection-read"
+        },
+        {
+          "field": "sourceName",
+          "value": "this.itemsById"
+        },
+        {
+          "field": "methodName",
+          "value": "values"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront exposes plain selection count getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "itemCount"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront components call the DI-owned state layer.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "component-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront state calls the injected service boundary.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "state-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "service-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront root binds DI-owned state projections directly.",
+      "effectKind": "service-interaction-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingSourceName",
+          "value": "state.selectionProgressPercent"
+        },
+        {
+          "field": "bindingSourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "bindingTargetProperty",
+          "value": "style"
+        },
+        {
+          "field": "interactionTargetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "interactionTargetClassName",
+          "value": "CatalogState"
+        },
+        {
+          "field": "interactionMemberName",
+          "value": "selectionProgressPercent"
+        },
+        {
+          "field": "interactionOperationKind",
+          "value": "read"
+        },
+        {
+          "field": "interactionIsSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront card binds directly to entity presentation getters.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.priceLabel"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "item"
+        },
+        {
+          "field": "sourceType",
+          "value": "string"
+        },
+        {
+          "field": "targetProperty",
+          "value": "textContent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront card observed dependencies mark entity getter reads as accessors.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.priceLabel"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "observedMemberKind",
+          "value": "accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront exposes plain Item getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "priceLabel"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront card disabled binding reads entity stock directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.inStock"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "item"
+        },
+        {
+          "field": "targetProperty",
+          "value": "disabled"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "sourceType",
+          "value": "boolean"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront detail route adapts the route parameter into a template-local item.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "let"
+        },
+        {
+          "field": "definitionName",
+          "value": "item-detail-route"
+        },
+        {
+          "field": "sourceName",
+          "value": "state.items.readItem(routeParams.itemId)"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "sourceType",
+          "value": "Item | null"
+        },
+        {
+          "field": "targetKind",
+          "value": "override-context"
+        },
+        {
+          "field": "targetProperty",
+          "value": "item"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "scope-slot"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront detail disabled binding reads entity stock directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "definitionName",
+          "value": "item-detail-route"
+        },
+        {
+          "field": "sourceName",
+          "value": "item.inStock"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "item"
+        },
+        {
+          "field": "targetProperty",
+          "value": "disabled"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "sourceType",
+          "value": "boolean"
+        }
+      ]
+    },
+    {
+      "summary": "Routed catalog storefront has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

@@ -1,0 +1,645 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "routed-app-shell",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell router options should be visible after RouterConfiguration is registered.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell should use decorator route object literals.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell route config should target the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell root should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell template should declare the main au-viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        },
+        {
+          "field": "name",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell static detail link should carry query params.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "queryParamPairs",
+          "value": "ref=nav"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell static detail link should carry a fragment.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "fragment",
+          "value": "details"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell Home route config should be visible as a source-backed router product.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        }
+      ]
+    },
+    {
+      "summary": "Home route should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell detail route pattern should expose its parameter.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell detail route endpoint should expose its parameter.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell should recognize the detail parameter name.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell should recognize the static detail parameter value.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=42"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell route node should carry the detail parameter value.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=42"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell route node should expose child-first detail parameters.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "childFirstParameterValuePairs",
+          "value": "itemId=42"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell route node should expose child-first query values.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "childFirstParameterAndQueryValuePairs",
+          "value": "ref=nav"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell route node should carry the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has root and route custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has routed-component roles.",
+      "effectKind": "component-role",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": []
+    },
+    {
+      "summary": "Routed app shell has RouteContext topology products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has au-viewport products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has ViewportAgent products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has route-recognizer pattern products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has route-recognizer endpoint products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has route-recognizer state products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-recognizer-state"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has TypedNavigationInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "typed-navigation-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has ViewportInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has ViewportInstructionTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has RecognizedRoute products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has RouteTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has RouteNode products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has ComponentAgent handoff products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "component-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed app shell has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

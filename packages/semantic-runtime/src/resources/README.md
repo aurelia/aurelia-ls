@@ -60,7 +60,7 @@ annotation contributions, static `$au` carriers become type-static-property cont
 become definition-object contributions, and current convention carriers stay convention contributions. Named resources
 share that mapping through `named-resource-kind.ts` / `resource-kind.ts`; attribute patterns keep their own syntax
 mapping because `AttributePattern.create(...)` is a parser-pattern factory and should remain a create-call contribution.
-Do not collapse these back into generic headers; authoring orientation and resource queries need the distinction.
+Do not collapse these back into generic headers; resource queries and future generation policy need the distinction.
 `CustomElementDefinition`, `CustomAttributeDefinition`, `ValueConverterDefinition`, `BindingBehaviorDefinition`,
 `BindingCommandDefinition`, and `AttributePatternDefinition` are fully formed metadata definitions before DI admission
 or template compilation. Template controllers currently converge through the custom-attribute shape with

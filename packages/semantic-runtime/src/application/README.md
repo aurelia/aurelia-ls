@@ -2,22 +2,22 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder owns the framework-normal app model that both analysis and authoring can point at. It is not a scaffold
+This folder owns the framework-normal app model that analysis, fixture verification, and future app-building can point at. It is not a scaffold
 template library and not a source parser. It names the app-level shapes the semantic runtime must understand:
 entrypoints, root components, component-local dependencies, external templates, styles, services, registrations,
 resources, routes, and assets.
 
-The topology should stay close to idiomatic Aurelia application structure. If a future authoring API proposes source,
+The topology should stay close to idiomatic Aurelia application structure. If a future app-builder API proposes source,
 the proposed source should be able to round-trip through this model and then through the existing evaluation,
 configuration, DI, resource, and template layers.
 
-`ApplicationTopologyBuilder` is the app-level construction helper for recipes and future authoring operations. Keep
-file/component/template/service/route assembly there when it is topology structure rather than recipe taste; recipes
-should name intent and preferences, not rebuild the same topology product graph by hand.
-For larger recipes, keep the recipe topology function as a short phase assembler and use named helpers for each
-topology artifact it contributes. This keeps root components, child components, state/service rows, routes, and
-entrypoints visible to Atlas without turning the builder into a recipe-specific DSL.
-When a recipe allows custom source paths, topology references and template/style import specifiers must be derived from
+`ApplicationTopologyBuilder` is the app-level construction helper for fixture and app-builder source plans. Keep
+file/component/template/service/route assembly there when it is topology structure rather than generation taste; pattern
+selection should name intent and preferences, not rebuild the same topology product graph by hand.
+For larger source plans, keep the topology function as a short phase assembler and use named helpers for each topology
+artifact it contributes. This keeps root components, child components, state/service rows, routes, and entrypoints
+visible to Atlas without turning the builder into a generator-specific DSL.
+When a source plan allows custom source paths, topology references and template/style import specifiers must be derived from
 those paths in the same way the source plan derives authored imports. `ApplicationTopologyBuilder.component(...)`
 therefore accepts the importer path as `referenceFromPath` and derives the component reference module specifier from
 that plus the component source path. A default-layout module specifier such as `./app` is only correct for the default
@@ -37,7 +37,7 @@ ambient helper can be weakly typed in generated or externally opened projects, b
 names the injected class and should keep service/state flow visible.
 
 Interaction rows distinguish the consumer file role and whether the operation is internal to the target class. This is
-important for authoring verification: internal state/service self-access may be useful topology, but it must not prove a
+important for fixture verification: internal state/service self-access may be useful topology, but it must not prove a
 component-to-service or service-to-state layering expectation by accident.
 
 Service interaction binding rows join template binding data-flow back to the component member that owns the service or
@@ -60,7 +60,7 @@ make the state call visible. Listener expressions may also evaluate to a functio
 the DOM event; topology rows should keep the full authored `bindingSourceName` while reporting the invoked state member
 without call arguments as `interactionMemberName`.
 
-Authoring topology and reopened app topology both expose stylesheet ownership through the same style asset vocabulary:
+Source-plan topology and reopened app topology both expose stylesheet ownership through the same style asset vocabulary:
 component/global ownership, asset kind, source kind, optional source file, and optional import specifier.
 `ApplicationTopologyBuilder` can assemble component-local styles and app-level global styles before source exists.
 `readApplicationStyleAssetSites(...)` then recognizes local CSS imports plus inline Aurelia `cssModules(...)` and
@@ -71,12 +71,13 @@ framework style registries, and feeds both `AppTopology.styles` and component-lo
 ## Boundary
 
 - `application` describes what an app contains.
-- `authoring` describes how an intent becomes a semantic edit plan; see [../authoring/README.md](../authoring/README.md).
+- `app-builder` describes future AI-first app-building intent; see [../app-builder/README.md](../app-builder/README.md).
+- `source-plan` describes neutral source artifact plans; see [../source-plan/README.md](../source-plan/README.md).
 - `api` opens workspaces and exposes analysis/query answers; see [../api/README.md](../api/README.md).
 - `boot`, `evaluation`, `configuration`, `di`, `resources`, `template`, and `type-system` prove whether the authored app
   actually means what the plan expected.
 
-Do not put generator taste, user preferences, or code formatting policy here. Those belong in authoring profiles or the
+Do not put generator taste, user preferences, or code formatting policy here. Those belong in app-builder or the
 AI/codegen layer. This folder should remain a calm topology model that TypeScript and Atlas can inspect.
 
 ## Baseline Topology Pressure
@@ -96,11 +97,11 @@ A minimal good Aurelia app topology includes:
   but they should be verified as the observed architecture rather than assumed as the only service-backed pattern. Where
   a template binding sources a component member that performs one of those operations, topology should also expose the
   binding-to-interaction join.
-- Component-local resource visibility is part of topology. If a recipe expects recursive child-component compilation,
+- Component-local resource visibility is part of topology. If a source plan expects recursive child-component compilation,
   the parent component should list the child resource dependency instead of relying on fixture source to carry hidden
   `dependencies: [...]` knowledge.
 - Route topology should name routeable components and paths without pretending that router lifecycle activation has
   already run.
 
-Recognition and verification should catch up to that topology rather than forcing authoring examples into whichever
+Recognition and verification should catch up to that topology rather than forcing fixtures into whichever
 shape happens to be easiest for today's analyzer.

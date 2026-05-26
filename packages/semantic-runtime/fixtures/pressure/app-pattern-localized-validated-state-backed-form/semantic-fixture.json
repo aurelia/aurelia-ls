@@ -1,0 +1,1578 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "localized-validated-state-backed-form",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "I18n plugin configuration should admit static translation resources.",
+      "effectKind": "dependency-injection",
+      "scope": "di",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Static i18n resources should expose the app title translation key.",
+      "effectKind": "i18n-translation-key",
+      "scope": "template",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "key",
+          "value": "app.title"
+        },
+        {
+          "field": "locale",
+          "value": "en"
+        },
+        {
+          "field": "namespace",
+          "value": "translation"
+        }
+      ]
+    },
+    {
+      "summary": "State source should be visible in app topology.",
+      "effectKind": "dependency-injection",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Field shell should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Form should expose target access for native value bindings.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose observer-backed value channels for native value bindings.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose TypeChecker-backed data flow for native value bindings.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose target access for checked bindings.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose checked observer value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose TypeChecker-backed data flow for checked bindings.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose listener value channels for submit handlers.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "listener"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "submit"
+        },
+        {
+          "field": "targetOperationKind",
+          "value": "event-listener-add"
+        },
+        {
+          "field": "channelKind",
+          "value": "event-handler-invocation"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose primitive model value domains for nullable select options.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "primitiveValueDomainDisplays",
+          "value": "null"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose app-authored matcher comparison for object-valued select options.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "usesCustomMatcher",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose select option-list mutation observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-option-list-mutation-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Form should expose checked element value observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "checked-element-value-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Form should materialize captured field-shell input type attributes.",
+      "effectKind": "target-operation",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "type"
+        },
+        {
+          "field": "staticValue",
+          "value": "email"
+        }
+      ]
+    },
+    {
+      "summary": "Form should data-flow field-shell captured value bindings.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "valueSiteKind",
+          "value": "captured-value"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceAssignmentKind",
+          "value": "runtime-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Validate binding behavior should materialize as a runtime application.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "binding-behavior",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "validate"
+        },
+        {
+          "field": "staticArgumentValues",
+          "value": "blur"
+        }
+      ]
+    },
+    {
+      "summary": "Validation error presentation should expose target access for validation-errors errors.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "lookup",
+          "value": "observer"
+        },
+        {
+          "field": "strategy",
+          "value": "setter-observer"
+        },
+        {
+          "field": "isObservable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Validation error presentation should expose a raw-property channel for validation-errors errors.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "channelKind",
+          "value": "raw-property"
+        }
+      ]
+    },
+    {
+      "summary": "Validation error presentation should expose from-view data flow for validation-errors errors.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "direction",
+          "value": "target-to-source"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceAssignmentKind",
+          "value": "runtime-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app has root, form, and field shell custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has a component-composition host role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "component-composition-host"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has a data-entry component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "data-entry-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated form app adapts DI state lookups into a template-local request through LetBinding scope-slot data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "let"
+        },
+        {
+          "field": "sourceName",
+          "value": "state.readRequest(requestId)"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "sourceType",
+          "value": "ServiceRequest | null"
+        },
+        {
+          "field": "targetKind",
+          "value": "override-context"
+        },
+        {
+          "field": "targetProperty",
+          "value": "request"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "scope-slot"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.urgent through the checked boolean value channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.urgent"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "checked-boolean"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.urgent directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.urgent"
+        },
+        {
+          "field": "memberName",
+          "value": "urgent"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.contactPreference through radio model value channels.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.contactPreference"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "checked-radio-value"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.contactPreference directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.contactPreference"
+        },
+        {
+          "field": "memberName",
+          "value": "contactPreference"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.primaryTopic through a single-select option value channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.primaryTopic"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "select-single-option-value"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.primaryTopic directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.primaryTopic"
+        },
+        {
+          "field": "memberName",
+          "value": "primaryTopic"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.assignee through an object-valued single-select option channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.assignee"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "select-single-option-value"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.assignee directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.assignee"
+        },
+        {
+          "field": "memberName",
+          "value": "assignee"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.topics through a multiple-select option values channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.topics"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "select-multiple-option-values"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.topics directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.topics"
+        },
+        {
+          "field": "memberName",
+          "value": "topics"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.customerName through the native value channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.customerName"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.customerName directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.customerName"
+        },
+        {
+          "field": "memberName",
+          "value": "customerName"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app binds request.email through the native value channel.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.email"
+        },
+        {
+          "field": "direction",
+          "value": "two-way"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        },
+        {
+          "field": "frameworkErrorCode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.email directly from the template without a forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "expressionKind",
+          "value": "AccessMember"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.email"
+        },
+        {
+          "field": "memberName",
+          "value": "email"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app models request submit readiness as a plain domain getter observer.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ServiceRequest"
+        },
+        {
+          "field": "memberName",
+          "value": "canSubmit"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app plain request submit-readiness getter observes customerName.",
+      "effectKind": "computed-observer-observed-dependency",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ServiceRequest"
+        },
+        {
+          "field": "memberName",
+          "value": "canSubmit"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "proxy-property-read"
+        },
+        {
+          "field": "sourceName",
+          "value": "this.customerName"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app plain request submit-readiness getter observes email.",
+      "effectKind": "computed-observer-observed-dependency",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ServiceRequest"
+        },
+        {
+          "field": "memberName",
+          "value": "canSubmit"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "proxy-property-read"
+        },
+        {
+          "field": "sourceName",
+          "value": "this.email"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app observes request.canSubmit directly from the template without a view-model forwarding getter.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "sourceName",
+          "value": "request.canSubmit"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "request"
+        },
+        {
+          "field": "memberName",
+          "value": "canSubmit"
+        },
+        {
+          "field": "observedMemberKind",
+          "value": "accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Generated form app exposes select array observation for request topic membership.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-array-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Validated form app binds customer-name validation errors directly to field presentation classes.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "sourceName",
+          "value": "customerNameErrors.length > 0 ? \"field-stack field-invalid\" : \"field-stack\""
+        }
+      ]
+    },
+    {
+      "summary": "Validated form app binds email validation errors directly to field presentation classes.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "sourceName",
+          "value": "emailErrors.length > 0 ? \"field-stack field-invalid\" : \"field-stack\""
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app exposes static i18n translation keys.",
+      "effectKind": "i18n-translation-key",
+      "scope": "template",
+      "topologyNodeKind": "plugin",
+      "cardinality": "at-least",
+      "count": 6,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Localized form app renders i18n translation binding groups.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "at-least",
+      "count": 6,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app exposes the translated submit label key.",
+      "effectKind": "i18n-translation-key",
+      "scope": "template",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "key",
+          "value": "form.submit"
+        },
+        {
+          "field": "locale",
+          "value": "en"
+        },
+        {
+          "field": "namespace",
+          "value": "translation"
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app renders parameterized translation bindings.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "hasParameterBinding",
+          "value": true
+        },
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app reads DI state directly for translated submitted-count parameters.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "staticKey",
+          "value": "app.submitted"
+        },
+        {
+          "field": "parameterSourceNames",
+          "value": "state.submittedCount"
+        },
+        {
+          "field": "parameterSourceRootNames",
+          "value": "state"
+        },
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app observes shorthand object-literal translation parameters.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "staticKey",
+          "value": "form.summary"
+        },
+        {
+          "field": "parameterSourceNames",
+          "value": "requestId"
+        },
+        {
+          "field": "parameterSourceRootNames",
+          "value": "requestId"
+        },
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app renders the translated submit label binding.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "staticKey",
+          "value": "form.submit"
+        },
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "summary": "Localized form app renders a translated submit title target.",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "staticKeys",
+          "value": "form.submit"
+        },
+        {
+          "field": "targetProperties",
+          "value": "title"
+        },
+        {
+          "field": "targetKinds",
+          "value": "attribute-or-property"
+        },
+        {
+          "field": "issueCount",
+          "value": 0
+        }
+      ]
+    }
+  ]
+}

@@ -8,10 +8,6 @@ import {
   appQueryBatchInputSchema,
   appQueryInputSchema,
   analysisCacheOverviewInputSchema,
-  authoringCatalogInputSchema,
-  authoringGuidanceInputSchema,
-  authoringOrientationInputSchema,
-  authoringRecipePlanInputSchema,
   aureliaMcpResponseOutputSchema,
   clearAnalysisCacheInputSchema,
   diagnosticOverviewInputSchema,
@@ -29,10 +25,6 @@ import {
   type AureliaMcpAppQueryBatchInput,
   type AureliaMcpAppQueryInput,
   type AureliaMcpAppQueryCatalogInput,
-  type AureliaMcpAuthoringCatalogInput,
-  type AureliaMcpAuthoringGuidanceInput,
-  type AureliaMcpAuthoringOrientationInput,
-  type AureliaMcpAuthoringRecipePlanInput,
   type AureliaMcpClearAnalysisCacheInput,
   type AureliaMcpDiagnosticOverviewInput,
   type AureliaMcpOpenSeamOverviewInput,
@@ -96,42 +88,6 @@ export function registerAureliaSemanticRuntimeTools(
   );
 
   server.registerTool(
-    aureliaMcpToolNames.authoringCatalog,
-    {
-      title: 'Aurelia Authoring Catalog',
-      description: 'Return the semantic-runtime authoring operations, taste axes, and recipes.',
-      inputSchema: authoringCatalogInputSchema,
-      outputSchema: aureliaMcpResponseOutputSchema,
-      annotations: readOnlyClosedWorldToolAnnotations,
-    },
-    async (input) => jsonResultFrom(() => adapter.authoringCatalog(input as AureliaMcpAuthoringCatalogInput)),
-  );
-
-  server.registerTool(
-    aureliaMcpToolNames.authoringGuidance,
-    {
-      title: 'Aurelia App Building Guidance',
-      description: 'Return compact semantic-runtime guidance for writing clean, scalable Aurelia app code and choosing recipe-backed follow-up queries.',
-      inputSchema: authoringGuidanceInputSchema,
-      outputSchema: aureliaMcpResponseOutputSchema,
-      annotations: readOnlyClosedWorldToolAnnotations,
-    },
-    async (input) => jsonResultFrom(() => adapter.authoringGuidance(input as AureliaMcpAuthoringGuidanceInput)),
-  );
-
-  server.registerTool(
-    aureliaMcpToolNames.authoringRecipePlan,
-    {
-      title: 'Aurelia Authoring Recipe Plan',
-      description: 'Build a read-only semantic-runtime authoring recipe plan with source-pattern policy, adaptation slots, optional sourceParameterValues for supported slots, and opt-in concrete file text narrowed with sourceFilePaths or sourceTextRequestHintKeys.',
-      inputSchema: authoringRecipePlanInputSchema,
-      outputSchema: aureliaMcpResponseOutputSchema,
-      annotations: readOnlyClosedWorldToolAnnotations,
-    },
-    async (input) => jsonResultFrom(() => adapter.authoringRecipePlan(input as AureliaMcpAuthoringRecipePlanInput)),
-  );
-
-  server.registerTool(
     aureliaMcpToolNames.appQueryCatalog,
     {
       title: 'Aurelia App Query Catalog',
@@ -147,7 +103,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appOverview,
     {
       title: 'Aurelia App Overview',
-      description: 'Open an Aurelia app and return compact summary, topology, diagnostics, open seams, and authoring fit.',
+      description: 'Open an Aurelia app and return compact summary, topology, diagnostics, and open seams.',
       inputSchema: appOverviewInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -189,18 +145,6 @@ export function registerAureliaSemanticRuntimeTools(
       annotations: readOnlyClosedWorldToolAnnotations,
     },
     async (input) => jsonResultFrom(() => adapter.appQueryBatch(input as AureliaMcpAppQueryBatchInput)),
-  );
-
-  server.registerTool(
-    aureliaMcpToolNames.authoringOrientation,
-    {
-      title: 'Aurelia Authoring Orientation',
-      description: 'Read app-specific authoring evidence, effects, repairs, and repair clusters.',
-      inputSchema: authoringOrientationInputSchema,
-      outputSchema: aureliaMcpResponseOutputSchema,
-      annotations: readOnlyClosedWorldToolAnnotations,
-    },
-    async (input) => jsonResultFrom(() => adapter.authoringOrientation(input as AureliaMcpAuthoringOrientationInput)),
   );
 
   server.registerTool(
@@ -310,12 +254,6 @@ function resourceLinksForResult(value: unknown) {
     return [];
   }
   switch (value.tool) {
-    case aureliaMcpToolNames.authoringCatalog:
-      return authoringResourceLinks('catalog', 'recipes', 'operations');
-    case aureliaMcpToolNames.authoringGuidance:
-      return authoringResourceLinks('guidance', 'recipes');
-    case aureliaMcpToolNames.authoringRecipePlan:
-      return authoringResourceLinks('recipes', 'operations');
     case aureliaMcpToolNames.appQuery:
       return [
         semanticRuntimeResourceLink('app-queries'),
@@ -337,42 +275,6 @@ function semanticRuntimeResourceLink(view: 'app-queries') {
     mimeType: 'application/json',
     description: 'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
   };
-}
-
-function authoringResourceLinks(...views: readonly ('catalog' | 'recipes' | 'operations' | 'guidance')[]) {
-  return views.map((view) => ({
-    type: 'resource_link' as const,
-    uri: `aurelia://authoring/${view}`,
-    name: authoringResourceTitle(view),
-    mimeType: 'application/json',
-    description: authoringResourceDescription(view),
-  }));
-}
-
-function authoringResourceTitle(view: 'catalog' | 'recipes' | 'operations' | 'guidance'): string {
-  switch (view) {
-    case 'catalog':
-      return 'Aurelia Authoring Catalog Overview';
-    case 'guidance':
-      return 'Aurelia App Building Guidance';
-    case 'recipes':
-      return 'Aurelia Authoring Recipes';
-    case 'operations':
-      return 'Aurelia Authoring Operations';
-  }
-}
-
-function authoringResourceDescription(view: 'catalog' | 'recipes' | 'operations' | 'guidance'): string {
-  switch (view) {
-    case 'catalog':
-      return 'Compact overview of semantic-runtime authoring capabilities, recipes, taste axes, and product-open reasons.';
-    case 'guidance':
-      return 'Compact public guidance for low-boilerplate Aurelia app building through semantic-runtime recipe contracts.';
-    case 'recipes':
-      return 'Recipe contracts, preferences, expected effects, and source-plan metadata without concrete source text.';
-    case 'operations':
-      return 'Authoring operation families, actions, target kinds, and product-open reason hints.';
-  }
 }
 
 function structuredContent(value: unknown): Record<string, unknown> {

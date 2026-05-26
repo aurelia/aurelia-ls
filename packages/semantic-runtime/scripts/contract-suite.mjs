@@ -247,19 +247,6 @@ const contractSuites = [
     'evaluation',
     'template',
   ], 'contract-expression-global-intrinsics.mjs', 'Aurelia parser-admitted globals and shared host intrinsic value reduction.'),
-  contract('authoring.app-shell', 'route', [
-    'authoring',
-    'fixtures',
-    'app-shell',
-    'resources',
-  ], 'smoke-authoring-minimal-app.mjs', 'Generated explicit minimal app semantic effects.'),
-  contract('authoring.app-shell', 'route', [
-    'authoring',
-    'fixtures',
-    'app-shell',
-    'resources',
-    'conventions',
-  ], 'smoke-authoring-convention-minimal-app.mjs', 'Generated convention minimal app semantic effects.'),
   contract('router', 'route', [
     'router',
     'binding',
@@ -270,112 +257,14 @@ const contractSuites = [
     'binding',
     'observation',
   ], 'contract-router-active-link-state.mjs', 'Router activeClass and load.active from-view state semantics.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'observation',
-  ], 'smoke-authoring-state-backed-form.mjs', 'Generated state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'validation',
-  ], 'smoke-authoring-validated-state-backed-form.mjs', 'Generated validated state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'service',
-  ], 'smoke-authoring-service-backed-form.mjs', 'Generated service-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'i18n',
-  ], 'smoke-authoring-localized-state-backed-form.mjs', 'Generated localized state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'validation',
-    'i18n',
-  ], 'smoke-authoring-localized-validated-state-backed-form.mjs', 'Generated localized validated state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'validation',
-    'style',
-  ], 'smoke-authoring-multi-step-state-backed-form.mjs', 'Generated multi-step state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'router',
-  ], 'smoke-authoring-routed-state-backed-form.mjs', 'Generated routed state-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'router',
-    'service',
-  ], 'smoke-authoring-routed-service-backed-form.mjs', 'Generated routed service-backed form semantic effects.'),
-  contract('authoring.forms', 'route', [
-    'authoring',
-    'fixtures',
-    'forms',
-    'router',
-    'validation',
-    'i18n',
-  ], 'smoke-authoring-routed-localized-validated-state-backed-form.mjs', 'Generated routed localized validated state-backed form semantic effects.'),
-  contract('authoring.state', 'route', [
-    'authoring',
-    'fixtures',
-    'state',
-    'plugin',
-  ], 'smoke-authoring-state-store-list.mjs', 'Generated @aurelia/state store-list semantic effects.'),
-  contract('authoring.catalog', 'route', [
-    'authoring',
-    'fixtures',
-    'state',
-    'composition',
-    'style',
-  ], 'smoke-authoring-catalog-storefront.mjs', 'Generated catalog storefront semantic effects.'),
-  contract('authoring.catalog', 'route', [
-    'authoring',
-    'fixtures',
-    'state',
-    'router',
-    'composition',
-    'style',
-  ], 'smoke-authoring-routed-catalog-storefront.mjs', 'Generated routed catalog storefront semantic effects.'),
-  contract('authoring.catalog', 'route', [
-    'authoring',
-    'fixtures',
-    'state',
-    'router',
-    'forms',
-    'style',
-  ], 'smoke-authoring-routed-searchable-data-table.mjs', 'Generated routed searchable data-table semantic effects.'),
-  contract('authoring.composition', 'route', [
-    'authoring',
-    'fixtures',
-    'composition',
-  ], 'smoke-authoring-composed-dashboard.mjs', 'Generated composed dashboard semantic effects.'),
-  contract('authoring.repair', 'route', [
-    'authoring',
-    'repair',
-    'diagnostics',
-  ], 'smoke-authoring-repair-plan.mjs', 'Repair plan semantic effects over the mixed-form pressure fixture.'),
-  contract('authoring.policy', 'route', [
-    'authoring',
+  contract('app-pattern.policy', 'route', [
+    'app-pattern',
     'observation',
     'state',
     'fixtures',
   ], 'contract-one-hop-forwarding-accessor.mjs', 'Contrastive one-hop state forwarding accessor authoring pressure.'),
-  contract('authoring.policy', 'route', [
-    'authoring',
+  contract('app-pattern.policy', 'route', [
+    'app-pattern',
     'observation',
     'state',
     'fixtures',
@@ -542,7 +431,7 @@ function printList() {
 }
 
 function printUsage() {
-  console.error('Usage: pnpm contract:suite -- [--route observation|authoring.forms|authoring] [--domain forms] [--tier fast] [--list] [--skip-build] [--verbose]');
+  console.error('Usage: pnpm contract:suite -- [--route observation|router|app-pattern.policy] [--domain forms] [--tier fast] [--list] [--skip-build] [--verbose]');
 }
 
 function runCommand(command, commandArgs, options = {}) {

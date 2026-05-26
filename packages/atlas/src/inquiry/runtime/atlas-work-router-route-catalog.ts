@@ -9,1220 +9,14 @@ import {
 /** Static work-route catalog used by the atlas.work-router lens. */
 export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   {
-    id: "authoring.forms.fixture-flywheel",
-    aliases: ["authoring-fixture-flywheel"],
-    title: "Authoring Forms Fixture Flywheel",
-    summary:
-      "Use framework docs/tests and existing recipe pressure to expand form fixtures while keeping generated fixtures distinct from non-recommended analysis fixtures.",
-    domains: ["authoring", "fixtures", "forms", "observation", "recipes", "expected-effects"],
-    roles: ["orient", "author", "analyze", "verify", "document"],
-    terms: [
-      "forms",
-      "state-backed forms",
-      "form recipe",
-      "larger app recipe",
-      "app-building recipe",
-      "clean Aurelia code",
-      "low boilerplate Aurelia",
-      "Aurelia code economy",
-      "code economy",
-      "fixture flywheel",
-      "expected semantic effects",
-      "validation",
-      "validate binding behavior",
-      "dynamic keyed validation",
-      "validation keyed form source",
-      "repeat local keyed validate binding",
-      "person[field] validate",
-      "person[addressField][line1Field] validate",
-      "ValidationController",
-      "validation controller usage",
-      "validation property info",
-      "binding behavior application",
-      "generated fixture",
-      "analysis fixture",
-      "authoring intent",
-      "authoring catalog",
-      "authoring orientation",
-      "api query missing",
-      "authoring api query missing",
-      "framework grounding missing",
-      "authoring framework grounding missing",
-      "semantic fact partial",
-      "project tooling",
-      "project tooling failed",
-      "package tooling",
-      "package tooling policy",
-      "policy open",
-      "source edit policy",
-      "source edit policy open",
-      "repair plan",
-      "repair app",
-      "service-backed form",
-      "service-backed state",
-      "state-owned service",
-      "state owned service",
-      "state-owned service loading",
-      "background service",
-      "service boundary",
-      "service interaction",
-      "service interaction binding",
-      "service class",
-      "multi-step form",
-      "wizard form",
-      "wizard state",
-      "wizard steps",
-      "workflow-step-list",
-      "wizard section fields",
-      "workflow section field schema",
-      "workflow-section-field-schema-list",
-      "wizard-section-fields source parameters",
-      "request field schema",
-      "request-fields source parameters",
-      "request selection identity",
-      "selection identity source parameters",
-      "plain editor selection identity",
-      "editor scalar selection id",
-      "profile form source parameters",
-      "settings tabs profile form",
-      "section routes request fields",
-      "file upload form field",
-      "avatar upload field",
-      "native file input authoring",
-      "phone number tel input",
-      "telephone field value channel",
-      "value-as-number form field",
-      "validated settings form",
-      "API keys notifications form",
-      "settings form API keys",
-      "step progress",
-      "progress presentation",
-      "class style progress",
-      "proxy observation",
-      "proxy observation authoring state fixtures",
-      "observer couplings",
-      "observer coupling expected effects",
-      "select observer couplings",
-      "checked observer couplings",
-      "direct state binding",
-      "direct domain binding",
-      "direct state domain methods",
-      "direct state domain method calls",
-      "clean app building",
-      "direct listener state method",
-      "listener state method",
-      "template listener state call",
-      "submit listener state method",
-      "event handler invocation",
-      "event-handler-invocation",
-      "ListenerBinding",
-      "state member binding",
-      "state.member",
-      "state.submitRequest",
-      "template-local domain object",
-      "template local domain object",
-      "forwarding getter",
-      "view-model forwarding getter",
-      "di state template binding",
-      "native value binding",
-      "native select binding",
-      "native checked binding",
-      "option model binding",
-      "checked collection binding",
-      "checked map binding",
-      "keyed form source",
-      "keyed form binding",
-      "array index form binding",
-      "record keyed checked binding",
-      "custom matcher binding",
-      "select multiple binding",
-      "classificationKey native-value-binding",
-      "classificationKey native-select-binding",
-      "classificationKey native-checked-binding",
-      "classificationKey option-model-binding",
-      "classificationKey checked-collection-binding",
-      "classificationKey checked-map-binding",
-      "classificationKey custom-matcher-binding",
-      "classificationKey select-multiple-binding",
-      "classificationKey multi-step-form",
-    ],
-    queryCanaries: [
-      {
-        query: "authoring catalog",
-        summary:
-          "Static authoring ontology questions should not fall back to prose or generic fixture routing.",
-      },
-      {
-        query: "repair plan",
-        summary:
-          "Authoring repair loops need to reopen source-plan pressure through the authoring route.",
-      },
-      {
-        query: "package tooling policy",
-        summary:
-          "Generated fixture tooling policy is part of authoring recipe quality, not a generic scripts concern.",
-      },
-      {
-        query: "project tooling failed package tooling policy open source edit policy",
-        summary:
-          "Authoring recipe pressure around tooling/source-edit policy should route to fixture viability and operation planning.",
-      },
-      {
-        query: "authoring api query missing framework grounding fixture forms recipe",
-        summary:
-          "App-pressure authoring-open reasons should route back to authoring fixtures and recipe/effect grounding without manual translation.",
-      },
-      {
-        query: "service interaction",
-        summary:
-          "Service-backed forms must route through expected service-interaction effects.",
-      },
-      {
-        query: "state-owned service loading",
-        summary:
-          "Service-backed authoring can mean DI state owning service/repository calls rather than a component-facing service facade.",
-      },
-      {
-        query: "native checked binding option model binding form fixture",
-        summary:
-          "Form fixture routing should find exact corpus classification handles for checked and select option-model behavior.",
-      },
-      {
-        query: "proxy observation authoring state fixtures",
-        summary:
-          "Direct DI state bindings and ProxyObservable-integrated domain-model pressure should route through the authoring fixture flywheel.",
-      },
-      {
-        query: "view-model forwarding getter state.member",
-        summary:
-          "Getter-only state forwarding in fixtures is authoring taste and observation pressure, not a generic cleanup task.",
-      },
-      {
-        query: "direct listener state method forms observation app building",
-        summary:
-          "Low-boilerplate listener calls into DI-owned state should route through form authoring and binding/value-channel semantics.",
-      },
-      {
-        query: "clean app building authoring forms observer couplings proxy direct state domain methods",
-        summary:
-          "Composite clean-code form questions with proxy/direct-state wording should route to form fixtures and proxy-observation grounding without needing exact route terms.",
-      },
-      {
-        query: "multi-step wizard state backed form class style validation",
-        summary:
-          "Wizard/progress form pressure should route through source-backed form recipe and class/style binding semantics.",
-      },
-      {
-        query: "wizard section fields workflow field schema source parameters",
-        summary:
-          "Workflow-specific wizard field schemas should route through source-parameterized authoring fixtures instead of becoming recipe-local hardcoded fields.",
-      },
-      {
-        query:
-          "validated settings form API keys notifications request field schema source parameters",
-        summary:
-          "Settings-form field-schema extraction belongs to form authoring/source-parameter pressure, not state-store configuration.",
-      },
-      {
-        query:
-          "profile form request selection identity low boilerplate source parameters",
-        summary:
-          "Profile-form selection identity heuristics belong to form authoring and source-parameter policy before state-store configuration.",
-      },
-      {
-        query:
-          "plain editor scalar selection id low boilerplate source parameters",
-        summary:
-          "Plain editor prompts should route to form source-parameter policy before any state-store route sees generic state/source words.",
-      },
-      {
-        query:
-          "settings tabs plus profile form section routes request fields source parameters",
-        summary:
-          "Mixed sectioned-navigation plus form-field scoping belongs to authoring guidance and routed shell companion planning.",
-      },
-      {
-        query: "avatar upload file input form field source parameter",
-        summary:
-          "Upload fields need deliberate form authoring and native file-input semantics rather than generic string-field scaffolding.",
-      },
-      {
-        query:
-          "phone number tel input value-as-number form field source parameter",
-        summary:
-          "Telephone fields should route to form value-channel policy so phone-number labels stay string-backed instead of numeric.",
-      },
-      {
-        query: "keyed form source checked select array index record binding",
-        summary:
-          "Keyed checked/select form sources should route through form fixture pressure and binding value-channel semantics.",
-      },
-      {
-        query: "dynamic keyed validation person[field] validate binding behavior data flow",
-        summary:
-          "Dynamic keyed validation pressure should route through contrastive forms, validation-html, and binding data-flow semantics.",
-      },
-    ],
-    anchors: [
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-catalog.ts",
-        symbolName: "readSemanticAuthoringCatalog",
-        role: "grounding",
-        summary:
-          "Static authoring ontology and recipe contracts should be read before changing recipe policy.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/api/authoring-orientation.ts",
-        symbolName: "readSemanticAuthoringOrientation",
-        role: "grounding",
-        summary:
-          "Opened-app authoring orientation joins capabilities, taste, repair, and recipe-fit pressure.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/state-backed-form-recipe.ts",
-        symbolName: "buildValidatedStateBackedFormPlan",
-        role: "supporting",
-        summary:
-          "Validated form authoring recipe surface for validation-html and validate binding-behavior pressure.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/state-backed-form-recipe.ts",
-        symbolName: "buildStateBackedFormPlan",
-        role: "primary",
-        summary:
-          "Primary non-routed form authoring recipe surface and source plan pressure.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/routed-state-backed-form-recipe.ts",
-        symbolName: "buildRoutedStateBackedFormPlan",
-        role: "supporting",
-        summary:
-          "Routed form recipe pressure joins forms with router and viewport semantics.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/service-backed-form-recipe.ts",
-        symbolName: "buildServiceBackedFormPlan",
-        role: "supporting",
-        summary:
-          "Service-backed form recipe pressure covers service-backed state, service-class, service-interaction, and service-interaction-binding effects.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/multi-step-state-backed-form-recipe.ts",
-        symbolName: "buildMultiStepStateBackedFormPlan",
-        role: "supporting",
-        summary:
-          "Multi-step form recipe pressure joins DI-owned state, validation, repeated steps, and class/style progress presentation.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/repair-plan.ts",
-        symbolName: "buildAuthoringRepairPlan",
-        role: "supporting",
-        summary:
-          "Repair plans turn reopened authoring repair clusters into semantic repair operations and closure effects.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
-        role: "grounding",
-        summary:
-          "Expected semantic effects make generated fixtures verifiable instead of passive snapshots.",
-      },
-      {
-        kind: "path",
-        pathPrefix: "packages/semantic-runtime/src/authoring/",
-        role: "primary",
-        summary:
-          "Authoring recipe builders, source plans, ontology, verification, and capability docs are route-local workset material.",
-      },
-      {
-        kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/authoring/",
-        role: "pressure",
-        summary:
-          "Generated and hand-authored recommendable fixtures are the durable authoring fixture workset lane.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "authoring-taste",
-        role: "pressure",
-        summary:
-          "Framework docs provide promoted form examples for authoring taste pressure.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        role: "pressure",
-        summary:
-          "Framework tests provide form behavior-grounding examples for non-recommendable or edge-case pressure.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "native-value-binding",
-        role: "grounding",
-        summary:
-          "Native value binding seeds ground input/select/textarea value-channel and data-flow behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "native-select-binding",
-        role: "grounding",
-        summary:
-          "Native select binding seeds ground SelectValueObserver value, model, and option-domain behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "native-checked-binding",
-        role: "grounding",
-        summary:
-          "Native checked binding seeds ground checkbox and radio observer behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "option-model-binding",
-        role: "grounding",
-        summary:
-          "Option model binding seeds ground select option identity and model/value channel behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "checked-collection-binding",
-        role: "grounding",
-        summary:
-          "Checked collection binding seeds ground checkbox Array/Set membership observer behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "checked-map-binding",
-        role: "grounding",
-        summary:
-          "Checked Map binding seeds ground checkbox Map key with boolean value observer behavior.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "custom-matcher-binding",
-        role: "grounding",
-        summary:
-          "Custom matcher binding seeds ground checked/select model identity matching.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "select-multiple-binding",
-        role: "grounding",
-        summary:
-          "Multiple select binding seeds ground array mutation and non-multiple array diagnostics.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "behavior-grounding",
-        classificationKind: "surface",
-        classificationKey: "validation-binding-behavior",
-        role: "grounding",
-        summary:
-          "Validation binding-behavior seeds ground validate application facts for validated form recipes.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        concept: "forms",
-        seedUse: "authoring-taste",
-        classificationKind: "surface",
-        classificationKey: "multi-step-form",
-        role: "pressure",
-        summary:
-          "Multi-step form seeds ground wizard/progress app-building pressure for state-backed form recipes.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "binding-value-channel",
-        recipeKey: "state-backed-form",
-        role: "grounding",
-        summary:
-          "State-backed form recipes should prove native form value-channel facts after reopening.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "binding-data-flow",
-        recipeKey: "state-backed-form",
-        role: "grounding",
-        summary:
-          "State-backed form recipes should prove TypeChecker-backed source-to-target binding data flow.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "binding-behavior-application",
-        recipeKey: "validated-state-backed-form",
-        role: "grounding",
-        summary:
-          "Validated form recipes should prove validate binding-behavior applications after reopening.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "binding-behavior-application",
-        recipeKey: "localized-validated-state-backed-form",
-        role: "grounding",
-        summary:
-          "Combined localized and validated form recipes should prove validate behavior rows while keeping i18n as a separate plugin lane.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "binding-behavior-application",
-        recipeKey: "multi-step-state-backed-form",
-        role: "grounding",
-        summary:
-          "Multi-step form recipes should prove validation behavior rows while also exercising progress class/style channels.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "service-class",
-        recipeKey: "state-backed-form",
-        role: "grounding",
-        summary:
-          "State-backed form recipes should expose DI-injectable state or service-class topology.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "service-interaction",
-        recipeKey: "service-backed-form",
-        role: "grounding",
-        summary:
-          "Service-backed form recipes should prove the chosen service boundary, currently component-to-state plus state-to-service interactions.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "service-interaction-binding",
-        recipeKey: "service-backed-form",
-        role: "grounding",
-        summary:
-          "Service-backed form recipes should prove template bindings hand off through the state/service boundary.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        effectKind: "route",
-        recipeKey: "routed-state-backed-form",
-        role: "supporting",
-        summary:
-          "Routed form recipes should prove route topology facts separately from plain form semantics.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "authoring", "forms", "fixtures", "observation"],
-        role: "grounding",
-        summary:
-          "Durable memory carries user taste about idiomatic state-backed forms and observation channels.",
-      },
-      {
-        kind: "lens",
-        lensId: LensId.FrameworkCorpus,
-        projection: "fixture-seeds",
-        filters: { concept: "forms" },
-        role: "pressure",
-        summary:
-          "Find docs/tests examples that can seed both recommended and contrastive form fixtures.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring",
-        role: "supporting",
-        summary:
-          "Refresh durable generated authoring fixtures from recipe source plans after recipe changes.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
-        role: "pressure",
-        summary:
-          "Aggregate opened-app pressure, authoring expected-effect outcomes, diagnostics, routes, and binding facts.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:state-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the generated state-backed form recipe.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:validated-state-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the generated validated state-backed form recipe.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation",
-        role: "pressure",
-        summary:
-          "Focused contrastive contract for validate binding behavior over dynamic keyed form sources.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:localized-validated-state-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the generated combined i18n and validation state-backed form recipe.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:multi-step-state-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the generated multi-step state-backed form recipe.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:service-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for DI service-layer and service-interaction form recipes.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:routed-service-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for route-selected DI state plus service-boundary form recipes.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:routed-localized-validated-state-backed-form",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the generated routed i18n and validation state-backed form recipe.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:repair-plan",
-        role: "supporting",
-        summary:
-          "Repair-plan smoke for turning observed authoring repair clusters into semantic repair operations.",
-      },
-      {
-        kind: "doc",
-        path: "packages/semantic-runtime/src/authoring/README.md",
-        role: "grounding",
-        summary:
-          "Authoring loop, expected-effect, recipe, and fixture-generation boundary.",
-      },
-      {
-        kind: "doc",
-        path: "packages/semantic-runtime/fixtures/authoring/README.md",
-        role: "grounding",
-        summary:
-          "Recommendable generated authoring fixture lane and separation from pressure fixtures.",
-      },
-    ],
-    authority: [
-      "User taste about state classes, sparse bindables, ids over object handoff, and generated-vs-analysis fixture separation.",
-      "Aurelia framework docs and tests for form, binding, and observation semantics.",
-      "semantic-runtime authoring recipes and expected-effect contracts.",
-      "Atlas memory live checks for still-open authoring and forms frontiers.",
-    ],
-    cautions: [
-      "Do not let generated fixture ideals erase analysis fixtures that represent code users may actually write.",
-      "Do not invent form semantics locally when observer, binding, or template compiler framework mirrors already exist.",
-      "Weak typings in a fixture should often become diagnostics pressure, not an autocomplete failure.",
-    ],
-    nextQuestions: [
-      "Which expected semantic effects should a state-backed form fixture assert?",
-      "Which validation-html and binding-behavior examples should seed validated form fixtures?",
-      "Which framework tests/docs examples cover checked, select, value, class, and style channels?",
-      "Which generated recipe output should be intentionally recommended versus contrastive?",
-    ],
-    relatedRouteIds: [
-      "semantic-runtime.observation.binding-flow",
-      "semantic-runtime.template-recursive-rendering",
-      "semantic-runtime.type-system.expression-semantics",
-      "semantic-runtime.evaluator.world-construction",
-      "atlas.work-router.self-improvement",
-      "atlas.framework-corpus.navigation",
-      "router.viewport.authoring-semantics",
-    ],
-  },
-  {
-    id: "semantic-runtime.authoring-fixture-substrate-loop",
-    title: "Semantic Runtime Authoring Fixture Substrate Loop",
-    summary:
-      "Coordinate authoring recipes, generated/contrastive fixtures, expected effects, evaluator, TypeChecker, template recursion, framework corpus, and Atlas memory as one recursive product loop.",
-    domains: [
-      "semantic-runtime",
-      "authoring",
-      "fixtures",
-      "expected-effects",
-      "atlas",
-      "memory",
-      "analysis-substrate",
-    ],
-    roles: ["orient", "author", "analyze", "refactor", "verify", "improve-atlas"],
-    terms: [
-      "authoring fixture substrate loop",
-      "semantic-runtime authoring fixture loop",
-      "semantic runtime authoring fixture loop",
-      "fixture flywheel",
-      "fixture flywheel substrate",
-      "generated fixture expected effects",
-      "contrastive fixture expected effects",
-      "atlas memory authoring loop",
-      "framework corpus fixture grounding",
-      "authoring fixture pressure frontier",
-      "app-building guidance",
-      "recipePlanSequence",
-      "recipe plan sequence",
-      "pattern-reference companion recipe",
-      "mixed feature-goal guidance",
-      "mixed app-building guidance",
-      "source-plan-start recipe",
-      "source pattern parameters",
-      "source pattern modules",
-      "sourcePlan.pattern.modules",
-      "sourcePlan.pattern.parameters",
-      "sourceParameterValues",
-      "source parameter applications",
-      "workflow-step-list",
-      "wizard-steps source-text-input",
-      "wizard section fields",
-      "workflow section field schema",
-      "workflow-section-field-schema-list",
-      "wizard-section-fields source-text-input",
-      "AuthoringSourcePatternModule",
-      "AuthoringSourcePatternParameter applicationPolicy",
-      "AuthoringSourcePattern parameters",
-      "reference instantiation adaptation slots",
-      "caller-domain source generation",
-      "recipe fixture separation",
-      "fixture vs recipe",
-      "domain model policy reference instantiation",
-      "semantic-runtime-reference-instantiation",
-      "app shell",
-      "app-shell recipe",
-      "minimal app",
-      "minimal-app",
-      "convention minimal app",
-      "convention-minimal-app",
-      "convention app shell",
-      "convention resource declaration",
-      "convention template file",
-      "public scaffold app shell",
-      "routed app shell",
-      "routed-app-shell",
-      "generic routing recipe",
-      "route shell recipe",
-      "routing companion recipe",
-      "larger app feature module",
-      "clean efficient larger app",
-      "route service state validation",
-      "routed catalog storefront",
-      "routed-catalog-storefront",
-      "routed app-building recipe",
-      "catalog storefront routes",
-      "route parameter selected state",
-      "localized validated state-backed form",
-      "localized-validated-state-backed-form",
-      "routed localized validated state-backed form",
-      "routed-localized-validated-state-backed-form",
-      "routed service-backed form",
-      "routed-service-backed-form",
-      "routed service form recipe",
-      "searchable data table",
-      "searchable-data-table",
-      "routed searchable data table",
-      "routed-searchable-data-table",
-      "routed data table recipe",
-      "management feature table route",
-      "data table recipe",
-      "data-grid recipe",
-      "search filter sort pagination",
-      "checked model selection table",
-      "debounced search value channel",
-      "plugin-backed form recipe",
-      "i18n validation form recipe",
-    ],
-    queryCanaries: [
-      {
-        query:
-          "semantic runtime authoring fixture flywheel evaluator type system template recursion atlas memory",
-        summary:
-          "The core loop spans authoring and lower semantic-runtime substrates; a broad checkpoint query should route to the coordinating loop before choosing a concrete frontier.",
-      },
-      {
-        query: "newly improved atlas memory drive semantic-runtime authoring fixture loop",
-        summary:
-          "Memory-driven authoring/fixture work should not require manual translation through workbench notes after compaction.",
-      },
-      {
-        query: "authoring fixture substrate loop expected effects framework corpus",
-        summary:
-          "Fixture expansion should connect generated output, contrastive examples, framework corpus seeds, and expected semantic effects.",
-      },
-      {
-        query: "convention minimal app app shell recipe public scaffold",
-        summary:
-          "Convention-based app-shell recipes should route through authoring fixtures and resource-convention grounding instead of becoming MCP-local scaffold prose.",
-      },
-      {
-        query: "routed app shell recipe generic route companion",
-        summary:
-          "Generic routing authoring should route through the routed app-shell recipe before borrowing domain-specific routed form, catalog, or data-table recipes.",
-      },
-      {
-        query: "routed catalog storefront app-building recipe expected effects",
-        summary:
-          "Larger routed authoring recipes should route through the authoring fixture loop before dropping into router or observation substrates.",
-      },
-      {
-        query: "localized validated state-backed form plugin recipe i18n validation",
-        summary:
-          "Combined plugin form recipes should route through the authoring fixture loop before narrowing to i18n or validation internals.",
-      },
-      {
-        query: "routed localized validated state-backed form route plugin recipe",
-        summary:
-          "Route-owned plugin form recipes should route through the authoring fixture loop before narrowing to router, i18n, or validation internals.",
-      },
-      {
-        query: "routed service-backed form route selected state service loading recipe",
-        summary:
-          "Routed service-backed form recipes should route through the authoring fixture loop before narrowing to router, service-interaction, or binding-flow substrates.",
-      },
-      {
-        query:
-          "searchable data table recipe direct state value checked debounce pagination",
-        summary:
-          "Search/filter/sort/pagination app-building recipes should route through the authoring fixture loop before narrowing to value channels or observation substrates.",
-      },
-      {
-        query:
-          "routed searchable data table list detail route selected state management feature",
-        summary:
-          "Route-owned list/detail table-management recipes should route through the authoring fixture loop before narrowing to router, value-channel, or observation substrates.",
-      },
-      {
-        query:
-          "featureGoal recipePlanSequence pattern-reference routed searchable validation localization",
-        summary:
-          "Mixed feature-goal recipe paths should route through the authoring fixture loop so generated and companion pattern recipes stay grounded in expected effects.",
-      },
-      {
-        query:
-          "feature goal specialization multi step form guidance over scaffolding",
-        summary:
-          "Feature-goal specialization policy should route through authoring guidance before adding recipe-local conditionals.",
-      },
-      {
-        query:
-          "authoring source pattern parameters caller-domain generation recipe fixture separation",
-        summary:
-          "Recipe/fixture separation and caller-domain adaptation slots should route through the authoring fixture substrate loop before any public-shell packaging concern.",
-      },
-    ],
-    coverage: [
-      {
-        dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
-        state: AtlasWorkRouteCoverageState.Partial,
-        ownerRouteId: "semantic-runtime.intent-aware-continuations",
-        summary:
-          "Authoring guidance, recipe plans, and fixture orientation already expose compact next-step policy, but public authoring answers still need typed intent-aware continuations for source-plan, fixture, repair, and verification follow-up choices.",
-      },
-    ],
-    anchors: [
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
-        symbolName: "AuthoringSourcePattern",
-        role: "primary",
-        summary:
-          "Source pattern metadata separates reusable recipe architecture from complete reference instantiations and exposes adaptation slots.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
-        symbolName: "SourcePatternModules",
-        role: "supporting",
-        summary:
-          "Shared source-pattern module catalog for reusable architecture capabilities inside reference source plans.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance.ts",
-        symbolName: "readSemanticAuthoringGuidance",
-        role: "primary",
-        summary:
-          "Compact app-building guidance surface for MCP-like callers choosing a recipe or next authoring action.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance-catalog.ts",
-        symbolName: "guidanceFeatureSignals",
-        role: "supporting",
-        summary:
-          "Authored app-building guidance policy tables: feature-goal signals, recipe ordering, principles, decisions, and follow-up surfaces.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance-catalog.ts",
-        symbolName: "guidanceRecipeSpecializationSignalKeysByRecipe",
-        role: "supporting",
-        summary:
-          "Recipe specialization signal table prevents wider routed, localized, multi-step, service, state, or composition recipes from becoming the source-plan start unless the user asked for that capability.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-catalog.ts",
-        symbolName: "readSemanticAuthoringCatalog",
-        role: "primary",
-        summary:
-          "Static authoring ontology, recipe, taste, operation, and expected-effect catalog surface.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-orientation.ts",
-        symbolName: "readSemanticAuthoringOrientation",
-        role: "primary",
-        summary:
-          "Opened-app authoring orientation joins capability, taste, repair, and semantic-fact pressure.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
-        symbolName: "ExpectedSemanticEffect",
-        role: "primary",
-        summary:
-          "Expected effects make authoring fixtures active semantic contracts instead of passive snapshots.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/ontology.ts",
-        symbolName: "AuthoringOperationOntology",
-        role: "primary",
-        summary:
-          "Authoring ontology is the durable operation/taste/capability spine for generated app-building behavior.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/application/topology-builder.ts",
-        symbolName: "ApplicationTopologyBuilder",
-        role: "supporting",
-        summary:
-          "Application topology assembly is the authoring-side file/component/service/route layout substrate.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/authoring/convention-minimal-app-recipe.ts",
-        symbolName: "buildConventionMinimalAppPlan",
-        role: "primary",
-        summary:
-          "Generated app-shell recipe that uses current Aurelia convention resource discovery when the class/file/template pair is provable.",
-      },
-      {
-        kind: "source",
-        filePath:
-          "packages/semantic-runtime/src/resources/resource-convention.ts",
-        symbolName: "readResourceNameConvention",
-        role: "grounding",
-        summary:
-          "Framework-shaped convention rules decide whether a convention source pair is admissible; authoring should not invent name heuristics.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-app-shell-recipe.ts",
-        symbolName: "buildRoutedAppShellPlan",
-        role: "primary",
-        summary:
-          "Generated route-shell recipe that proves RouterConfiguration, static route config, named au-viewport layout, route params, query values, fragments, and routeable components without a domain-model recipe.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-catalog-storefront-recipe.ts",
-        symbolName: "buildRoutedCatalogStorefrontPlan",
-        role: "primary",
-        summary:
-          "Generated app-building recipe that combines DI-owned catalog state, service-backed loading, list/detail routing, route params, and route expected effects.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-searchable-data-table-recipe.ts",
-        symbolName: "buildRoutedSearchableDataTablePlan",
-        role: "primary",
-        summary:
-          "Generated app-building recipe that combines searchable table state, service-backed loading, list/detail routing, data-driven row links, and route expected effects.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/evaluation/evaluator.ts",
-        symbolName: "StaticEvaluator",
-        role: "supporting",
-        summary:
-          "Evaluator gaps exposed by authoring or fixture pressure should be absorbed at the world-construction substrate.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
-        symbolName: "CheckerExpressionTypeEvaluator",
-        role: "supporting",
-        summary:
-          "TypeChecker-backed expression semantics should be reused by authoring, diagnostics, and template recursion pressure.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
-        symbolName: "CompiledTemplateMaterializer",
-        role: "supporting",
-        summary:
-          "Recursive template/controller materialization is a likely lower substrate when fixtures expose nested template semantics.",
-      },
-      {
-        kind: "lens",
-        lensId: LensId.AtlasMemory,
-        projection: "next",
-        role: "grounding",
-        summary:
-          "Atlas memory is the durable state for still-open work and should drive the next concrete frontier.",
-      },
-      {
-        kind: "lens",
-        lensId: LensId.AtlasWorkRouter,
-        projection: "route-plan",
-        role: "grounding",
-        summary:
-          "The Work Router should choose or improve structural routes before product work proceeds from a broad checkpoint phrase.",
-      },
-      {
-        kind: "lens",
-        lensId: LensId.FrameworkCorpus,
-        projection: "fixture-seeds",
-        role: "grounding",
-        summary:
-          "Official docs and framework tests seed promoted and behavior-grounded fixtures without manual spelunking.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "expected-effects",
-        effectKind: "resource-visibility",
-        recipeKey: "convention-minimal-app",
-        role: "grounding",
-        summary:
-          "Convention app-shell recipes should prove resource visibility through convention admission and template-file ownership.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "authoring", "fixtures"],
-        role: "grounding",
-        summary:
-          "Durable authoring and fixture memory captures taste, expected-effect, and still-open frontier context.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "authoring", "ontology", "app-building"],
-        role: "grounding",
-        summary:
-          "Authoring ontology memory should route to the authoring fixture substrate before recipe-local vocabulary grows.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "application", "authoring", "fixture", "topology"],
-        role: "supporting",
-        summary:
-          "Application topology memory is authoring substrate guidance when generated fixtures assemble app-level files.",
-      },
-      {
-        kind: "memory",
-        domains: ["atlas", "memory", "work-router"],
-        role: "grounding",
-        summary:
-          "Durable Atlas memory/router guidance keeps compaction recovery and route misses visible.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "evaluation", "world-construction"],
-        role: "pressure",
-        summary:
-          "Evaluator and world-construction memory frontiers should be visible when authoring fixtures expose lower substrate gaps.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "type-system", "expression", "checker"],
-        role: "pressure",
-        summary:
-          "TypeChecker expression memory frontiers should be visible when authoring fixtures need speculative or template-aware expression reads.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "template", "rendering", "controller"],
-        role: "pressure",
-        summary:
-          "Template rendering and controller materialization memory frontiers should be visible when fixtures expose recursive hydration or controller-scope gaps.",
-      },
-      {
-        kind: "memory",
-        domains: ["semantic-runtime", "template", "controller", "recursive-rendering"],
-        role: "pressure",
-        summary:
-          "Nested template-controller memory frontiers should be visible as recursive rendering pressure, not hidden under generic authoring work.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        seedUse: "authoring-taste",
-        role: "grounding",
-        summary:
-          "Docs-promoted fixture seeds provide authoring taste pressure.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        seedUse: "behavior-grounding",
-        role: "grounding",
-        summary:
-          "Framework-test fixture seeds provide behavioral grounding, including contrastive cases authoring should understand but not necessarily generate.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        recipeKey: "routed-app-shell",
-        role: "grounding",
-        summary:
-          "Routed app-shell filters gather generic router seeds before app-building guidance composes them with feature-domain recipes.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        recipeKey: "searchable-data-table",
-        role: "grounding",
-        summary:
-          "Searchable data-table recipe filters join explicit table/list management, search/filter/sort/pagination, and selection seed lanes.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "fixture-seeds",
-        recipeKey: "routed-searchable-data-table",
-        role: "grounding",
-        summary:
-          "Routed searchable data-table filters compose data-table seeds with router seeds because docs/tests often ground the feature and navigation lanes separately.",
-      },
-      {
-        kind: "framework-corpus",
-        projection: "expected-effects",
-        effectKind: "authoring-capability",
-        role: "grounding",
-        summary:
-          "Authoring capability expected effects connect generated fixtures to semantic-runtime orientation contracts.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:convention-minimal-app",
-        role: "supporting",
-        summary:
-          "Isolated source-plan smoke for the convention-based minimal app-shell recipe.",
-      },
-      {
-        kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/authoring/",
-        role: "pressure",
-        summary:
-          "Authoring fixtures are the visible canary for generated, contrastive, and behavior-grounded app-building pressure.",
-      },
-    ],
-    authority: [
-      "Atlas memory and Work Router for choosing the next concrete frontier after compaction.",
-      "Authoring catalog/orientation and expected-effect contracts for generated fixture intent.",
-      "Framework corpus docs/tests for promoted and behavior-grounded example pressure.",
-      "Evaluator, TypeChecker expression, and recursive template materialization routes when fixture pressure exposes lower substrate gaps.",
-    ],
-    cautions: [
-      "This route coordinates a loop; once a concrete substrate is selected, pivot to the related route that owns that code.",
-      "Do not let ideal generated fixtures erase contrastive fixtures that represent code semantic-runtime must still analyze.",
-      "When a fixture exposes an evaluator, checker, or recursive template gap, improve the substrate rather than patching only the fixture.",
-    ],
-    nextQuestions: [
-      "Which memory next action is the first concrete frontier for the authoring fixture loop?",
-      "Is the current pressure authoring ontology, expected effects, evaluator/world construction, TypeChecker expression semantics, or template recursion?",
-      "Which framework docs/tests seeds should become generated examples, contrastive examples, or behavior-grounding checks?",
-      "Does the Work Router need a stronger structural route before product work continues?",
-    ],
-    relatedRouteIds: [
-      "authoring.forms.fixture-flywheel",
-      "semantic-runtime.proxy-observation-domain-modeling",
-      "semantic-runtime.observation.binding-flow",
-      "semantic-runtime.template-recursive-rendering",
-      "semantic-runtime.type-system.expression-semantics",
-      "semantic-runtime.evaluator.world-construction",
-      "router.viewport.authoring-semantics",
-      "semantic-runtime.semantic-contract-verification",
-      "atlas.work-router.self-improvement",
-      "atlas.framework-corpus.navigation",
-    ],
-  },
-  {
     id: "semantic-runtime.app-builder-pattern-ontology",
-    aliases: ["app-builder-pattern-ontology", "app-builder-reference-domain-separation"],
+    aliases: ["app-builder-pattern-ontology", "app-builder-reference-scenario-separation"],
     title: "App Builder Pattern Ontology",
     summary:
-      "Route app-building ontology, reusable pattern composition, reference-domain separation, and catalog/storefront demotion through a durable Atlas-owned direction instead of temporary run notes or example-domain recipe keys.",
+      "Route AI-first app-building algebra, reusable pattern composition, domain-slot accounting, public reference-scenario separation, and catalog/storefront demotion through a durable Atlas-owned direction instead of temporary run notes or example-domain recipe keys.",
     domains: [
       "semantic-runtime",
       "app-builder",
-      "authoring",
       "ontology",
       "fixtures",
       "mcp",
@@ -1235,14 +29,103 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "pattern ontology",
       "reusable app-building patterns",
       "app-building algebra",
+      "AI-first app builder",
+      "AI-facing app builder",
+      "token-saving app builder",
+      "authoring catalog retired",
+      "authoring catalog",
+      "semantic-runtime saves tokens",
       "pattern composition",
-      "recipe ontology",
+      "pattern composition domain slots",
+      "seed profile",
+      "seed profile axes",
+      "minimal runnable",
+      "clean starter",
+      "service-backed foundation",
+      "large app foundation",
+      "seed scale",
+      "data posture",
+      "sample data",
+      "service stub",
+      "real api boundary",
+      "architecture depth",
+      "routing depth",
+      "presentation posture",
+      "code economy",
+      "solution space",
+      "canonical solution space",
+      "commerce storefront",
+      "catalog directory",
+      "operations backoffice",
+      "support workspace",
+      "content knowledge base",
+      "learning portal",
+      "reporting analytics",
+      "account settings",
+      "intent pattern composition domain slots lowering axes verification",
+      "domain slot",
+      "domain-slot accounting",
+      "Aurelia lowering",
+      "semantic reopen",
+      "syntax-neutral app mechanics",
+      "Aurelia-aware app mechanics",
+      "app-builder pattern descriptor",
+      "app-builder source policy",
+      "Aurelia lowering axes",
+      "conventions vs decorators",
+      "app convention policy",
+      "conventions enabled",
+      "explicit resource declarations",
+      "inline custom element",
+      "DI state class",
+      "state plugin store",
+      "view model local state",
+      "bindable pass through",
+      "router admission",
+      "area navigation policy",
+      "binding driven view selection",
+      "router driven view selection",
+      "nested viewports as consequence",
+      "direct state template binding",
+      "cssModules",
+      "shadowCSS",
+      "app-builder AI workflow",
+      "available seed profiles",
+      "profile-filtered starter intents",
+      "available intents",
+      "starter intent",
+      "intent menu",
+      "pattern menu",
+      "staged menu",
+      "starter source workflow",
+      "app-builder new starter menu",
+      "AppBuilderNewStarterMenu",
+      "appBuilderNewStarterMenu",
+      "previewAppBuilderStarterLowering",
+      "buildAppBuilderStarter",
+      "SourcePlan",
+      "appBuilderMinimalAppSourcePlan",
+      "fixtures:app-builder",
+      "app-builder goldens",
+      "minimal-app-shell.convention",
+      "minimal-app-shell.decorator",
+      "no app yet generate starter",
+      "existing app suggest extension intents",
+      "typed menu input",
+      "lowering preview",
+      "verification promise",
+      "north-star prose masquerading as algebra",
       "recipe key",
-      "recipe-key inertia",
       "fixture vs recipe",
-      "reference domain",
-      "reference-domain pack",
-      "reference-domain separation",
+      "reference scenario",
+      "reference-scenario pack",
+      "reference-scenario separation",
+      "structured record management",
+      "collection browse and compare",
+      "primary-detail workspace",
+      "transactional form flow",
+      "metrics overview dashboard",
+      "task navigation shell",
       "example domain",
       "domain-specific recipe",
       "storefront fixture",
@@ -1270,29 +153,106 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "analysis-pressure-only",
       "public MCP guidance source parameters",
       "reference app dump",
-      "fixture-shaped authoring pollution",
+      "legacy fixture-shaped recipe pollution",
     ],
     queryCanaries: [
       {
         query: "app builder algebra authoring ontology reusable app-building patterns",
         summary:
-          "Broad app-builder ontology work should route to the pattern ontology before adding more authoring recipe keys.",
+          "Broad app-builder ontology work should route to the pattern ontology before adding more app-building pattern keys.",
+      },
+      {
+        query: "authoring catalog",
+        summary:
+          "Requests for the retired authoring catalog should route to app-builder direction and current app-query/API surfaces, not resurrect the removed recipe-authoring API.",
       },
       {
         query:
-          "catalog storefront authoring fixture reference domain app builder pattern ontology",
+          "catalog storefront authoring fixture reference scenario app builder pattern ontology",
         summary:
-          "Catalog/storefront should route as an ontology/reference-domain split, not as a durable recipe expansion.",
+          "Catalog/storefront should route as an ontology/reference-scenario split, not as a durable recipe expansion.",
       },
       {
-        query: "fixture vs recipe reference domain collection-card-browser resource-index",
+        query: "fixture vs recipe reference scenario collection-card-browser resource-index",
         summary:
-          "Questions about example domains and reusable mechanics should route to app-builder pattern ontology.",
+          "Questions about scenario archetypes and reusable mechanics should route to app-builder pattern ontology.",
       },
       {
         query: "MCP guidance should expose pattern composition not reference app dump",
         summary:
-          "Public authoring output should route through source-parameter and pattern-composition policy.",
+          "Public app-building output should route through source-parameter and pattern-composition policy.",
+      },
+      {
+        query:
+          "AI-first app builder pattern composition domain slots Aurelia lowering verification effects token saving",
+        summary:
+          "AI-first app-building work should route through compact pattern algebra before source generation.",
+      },
+      {
+        query:
+          "semantic-runtime should save tokens through app-builder pattern descriptors and required domain slots",
+        summary:
+          "Token-saving MCP guidance should route to app-builder descriptors and slot accounting.",
+      },
+      {
+        query:
+          "app-builder AI workflow available intents pattern menu domain slots lowering preview generate starter",
+        summary:
+          "AI-facing workflow design should route to staged app-builder menus before source generation.",
+      },
+      {
+        query:
+          "app-builder domain presets task-list todos starter domain slot filler collection list add item",
+        summary:
+          "Starter-domain menu questions should route to domain presets as slot fillers, not pattern identities.",
+      },
+      {
+        query:
+          "domain preset task-list collection list starter seed data menu",
+        summary:
+          "Short domain-preset starter queries should route to app-builder domain preset and seed-data menu design.",
+      },
+      {
+        query:
+          "app-builder seed data sets public starter demo inspection fixture no seed data sample records",
+        summary:
+          "Starter data questions should route to first-class seed data sets rather than domain preset records.",
+      },
+      {
+        query:
+          "minimal runnable minimal app starter app-builder generated starter convention minimal app shell fixtures app-builder goldens",
+        summary:
+          "The first executable vertical slice should route through the app-builder starter menu/lowering path and shared SourcePlan artifacts.",
+      },
+      {
+        query:
+          "clean starter collection list starter state-backed collection list DI state repeat checked value binding add task",
+        summary:
+          "The first nontrivial app-builder source option should route through the state-backed collection-list composition and domain preset lane.",
+      },
+      {
+        query:
+          "app-builder seed profile minimal starter large app foundation data posture sample data service boundary",
+        summary:
+          "Seed-size/data-source questions should route to the seed-profile dimension before pattern composition.",
+      },
+      {
+        query:
+          "app-builder canonical solution spaces storefront commerce catalog backoffice support analytics settings",
+        summary:
+          "Solution-space questions should route to menu biasing, not concrete domain slots or fixture copy.",
+      },
+      {
+        query:
+          "app-builder Aurelia lowering axes conventions decorators inline custom element local state bindable pass through router admission area navigation validation i18n Shadow DOM CSS modules shadowCSS",
+        summary:
+          "Aurelia-specific choices should route to typed app-global, resource-local, and area-local lowering axes, not pattern or domain identities.",
+      },
+      {
+        query:
+          "north star prose masquerading as algebra app-builder typed menu input",
+        summary:
+          "Questions about what is executable algebra versus prose should route to app-builder pattern ontology.",
       },
     ],
     coverage: [
@@ -1307,57 +267,208 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     anchors: [
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
-        symbolName: "AuthoringSourcePattern",
+        filePath: "packages/semantic-runtime/src/app-builder/seed-profile.ts",
+        symbolName: "AppBuilderSeedProfileId",
         role: "primary",
         summary:
-          "Current source-plan boundary between reusable architecture declarations and concrete source text.",
+          "Seed profile identities and axes for scale, data posture, architecture depth, routing depth, presentation posture, and code economy.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
-        symbolName: "SourcePatternModules",
+        filePath: "packages/semantic-runtime/src/app-builder/intent.ts",
+        symbolName: "AppBuilderStarterIntentId",
         role: "primary",
         summary:
-          "Current reusable architecture capability vocabulary carried by source plans.",
+          "Starter intent menu identities offered after seed-profile selection.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
-        symbolName: "ExpectedSemanticEffect",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-preset.ts",
+        symbolName: "AppBuilderDomainPresetId",
         role: "primary",
         summary:
-          "Expected effects are the verification contract for lowered app-builder patterns.",
+          "Public starter-domain preset identities that fill domain slots without becoming pattern ontology.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/catalog-storefront-source-plan.ts",
-        symbolName: "catalogStorefrontSourcePlan",
-        role: "pressure",
+        filePath: "packages/semantic-runtime/src/app-builder/seed-data.ts",
+        symbolName: "AppBuilderSeedDataSetId",
+        role: "primary",
         summary:
-          "Current ontology-drift canary: reference-domain material still lives in the authoring source-plan layer.",
+          "Seed data set identities and audience/density/purpose vocabulary for generated starter records.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/catalog-storefront-source-pattern.ts",
-        symbolName: "catalogStorefrontSourcePattern",
-        role: "pressure",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderAureliaLoweringSelection",
+        role: "primary",
         summary:
-          "Current source-pattern canary for separating reusable collection/card mechanics from storefront reference material.",
+          "Typed Aurelia lowering axes kept separate from patterns, scenarios, and domain slots.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderConventionPolicy",
+        role: "supporting",
+        summary:
+          "App-global convention admission policy for convention-enabled versus explicit resource declarations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderResourceDeclarationMode",
+        role: "supporting",
+        summary:
+          "Per-resource declaration mode for convention, decorator, or inline custom-element resources.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderAppStateOwnershipMode",
+        role: "supporting",
+        summary:
+          "App-global shared-state ownership policy for DI state classes versus @aurelia/state stores.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderLocalStatePolicy",
+        role: "supporting",
+        summary:
+          "Local state mechanics for compact apps, small sections, and bindable pass-through boundaries.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderRouterAdmissionPolicy",
+        role: "supporting",
+        summary:
+          "App-global router admission policy for no-router versus router-configured starters.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderAreaNavigationPolicy",
+        role: "supporting",
+        summary:
+          "Per-area view-selection policy for binding-driven versus router-driven menus and list/detail flows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderResourceDomEncapsulationMode",
+        role: "supporting",
+        summary:
+          "Per-resource DOM encapsulation axis for light DOM versus open/closed Shadow DOM.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderAppStylePolicy",
+        role: "supporting",
+        summary:
+          "Stackable app-level stylesheet policies such as global stylesheets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderResourceStylePolicy",
+        role: "supporting",
+        summary:
+          "Stackable per-resource style policies for component stylesheets, cssModules, and shadowCSS.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/solution-space.ts",
+        symbolName: "AppBuilderSolutionSpaceId",
+        role: "primary",
+        summary:
+          "Canonical product/application spaces used to bias pattern menus without becoming domain slots.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/pattern.ts",
+        symbolName: "AppBuilderPatternId",
+        role: "primary",
+        summary:
+          "Durable syntax-neutral identities for reusable app-building mechanics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/composition.ts",
+        symbolName: "AppBuilderPatternComposition",
+        role: "primary",
+        summary:
+          "Compact composition contract connecting pattern IDs, source policy, domain slots, and expected effects before source lowering.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/reference-scenario.ts",
+        symbolName: "AppBuilderReferenceScenarioId",
+        role: "primary",
+        summary:
+          "Publicly grounded scenario archetypes for pressure/examples without app-specific recipe identity.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/composition-catalog.ts",
+        symbolName: "APP_BUILDER_STARTER_COMPOSITIONS",
+        role: "primary",
+        summary:
+          "Core app-builder compositions that can lower without going through the retired recipe-authoring API.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlan",
+        role: "primary",
+        summary:
+          "Shared source artifact plan emitted by app-builder and app-builder patterns before any host writes files.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/minimal-app-source.ts",
+        symbolName: "appBuilderMinimalAppSourcePlan",
+        role: "primary",
+        summary:
+          "First concrete source lowering for decorator and convention minimal app shells.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/collection-list-source.ts",
+        symbolName: "appBuilderCollectionListSourcePlan",
+        role: "primary",
+        summary:
+          "First nontrivial source lowering for state-backed collection/add-item starters.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder",
+        role: "primary",
+        summary:
+          "Materializes app-builder generated source plans into committed inspection goldens.",
       },
       {
         kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/authoring/",
+        pathPrefix: "packages/semantic-runtime/fixtures/app-builder/goldens/",
         role: "pressure",
         summary:
-          "Generated recommendable fixture outputs should stay distinct from reusable app-builder ontology.",
+          "Generated app-builder source goldens for direct inspection.",
       },
       {
-        kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/pressure/",
-        role: "pressure",
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/starter.ts",
+        symbolName: "buildAppBuilderStarter",
+        role: "primary",
         summary:
-          "Contrast and analyzer-pressure fixture outputs should stay separate from public authoring recommendations.",
+          "First executable no-app starter slice: staged menus, lowering preview, and generation through shared SourcePlan artifacts.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/app-builder/README.md",
+        role: "grounding",
+        summary:
+          "Starting-point framing for app-builder as an AI-first pattern algebra.",
       },
       {
         kind: "lens",
@@ -1370,27 +481,462 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     authority: [
       "Atlas memory record intent:app-builder-pattern-ontology for durable direction.",
-      "semantic-runtime authoring source-plan and source-pattern modules as current pressure surfaces.",
-      "ExpectedSemanticEffect and fixture verification for proving generated app mechanics.",
-      "User direction that example domains belong in fixtures and reusable mechanics belong in app-builder/authoring lowering.",
+      "semantic-runtime app-builder descriptors for seed profiles, starter intents, canonical solution spaces, reusable pattern identities, domain slots, public domain presets, seed data sets, public reference scenarios, Aurelia lowering axes, source policies, source plans, and starter goldens.",
+      "Aurelia lowering axes distinguish app-global policy from resource-local and area-local mechanics; nested viewports should fall out of router-driven area selection rather than become a standalone global taste.",
+      "Expected effects and fixture verification for proving generated app mechanics.",
+      "Public pattern/design-system grounding for reference scenarios; concrete app domains, sample records, copy, and presentation belong in domain presets, seed data sets, fixtures, or scenarios, not in reusable pattern identities.",
     ],
     cautions: [
-      "Do not add another domain-named recipe when a pattern composition can represent the mechanics.",
-      "Do not let storefront/product/sample-data/CSS reference material remain in authoring core as durable ontology.",
-      "Do not make Atlas depend on `.temp` autonomous-run scaffolds for this direction.",
-      "Do not treat current app-builder absence as permission to keep deepening recipe-key inertia inside authoring.",
+      "Stable IDs are appropriate for real selectable dimensions; avoid only opaque recipe keys that bundle independent choices invisibly.",
+      "Pattern identities name reusable mechanics. Domain presets, seed data sets, reference scenarios, solution spaces, and Aurelia lowering axes are separate selectable dimensions.",
+      "A public answer should expose typed selections and verification promises before source text when that prevents accidental fixture leakage or saves tokens.",
+      "North-star prose becomes executable ontology only when it constrains a typed next request.",
+      "Atlas should route to app-builder source and memory for new generation work; migrated app-pattern fixtures are pressure material, not a public generation taxonomy.",
     ],
     nextQuestions: [
-      "Which authoring files are reusable lowering code versus reference-domain fixture material?",
-      "Which neutral pattern identity should replace the current catalog/storefront recipe identity?",
-      "Which source-plan parameters are real pattern slots versus adaptation scaffolding for a reference domain?",
-      "Where should reference-domain packs live so generated fixtures, pressure fixtures, and public authoring guidance remain distinct?",
+      "Which typed selection stage is being answered: seed profile, starter intent, scenario/solution bias, pattern composition, domain preset or slots, seed data set, Aurelia lowering axes, preview, or generation?",
+      "Which pattern composition and required domain slots satisfy the user's app-building intent before source text is emitted?",
+      "Which seed profile is the caller asking for: minimal runnable, clean starter, service-backed foundation, or large app foundation?",
+      "Should the caller supply a domain, use a public starter-domain preset such as task-list, or stay at the domain-slot menu?",
+      "Should the starter generate no seed data, public seed data, demo seed data, inspection seed data, or caller-supplied records?",
+      "Can the user's requested starter lower through `buildAppBuilderStarter`, or does it still need a new pattern composition/source-plan rule?",
+      "Which migrated app-pattern fixture exposed the pressure, and which app-builder dimension should own it now?",
+      "Where should reference-scenario packs live so generated fixtures, pressure fixtures, and public app-builder guidance remain distinct?",
     ],
     relatedRouteIds: [
-      "semantic-runtime.authoring-fixture-substrate-loop",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
+      "atlas.framework-capability-terrain",
+      "semantic-runtime.source-plan",
       "semantic-runtime.app-builder-ide-fixture-flywheel",
       "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.lsp-edit-affordance-substrate",
+      "mcp.developer-preview-shell",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "atlas.framework-capability-terrain",
+    aliases: [
+      "framework-capabilities",
+      "framework.capabilities",
+      "aurelia-capability-terrain",
+      "what-aurelia-can-do",
+    ],
+    title: "Framework Capability Terrain",
+    summary:
+      "Route work that needs a compact map of what Aurelia can do, how app authors express those capabilities, which choices are global or local, and what semantic-runtime already understands before app-builder or MCP turns them into public guidance.",
+    domains: [
+      "atlas",
+      "framework-capabilities",
+      "aurelia-framework",
+      "app-builder",
+      "semantic-runtime",
+      "mcp",
+    ],
+    roles: ["orient", "analyze", "refactor", "document", "improve-atlas"],
+    terms: [
+      "framework.capabilities",
+      "framework capabilities",
+      "framework capability terrain",
+      "Aurelia capability terrain",
+      "what Aurelia can do",
+      "Aurelia affordances",
+      "app-author source forms",
+      "framework authoring surface",
+      "semantic-runtime capability model",
+      "MCP capability API",
+      "app-builder capability grounding",
+      "app-builder lowering axes from framework capabilities",
+      "convention decorator inline custom element",
+      "convention vs explicit",
+      "decorator static define source forms",
+      "CustomElement.define",
+      "static $au",
+      "as-custom-element",
+      "as-element",
+      "resource locality",
+      "template-local resource",
+      "app-global policy",
+      "resource-local policy",
+      "area-local policy",
+      "binding-site policy",
+      "route-local policy",
+      "feature admission",
+      "plugin admission",
+      "semantic consequence",
+      "StandardConfiguration capabilities",
+      "bundle decomposition",
+      "router admission area navigation nested viewport consequence",
+      "state observation binding capability",
+      "proxy observation ordinary getter @computed",
+      "Shadow DOM cssModules shadowCSS",
+      "template controller capability",
+      "DI configuration app task capability",
+      "auLink coverage status",
+    ],
+    queryCanaries: [
+      {
+        query:
+          "what can Aurelia do convention decorator inline custom element app-builder ontology",
+        summary:
+          "Resource/source-form ontology questions should route through the framework capability terrain before changing app-builder lowering axes.",
+      },
+      {
+        query:
+          "framework.capabilities semantic-runtime capability api MCP Atlas for app developers",
+        summary:
+          "Public capability API design should route through the internal Atlas terrain before becoming an MCP or semantic-runtime surface.",
+      },
+      {
+        query:
+          "router admission area navigation nested viewport app-global local policy",
+        summary:
+          "Router taste questions should route to capability terrain so global admission and area-local navigation are not conflated.",
+      },
+      {
+        query:
+          "proxy observation direct state template binding ordinary getter computed app builder low boilerplate",
+        summary:
+          "Clean-code app-builder guidance should route through observation capability terrain, not through boilerplate recipe inertia.",
+      },
+      {
+        query:
+          "StandardConfiguration bundle decomposed capabilities plugin admission framework capability terrain",
+        summary:
+          "Bundle questions should route to capability terrain because bundles are discovery/admission conveniences rather than the ontology.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "memory",
+        domains: ["atlas", "framework-capabilities"],
+        role: "primary",
+        summary:
+          "Durable memory record frontier:framework-capability-terrain owns the direction for this lens and app-builder grounding.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/lens-contracts.ts",
+        symbolName: "LensId",
+        role: "primary",
+        summary:
+          "The future framework.capabilities surface should become a first-class Atlas lens when implemented.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+        symbolName: "FrameworkObserverCapability",
+        role: "supporting",
+        summary:
+          "Existing observation/reactivity capability vocabulary that can seed capability rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+        symbolName: "FrameworkRouterCapability",
+        role: "supporting",
+        summary:
+          "Existing router capability vocabulary that can seed capability rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+        symbolName: "FrameworkExpressionCapability",
+        role: "supporting",
+        summary:
+          "Existing expression/parser capability vocabulary that can seed capability rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+        symbolName: "FrameworkRenderingCapability",
+        role: "supporting",
+        summary:
+          "Existing rendering/lifecycle capability vocabulary that can seed capability rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/framework/discovery-seeds.ts",
+        symbolName: "FrameworkExportCapability",
+        role: "supporting",
+        summary:
+          "Existing package-export capability vocabulary for bundle/configuration admission evidence.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkResources,
+        projection: "convergence",
+        role: "grounding",
+        summary:
+          "Framework resource convergence evidence for built-ins, source carriers, admission, syntax, and materialization.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCorpus,
+        projection: "doc-snippets",
+        role: "grounding",
+        summary:
+          "Docs/tests evidence for app-author source forms such as local templates, styles, router, bindings, and plugins.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkRouter,
+        projection: "relationships",
+        role: "grounding",
+        summary:
+          "Router/viewport/route-context/route-tree evidence for admission and area navigation capability rows.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "relationships",
+        role: "grounding",
+        summary:
+          "Observation and binding observer evidence for proxy/getter/collection/binding capability rows.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.BridgeAuLink,
+        projection: "anchors",
+        role: "grounding",
+        summary:
+          "Semantic-runtime coverage signal for framework concepts already mirrored through auLink.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+        symbolName: "AppBuilderAureliaLoweringAxis",
+        role: "pressure",
+        summary:
+          "Current app-builder lowering axes should be checked against the framework capability terrain before further expansion.",
+      },
+    ],
+    authority: [
+      "Atlas memory record frontier:framework-capability-terrain for durable direction.",
+      "Existing framework discovery capability enums for observer, router, expression, rendering, app-task, and export capabilities.",
+      "framework.resources, framework.corpus, framework.router, framework.observation, framework.discovery, and bridge.aulink evidence rows.",
+      "semantic-runtime app-builder lowering axes as pressure consumers, not as the source of truth.",
+    ],
+    cautions: [
+      "Do not infer app-builder ontology from one enum or one docs snippet when framework semantics cross source forms, locality, and admission policy.",
+      "Do not treat auLink coverage as proof that the capability terrain is complete; auLink marks semantic-runtime coverage for mirrored concepts.",
+      "Do not treat StandardConfiguration or other bundles as the ontology. Decompose the capabilities that bundles admit.",
+      "Do not collapse convention/default policy, explicit metadata forms, programmatic definitions, local inline templates, and semantic consequences into one co-equal option list.",
+      "Keep v1 curated and source-backed; broad heuristic generation can propose candidates later but should not own row identity.",
+    ],
+    nextQuestions: [
+      "Which Aurelia capability domain is being mapped: resources, styling, router, state/observation/binding, template controllers, DI/configuration/plugins, expressions/type-system, or diagnostics?",
+      "Which app-author source forms express this capability, and are they alternatives, stackable mechanisms, or consequences of another choice?",
+      "Is the choice app-global, package/global registration, resource-local, template-local, area-local, binding-site, or route-local?",
+      "What must be selected or admitted first before this capability can be used?",
+      "What semantic-runtime products or auLink anchors already cover the capability, and what remains Atlas-only or missing?",
+      "Should app-builder expose this as a selectable axis, derive it as a consequence, or keep it as analysis-only pressure?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.source-plan",
+      "semantic-runtime.observation.binding-flow",
+      "router.viewport.authoring-semantics",
+      "semantic-runtime.template-recursive-rendering",
+      "mcp.developer-preview-shell",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.source-plan",
+    aliases: ["source-plan", "semantic-runtime.source-plan"],
+    title: "Source Plan Boundary",
+    summary:
+      "Route shared source artifact planning for app-builder, fixture materialization, diagnostics-to-action, and future edit planning without reviving legacy recipe APIs.",
+    domains: [
+      "semantic-runtime",
+      "source-plan",
+      "app-builder",
+      "fixture-verification",
+      "diagnostic-action",
+      "edits",
+    ],
+    roles: ["orient", "analyze", "refactor", "verify", "document"],
+    terms: [
+      "source-plan",
+      "source plan",
+      "source artifact plan",
+      "source artifact envelope",
+      "SourcePlan",
+      "SourcePlanFile",
+      "SourcePlanPolicy",
+      "SourcePlanProjectTooling",
+      "SourcePattern",
+      "SourcePatternModule",
+      "SourcePatternModuleKey",
+      "SourcePatternParameter",
+      "SourcePatternParameterKey",
+      "SourcePatternAdaptationGroupKey",
+      "SourcePatternUsePolicy",
+      "ExpectedSemanticEffectKind",
+      "AppBuilderDomainSlotKey",
+      "sourcePatternUsePolicy",
+      "sourcePlanHasCompleteText",
+      "source pattern parameters",
+      "source pattern modules",
+      "sourcePlan.pattern.modules",
+      "sourcePlan.pattern.parameters",
+      "sourceParameterValues",
+      "source parameter applications",
+      "app-builder source lowering",
+      "fixture materialization source plan",
+      "diagnostic action source plan",
+      "future edit planning source plan",
+      "neutral source-plan substrate",
+    ],
+    queryCanaries: [
+      {
+        query:
+          "source plan source pattern parameters app builder source lowering",
+        summary:
+          "Shared source-plan questions should route to the neutral substrate before choosing app-builder, fixture, diagnostic-action, or future edit callers.",
+      },
+      {
+        query: "fixture materialization source artifacts complete text project tooling SourcePlan",
+        summary:
+          "Fixture materialization should keep using the shared SourcePlan envelope rather than generator-local file models.",
+      },
+      {
+        query: "diagnostic action source plan future edit application host boundary",
+        summary:
+          "Diagnostics-to-action and future editing should route through SourcePlan before any host write policy is introduced.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlan",
+        role: "primary",
+        summary:
+          "Neutral source artifact plan emitted before a host writes files.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePattern",
+        role: "primary",
+        summary:
+          "Pattern metadata and adaptation slots that keep reusable mechanics separate from sample domains.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePatternParameterKey",
+        role: "supporting",
+        summary:
+          "Enum-backed source-pattern parameter identities so route/app-builder adaptation keys stay typed and Atlas-visible.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePatternModuleKey",
+        role: "supporting",
+        summary:
+          "Enum-backed source-pattern module identities for reusable app-building mechanics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePatternUsePolicy",
+        role: "supporting",
+        summary:
+          "Shared source-use policy consumed by app-builder and source-plan instead of package-local aliases.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-model.ts",
+        symbolName: "AppBuilderDomainSlotKey",
+        role: "supporting",
+        summary:
+          "Enum-backed app-builder domain slot keys so starter menus do not carry raw parameter ids.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/package-tooling.ts",
+        symbolName: "SourcePlanProjectTooling",
+        role: "supporting",
+        summary:
+          "Structured package/typecheck artifacts that travel beside source plans without becoming host execution policy.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/src/source-plan/",
+        role: "primary",
+        summary:
+          "Shared source artifact, pattern, naming, field-schema, route-pattern, and project-tooling helpers.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/src/app-builder/",
+        role: "supporting",
+        summary:
+          "Clean-room app-builder source lowering consumes SourcePlan after typed app intent is known.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/diagnostic-action/action.ts",
+        symbolName: "DiagnosticActionKind",
+        role: "supporting",
+        summary:
+          "Diagnostics-to-action owns repair/action classification before future source plans become host edits.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/src/fixture-verification/",
+        role: "supporting",
+        summary:
+          "Fixture verification consumes expected semantic effects after source plans are materialized and reopened.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+        symbolName: "ExpectedSemanticEffectKind",
+        role: "supporting",
+        summary:
+          "Single expected-effect ontology reused by app-builder verification promises and corpus fixture-seed discovery.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "source-plan"],
+        role: "grounding",
+        summary:
+          "Durable memory for the neutral source-plan boundary and future maintenance pressure.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "app-builder", "ontology"],
+        role: "grounding",
+        summary:
+          "App-builder memory owns new public generation direction; source-plan should serve it without owning the ontology.",
+      },
+    ],
+    authority: [
+      "source-plan owns source artifact and pattern envelopes; callers own generation intent, host writes, and verification policy.",
+      "app-builder may consume SourcePlan for clean-room source lowering after typed menus have selected intent, patterns, domain slots, seed data, and Aurelia lowering axes.",
+      "fixture verification consumes materialized source facts and expected effects; it should not turn SourcePlan into a public recipe taxonomy.",
+      "diagnostics-to-action and future editing may plan through SourcePlan, but host write policy remains separate until explicitly modeled.",
+    ],
+    cautions: [
+      "Do not reintroduce generator-local SourcePlan aliases or compatibility shims when the shared SourcePlan model is available.",
+      "Do not hide sample domains, copy, seed data, or presentation defaults inside reusable source-pattern identities.",
+      "Do not treat a complete SourcePlan as permission to write files; edit application is a future host boundary.",
+    ],
+    nextQuestions: [
+      "Is this source artifact work shared SourcePlan policy, app-builder lowering, fixture verification, diagnostics-to-action, or future host edit application?",
+      "Does the source plan need complete text now, or only pattern/adaptation metadata for a next menu or comparison answer?",
+      "Which SourcePattern modules and parameters are reusable mechanics, and which details belong to a reference scenario, seed data set, domain preset, or fixture?",
+      "Which verifier or public API row will prove the materialized source plan did what it promised?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.semantic-contract-verification",
+      "diagnostics.template-repair-policy",
       "semantic-runtime.lsp-edit-affordance-substrate",
       "mcp.developer-preview-shell",
       "atlas.work-router.self-improvement",
@@ -1496,7 +1042,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        filePath: "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
         symbolName: "ExpectedSemanticEffect",
         role: "supporting",
         summary:
@@ -1504,8 +1050,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
-        symbolName: "AuthoringSourcePattern",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePattern",
         role: "supporting",
         summary:
           "Current source-plan metadata for generating realistic fixture source from pattern intent.",
@@ -1523,7 +1069,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         domains: ["semantic-runtime", "app-builder", "authoring", "ontology"],
         role: "grounding",
         summary:
-          "App-builder ontology memory owns pattern intent and reference-domain separation.",
+          "App-builder ontology memory owns pattern intent and reference-scenario separation.",
       },
       {
         kind: "memory",
@@ -1540,7 +1086,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "TypeSystemProject, overlays, binding/data-flow, router, i18n, resource, and source-reference products as reference inputs.",
     ],
     cautions: [
-      "Do not make large editing fixtures another hard-coded domain inside authoring.",
+      "Do not make large editing fixtures another hard-coded example domain inside app-builder.",
       "Do not treat overlay generated spans as authoritative edit ranges without joining authored source provenance.",
       "Do not start with a mutating rename tool when the reference family and editability contract are still incomplete.",
       "Do not let read-only navigation requirements hide stricter edit requirements; editing is the tightest consumer.",
@@ -1554,7 +1100,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     relatedRouteIds: [
       "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.lsp-edit-affordance-substrate",
-      "semantic-runtime.authoring-fixture-substrate-loop",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.semantic-contract-verification",
       "semantic-runtime.type-system-project-epoch",
       "semantic-runtime.template-overlay-integration",
@@ -1599,6 +1145,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "query cost contract",
       "inquiry budget contract",
       "semantic effects not snapshots",
+      "support-state ladder",
+      "support state promise strength",
     ],
     queryCanaries: [
       {
@@ -1630,7 +1178,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     anchors: [
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        filePath: "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
         symbolName: "ExpectedSemanticEffect",
         role: "primary",
         summary:
@@ -1638,11 +1186,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/verification.ts",
-        symbolName: "readAuthoringVerificationSnapshot",
+        filePath: "packages/semantic-runtime/src/fixture-verification/verification.ts",
+        symbolName: "readFixtureVerificationSnapshot",
         role: "primary",
         summary:
           "Opened-app verification snapshot collector for row-backed expected effects.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/support-state.ts",
+        symbolName: "SemanticSupportState",
+        role: "supporting",
+        summary:
+          "Shared support-state ladder keeps capability and verification minimum-state checks from drifting into authoring-local policy.",
       },
       {
         kind: "source",
@@ -1712,7 +1268,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests",
         role: "supporting",
         summary:
           "Current generated-fixture lane that should eventually feed semantic contract witnesses.",
@@ -1737,8 +1293,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Does the inquiry profile need cost, retention, paging, or materialization-budget assertions?",
     ],
     relatedRouteIds: [
-      "semantic-runtime.authoring-fixture-substrate-loop",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.inquiry-query-claim-graph",
       "diagnostics.framework-error-grounding",
       "semantic-runtime.proxy-observation-domain-modeling",
@@ -1752,9 +1308,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     id: "mcp.developer-preview-shell",
     title: "MCP Developer Preview Shell",
     summary:
-      "Keep the public MCP package as a thin, restart-tolerant shell over semantic-runtime APIs while Atlas remains the internal navigation substrate.",
-    domains: ["mcp", "api", "semantic-runtime", "authoring", "app-building", "lsp", "router"],
-    roles: ["orient", "analyze", "author", "verify", "document"],
+      "Keep the public MCP package as a thin, restart-tolerant shell over current semantic-runtime analysis APIs while future generation grows through app-builder.",
+    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router"],
+    roles: ["orient", "analyze", "verify", "document"],
     terms: [
       "mcp shell",
       "aurelia mcp",
@@ -1776,93 +1332,32 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "clear analysis cache",
       "workspace overview",
       "aurelia_workspace_overview",
-      "projectPage",
-      "project page",
-      "aurelia_authoring_recipe_plan",
-      "aurelia_app_building_guidance",
-      "sourcePlan.pattern.modules",
-      "source pattern modules",
-      "sourcePlan.pattern.parameters",
-      "source pattern parameters",
-      "AuthoringSourcePatternModule",
-      "sourceParameterValues",
-      "source parameter applications",
-      "source-text-input adaptation slots",
-      "reference instantiation adaptation slots",
-      "caller domain generation",
-      "recipe fixture separation",
-      "aurelia_app_query_catalog",
-      "aurelia_orient_workspace",
-      "aurelia_plan_authoring_recipe",
-      "aurelia_build_app_feature",
-      "authoring recipe plan",
-      "recipePlanSequence",
-      "recipe plan sequence",
-      "pattern-reference",
-      "pattern reference",
-      "source-plan-start",
-      "source plan start",
-      "build app feature prompt",
-      "authoring guidance",
-      "app-building guidance",
-      "MCP app building",
-      "MCP app-building",
-      "mixed app guidance",
-      "mixed app-building guidance",
-      "MCP authoring recipe pressure",
-      "next MCP app building pressure",
-      "recipeLimit",
-      "convention minimal app",
-      "convention-minimal-app",
-      "convention app shell",
-      "public scaffold app shell",
-      "resource declaration style",
-      "routed catalog storefront",
-      "routed-catalog-storefront",
-      "routed storefront recipe",
-      "localized validated state-backed form",
-      "localized-validated-state-backed-form",
-      "routed localized validated state-backed form",
-      "routed-localized-validated-state-backed-form",
-      "routed service-backed form",
-      "routed-service-backed-form",
-      "routed service form recipe",
-      "searchable data table",
-      "searchable-data-table",
-      "routed searchable data table",
-      "routed-searchable-data-table",
-      "data table app-building",
-      "search filter sort pagination",
-      "plugin-backed form recipe",
-      "i18n validation form recipe",
       "app overview",
-      "router overview",
-      "router row sample",
-      "pagingKind",
-      "minimumAnalysisDepth",
-      "row-sample",
+      "aurelia_app_overview",
+      "query catalog",
+      "aurelia_app_query_catalog",
+      "aurelia_app_query",
+      "aurelia_app_query_batch",
       "diagnostic overview",
+      "typescript diagnostics",
+      "template diagnostics",
+      "router overview",
       "open seam overview",
       "template cursor info",
-      "app query catalog",
+      "aurelia_orient_workspace",
+      "aurelia_inspect_app_feature",
+      "aurelia_build_app_feature",
+      "read-only mcp",
+      "mcp app building future app-builder",
       "mcp hand-test",
       "mcp restart",
       "mcp token economy",
       "mcp clean code",
-      "effectDetail contracts",
-      "effectDetail compact",
-      "compact recipe plan",
-      "minimal Aurelia code",
       "idiomatic Aurelia code",
       "low boilerplate Aurelia",
-      "larger app feature module",
-      "clean efficient larger app",
-      "route service state validation",
-      "terse authoring guidance",
       "core observation MCP",
       "core router MCP",
       "plugin patterns MCP",
-      "advertised Aurelia patterns",
       "first MCP delivery cut",
     ],
     queryCanaries: [
@@ -1874,95 +1369,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "mcp workspace overview app overview diagnostic overview router overview structured content",
         summary:
-          "MCP tool-shape work should route through the public shell, compact semantic-runtime projections, and explicit pagingKind affordances.",
+          "MCP tool-shape work should route through the public shell, compact semantic-runtime projections, and explicit paging affordances.",
       },
       {
-        query: "aurelia_authoring_recipe_plan MCP recipe plan",
+        query: "mcp exposes ordinary typescript diagnostics with aurelia diagnostics",
         summary:
-          "Recipe-plan tool work should route through the public MCP shell and semantic-runtime authoring recipe plan API.",
-      },
-      {
-        query: "developer preview mcp router viewport authoring",
-        summary:
-          "Router/viewport developer-preview pressure should keep MCP packaging and semantic-runtime route facts connected.",
-      },
-      {
-        query: "mcp clean terse idiomatic aurelia code core observation router plugins",
-        summary:
-          "First-preview delivery pressure should route to token-efficient authoring guidance, core observation, common router use, and plugin patterns before fringe API completeness.",
-      },
-      {
-        query: "mcp clean efficient larger app feature module route service state validation observation authoring recipe",
-        summary:
-          "Larger-feature app-building pressure should route to MCP guidance and semantic-runtime authoring recipes before becoming transport-local prose.",
-      },
-      {
-        query: "aurelia_app_building_guidance app-building focus recipeKey",
-        summary:
-          "Public app-building guidance should route to the semantic-runtime guidance query before adding shell-local MCP prose.",
-      },
-      {
-        query: "aurelia_app_building_guidance recipeLimit broad app-building candidates",
-        summary:
-          "Broad app-building guidance token budget should route to semantic-runtime guidance shape, not MCP-local truncation.",
-      },
-      {
-        query: "MCP convention minimal app public scaffold guidance",
-        summary:
-          "Public convention app-shell guidance should stay on the MCP shell plus semantic-runtime authoring API boundary.",
-      },
-      {
-        query: "MCP routed catalog storefront app-building guidance",
-        summary:
-          "Public routed app-building recipe guidance should stay on the MCP shell plus semantic-runtime authoring API boundary.",
-      },
-      {
-        query: "MCP localized validated state-backed form plugin guidance",
-        summary:
-          "Public plugin-backed form guidance should stay on the MCP shell plus semantic-runtime authoring API boundary.",
-      },
-      {
-        query: "MCP routed service-backed form service boundary guidance",
-        summary:
-          "Public route-owned service form guidance should stay on the MCP shell plus semantic-runtime authoring API boundary.",
-      },
-      {
-        query: "MCP routed localized validated form router i18n validation guidance",
-        summary:
-          "Public route-owned plugin form guidance should stay on the MCP shell plus semantic-runtime authoring API boundary.",
-      },
-      {
-        query: "aurelia_authoring_recipe_plan effectDetail contracts compact token economy",
-        summary:
-          "Recipe-plan token-budget work should route to the MCP shell and semantic-runtime authoring plan API, not transport-local filtering.",
-      },
-      {
-        query:
-          "mcp app building recipePlanSequence pattern-reference authoring fixture clean code",
-        summary:
-          "Mixed-feature recipe path and pattern-reference usage should route to MCP guidance plus semantic-runtime authoring APIs, not generic Work Router maintenance.",
-      },
-      {
-        query:
-          "recipe fixture source parameters mixed app guidance",
-        summary:
-          "Public mixed-feature app-building guidance should find MCP packaging while still pointing at semantic-runtime source-pattern and fixture separation.",
-      },
-      {
-        query:
-          "MCP authoring source pattern parameters caller-domain generation recipe fixture separation",
-        summary:
-          "Public app-building answers should expose source-pattern adaptation slots while keeping the actual product model in semantic-runtime.",
+          "Diagnostics hardening should route through semantic-runtime query families and MCP pass-through, not adapter-local TypeScript checks.",
       },
       {
         query: "aurelia_build_app_feature prompt source edits low boilerplate",
         summary:
-          "Public app-building workflow prompts should route to MCP prompt packaging while leaving source edits and product facts outside the read-only shell.",
+          "Current app-building workflow prompts should admit the public generator is not ready and route to analysis/app-builder follow-up instead of legacy recipe tools.",
       },
       {
-        query: "next MCP app building authoring recipe pressure after proxy exits",
+        query: "MCP app-builder future generation shell should not expose removed recipe tools",
         summary:
-          "Checkpoint-style app-building follow-up questions should route to MCP guidance and adjacent semantic-runtime authoring/observation routes instead of missing because they ask for next work.",
+          "Public generation work should route to app-builder and semantic-runtime API design before adding MCP tools.",
       },
     ],
     coverage: [
@@ -1972,7 +1394,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         depth: AtlasWorkRouteCoverageDepth.Verified,
         ownerRouteId: "semantic-runtime.intent-aware-continuations",
         summary:
-          "MCP receives semantic-runtime answers as pass-through data, and a focused contract verifies single and batch app-query continuation pass-through plus compact continuation target text. Broader hand-tested low-token presentation remains future work, and MCP must avoid adapter-local next-query hints.",
+          "MCP receives semantic-runtime answers as pass-through data, and focused contracts verify single and batch app-query continuation pass-through. MCP must avoid adapter-local next-query hints.",
       },
     ],
     anchors: [
@@ -1990,13 +1412,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Adapter boundary that forwards MCP requests to semantic-runtime without becoming a second product model.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
-        role: "supporting",
-        summary:
-          "Focused contract proving MCP app-query single and batch surfaces retain semantic-runtime continuation rows.",
       },
       {
         kind: "source",
@@ -2036,63 +1451,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "readSemanticAppQueryCatalog",
         role: "grounding",
         summary:
-          "Semantic-runtime-owned app query vocabulary and pagingKind affordances for generic MCP app query tooling.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/router-overview.ts",
-        symbolName: "readSemanticRouterOverview",
-        role: "grounding",
-        summary:
-          "Summary-first router overview; row samples from multiple router families are explicit opt-in.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance.ts",
-        symbolName: "readSemanticAuthoringGuidance",
-        role: "grounding",
-        summary:
-          "Semantic-runtime-owned compact app-building guidance for MCP-like callers; keep product choices here rather than in transport handlers.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance-catalog.ts",
-        symbolName: "guidanceFeatureSignals",
-        role: "supporting",
-        summary:
-          "Authored public app-building policy tables used by guidance; tune feature-goal vocabulary and recipe order here, not in MCP adapters.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-guidance-catalog.ts",
-        symbolName: "guidanceRecipeSpecializationSignalKeysByRecipe",
-        role: "supporting",
-        summary:
-          "Public guidance specialization table that guards against over-scaffolding when a wider recipe covers a simpler feature goal.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-plan.ts",
-        symbolName: "readSemanticAuthoringRecipePlan",
-        role: "grounding",
-        summary:
-          "Semantic-runtime-owned recipe-plan projection; row-level expected-effect contracts are opt-in for MCP token economy.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
-        symbolName: "AuthoringSourcePattern",
-        role: "grounding",
-        summary:
-          "Source-plan pattern metadata and adaptation slots are semantic-runtime-owned; MCP should only forward and explain them.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
-        symbolName: "SourcePatternModules",
-        role: "grounding",
-        summary:
-          "Source-pattern module catalog that lets MCP explain reusable architecture before reference fixture nouns.",
+          "Semantic-runtime-owned app query vocabulary and paging affordances for generic MCP app query tooling.",
       },
       {
         kind: "source",
@@ -2103,6 +1462,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Public query kind vocabulary that should drive MCP tools before adding shell-local concepts.",
       },
       {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/router-overview.ts",
+        symbolName: "readSemanticRouterOverview",
+        role: "grounding",
+        summary:
+          "Summary-first router overview; row samples from multiple router families are explicit opt-in.",
+      },
+      {
         kind: "doc",
         path: "packages/mcp/README.md",
         role: "primary",
@@ -2110,58 +1477,35 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Public package boundary, local invocation commands, and thin-shell constraints.",
       },
       {
-        kind: "doc",
-        path: "packages/atlas/workbench/product-specific-pressures.md",
-        heading: "MCP Packaging",
-        role: "grounding",
-        summary:
-          "Product-level MCP packaging grammar: resources, tools, structured content, roots, invalidation, and resource links.",
-      },
-      {
         kind: "memory",
-        domains: ["mcp", "api", "semantic-runtime", "authoring"],
+        domains: ["semantic-runtime", "app-builder", "ontology"],
         role: "supporting",
         summary:
-          "Join durable decisions about MCP timing, public API boundaries, and semantic-runtime facade constraints.",
-      },
-      {
-        kind: "memory",
-        domains: ["mcp", "authoring", "token-economy", "observation", "router"],
-        role: "grounding",
-        summary:
-          "First-preview delivery priority: compact idiomatic Aurelia guidance beats fringe API completeness.",
+          "Future app generation belongs to app-builder before MCP exposes a public generation tool.",
       },
     ],
     authority: [
-      "MCP package README and adapter source for public shell shape.",
-      "semantic-runtime API contracts/facade for the actual product facts.",
-      "Atlas product-specific MCP pressures for protocol grammar and token economics.",
-      "Atlas memory for the boundary that MCP is public and Atlas remains internal.",
+      "MCP is a public API shell; semantic-runtime owns product concepts and query results.",
+      "Atlas remains the internal development navigation layer and should not be required for end-user MCP operation.",
+      "Future app generation must be exposed through app-builder after the app-building algebra is durable enough for public use.",
     ],
     cautions: [
-      "Do not expose Atlas memory, Work Router rows, legacy maps, or internal corpus rows through MCP.",
-      "Do not implement product semantics inside MCP handlers; add or improve semantic-runtime queries instead.",
-      "MCP restart friction means direct adapter invokers must stay first-class for autonomous development.",
-      "Prefer short text plus structuredContent over JSON text dumps for token economics.",
-      "Do not make full au-compose support or pixel-perfect au-viewport parity a first-preview blocker.",
-      "Do not accept verbose generated Aurelia code as a harmless preview limitation; code quality and token economy are core preview value.",
-      "Core observation, common router flows, plugins, and advertised patterns outrank fringe API coverage for the first public MCP cut.",
+      "Do not reintroduce removed recipe/guidance tools just to make old prompts work.",
+      "Do not let MCP adapters classify diagnostics, routes, app-building taste, or source-plan policy locally.",
+      "Do not expose a public app generator until app-builder owns the ontology, typed menus, lowering previews, and verification promises.",
     ],
     nextQuestions: [
-      "Which semantic-runtime query already owns the requested MCP answer?",
-      "Is this a stable public tool/resource, or should it stay a direct dev invoker until the semantic-runtime shape settles?",
-      "Does a repeated MCP answer pattern indicate a missing semantic-runtime summary query?",
-      "Does the MCP client need cache reset or explicit roots/project selection before the next hand-test?",
-      "Will this answer help another AI write less, cleaner Aurelia code, or is it exposing breadth without authoring leverage?",
+      "Is this a shell/transport concern or a semantic-runtime API concern?",
+      "Does the MCP tool forward a current semantic-runtime query, or is it trying to resurrect a removed public surface?",
+      "Does an app-building prompt need to inspect an existing app, preview future app-builder direction, or defer generation?",
+      "Which semantic-runtime query family should prove the answer before MCP formats it?",
     ],
     relatedRouteIds: [
-      "semantic-runtime.authoring-fixture-substrate-loop",
-      "semantic-runtime.proxy-observation-domain-modeling",
-      "router.viewport.authoring-semantics",
-      "diagnostics.framework-error-grounding",
-      "semantic-runtime.type-system.expression-semantics",
-      "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.source-plan",
       "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.intent-aware-continuations",
+      "semantic-runtime.lsp-edit-affordance-substrate",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -2547,7 +1891,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.inquiry-query-claim-graph",
       "semantic-runtime.lsp-edit-affordance-substrate",
       "semantic-runtime.app-builder-pattern-ontology",
-      "semantic-runtime.authoring-fixture-substrate-loop",
+      "semantic-runtime.app-builder-pattern-ontology",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -3311,6 +2655,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "InterpolationPartBinding",
       "state binding behavior interpolation",
       "state initial source value",
+      "state initial source value bound controller",
       "state initial-state source-value",
       "state initial-state source-value bound controller",
       "StateBinding scope slot initial state value",
@@ -3871,7 +3216,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     relatedRouteIds: [
       "semantic-runtime.template-overlay-integration",
       "semantic-runtime.proxy-observation-domain-modeling",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.type-system.expression-semantics",
@@ -4397,7 +3742,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "readRuntimeWatcherObservedDependencyRows",
         role: "primary",
         summary:
-          "Public runtime-watcher-observed-dependencies query projection for API/authoring consumers.",
+          "Public runtime-watcher-observed-dependencies query projection for API and app-builder consumers.",
       },
       {
         kind: "source",
@@ -4405,7 +3750,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "readRuntimeWatcherRows",
         role: "primary",
         summary:
-          "Public runtime-watchers query projection for API/authoring consumers.",
+          "Public runtime-watchers query projection for API and app-builder consumers.",
       },
       {
         kind: "source",
@@ -4425,11 +3770,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/api/authoring-orientation.ts",
-        symbolName: "templateModelAccessValues",
+        filePath: "packages/semantic-runtime/src/api/app-topology.ts",
+        symbolName: "directInjectionServiceInteractionBindingRowsForDataFlow",
         role: "supporting",
         summary:
-          "Authoring orientation reports direct state/domain template access, plain getter observation, and template-read source-proven one-hop forwarding accessor pressure.",
+          "App topology reports direct state/domain template access through analysis rows, not retired authoring orientation rows.",
       },
       {
         kind: "source",
@@ -4449,14 +3794,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "memory",
-        domains: ["semantic-runtime", "observation", "authoring", "state", "framework-grounding"],
+        domains: ["semantic-runtime", "observation", "app-builder", "state", "framework-grounding"],
         role: "grounding",
         summary:
           "ProxyObservable domain-modeling memory records the integrated astEvaluate/ProxyObservable observation circuit.",
       },
       {
         kind: "memory",
-        domains: ["semantic-runtime", "application", "authoring", "observation", "fixtures", "topology"],
+        domains: ["semantic-runtime", "application", "app-builder", "observation", "fixtures", "topology"],
         role: "grounding",
         summary:
           "Direct DI state template-binding memory keeps state.member bindings as topology facts without VM forwarding getters.",
@@ -4659,7 +4004,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     relatedRouteIds: [
       "semantic-runtime.observation.binding-flow",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.semantic-contract-verification",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
@@ -4947,7 +4292,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.expression-parser-completion",
       "semantic-runtime.evaluator.world-construction",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
     ],
   },
   {
@@ -5422,14 +4767,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/authoring/generated-composed-dashboard",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-pattern-composed-dashboard",
         role: "pressure",
         summary:
           "Generated authoring fixture for recommendable dynamic component composition.",
       },
       {
         kind: "path",
-        pathPrefix: "packages/semantic-runtime/src/authoring/composed-dashboard",
+        pathPrefix: "packages/semantic-runtime/src/app-builder/",
         role: "supporting",
         summary:
           "Authoring recipe/source-plan files that generate the composed dashboard pressure fixture.",
@@ -8721,7 +8066,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         effectKind: "project-tooling",
         role: "grounding",
         summary:
-          "World construction and authoring recipes should expose package/typecheck tooling source roles.",
+          "World construction and app-building patterns should expose package/typecheck tooling source roles.",
       },
       {
         kind: "framework-corpus",
@@ -8926,7 +8271,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     title: "Router Viewport Authoring Semantics",
     summary:
-      "Route router, au-viewport, RouteContext, route tree, route-recognizer, and routeable-component work through framework-grounded modeling before MCP or fixture authoring.",
+      "Route router, au-viewport, RouteContext, route tree, route-recognizer, and routeable-component work through framework-grounded modeling before MCP or fixture generation.",
     domains: ["router", "viewport", "authoring", "world-construction", "fixtures"],
     roles: ["orient", "author", "analyze", "refactor", "verify"],
     terms: [
@@ -9184,36 +8529,32 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "RouteConfigContext eager path generation for object-form router resource values.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-app-shell-recipe.ts",
-        symbolName: "buildRoutedAppShellPlan",
-        role: "supporting",
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-pattern-routed-app-shell",
+        role: "pressure",
         summary:
-          "Generated generic route-shell recipe that consumes router semantics without a form, catalog, or table domain model.",
+          "Migrated route-shell app-pattern fixture that consumes router semantics without a form, catalog, or table domain model.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-state-backed-form-recipe.ts",
-        symbolName: "buildRoutedStateBackedFormPlan",
-        role: "supporting",
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-pattern-routed-state-backed-form",
+        role: "pressure",
         summary:
-          "Current generated routed-form authoring recipe that consumes router semantics.",
+          "Migrated routed-form app-pattern fixture that consumes router semantics.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-catalog-storefront-recipe.ts",
-        symbolName: "buildRoutedCatalogStorefrontPlan",
-        role: "supporting",
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-pattern-routed-catalog-storefront",
+        role: "pressure",
         summary:
-          "Generated routed app-building recipe that proves common list/detail route config, static navigation, route params, viewport, route-node, and component-agent effects.",
+          "Migrated routed catalog fixture that proves common list/detail route config, static navigation, route params, viewport, route-node, and component-agent effects.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/routed-searchable-data-table-recipe.ts",
-        symbolName: "buildRoutedSearchableDataTablePlan",
-        role: "supporting",
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-pattern-routed-searchable-data-table",
+        role: "pressure",
         summary:
-          "Generated routed data-table recipe that proves common list/detail route config, data-driven row links, route params, viewport, route-node, and component-agent effects.",
+          "Migrated routed data-table fixture that proves common list/detail route config, data-driven row links, route params, viewport, route-node, and component-agent effects.",
       },
       {
         kind: "source",
@@ -9225,7 +8566,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/route-expected-effects.ts",
+        filePath: "packages/semantic-runtime/src/fixture-verification/route-expected-effects.ts",
         symbolName: "routeProductSignatureEffect",
         role: "supporting",
         summary:
@@ -9373,7 +8714,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     relatedRouteIds: [
       "semantic-runtime.template-recursive-rendering",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.evaluator.world-construction",
     ],
   },
@@ -9581,6 +8922,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "state binding behavior",
       "initial-state source value",
       "state initial source value",
+      "state initial source value bound controller",
       "StateBinding scope slot initial state value",
       "raw Error authority",
     ],
@@ -9601,7 +8943,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "State dispatch payload typing should route through state command value-channel flow before generic template repair policy.",
       },
       {
-        query: "state initial source value bound controller",
+        query: "IStoreRegistry withStore StateBinding scope slot initial state value",
         summary:
           "State initial-value source reads should route to the state store product and observation source-value evaluator together.",
       },
@@ -9637,7 +8979,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "readStateStoreRows",
         role: "supporting",
         summary:
-          "Public StateStores/StateIssues API projections consumed by authoring orientation and diagnostics.",
+          "Public StateStores/StateIssues API projections consumed by diagnostics and future app-builder orientation.",
       },
       {
         kind: "source",
@@ -9669,7 +9011,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "@aurelia/state StateDefaultConfiguration withStore",
         role: "pressure",
         summary:
-          "State docs/tests provide promoted store configuration and state binding examples before recipe authoring.",
+          "State docs/tests provide promoted store configuration and state binding examples before app-builder generation.",
       },
       {
         kind: "script",
@@ -9709,7 +9051,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which docs/tests state examples should become generated fixtures versus contrastive pressure fixtures?",
     ],
     relatedRouteIds: [
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "diagnostics.framework-error-grounding",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.observation.binding-flow",
@@ -9853,7 +9195,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     relatedRouteIds: [
       "diagnostics.framework-error-grounding",
       "mcp.developer-preview-shell",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.evaluator.world-construction",
     ],
   },
@@ -9961,6 +9303,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Carries value-producing source routes for source-independent weak types such as any.",
       },
       {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/diagnostic-action/action.ts",
+        symbolName: "diagnosticActionKindForDiagnosticSuggestion",
+        role: "supporting",
+        summary:
+          "Maps diagnostic suggestions and open seams into neutral action categories before authoring or IDE/edit planning consumes them.",
+      },
+      {
         kind: "script",
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics",
         role: "pressure",
@@ -9995,7 +9345,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     nextQuestions: [
       "Is this diagnostic missing a source route, an owner/member projection, or only a policy/suggestion shape?",
       "Can an in-repo weak-owner fixture isolate the pressure before external app sampling?",
-      "Which query locus needs the diagnostic: cursor, file, app, authoring orientation, or repair plan?",
+      "Which query locus needs the diagnostic: cursor, file, app, diagnostics-to-action, or future edit plan?",
     ],
     relatedRouteIds: [
       "semantic-runtime.template-overlay-integration",
@@ -10004,7 +9354,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.binding-scope",
       "semantic-runtime.inquiry-query-claim-graph",
       "diagnostics.framework-error-grounding",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
     ],
   },
   {
@@ -10149,7 +9499,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.resource-style-dependencies",
       "router.viewport.authoring-semantics",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
     ],
   },
   {
@@ -10510,7 +9860,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     relatedRouteIds: [
       "semantic-runtime.evaluator.world-construction",
       "diagnostics.framework-error-grounding",
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "atlas.source-analysis.substrate",
     ],
   },
@@ -10810,7 +10160,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        filePath: "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
         role: "grounding",
         summary:
           "Expected effects connect fixture examples to semantic-runtime behavior contracts.",
@@ -10840,7 +10190,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which expected-effect descriptor would make the example semantically useful?",
     ],
     relatedRouteIds: [
-      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-pattern-ontology",
       "diagnostics.framework-error-grounding",
       "atlas.work-router.self-improvement",
     ],

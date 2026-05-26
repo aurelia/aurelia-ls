@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "app-builder-golden.v1",
+  "workflowId": "new-app-starter",
+  "stageId": "generate-starter",
+  "selection": {
+    "workflowId": "new-app-starter",
+    "seedProfileId": "clean-starter",
+    "intentId": "collection-list-starter",
+    "compositionId": "state-backed-collection-list.convention",
+    "domainPresetId": "task-list",
+    "seedDataSetId": "task-list.public-small"
+  },
+  "preview": {
+    "seedProfileId": "clean-starter",
+    "starterIntentId": "collection-list-starter",
+    "compositionId": "state-backed-collection-list.convention",
+    "domainPresetId": "task-list",
+    "seedDataSetId": "task-list.public-small",
+    "patternIds": [
+      "single-app-package",
+      "minimal-app-shell",
+      "collection-browser",
+      "di-owned-app-state",
+      "composed-domain-state",
+      "plain-domain-entity",
+      "direct-state-template-read",
+      "native-value-channel",
+      "checked-collection-channel"
+    ],
+    "aureliaLoweringChoiceIds": [
+      "conventions-enabled",
+      "convention-resource",
+      "di-state-class",
+      "plain-domain-composition",
+      "no-router",
+      "direct-state-template-binding",
+      "light-dom"
+    ],
+    "sourcePolicy": "apply-as-source-start",
+    "sourceFiles": [
+      {
+        "path": "src/main.ts",
+        "role": "entrypoint",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/my-app.ts",
+        "role": "root-component",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/my-app.html",
+        "role": "template",
+        "language": "html",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/task.ts",
+        "role": "domain-model",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      },
+      {
+        "path": "src/task-list-state.ts",
+        "role": "state-model",
+        "language": "typescript",
+        "editKind": "create",
+        "hasText": true
+      }
+    ],
+    "expectedEffectKinds": [
+      "resource-definition",
+      "runtime-controller",
+      "template-compilation",
+      "binding-observed-dependency",
+      "binding-value-channel",
+      "binding-data-flow",
+      "open-seam-closure"
+    ]
+  }
+}

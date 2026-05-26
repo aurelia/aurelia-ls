@@ -1,12 +1,6 @@
 import { z } from 'zod/v4';
 import {
-  AUTHORING_RECIPE_KEYS,
   SEMANTIC_APP_RETENTION_POLICIES,
-  SEMANTIC_AUTHORING_CATALOG_VIEWS,
-  SEMANTIC_AUTHORING_GUIDANCE_DETAILS,
-  SEMANTIC_AUTHORING_GUIDANCE_FOCI,
-  SEMANTIC_AUTHORING_RECIPE_PLAN_EFFECT_DETAILS,
-  SEMANTIC_AUTHORING_RECIPE_PLAN_USAGES,
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SEMANTIC_APP_QUERY_KINDS,
   SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES,
@@ -88,11 +82,6 @@ const cursorSchema = sourceFileSchema.extend({
   offset: z.number().int().nonnegative().nullable().optional(),
 }).strict();
 
-const sourceParameterValueSchema = z.object({
-  key: z.string(),
-  value: z.string(),
-}).strict();
-
 const semanticAppQuerySchema = z.object({
   kind: z.enum(SEMANTIC_APP_QUERY_KINDS),
   ...pagedShape,
@@ -101,7 +90,6 @@ const semanticAppQuerySchema = z.object({
   includeTypeSurfaces: z.boolean().nullable().optional(),
   diagnosticPageSize: z.number().int().positive().nullable().optional(),
   openSeamPageSize: z.number().int().positive().nullable().optional(),
-  includeAuthoringOrientation: z.boolean().nullable().optional(),
   rowPageSize: z.number().int().nonnegative().nullable().optional(),
   cursor: cursorSchema.nullable().optional(),
   sourceFile: sourceFileSchema.nullable().optional(),
@@ -122,35 +110,6 @@ export const clearAnalysisCacheInputSchema = {
   ...optionalRuntimeSelectorShape,
   typeSystemDependencyCacheClearPolicy: z.enum(SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES).nullable().optional(),
 } as const;
-export const authoringCatalogInputSchema = {
-  workspaceRoot: z.string().nullable().optional(),
-  catalogView: z.enum(SEMANTIC_AUTHORING_CATALOG_VIEWS).nullable().optional(),
-} as const;
-
-export const authoringGuidanceInputSchema = {
-  workspaceRoot: z.string().nullable().optional(),
-  focus: z.enum(SEMANTIC_AUTHORING_GUIDANCE_FOCI).nullable().optional(),
-  featureGoal: z.string().nullable().optional(),
-  detail: z.enum(SEMANTIC_AUTHORING_GUIDANCE_DETAILS).nullable().optional(),
-  recipeKey: z.enum(AUTHORING_RECIPE_KEYS).nullable().optional(),
-  recipeLimit: z.number().int().nonnegative().nullable().optional(),
-  principleLimit: z.number().int().nonnegative().nullable().optional(),
-  decisionLimit: z.number().int().nonnegative().nullable().optional(),
-} as const;
-
-export const authoringRecipePlanInputSchema = {
-  workspaceRoot: z.string().nullable().optional(),
-  recipeKey: z.enum(AUTHORING_RECIPE_KEYS),
-  usage: z.enum(SEMANTIC_AUTHORING_RECIPE_PLAN_USAGES).nullable().optional(),
-  rootDir: z.string().nullable().optional(),
-  appName: z.string().nullable().optional(),
-  includeText: z.boolean().nullable().optional(),
-  sourceFilePaths: z.array(z.string()).nullable().optional(),
-  sourceTextRequestHintKeys: z.array(z.string()).nullable().optional(),
-  sourceParameterValues: z.array(sourceParameterValueSchema).nullable().optional(),
-  effectDetail: z.enum(SEMANTIC_AUTHORING_RECIPE_PLAN_EFFECT_DETAILS).nullable().optional(),
-} as const;
-
 export const appQueryCatalogInputSchema = {
   workspaceRoot: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
@@ -179,7 +138,6 @@ export const appOverviewInputSchema = {
   ...openAppShape,
   diagnosticPageSize: z.number().int().positive().nullable().optional(),
   openSeamPageSize: z.number().int().positive().nullable().optional(),
-  includeAuthoringOrientation: z.boolean().nullable().optional(),
 } as const;
 
 export const routerOverviewInputSchema = {
@@ -191,12 +149,6 @@ export const routerOverviewInputSchema = {
 export const openSeamOverviewInputSchema = {
   ...openAppShape,
   ...pagedShape,
-} as const;
-
-export const authoringOrientationInputSchema = {
-  ...openAppShape,
-  ...pagedShape,
-  detail: z.enum(SEMANTIC_RUNTIME_DETAIL_VALUES).nullable().optional(),
 } as const;
 
 export const appDiagnosticsInputSchema = {

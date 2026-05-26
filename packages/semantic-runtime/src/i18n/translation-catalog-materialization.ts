@@ -42,7 +42,7 @@ export class I18nTranslationCatalogProjectResult {
   }
 }
 
-/** Read static i18n resource object values into translation-key products for authoring. */
+/** Read static i18n resource object values into translation-key products for analysis. */
 export class I18nTranslationCatalogMaterializationProjectPass {
   private readonly sourceTextCache = new AuthoredSourceTextCache('');
 

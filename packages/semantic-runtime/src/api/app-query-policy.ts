@@ -2,7 +2,6 @@ import {
   SemanticAppAnalysisDepth,
   semanticAppAnalysisDepthMax,
   normalizeSemanticAppAnalysisDepth,
-  semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
 import {
   readSemanticRuntimeInquiryProfileDefinition,
@@ -173,15 +172,8 @@ export function routedAppQueryAnalysisDepth(
   request: SemanticRuntimeAppQueryRequest,
   catalogDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
 ): SemanticAppAnalysisDepth {
-  const normalizedCatalogDepth = normalizeSemanticAppAnalysisDepth(catalogDepth);
-  if (
-    request.kind === SemanticAppQueryKind.AppOverview
-    && request.includeAuthoringOrientation === true
-    && !semanticAppAnalysisDepthSatisfies(normalizedCatalogDepth, SemanticAppAnalysisDepth.BindingObservation)
-  ) {
-    return SemanticAppAnalysisDepth.BindingObservation;
-  }
-  return normalizedCatalogDepth;
+  void request;
+  return normalizeSemanticAppAnalysisDepth(catalogDepth);
 }
 
 export function routedAppQueryBatchAnalysisDepth(

@@ -17,10 +17,6 @@ import {
   type AureliaMcpAppOverviewInput,
   type AureliaMcpAppQueryBatchInput,
   type AureliaMcpAppQueryInput,
-  type AureliaMcpAuthoringCatalogInput,
-  type AureliaMcpAuthoringGuidanceInput,
-  type AureliaMcpAuthoringRecipePlanInput,
-  type AureliaMcpAuthoringOrientationInput,
   type AureliaMcpAppQueryCatalogInput,
   type AureliaMcpClearAnalysisCacheInput,
   type AureliaMcpDiagnosticOverviewInput,
@@ -72,56 +68,6 @@ export class AureliaMcpSemanticRuntimeAdapter {
     return toolResponse(aureliaMcpToolNames.clearAnalysisCache, input, cleared);
   }
 
-  async authoringCatalog(input: AureliaMcpAuthoringCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    return toolResponse(
-      aureliaMcpToolNames.authoringCatalog,
-      input,
-      runtime.authoringCatalogView({
-        view: input.catalogView ?? 'overview',
-        inquiryProfile: 'mcp-orientation',
-      }),
-    );
-  }
-
-  async authoringGuidance(input: AureliaMcpAuthoringGuidanceInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    return toolResponse(
-      aureliaMcpToolNames.authoringGuidance,
-      input,
-      runtime.authoringGuidance({
-        focus: input.focus,
-        featureGoal: input.featureGoal,
-        detail: input.detail,
-        recipeKey: input.recipeKey,
-        recipeLimit: input.recipeLimit,
-        principleLimit: input.principleLimit,
-        decisionLimit: input.decisionLimit,
-        inquiryProfile: 'mcp-authoring',
-      }),
-    );
-  }
-
-  async authoringRecipePlan(input: AureliaMcpAuthoringRecipePlanInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    const runtime = await this.sessions.runtime(runtimeOptions(input));
-    return toolResponse(
-      aureliaMcpToolNames.authoringRecipePlan,
-      input,
-      runtime.authoringRecipePlan({
-        recipeKey: input.recipeKey,
-        usage: input.usage,
-        rootDir: input.rootDir,
-        appName: input.appName,
-        includeText: input.includeText,
-        sourceFilePaths: input.sourceFilePaths,
-        sourceTextRequestHintKeys: input.sourceTextRequestHintKeys,
-        sourceParameterValues: input.sourceParameterValues,
-        effectDetail: input.effectDetail,
-        inquiryProfile: 'mcp-authoring',
-      }),
-    );
-  }
-
   async appQueryCatalog(input: AureliaMcpAppQueryCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     const runtime = await this.sessions.runtime(runtimeOptions(input));
     return toolResponse(
@@ -170,7 +116,6 @@ export class AureliaMcpSemanticRuntimeAdapter {
       kind: SemanticAppQueryKind.AppOverview,
       diagnosticPageSize: input.diagnosticPageSize,
       openSeamPageSize: input.openSeamPageSize,
-      includeAuthoringOrientation: input.includeAuthoringOrientation,
     });
   }
 
@@ -178,14 +123,6 @@ export class AureliaMcpSemanticRuntimeAdapter {
     return this.answerAppQuery(aureliaMcpToolNames.routerOverview, input, {
       kind: SemanticAppQueryKind.RouterOverview,
       rowPageSize: input.rowPageSize,
-      detail: input.detail ?? undefined,
-    });
-  }
-
-  async authoringOrientation(input: AureliaMcpAuthoringOrientationInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
-    return this.answerAppQuery(aureliaMcpToolNames.authoringOrientation, input, {
-      kind: SemanticAppQueryKind.AuthoringOrientation,
-      page: input.page ?? { size: 20 },
       detail: input.detail ?? undefined,
     });
   }

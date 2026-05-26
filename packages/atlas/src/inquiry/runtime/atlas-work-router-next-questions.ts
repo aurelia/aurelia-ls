@@ -28,46 +28,46 @@ interface RouteQuestionRule {
 
 const RouteQuestionRules: readonly RouteQuestionRule[] = [
   {
-    routeId: "authoring.forms.fixture-flywheel",
-    queryAny: ["authoring catalog"],
+    routeId: "semantic-runtime.app-builder-pattern-ontology",
+    queryAny: ["app-builder", "app builder", "pattern ontology"],
     question:
-      "Do you need static recipe/taste ontology from AuthoringCatalog or opened-app evidence from AuthoringOrientation?",
+      "Which app-builder selection stage is missing: seed profile, starter intent, pattern composition, domain slots, seed data, Aurelia lowering, source plan, or verification promise?",
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "semantic-runtime.source-plan",
     queryAny: ["package tooling"],
     question:
-      "Is this package-tooling gap about recipe-baseline typecheck files, runnable build profile policy, or missing project source-role evidence?",
+      "Is this package-tooling gap about source-plan typecheck files, runnable build profile policy, or missing project source-role evidence?",
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "diagnostics.template-repair-policy",
     queryAny: ["repair"],
     question:
       "Which repair clusters are app-source edits, runtime-intent decisions, or semantic-runtime substrate gaps before repair operations are honest?",
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "semantic-runtime.semantic-contract-verification",
     queryAny: ["service interaction"],
     effectKind: "service-interaction",
     question:
       "Which service-class, service-interaction, and service-interaction-binding effects should the fixture prove after reopening?",
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "semantic-runtime.app-builder-pattern-ontology",
     queryAny: ["state-owned service", "state owned service", "service-backed state"],
     question:
-      "Does this fixture need component-to-state handoff, state-to-service side effects, a direct component service facade, or a contrastive non-recommendable pattern?",
+      "Does this app-builder pattern need component-to-state handoff, state-to-service side effects, a direct component service facade, or a contrastive pressure fixture?",
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "semantic-runtime.semantic-contract-verification",
     requiresRecipeKey: true,
     question: (filters) =>
       filters.recipeKey === undefined
         ? undefined
-        : `Which expected semantic effects distinguish ${filters.recipeKey} from its base recipe and sibling recipes?`,
+        : `Which expected semantic effects distinguish ${filters.recipeKey} from nearby app-pattern pressure fixtures?`,
   },
   {
-    routeId: "authoring.forms.fixture-flywheel",
+    routeId: "semantic-runtime.semantic-contract-verification",
     requiresSeedUse: true,
     question: (filters) =>
       filters.seedUse === undefined

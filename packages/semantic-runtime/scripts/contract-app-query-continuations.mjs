@@ -53,7 +53,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('contract ok: public app-query continuations are typed, followable, and intentionally authoring-deferred.');
+console.log('contract ok: public app-query continuations are typed, followable, and fixture-pressure backed.');
 
 function verifyCatalogWideContinuationCoverage() {
   const answer = {
@@ -81,11 +81,6 @@ function verifyCatalogWideContinuationCoverage() {
       answer,
     );
     const continuationCount = result.continuations?.length ?? 0;
-    if (kind === SemanticAppQueryKind.AuthoringCatalog || kind === SemanticAppQueryKind.AuthoringOrientation) {
-      expect(!catalogRow.supportsContinuationIntentFilter, `${kind} should not advertise continuation intent filtering while authoring continuations are deferred.`);
-      expect(continuationCount === 0, `${kind} should stay continuation-free until app-builder replaces recipe-shaped authoring.`);
-      continue;
-    }
     expect(catalogRow.supportsContinuationIntentFilter, `${kind} should advertise continuation intent filtering.`);
     expect(continuationCount > 0, `${kind} should expose at least one public continuation.`);
     for (const continuation of result.continuations ?? []) {
@@ -240,7 +235,6 @@ function verifyCatalogShapeAndIdentityNormalization() {
     includeTypeSurfaces: true,
     diagnosticPageSize: 3,
     openSeamPageSize: 4,
-    includeAuthoringOrientation: true,
     rowPageSize: 6,
     cursor: { filePath: 'src/app.html', line: 0, character: 0 },
     sourceFile: { filePath: 'src/app.html' },
@@ -346,7 +340,6 @@ function verifyContinuationTargetQueryShapes() {
         diagnosticProjection: 'type-projection',
         diagnosticPageSize: 3,
         openSeamPageSize: 4,
-        includeAuthoringOrientation: true,
         rowPageSize: 5,
         cursor: { filePath: 'src/app.html', line: 0, character: 0 },
         sourceFile: { filePath: 'src/app.html' },
@@ -387,10 +380,6 @@ function verifyContinuationTargetQueryShapes() {
       expect(
         targetQuery.openSeamPageSize == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
         `${kind} -> ${targetQuery.kind} should not carry openSeamPageSize outside app-overview.`,
-      );
-      expect(
-        targetQuery.includeAuthoringOrientation == null || targetQuery.kind === SemanticAppQueryKind.AppOverview,
-        `${kind} -> ${targetQuery.kind} should not carry includeAuthoringOrientation outside app-overview.`,
       );
       expect(
         targetQuery.rowPageSize == null || targetQuery.kind === SemanticAppQueryKind.RouterOverview,
@@ -822,7 +811,6 @@ async function verifyTemplateRepairPrecisionContinuations() {
 
 async function verifyFamilySpecificContinuationCanaries() {
   const pressureRoot = path.join(packageRoot, 'fixtures/pressure');
-  const authoringRoot = path.join(packageRoot, 'fixtures/authoring');
   const canaries = [
     {
       label: 'typescript diagnostics',
@@ -1034,7 +1022,7 @@ async function verifyFamilySpecificContinuationCanaries() {
     },
     {
       label: 'state rows',
-      workspaceRoot: path.join(authoringRoot, 'generated-state-store-list'),
+      workspaceRoot: path.join(pressureRoot, 'app-pattern-state-store-list'),
       queries: [
         { kind: SemanticAppQueryKind.StateStores, page: { size: 5 } },
         { kind: SemanticAppQueryKind.StateIssues, page: { size: 5 } },

@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:framework-capability-terrain",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-capabilities",
+        "aurelia-framework",
+        "app-builder",
+        "semantic-runtime",
+        "mcp"
+      ],
+      "summary": "Atlas needs a framework capability terrain that answers what Aurelia can do, how app authors express it, where the choice is local or global, and what semantic-runtime already models.",
+      "rationale": "App-builder lowering exposed a granularity error by treating convention, decorator metadata, and inline/local custom elements as co-equal choices. The raw evidence already exists across framework resources, corpus, router, observation, discovery, and auLink, but it is not available as one compact terrain for app-builder and future MCP capability answers. A curated framework.capabilities lens should prevent app-builder axes from being inferred from local enum guesses or isolated docs snippets.",
+      "nextActionPolicy": "proactive",
+      "guidance": [
+        "Build `framework.capabilities` as an Atlas lens before further durable app-builder lowering-axis expansion. It should start curated and source-backed, then join existing framework/resource/router/observation/corpus/auLink evidence rather than using broad text heuristics as row identity.",
+        "Each capability row should distinguish framework concept, app-author source form, locality, policy nature, prerequisites, consequences, recommendation posture, semantic-runtime coverage, app-builder implication, and evidence.",
+        "Use locality as a first-class dimension: app-global, package/global registration, resource-local, template-local, area-local, binding-site, and route-local are not interchangeable.",
+        "Use policy nature as a first-class dimension: convention/default, explicit metadata, programmatic definition, local compression, feature or plugin admission, and semantic consequence should not be collapsed into one option enum.",
+        "Treat `auLink` as a coverage and grounding signal for semantic-runtime understanding, not as the only proof that a framework capability exists.",
+        "Start v1 from semantic-runtime-understood areas: resource/source forms and local templates, style/Shadow DOM policies, router admission and area navigation, state/observation/binding, template controllers/composition, and DI/configuration/plugin admissions.",
+        "App-builder should derive Aurelia lowering axes from this terrain. Convention-vs-explicit is app/project policy, decorator/static/define are source metadata forms, and inline custom elements are locality/code-economy choices.",
+        "Router admission can be app-global, but list/detail/menu area selection is area-local; nested or named viewports are consequences of router-driven area composition, not standalone app-global taste.",
+        "Observation capability should inform low-boilerplate app-builder guidance: direct state/domain template reads, object handoff, ID handoff, proxy observation, ordinary getter observation, and @computed metadata are separate modeling choices.",
+        "Do not use framework bundles such as StandardConfiguration as the ontology. Bundles are discovery and admission conveniences; the capabilities carried by bundles should remain visible independently."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/lens-contracts.ts",
+          "symbolName": "LensId",
+          "summary": "The future framework.capabilities lens should become a first-class Atlas lens id when implemented."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkObserverCapability",
+          "summary": "Existing framework discovery capability vocabulary for observation/reactivity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRouterCapability",
+          "summary": "Existing framework discovery capability vocabulary for router entities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkExpressionCapability",
+          "summary": "Existing framework discovery capability vocabulary for expression/parser entities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRenderingCapability",
+          "summary": "Existing framework discovery capability vocabulary for rendering/lifecycle structures."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/framework/discovery-seeds.ts",
+          "symbolName": "FrameworkExportCapability",
+          "summary": "Existing package-export capability vocabulary used by framework discovery and bundle analysis."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.resources",
+          "projection": "convergence",
+          "summary": "Framework resource convergence evidence for built-ins, source carriers, admission, syntax, and materialization."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "doc-snippets",
+          "summary": "Docs/tests corpus evidence for app-author source forms such as local templates, styles, router, bindings, and plugins."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Router/viewport/route-context/route-tree relationship evidence for admission and area navigation capabilities."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "relationships",
+          "summary": "Observation and binding observer evidence for proxy/getter/collection/binding capability rows."
+        },
+        {
+          "kind": "lens",
+          "lensId": "bridge.aulink",
+          "projection": "anchors",
+          "summary": "Semantic-runtime coverage signal for framework concepts already mirrored through auLink."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringAxis",
+          "summary": "Current app-builder lowering axes that should be rechecked against the framework capability terrain."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkObserverCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRouterCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkExpressionCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRenderingCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/framework/discovery-seeds.ts",
+          "symbolName": "FrameworkExportCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringAxis"
+        }
+      ],
+      "createdAt": "2026-05-26",
+      "updatedAt": "2026-05-26"
+    }
+  ]
+}

@@ -1,0 +1,965 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "searchable-data-table",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Data table state source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        }
+      ]
+    },
+    {
+      "summary": "Data table state should expose composed filter, sort, pagination and selection state.",
+      "effectKind": "state-composition",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "ownerClassName",
+          "value": "ItemTableState"
+        }
+      ]
+    },
+    {
+      "summary": "Data table filtered rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "filteredItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table sorted rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "sortedItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table current page rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "pageItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table service source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "role",
+          "value": "service-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemService"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Data table controls should expose native value target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose native value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose native value data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose checked target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose checked value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose checked data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose checked collection observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "checked-collection-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose checked collection mutation coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "checked-collection-membership-mutation"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose select option-list mutation observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-option-list-mutation-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Data table controls should expose debounce binding behavior application.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "debounce"
+        }
+      ]
+    },
+    {
+      "summary": "Data table list should expose list-renderer component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "list-renderer"
+        }
+      ]
+    },
+    {
+      "summary": "Data table list should materialize header repeat controllers.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Data table list should materialize row synthetic views.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Data table list should observe direct DI state rows.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.pageItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Data table list should observe the active sort column directly.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.sort.column"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table has root and data-table custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has a component-composition host role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "component-composition-host"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has an event-surface component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "event-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Searchable data table component calls the DI-owned state layer.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "component-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table state calls the injected service boundary.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "state-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "service-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has class interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "strategy",
+          "value": "class-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has class-token value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-attribute-tokens"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has class interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has class-toggle value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has class-toggle data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has style interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "strategy",
+          "value": "style-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has style-rule value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-attribute-rules"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has style interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-attribute-rules"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has style-property value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has style-property data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table exposes observed dependencies for direct filter search binding.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.filters.searchQuery"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Searchable data table has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

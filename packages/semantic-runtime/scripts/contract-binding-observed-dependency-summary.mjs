@@ -6,19 +6,19 @@ import {
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const fixtureRoot = 'packages/semantic-runtime/fixtures/authoring/generated-searchable-data-table';
+const fixtureRoot = 'packages/semantic-runtime/fixtures/pressure/app-pattern-searchable-data-table';
 
 const runtime = await createSemanticRuntime({
   workspaceRoot,
   storeKey: 'binding-observed-dependency-summary-contract',
   projects: [{
     rootDir: fixtureRoot,
-    projectKey: 'generated-searchable-data-table',
+    projectKey: 'app-pattern-searchable-data-table',
   }],
 });
 
 const app = await runtime.openApp({
-  projectKey: 'generated-searchable-data-table',
+  projectKey: 'app-pattern-searchable-data-table',
   analysisDepth: 'binding-observation',
 });
 

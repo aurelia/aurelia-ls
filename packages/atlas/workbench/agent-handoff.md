@@ -213,7 +213,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   including `effectRole=signature` and `effectRole=discriminator` when fixture
   selection needs the recipe-fit distinction. Effect-kind rows also carry an `effectSeedPolicy` so corpus
   source-pattern effects can be separated from reopen baselines,
-  authoring-orientation contracts, and closure contracts. Use
+  retired app-pattern migration contracts, and closure contracts. Use
   `framework:corpus -- --projection=fixture-seeds --effectKind=binding-data-flow`
   when you need the same corpus narrowed to expected-effect contract and recipe
   pressure.
@@ -257,7 +257,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   compact display preview; keep it that way when adding source-shaped rules. The
   pressure script reports non-corpus expected-effect contracts without direct
   fixture seeds separately from seedable `corpus-pattern` gaps when they exist;
-  do not chase reopen-baseline, closure, or authoring-orientation contracts as
+  do not chase reopen-baseline, closure, or migrated app-pattern contracts as
   missing docs snippets.
   Template binding and interpolation snippets now seed `binding-observed-dependency`
   when they expose concrete source expressions, so direct state/domain reads can
@@ -439,11 +439,11 @@ pnpm --filter @aurelia-ls/atlas self-check
   materializer bypassing the shared `CheckerExpressionTypeEvaluationCache`,
   while stable hits with high phase time points farther down into TypeChecker,
   observer/value-channel, or record-publication work.
-  Default output is aggregate because the discovered generated-authoring and
+  Default output is aggregate because the discovered app-pattern and
   pressure fixture set is broad and the usual next move depends on combined
   product pressure shape rather than per-root detail; set
   `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` when narrowing a single odd root.
-  It also prints first-pass authoring repair rows from `AuthoringOrientation`.
+  It also prints first-pass diagnostics-to-action rows when repair pressure is present.
   Ideal fixtures should normally show zero repairs; stress fixtures or external pressure
   should classify repair kinds, evidence, support state, and action targets
   without carrying source details into tracked notes.

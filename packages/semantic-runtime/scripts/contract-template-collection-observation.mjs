@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AuthoringVerificationRequest,
+  FixtureVerificationRequest,
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
-  readAuthoringVerificationSnapshot,
-  verifyAuthoringEffects,
+  readFixtureVerificationSnapshot,
+  verifyFixtureEffects,
 } from '../out/index.js';
 import { exactSourceSpanFailures } from './contract-source-span-assertions.mjs';
 
@@ -397,9 +397,9 @@ const expectedEffects = [
   ),
 ];
 
-const snapshot = readAuthoringVerificationSnapshot(app);
-const verification = verifyAuthoringEffects(
-  new AuthoringVerificationRequest(null, expectedEffects),
+const snapshot = readFixtureVerificationSnapshot(app);
+const verification = verifyFixtureEffects(
+  new FixtureVerificationRequest(null, expectedEffects),
   snapshot,
 );
 const failures = verification.effectResults

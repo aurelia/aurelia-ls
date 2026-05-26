@@ -185,7 +185,7 @@ disposed handle characters, and net handle characters before assuming product/de
 Diagnostic answers now expose one concrete inquiry-algebra lever: `diagnosticProjection`. Overview-style queries use
 `available-products` when they need summary signal without answer-time TypeChecker projection, while explicit diagnostic
 queries can use `type-projection` to run weak owner/member analysis. The graph now measures those answer-time TypeChecker
-products and disposes them for the `lsp-diagnostics` profile, while fixture/authoring profiles may retain them when the
+products and disposes them for the `lsp-diagnostics` profile, while fixture/app-builder profiles may retain them when the
 pressure run needs to inspect the products. The deeper remaining frontier is to make more of those diagnostic type
 projections answer-local from the start instead of briefly publishing durable kernel products just to dispose them at
 the boundary.
@@ -310,7 +310,7 @@ targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed miss
 text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,
 resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` accepts a
 path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
-sampled without changing the script. The known `fixtures/authoring` and `fixtures/pressure` collection roots expand to
+sampled without changing the script. The known `fixtures/pressure` and `fixtures/app-builder` collection roots expand to
 their child fixture projects; `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY` mirrors
 `SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/package-tsconfig roots. The script requests paged runtime
 summary rows explicitly, because `runtime.summary()` defaults to no project rows for large workspaces. Use

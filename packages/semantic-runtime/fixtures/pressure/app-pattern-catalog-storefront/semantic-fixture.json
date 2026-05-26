@@ -1,0 +1,1878 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "catalog-storefront",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog state source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "CatalogState"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog state should expose composed state objects.",
+      "effectKind": "state-composition",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "ownerClassName",
+          "value": "CatalogState"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog items collection should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "visibleItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog items collection plain getter should observe Map values.",
+      "effectKind": "computed-observer-observed-dependency",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "visibleItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "proxy-collection-read"
+        },
+        {
+          "field": "sourceName",
+          "value": "this.itemsById"
+        },
+        {
+          "field": "methodName",
+          "value": "values"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog service source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "role",
+          "value": "service-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemCatalogService"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog status promise owner template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status promise owner synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status pending branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-pending"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status pending branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-pending"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status fulfilled branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-fulfilled"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status fulfilled branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-fulfilled"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status rejected branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-rejected"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "promise-branch-to-promise"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "promise"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog status rejected branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "promise-rejected"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Item list should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog list should expose list-renderer component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "list-renderer"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should bind local Item objects into a local card.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item"
+        },
+        {
+          "field": "sourceType",
+          "value": "Item"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "item"
+        },
+        {
+          "field": "targetValueType",
+          "value": "Item | null"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should observe direct DI state items without VM forwarding getters.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.items.visibleItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose native filter value target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose native filter value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose native filter value data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose in-stock checked target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose in-stock checked value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose in-stock checked data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose badge select option-list observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-option-list-mutation-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should expose debounce binding behavior for search.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "debounce"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should observe direct DI state search filter reads.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.items.searchText"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should materialize repeat template-controller hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog list should materialize repeat synthetic-view hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability switch owner template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability switch owner synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "single"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability case branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-case"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "switch-case-to-switch"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "switch"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability case branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-case"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability default branch template-controller row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-default"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        },
+        {
+          "field": "templateControllerLinkKind",
+          "value": "switch-case-to-switch"
+        },
+        {
+          "field": "linkedTemplateControllerName",
+          "value": "switch"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog availability default branch synthetic-view row.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "switch-default"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog storefront has root, list, and card custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog storefront has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has a component-composition host role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "component-composition-host"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has an event-surface component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "event-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog storefront has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog storefront has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Catalog storefront has class interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "strategy",
+          "value": "class-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has class-token value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-attribute-tokens"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has class interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has style interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "strategy",
+          "value": "style-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has style-rule value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-attribute-rules"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has style interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-attribute-rules"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has class-toggle value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has class-toggle data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has style-property value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has style-property data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has conditional template-controller rows.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "conditional"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has else template-controller rows.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "conditional-else"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has truthiness value channels for conditional controllers.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-truthiness"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "boolean"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront preserves boolean truthiness inputs for conditional controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "boolean"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-truthiness"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has switch owner value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-switch-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "ItemAvailability"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront preserves availability enum inputs for switch controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.availability"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "ItemAvailability"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-switch-value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has promise owner value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-promise-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "Promise<unknown>"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "Promise<string>"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront preserves promise inputs for promise controllers.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "catalogStatus"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "Promise<unknown>"
+        },
+        {
+          "field": "targetValueType",
+          "value": "Promise<string>"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-promise-value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has fulfilled promise branch value-channel typing.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "channelKind",
+          "value": "template-controller-promise-branch-value"
+        },
+        {
+          "field": "rawTargetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "string"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront unwraps fulfilled promise branch values into template scope.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "notice"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "targetPropertyType",
+          "value": "unknown"
+        },
+        {
+          "field": "targetValueType",
+          "value": "string"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-promise-branch-value"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront exposes plain selection count getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "itemCount"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront components call the DI-owned state layer.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "component-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront state calls the injected service boundary.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "state-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "service-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront root binds DI-owned state projections directly.",
+      "effectKind": "service-interaction-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingSourceName",
+          "value": "state.selectionProgressPercent"
+        },
+        {
+          "field": "bindingSourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "bindingTargetProperty",
+          "value": "style"
+        },
+        {
+          "field": "interactionTargetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "interactionTargetClassName",
+          "value": "CatalogState"
+        },
+        {
+          "field": "interactionMemberName",
+          "value": "selectionProgressPercent"
+        },
+        {
+          "field": "interactionOperationKind",
+          "value": "read"
+        },
+        {
+          "field": "interactionIsSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront card binds directly to entity presentation getters.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.priceLabel"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "item"
+        },
+        {
+          "field": "sourceType",
+          "value": "string"
+        },
+        {
+          "field": "targetProperty",
+          "value": "textContent"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront card observed dependencies mark entity getter reads as accessors.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.priceLabel"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        },
+        {
+          "field": "observedMemberKind",
+          "value": "accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront exposes plain Item getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "memberName",
+          "value": "priceLabel"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront card disabled binding reads entity stock directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "item.inStock"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "item"
+        },
+        {
+          "field": "targetProperty",
+          "value": "disabled"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "sourceType",
+          "value": "boolean"
+        }
+      ]
+    },
+    {
+      "summary": "Catalog storefront has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

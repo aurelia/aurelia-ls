@@ -1,0 +1,334 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "intent:app-builder-pattern-ontology",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "app-builder",
+        "ontology",
+        "fixtures",
+        "mcp"
+      ],
+      "summary": "The app-builder direction is an AI-first algebra for app intent, reusable mechanics, domain presets, seed data, Aurelia lowering, source plans, and verification.",
+      "rationale": "Earlier authoring memory over-corrected away from recipe-key multiplication and then started steering against legitimate first-class choices. Durable app-builder guidance should state the ownership model positively: orthogonal choices may each have stable IDs when they represent a distinct user-visible decision or lowering policy; what should be avoided is hiding concrete domains, sample data, presentation, or multi-axis bundles inside one opaque recipe key.",
+      "guidance": [
+        "Treat app-builder as a staged AI-facing workflow: user intent -> seed profile -> starter intent -> scenario/solution-space bias -> pattern composition -> domain preset or domain slots -> seed data set -> Aurelia lowering axes -> source-plan preview -> generated source -> semantic reopen and verification.",
+        "Stable IDs are appropriate when they name a real selectable dimension. Use separate IDs for seed profiles, starter intents, pattern compositions, domain presets, seed data sets, solution spaces, reference scenarios, Aurelia lowering axes, source plans, and verification effects when those choices need to be independently inspected, selected, or overridden.",
+        "Avoid recipe keys that smuggle multiple independent dimensions into one opaque name. Prefer a composition of typed selections when routing, validation, localization, service boundaries, seed data, domain shape, or presentation can vary independently.",
+        "Pattern identities name reusable mechanics such as app shells, collection browsing, state/domain boundaries, value channels, route selection, template-controller use, and class/style binding. They should not name sample domains, fixture copy, CSS, or starter records.",
+        "Domain presets fill entity/schema/operation vocabulary for callers that do not yet have a domain. They are selectable starter inputs, not reusable mechanic identities.",
+        "Seed data sets own visible records, audience, density, purpose, and domain compatibility. Public starters should choose `none` or a public seed data set deliberately; demo and inspection data stay explicit.",
+        "Solution spaces and reference scenarios bias menus and fixture pressure. They may be opinionated about domains such as commerce, support, or analytics, but they should not carry concrete app nouns or sample records into pattern identity.",
+        "Aurelia lowering axes describe framework-specific projection choices after app intent and mechanics are known. App-global policies include convention admission, router admission, shared-state ownership, package capabilities, and app style policy.",
+        "Resource-local and area-local policies include resource declaration/configuration, local view-model or bindable state, binding-driven versus router-driven area navigation, resource DOM encapsulation, and resource style policy. Nested viewports are a consequence of router-driven area composition, not an independent app-global policy.",
+        "Before adding or reshaping durable Aurelia lowering axes, route through the framework capability terrain so source forms, locality, global policy, feature admission, and semantic consequences are not collapsed into one local enum.",
+        "The current resource declaration/local-template axis is a known canary for that terrain: convention-vs-explicit belongs closer to app/project policy, decorator/static/define are source metadata forms, and inline/local custom elements are locality/code-economy choices.",
+        "Inline custom elements, Shadow DOM, cssModules, shadowCSS, global stylesheets, component stylesheets, local view-model state, bindable pass-through, and router-driven or binding-driven area selection are app-builder lowering axes now, but they should not be accepted by source generation until a compatible composition/source lowering can emit them truthfully.",
+        "Source generation is a lowering step, not the ontology. Return typed menus, compatibility, required slots, preview files, and verification promises before emitting source text when that saves tokens or prevents accidental app-specific leakage.",
+        "Expected semantic effects are the verification contract for generated source. If a pattern composition cannot state what reopening the app should prove, its semantics are still too textual.",
+        "The retired recipe-authoring API is not a public generation surface. New app-generation work belongs in app-builder; migrated app-pattern fixtures in `fixtures/pressure/app-pattern-*` are pressure material, not an ontology to preserve.",
+        "Do not recreate catalog/storefront/table/form variants as hard-coded source generators. Model them as typed selections over seed profile, starter intent, solution space, reusable patterns, domain preset or slots, seed data, Aurelia lowering axes, source plan, and expected effects.",
+        "Keep app-builder direction in Atlas memory and Work Router. Scratch `.temp` files may help a run, but durable routing should point at app-builder source files, goldens, and verification contracts.",
+        "Current executable slices are minimal app shell and state-backed collection list. Treat them as plumbing and taste canaries, not proof that the ontology is complete.",
+        "Future domains should be added with paired seed-data strategy from the start: at minimum no-data plus one public small set, and optionally demo/inspection sets for fixture pressure."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/seed-profile.ts",
+          "symbolName": "AppBuilderSeedProfileId",
+          "summary": "Seed profile identities and axes for scale, data posture, architecture depth, routing depth, presentation posture, and code economy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/intent.ts",
+          "symbolName": "AppBuilderStarterIntentId",
+          "summary": "Starter intent identities offered after seed profile selection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringSelection",
+          "summary": "Typed Aurelia lowering selection whose scalar axes are exclusive and array axes are stackable."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderConventionPolicy",
+          "summary": "App-global convention admission policy for convention-enabled versus explicit resource declarations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceDeclarationMode",
+          "summary": "Current provisional per-resource declaration mode; framework capability terrain should split convention policy, metadata source forms, and local inline resource locality more cleanly."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAppStateOwnershipMode",
+          "summary": "App-global shared-state ownership policy for DI state classes versus @aurelia/state stores."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderLocalStatePolicy",
+          "summary": "Local state mechanics for compact apps, small sections, and bindable pass-through boundaries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderRouterAdmissionPolicy",
+          "summary": "App-global router admission policy for no-router versus router-configured starters."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAreaNavigationPolicy",
+          "summary": "Per-area view-selection policy for binding-driven versus router-driven menus and list/detail flows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceDomEncapsulationMode",
+          "summary": "Per-resource DOM encapsulation axis for light DOM versus open or closed Shadow DOM."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAppStylePolicy",
+          "summary": "Stackable app-level stylesheet policies such as global stylesheets."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceStylePolicy",
+          "summary": "Stackable per-resource style policies for component stylesheets, cssModules, and shadowCSS."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/solution-space.ts",
+          "symbolName": "AppBuilderSolutionSpaceId",
+          "summary": "Canonical product/application spaces used to bias pattern menus without becoming caller domain slots."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/pattern.ts",
+          "symbolName": "AppBuilderPatternId",
+          "summary": "Durable app-building mechanic identities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/composition.ts",
+          "symbolName": "AppBuilderPatternComposition",
+          "summary": "Compact pattern composition contract used before Aurelia source lowering."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/reference-scenario.ts",
+          "symbolName": "AppBuilderReferenceScenarioId",
+          "summary": "Publicly grounded scenario archetypes used as pressure without becoming recipe identity."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/app-builder/README.md",
+          "summary": "Starting-point explanation for AI-first app-builder pattern algebra."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/starter.ts",
+          "symbolName": "buildAppBuilderStarter",
+          "summary": "First executable no-app starter slice: staged menus, lowering preview, and generation through shared SourcePlan artifacts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/composition-catalog.ts",
+          "symbolName": "APP_BUILDER_STARTER_COMPOSITIONS",
+          "summary": "Core app-builder compositions that can lower without going through legacy authoring recipes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan",
+          "summary": "Shared source artifact plan emitted by app-builder before any host writes files."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/minimal-app-source.ts",
+          "symbolName": "appBuilderMinimalAppSourcePlan",
+          "summary": "First concrete source lowering for decorator and convention minimal app shells."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/materialize-app-builder-fixtures.mjs",
+          "summary": "Materializes app-builder generated source plans into committed inspection goldens."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/goldens",
+          "summary": "Generated app-builder source goldens for direct inspection."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure",
+          "summary": "Migrated app-pattern pressure fixtures that preserve analysis and verification value without owning public generation direction."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/domain-preset.ts",
+          "symbolName": "AppBuilderDomainPresetId",
+          "summary": "Public starter-domain preset identities that fill domain slots without becoming pattern ontology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/collection-list-source.ts",
+          "symbolName": "appBuilderCollectionListSourcePlan",
+          "summary": "First nontrivial app-builder source lowering for state-backed collection/add-item starters."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/goldens/task-list-clean-starter",
+          "summary": "Generated app-builder golden for the clean state-backed task-list domain preset."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/seed-data.ts",
+          "symbolName": "AppBuilderSeedDataSetId",
+          "summary": "Seed data set identities and audience/density/purpose vocabulary for app-builder generated records."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/catalog.ts",
+          "symbolName": "APP_BUILDER_SEED_DATA_SETS",
+          "summary": "Seed data set catalog kept separate from domain presets and pattern compositions."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/seed-profile.ts",
+          "symbolName": "AppBuilderSeedProfileId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/intent.ts",
+          "symbolName": "AppBuilderStarterIntentId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringSelection"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderConventionPolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceDeclarationMode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAppStateOwnershipMode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderLocalStatePolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderRouterAdmissionPolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAreaNavigationPolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceDomEncapsulationMode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAppStylePolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderResourceStylePolicy"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/solution-space.ts",
+          "symbolName": "AppBuilderSolutionSpaceId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/pattern.ts",
+          "symbolName": "AppBuilderPatternId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/composition.ts",
+          "symbolName": "AppBuilderPatternComposition"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/reference-scenario.ts",
+          "symbolName": "AppBuilderReferenceScenarioId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/starter.ts",
+          "symbolName": "buildAppBuilderStarter"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/composition-catalog.ts",
+          "symbolName": "APP_BUILDER_STARTER_COMPOSITIONS"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/minimal-app-source.ts",
+          "symbolName": "appBuilderMinimalAppSourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/domain-preset.ts",
+          "symbolName": "AppBuilderDomainPresetId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/collection-list-source.ts",
+          "symbolName": "appBuilderCollectionListSourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/seed-data.ts",
+          "symbolName": "AppBuilderSeedDataSetId"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/catalog.ts",
+          "symbolName": "APP_BUILDER_SEED_DATA_SETS"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-05-26"
+    }
+  ]
+}

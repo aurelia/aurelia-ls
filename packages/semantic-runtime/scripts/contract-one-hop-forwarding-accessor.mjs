@@ -1,11 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AuthoringVerificationRequest,
   createSemanticRuntime,
-  ExpectedSemanticEffect,
-  readAuthoringVerificationSnapshot,
-  verifyAuthoringEffects,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -26,52 +22,53 @@ const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
 
-const expectedEffects = [
-  ExpectedSemanticEffect.signatureTaste(
-    'Authoring orientation should flag one-hop accessors that only forward injected state.',
-    'template-model-access',
-    'one-hop-forwarding-accessor-pressure',
-    'component',
-  ),
-  ExpectedSemanticEffect.signatureTaste(
-    'Authoring orientation should still recognize direct injected state template reads.',
-    'template-model-access',
-    'direct-state-domain-template-binding',
-    'template-binding',
-  ),
-];
+const computedObserverSources = app.ask({
+  kind: 'computed-observer-sources',
+  page: { size: 100 },
+}).value.rows;
+const bindingObservedDependencies = app.ask({
+  kind: 'binding-observed-dependencies',
+  page: { size: 100 },
+}).value.rows;
+const bindingDataFlows = app.ask({
+  kind: 'binding-data-flows',
+  page: { size: 100 },
+}).value.rows;
 
-const snapshot = readAuthoringVerificationSnapshot(app);
-const verification = verifyAuthoringEffects(
-  new AuthoringVerificationRequest(null, expectedEffects),
-  snapshot,
+const failures = [];
+const observedTemplateGetterReads = bindingObservedDependencies.filter((row) =>
+  row.definitionName === 'one-hop-forwarding-accessor-app'
+  && row.dependencyKind === 'template-expression-read'
+  && row.observedMemberKind === 'accessor'
 );
-const failures = verification.effectResults
-  .filter((result) => result.outcome === 'failed')
-  .map((result) => result.summary);
+const directStateTemplateReads = bindingObservedDependencies.filter((row) =>
+  row.definitionName === 'one-hop-forwarding-accessor-app'
+  && row.sourceName === 'state.selectedName'
+  && row.observedMemberKind === 'property'
+);
+const directStateDataFlows = bindingDataFlows.filter((row) =>
+  row.definitionName === 'one-hop-forwarding-accessor-app'
+  && row.sourceName === 'state.selectedName'
+  && row.sourceType === 'string'
+  && row.targetProperty === 'textContent'
+);
+const forwardingComputedSources = computedObserverSources.filter((row) =>
+  row.className === 'OneHopForwardingAccessorApp'
+  && row.dependencyMode === 'proxy-auto-track'
+  && row.observerKind === 'computed-observer'
+  && row.triggerKind === 'accessor-descriptor'
+);
 
-const modelAccessAxis = snapshot.authoringOrientation.taste.find((axis) =>
-  axis.axisKey === 'template-model-access'
-);
-const modelAccessValues = modelAccessAxis?.values.map((value) => ({
-  valueKey: value.valueKey,
-  evidenceCount: value.evidence.reduce((total, evidence) => total + (evidence.count ?? 0), 0),
-})) ?? [];
-const forwardingPressure = modelAccessValues.find((value) =>
-  value.valueKey === 'one-hop-forwarding-accessor-pressure'
-);
-const sourceBackedGetterObservation = modelAccessValues.find((value) =>
-  value.valueKey === 'source-backed-getter-observation'
-);
-
-if (forwardingPressure?.evidenceCount !== 1) {
-  failures.push(`Expected exactly one one-hop forwarding accessor, received ${forwardingPressure?.evidenceCount ?? 0}.`);
+if (observedTemplateGetterReads.length !== 2) {
+  failures.push(`Expected exactly two template getter reads, received ${observedTemplateGetterReads.length}.`);
 }
 
-if (sourceBackedGetterObservation?.evidenceCount !== 2) {
-  failures.push(
-    `Expected exactly two template-read source-backed getter observations, received ${sourceBackedGetterObservation?.evidenceCount ?? 0}.`
-  );
+if (directStateTemplateReads.length !== 1 || directStateDataFlows.length !== 1) {
+  failures.push(`Expected one direct state template read and data-flow row, received ${directStateTemplateReads.length}/${directStateDataFlows.length}.`);
+}
+
+if (forwardingComputedSources.length !== 4) {
+  failures.push(`Expected four getter observer source rows, received ${forwardingComputedSources.length}.`);
 }
 
 if (failures.length > 0) {
@@ -79,13 +76,47 @@ if (failures.length > 0) {
     ok: false,
     fixtureRoot,
     failures,
-    modelAccessValues,
+    observedTemplateGetterReads: observedTemplateGetterReads.map(summaryObservedDependency),
+    directStateTemplateReads: directStateTemplateReads.map(summaryObservedDependency),
+    directStateDataFlows: directStateDataFlows.map(summaryDataFlow),
+    forwardingComputedSources: forwardingComputedSources.map(summaryComputedSource),
   }, null, 2));
   process.exitCode = 1;
 } else {
   console.log(JSON.stringify({
     ok: true,
     fixtureRoot,
-    modelAccessValues,
+    observedTemplateGetterReads: observedTemplateGetterReads.map(summaryObservedDependency),
+    directStateTemplateReads: directStateTemplateReads.map(summaryObservedDependency),
+    directStateDataFlows: directStateDataFlows.map(summaryDataFlow),
+    forwardingComputedSources: forwardingComputedSources.map(summaryComputedSource),
   }, null, 2));
+}
+
+function summaryObservedDependency(row) {
+  return {
+    sourceName: row.sourceName,
+    sourceRootName: row.sourceRootName,
+    observedMemberKind: row.observedMemberKind,
+    observedMemberSourceState: row.observedMemberSourceState,
+  };
+}
+
+function summaryDataFlow(row) {
+  return {
+    sourceName: row.sourceName,
+    sourceType: row.sourceType,
+    targetProperty: row.targetProperty,
+    targetValueType: row.targetValueType,
+  };
+}
+
+function summaryComputedSource(row) {
+  return {
+    className: row.className,
+    memberName: row.memberName,
+    triggerKind: row.triggerKind,
+    dependencyMode: row.dependencyMode,
+    observedDependencies: row.observedDependencies,
+  };
 }

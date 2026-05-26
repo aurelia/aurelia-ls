@@ -16,8 +16,8 @@
         "Start here before adding validation diagnostics or changing validation framework-error dispositions.",
         "Use framework.errors for the validation package and the framework validation sources before spending another AUR41xx authority row.",
         "Keep validation source-rule diagnostics separate from validation-html binding behavior; validation-html template semantics should stay in template/binding lanes unless the issue is genuinely rule-source owned.",
-        "AuthoringOrientation may report validation ownership from positive validation-html `& validate` applications, validation package configuration admissions, validation service resolve sites, or validation source-rule issue rows; do not confuse that taste signal with the narrower ValidationIssue diagnostic product lane.",
-        "The generated `validated-state-backed-form` authoring recipe is the positive ownership canary for validation-html: it should materialize `validate` through `BindingBehaviorApplications`, expose any static validation trigger through `staticArgumentValues`, satisfy `validation-controller-usage`, and avoid producing ValidationIssue diagnostics.",
+        "Validation/app topology rows may report validation ownership from positive validation-html `& validate` applications, validation package configuration admissions, validation service resolve sites, or validation source-rule issue rows; do not confuse that taste signal with the narrower ValidationIssue diagnostic product lane.",
+        "The generated `validated-state-backed-form` app-pattern fixture is the positive ownership canary for validation-html: it should materialize `validate` through `BindingBehaviorApplications`, expose any static validation trigger through `staticArgumentValues`, satisfy `validation-controller-usage`, and avoid producing ValidationIssue diagnostics.",
         "`dynamic-keyed-validation` is the contrastive validation-html pressure canary: repeat-local keyed writes such as `person[field] & validate` and nested keyed writes such as `person[addressField][line1Field] & validate` should remain analyzable as binding-behavior applications plus runtime-assignable two-way data flows without becoming a generated authoring recommendation.",
         "Current exact source-owned codes are AUR4101 rule_provider_no_rule_found, AUR4102 unable_to_parse_accessor_function, AUR4105 hydrate_rule_unsupported, AUR4106 hydrate_rule_invalid_name, and AUR4108 group_rule_invalid_execution_result.",
         "Do not claim AUR4100, AUR4103, or AUR4104 until semantic-runtime admits serialized validation payloads; do not claim AUR4107 or AUR4109 until it admits live validation rule execution or custom rule return values."
@@ -42,8 +42,8 @@
         },
         {
           "kind": "fixture",
-          "path": "packages/semantic-runtime/fixtures/authoring/generated-validated-state-backed-form",
-          "summary": "Recommendable validation-html authoring fixture with positive validation ownership."
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form",
+          "summary": "Recommendable validation-html app-pattern fixture with positive validation ownership."
         },
         {
           "kind": "fixture",
@@ -112,17 +112,17 @@
         "template",
         "binding",
         "framework-errors",
-        "authoring"
+        "app-builder"
       ],
       "summary": "Validation-html validate binding behavior and ValidationController property-info semantics need a shared substrate before bridge role evidence is complete.",
       "rationale": "Aurelia's validate binding behavior evaluates trigger, controller, and rule arguments at bind time, registers the rendered PropertyBinding with ValidationController, and later derives object/propertyName through ValidationController.getPropertyInfo. Semantic-runtime already models the closed bind-time diagnostics and AUR4205 parser-owned property-expression issue, but Atlas bridge evidence still lacks a validation relationship row for validation-html:ValidationController. Treat that as missing relationship substrate, not as an invitation to attach a generic role.",
       "guidance": [
-        "Start here when work touches `& validate`, ValidationController property path extraction, validation-html AUR4200-AUR4206 dispositions, or validated form authoring facts.",
+        "Start here when work touches `& validate`, ValidationController property path extraction, validation-html AUR4200-AUR4206 dispositions, or validated form fixture facts.",
         "Ground changes in `ValidateBindingBehavior._processBindingExpressionArgs`, `_ensureController`, `_ensureTrigger`, `_getTarget`, and `ValidationController.getPropertyInfo` before changing semantic-runtime template behavior.",
         "Keep AUR4200-AUR4204 as validate bind-time checks and AUR4205 as parser-owned property-expression support; leave AUR4206 unclaimed unless semantic-runtime admits malformed or foreign framework AST objects.",
         "Do not close the `validation-html:ValidationController` bridge no-role row with a generic resource or DI label. The role should come from a validation binding-behavior/property-info relationship substrate joined to framework-error authority.",
-        "Generated validated form recipes should prove positive validation ownership through `BindingBehaviorApplications`, static trigger argument facts, and `validation-controller-usage` taste without adding view-model forwarding getters only for validation metadata.",
-        "Contrastive fixtures such as dynamic keyed validation should stay analysis pressure: they may prove writable data-flow and validate application facts without becoming recommendable authoring output."
+        "Migrated validated form app-pattern fixtures should prove positive validation ownership through `BindingBehaviorApplications`, static trigger argument facts, and `validation-controller-usage` taste without adding view-model forwarding getters only for validation metadata.",
+        "Contrastive fixtures such as dynamic keyed validation should stay analysis pressure: they may prove writable data-flow and validate application facts without becoming recommendable app-builder output."
       ],
       "anchors": [
         {
@@ -144,15 +144,9 @@
           "summary": "Materializes validate binding-behavior applications and issues from rendered bindings."
         },
         {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/authoring/state-backed-form-recipe.ts",
-          "symbolName": "buildValidatedStateBackedFormPlan",
-          "summary": "Recommendable validated form authoring recipe."
-        },
-        {
           "kind": "fixture",
-          "path": "packages/semantic-runtime/fixtures/authoring/generated-validated-state-backed-form",
-          "summary": "Positive validation-html authoring fixture."
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form",
+          "summary": "Positive validation-html app-pattern fixture."
         },
         {
           "kind": "fixture",
@@ -201,7 +195,7 @@
         },
         {
           "kind": "source-file-exists",
-          "filePath": "packages/semantic-runtime/fixtures/authoring/generated-validated-state-backed-form/src/components/state-backed-form.html"
+          "filePath": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form/src/components/state-backed-form.html"
         },
         {
           "kind": "source-file-exists",
@@ -213,7 +207,7 @@
         }
       ],
       "createdAt": "2026-05-19",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-05-26"
     }
   ]
 }

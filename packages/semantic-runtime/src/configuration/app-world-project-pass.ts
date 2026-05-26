@@ -288,7 +288,7 @@ export class AureliaAppWorldProjectEmission {
     readonly routeContextParameterReads: RouteContextParameterReadProjectResult,
     /** Configuration recognition and kernel emission over the project. */
     readonly configuration: ConfigurationRecognitionProjectResult,
-    /** Static i18n translation keys admitted from configuration resources for authoring. */
+    /** Static i18n translation keys admitted from configuration resources for analysis. */
     readonly i18n: I18nTranslationCatalogProjectResult,
     /** @aurelia/state store configurations admitted from builder flow before AppTask execution. */
     readonly state: StateProjectResult,

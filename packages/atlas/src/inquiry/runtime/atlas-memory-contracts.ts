@@ -326,7 +326,7 @@ export interface AtlasMemoryRecord {
   readonly id: string;
   /** Record family. */
   readonly kind: AtlasMemoryRecordKind;
-  /** Broad problem domains such as evaluator, router, or authoring. */
+  /** Broad problem domains such as evaluator, router, app-builder, or fixture verification. */
   readonly domains: readonly string[];
   /** Compact human summary. */
   readonly summary: string;

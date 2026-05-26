@@ -23,9 +23,8 @@ import {
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const authoringFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring');
 const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure');
-const defaultRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring/storefront');
+const defaultRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-storefront');
 const analysisDepth = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_DEPTH ?? 'binding-observation';
 const projectShapeFilter = pressureProjectShapeFilter();
 const projectDiscovery = pressureProjectDiscovery();
@@ -45,14 +44,12 @@ const diagnosticReadLimitPerProject = integerEnv(
 );
 const pressureRootSelectionConfig = {
   workspaceRoot,
-  authoringFixtureRoot,
   pressureFixtureRoot,
   defaultRoots: [defaultRoot],
   envRootNames: ['SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS', 'SEMANTIC_RUNTIME_PRESSURE_ROOTS'],
-  includeAuthoringFixtureName: (name) => name.startsWith('generated-') || name === 'storefront',
   usageName: 'pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci',
   label: 'cursor-locus pressure',
-  fixtureHelp: 'Use --fixture pressure-name, pressure:<name>, or authoring:<name> for focused cursor pressure.',
+  fixtureHelp: 'Use --fixture pressure-name or pressure:<name> for focused cursor pressure.',
 };
 const cliOptions = parsePressureRootCliOptions(process.argv.slice(2), pressureRootSelectionConfig);
 const defaultCursorPressureAnalysisKinds = new Set([
