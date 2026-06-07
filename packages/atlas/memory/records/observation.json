@@ -30,8 +30,8 @@
           "RuntimeBindingSourceValueEvaluationContext carries the binding-behavior lifecycle explicitly. Do not encode AstEvaluateOnly by dropping the binding-expression scope projector; nested bound-controller/source-value reads may still need the projector while the current expression stays evaluate-only.",
           "Bound-controller source-value reads should use RuntimeBindingSourceValueEvaluationContext.projectBindingSourceValueContext(...) before evaluating the stored parent expression, so parent binding-behavior scope handoffs such as & state are spent when child properties are read through getters, composition, or static value reduction.",
           "StateBinding scope slots may reduce through the configured initial-state source address by way of RuntimeBindingSourceEvaluationFrame.evaluateSourceAddressExpression(...); keep that as initial-state static value support, not an action/lifecycle store emulator.",
-          "Consumers such as router instruction materialization, dynamic composition, repeat static values, and template-controller let-value closure should pass a RuntimeBindingSourceValueEvaluationContext instead of mutating evaluator-level active container or recursion state.",
-          "Direct ambient resolve(ClassKey) calls can close during activation-like instance/member source reads because the reused Aurelia runtime host can instantiate evaluator-local class keys. Registered/interface DI keys can close through RuntimeBindingSourceActivationContext when the read also has an active modeled container; wrapper keys and unsupported resolver branches remain DI-world activation pressure.",
+          "Consumers such as router instruction materialization, dynamic composition, repeat static values, and template-controller let-value closure should pass a RuntimeBindingSourceValueEvaluationContext instead of mutating evaluator-level active container or recursion state. Router-resource reads now enter through `routerSourceExpressionEvaluationFrame(...)`, which is the explicit router-owned source-value context/open-row bridge guarded by `contract:expression-context-usage`.",
+          "Direct ambient resolve(ClassKey) calls can close during activation-like instance/member source reads because the reused Aurelia runtime host can instantiate evaluator-local class keys. Registered/interface DI keys can close through RuntimeBindingSourceActivationContext when the read also has an active modeled container; RuntimeBindingSourceActivationContext.resolveCallFrame(...) owns call/key admission before resolver lookup or open-row wording, while wrapper keys and unsupported resolver branches remain DI-world activation pressure.",
           "AccessKeyed is part of binding-owned source-value evaluation: exact array/object reads may close to element/property values, exact object misses close as undefined, and unknown array membership/order should stay open rather than becoming a feature-local router/template shortcut.",
           "ArrayLiteral and ObjectLiteral are binding-source values too. Reduce their element/property values in RuntimeBindingSourceValueEvaluator, preserve binding-scope holes as boundary values when the shape is static, and keep router/composition consumers downstream of that value shape.",
           "Primitive binary value reduction should reuse evaluation/operators.ts after Scope reads close; keep only binding-specific boundary string-pattern handling in RuntimeBindingSourceValueEvaluator.",
@@ -173,6 +173,24 @@
           "summary": "Binding-source DI activation join over active modeled containers and resolver slots."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
+          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallFrame",
+          "summary": "Activation-scoped resolve(...) call/key admission frame before active-container resolver lookup."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
+          "symbolName": "RuntimeBindingSourceActivationContext.resolveCallWithoutActiveContainer",
+          "summary": "Open-row policy for registered/interface resolve(...) reads that lack active container ancestry."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
+          "symbolName": "RuntimeBindingSourceActivationContext.evaluationValueForResolvedKey",
+          "summary": "Resolved DI key result projection into closed source value or activation open seam."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.observation",
           "projection": "summary",
@@ -258,7 +276,7 @@
       "rationale": "Aurelia runtime throws stopping_a_stopped_effect from Observation.watch and RunEffect stop guards, while method_not_implemented in ast evaluator/connectable mixins is an internal stub guard. Semantic-runtime should model the concrete effect lifecycle without claiming user-extensible evaluator/connectable stubs until those products exist.",
       "guidance": [
         "Use RuntimeEffect when a product needs direct Observation.watch/run source-call rows or IEffect stop-state semantics.",
-        "RuntimeEffect source product publication goes through source-observation-product-publication.ts; only effect-owned dependency rows go through source-observed-dependency-publication.ts.",
+        "RuntimeEffect source product publication goes through source-observation-product-publication.ts; only effect-owned dependency rows go through source-observed-dependency-publication.ts. Both publishers now prepare explicit publication frames before spending them into kernel records, so exact source spans, evidence/provenance handles, source-observer claims, and fallback owner addresses stay visible to Atlas.",
         "Source-level IObservation.watch(...) calls publish runtime-effect products and effect-owned observed-dependency rows; do not route those facts through resource watchers or renderer-owned bindings.",
         "Effect-owned observed-dependency publication goes through source-observed-dependency-publication.ts so exact source-file handles flow from the recognized source site instead of being rediscovered from the broader effect carrier address.",
         "The watch materializer follows framework Observation._doWatch: string expressions route through getExpressionObserver, function getters route through ObserverLocator.getObserver(obj, function) and therefore the function-key ComputedObserver branch.",
@@ -292,9 +310,21 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observation-product-publication.ts",
+          "symbolName": "sourceObservationProductPublicationFrame",
+          "summary": "Prepared source-backed observation product frame before runtime-effect or computed-source record assembly."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
           "symbolName": "sourceObservedDependencyRecords",
           "summary": "Shared publication primitive for source observer/effect-owned observed-dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
+          "symbolName": "sourceObservedDependencyPublicationFrame",
+          "summary": "Prepared source-observer dependency frame for exact spans, fallback owner address, and semantic claim before record assembly."
         },
         {
           "kind": "source",
@@ -616,7 +646,7 @@
         "RuntimeWatcherObservedDependency rows preserve observedMemberKind and observedMemberSource like binding observed-dependency rows. Use runtime-watcher-observed-dependencies when hover/diagnostic/authoring work needs to explain a watcher read against the authored member or TypeScript/library member that would be observed.",
         "Binding and watcher observed-dependency rows now publish per-dependency SourceSpanAddress records when their carrier can be narrowed to an admitted source file. Template bindings parse against the ValueSite source context; property-key ExpressionWatcher strings parse against the string-body source context; ProxyObservable watcher dependencies use the dependency function carrier. If a future row exposes `spanStart` / `spanEnd` but the public `source` regresses to an unexpanded or broader carrier, fix the runtime-expression source publication boundary rather than adding API-local span math.",
         "Observed-dependency rows are semantic dependency products, not raw read-event counters. Use the shared runtime observed-dependency draft helper to dedupe repeated reads by dependency identity rather than by parser span, while keeping distinct lanes for template reads, proxy reads, collection methods, and trackable call evidence.",
-        "Binding-owned and watcher-owned observed dependencies share `runtime-observed-dependency-publication.ts` for the concrete ObservedDependency product/source/claim envelope. Add new owner-specific usage predicates there by parameter, not by copying the same CompilerIdentity/MaterializedProduct/MaterializationRecord ceremony into each materializer.",
+        "Binding-owned and watcher-owned observed dependencies share `runtime-observed-dependency-publication.ts` for the concrete ObservedDependency product/source/claim envelope. `runtimeObservedDependencyPublicationFrame(...)` owns source-address expansion plus owner-specific usage claims, and `runtimeObservedDependencyKernelRecords(...)` owns the record assembly. Add new owner-specific usage predicates there by parameter, not by copying the same CompilerIdentity/MaterializedProduct/MaterializationRecord ceremony into each materializer.",
         "Keep observed-dependency publication attached to the product that owns the semantic question. Binding data-flow owns concrete binding reads; ComputedObservationDefinition owns source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeWatcher owns controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns ProxyObservable dependency reads; binding and proxy execution both reuse the shared @computed/@astTrack method dependency recognizer.",
         "Treat object binding versus ID binding as an authoring/domain-modeling decision, not a universal correctness rule. Direct object binding can be appropriate when the domain model and view model are intentionally close; ID handoff can be better when routeability, lazy loading, component independence, or stale-object avoidance matters.",
         "Nullable object component inputs should preserve both sides of the type story: declared surface such as `Product | null` for target assignability, and effective non-nullable `Product` shape for component-interface taste. Use `contract:component-object-boundary` before changing object-input classification or bindable type-surface projection.",
@@ -813,6 +843,18 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
           "symbolName": "runtimeObservedDependencyRecords",
           "summary": "Shared product/source/claim publication envelope for binding-owned and watcher-owned runtime observed-dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+          "symbolName": "runtimeObservedDependencyPublicationFrame",
+          "summary": "Prepared runtime observed-dependency frame for source-address expansion and owner-specific semantic claims before record assembly."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+          "symbolName": "runtimeObservedDependencyKernelRecords",
+          "summary": "Runtime observed-dependency record assembly boundary that spends the prepared source and claim frame."
         },
         {
           "kind": "source",
@@ -1028,7 +1070,7 @@
         "BindingObservedDependencies now carry observedMemberKind and observedMemberSource for TypeChecker-closed member reads, plus scope-slot/context source for root AccessScope/CallScope reads. Use those fields as the concrete template-read side of the source/use bridge before claiming that a getter source-observer projection is used.",
         "BindingObservedDependencies also expose observedMemberSourceState. Treat source as closed provenance; temporary-value as honest intermediate collection call-result pressure; runtime-scope-name as runtime/synthetic scope pressure such as $host or writeback locals; and scope-open as a genuinely unresolved scope route rather than collapsing all null member sources into missing provenance.",
         "Use computed-observer-observed-dependencies for dependency rows collected from plain getter bodies, dependency functions, and explicit dependency strings. Explicit string dependency rows should point at the dependency literal span when possible, not just the enclosing getter.",
-        "ComputedObserverSource product publication goes through source-observation-product-publication.ts; only its source-owned dependency rows go through source-observed-dependency-publication.ts.",
+        "ComputedObserverSource product publication goes through source-observation-product-publication.ts; only its source-owned dependency rows go through source-observed-dependency-publication.ts. Both publishers prepare explicit publication frames before record assembly, which keeps exact source spans, evidence/provenance handles, source-observer claims, and owner-address fallback visible for Atlas and future IDE/MCP loci.",
         "Computed observer source dependency publication goes through source-observed-dependency-publication.ts so it shares the source-observer-owned record shape with runtime effects without collapsing into binding-owned or watcher-owned observed dependency publication.",
         "Partially readable explicit dependency declarations stay on the getter-owned ControlledComputedObserver path when info.deps is present. Preserve closed string/function dependency rows, keep the source mode open, and do not fall back to getter-body proxy observation.",
         "Do not fold direct ObserverLocator.getObserver(obj, fn) function-key requests into ComputedObserverSource. They are concrete runtime lookup call sites that should get their own product if/when exposed; ComputedObserverSource is the source-backed getter availability/projection lane.",
@@ -1073,9 +1115,21 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observation-product-publication.ts",
+          "symbolName": "sourceObservationProductPublicationFrame",
+          "summary": "Prepared source-backed observation product frame before computed-source or runtime-effect record assembly."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
           "symbolName": "sourceObservedDependencyRecords",
           "summary": "Shared publication primitive for source observer/effect-owned observed-dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
+          "symbolName": "sourceObservedDependencyPublicationFrame",
+          "summary": "Prepared source-observer dependency frame for exact spans, fallback owner address, and semantic claim before record assembly."
         },
         {
           "kind": "source",
@@ -1296,6 +1350,7 @@
         "Event-handler invocation value channels mirror framework ListenerBinding: when the source expression evaluates to a function, Aurelia invokes it with the DOM event. Handler-reference return typing should spend the shared checker signature runtime-argument substrate plus the `dom-node-type.ts` event-map vocabulary used by `$event` scopes and overlay helpers, not first-signature callReturnType metadata.",
         "Matcher boolean-return checks mirror select/checked observer calls: framework observers invoke matchers with two comparison values. Data-flow source-to-target acceptance for custom-matcher-function channels should spend shared signature runtime-argument narrowing with two runtime values rather than trusting first-signature callReturnType metadata.",
         "Use runtime-binding-primitive-value.ts for primitive option/model/value facts: expression literal extraction through transparent parens, DOM value coercion, public row display, TypeScript literal display, uniqueness, and checker assignability should not grow local switch walkers. Parser-level primitive values should remain `ExpressionPrimitiveLiteralValue`, and checker assignability should spend `checkerPrimitiveLiteralType(...)`.",
+        "When API, catalog, or app-builder surfaces need the complete runtime binding value-channel id set, consume `RUNTIME_BINDING_VALUE_CHANNEL_KINDS` from runtime-binding-observation instead of trying to enumerate const enum members locally.",
         "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary."
       ],
       "anchors": [
@@ -1341,6 +1396,12 @@
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
           "symbolName": "runtimeBindingPrimitiveValueForExpression",
           "summary": "Shared primitive binding-value substrate for value-channel drafts, data-flow assignability, and public row display."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RUNTIME_BINDING_VALUE_CHANNEL_KINDS",
+          "summary": "Stable value list for runtime binding value-channel transport and catalog projections."
         },
         {
           "kind": "source",
@@ -1439,6 +1500,7 @@
         "`binding-data-flow-assignability.ts` owns the observer value-channel plus TypeChecker assignment policy for source-to-target and target-to-source comparisons. Data-flow, diagnostics, overlays, MCP repair planning, and future LSP affordances should consume those published assignability facts rather than reopening primitive/string/collection/nullish checks locally.",
         "`binding-data-flow-direction.ts` owns the small but shared direction predicates for source-to-target and target-to-source transport. Use it instead of local `twoWay`/`fromView` boolean checks when a consumer already has a RuntimeBindingDataFlowDirection.",
         "`binding-data-flow-source-info.ts` owns the binding-source descriptor boundary: assignment-target source kind/name/root, spread-source retargeting, and value-converter `fromView` writeback hints. Keep that separate from the rendered binding/source-scope site selection in BindingDataFlowSourceProjector.",
+        "`bindingDataFlowSourceKindForRuntimeAssignmentTarget(...)`, its name/root siblings, and `sourceWriteCapabilityForRuntimeAssignmentTarget(...)` are the local source-info axes for runtime assignment targets. Descriptor classification should stay separate from writeability policy, and writeability should spend the rendered source projection plus TypeChecker/Aurelia astAssign facts rather than reopen scope or checker helpers locally.",
         "`binding-data-flow-source-assignment.ts` owns the final source-assignment result: target-to-source direction, collection mutation exceptions, source-write capability, and target-to-source TypeChecker assignability are joined there before data-flow rows or diagnostics consume `sourceAssignmentKind` / `sourceAssignmentReasonKinds`.",
         "A 2026-05-25 overlay/diagnostic audit found the binding-data-flow substrate partial coverage row to be a standing anti-regression guardrail rather than an active local-duplicate bug: template diagnostics consume data-flow rows and generated overlays consume materialized BindingScope/runtime-assignment slots. If a future pass finds overlay-local assignability, source-write, or value-channel policy, move that fact back into binding-flow instead of widening overlay or API policy.",
         "`binding-source-write-capability.ts` owns the source-write policy bridge from Scope lookup and TypeChecker writability into Aurelia `astAssign` facts. Data-flow row publication should consume its SourceWriteCapability result instead of re-opening checker symbols or duplicating runtime assignment policy.",
@@ -1518,6 +1580,30 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "readBindingDataFlowSummary",
+          "summary": "Public binding data-flow summary answer for compact MCP/LSP source-target, assignability, and issue rollups."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "bindingDataFlowSummaryGroups",
+          "summary": "API-side grouping phase for binding data-flow summary rows before compact projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "addBindingDataFlowSummaryRow",
+          "summary": "API-side accumulator phase for source-root, type, assignment, framework-error, and open-data-flow rollups."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "bindingDataFlowSummaryRow",
+          "summary": "API-side projection phase that turns a binding data-flow accumulator into a compact public summary row."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/binding-source-write-capability.ts",
           "symbolName": "BindingDataFlowSourceWriteCapabilityProjector",
           "line": 67,
@@ -1557,6 +1643,18 @@
           "symbolName": "BindingDataFlowSourceInfoProjector",
           "line": 58,
           "summary": "Binding source descriptor, assignment-target classification, and value-converter writeback hint projector."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-source-info.ts",
+          "symbolName": "bindingDataFlowSourceKindForRuntimeAssignmentTarget",
+          "summary": "Assignment-target source-kind classifier for AccessScope/member/keyed targets before source rows, diagnostics, or repair/edit consumers read the descriptor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-source-info.ts",
+          "symbolName": "sourceWriteCapabilityForRuntimeAssignmentTarget",
+          "summary": "Runtime assignment target writeability bridge that consumes projected source-expression context and TypeChecker/Aurelia astAssign policy."
         },
         {
           "kind": "source",
@@ -1739,6 +1837,21 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "bindingDataFlowSummaryGroups"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "addBindingDataFlowSummaryRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "bindingDataFlowSummaryRow"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/connectable-observed-dependency.ts",
           "symbolName": "collectRuntimeConnectableObservedDependencyDrafts"
         },
@@ -1761,6 +1874,13 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
           "symbolName": "RuntimeBindingExpressionScopeProjector"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingExpressionScopeProjector",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
         },
         {
           "kind": "source-file-exists",
@@ -1826,7 +1946,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-06-02"
     },
     {
       "id": "reuse:observation-source-issues",

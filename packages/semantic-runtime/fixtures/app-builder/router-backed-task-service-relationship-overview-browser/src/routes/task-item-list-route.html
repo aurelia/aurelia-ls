@@ -1,0 +1,41 @@
+<section>
+  <h2>Tasks</h2>
+  <section promise.bind="taskItemsPromise">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+      <table else>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Assignee</th>
+            <th>Reviewers</th>
+            <th>Schedule</th>
+            <th>Checkpoints</th>
+            <th>Effort</th>
+            <th>Done</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="taskItem of loadedTaskItems">
+            <td>${taskItem.title}</td>
+            <td>${state.assigneeLabelForTaskItem(taskItem)}</td>
+            <td>${state.reviewersLabelForTaskItem(taskItem)}</td>
+            <td>${state.scheduleLabelForTaskItem(taskItem)}</td>
+            <td>${state.checkpointsLabelForTaskItem(taskItem)}</td>
+            <td>${state.effortLabelForTaskItem(taskItem)}</td>
+            <td>
+              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+            </td>
+            <td>
+              <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+    <p catch>Could not load tasks.</p>
+  </section>
+  <au-viewport name="detail"></au-viewport>
+</section>

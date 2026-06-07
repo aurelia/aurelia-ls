@@ -345,11 +345,29 @@ export function answerRepoMap(
           ),
         },
         {
+          id: "repo.map:framework-capabilities",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale:
+            "Enter curated Aurelia capability terrain before deriving consumer-specific guidance.",
+          inquiry: {
+            lens: LensId.FrameworkCapabilities,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: navigationRoute(
+            NavigationPlane.Semantic,
+            NavigationRelation.FrameworkFlowOf,
+            [BasisKind.AtlasContract],
+            "Curated Aurelia capability terrain across source forms, locality, resource kinds/source support, framework effects, requirements, constraints, and evidence.",
+          ),
+        },
+        {
           id: "repo.map:framework-corpus",
           kind: ContinuationKind.SwitchLens,
           priority: ContinuationPriority.Secondary,
           rationale:
-            "Enter Aurelia documentation, framework tests, and legacy package corpus pressure.",
+            "Enter Aurelia documentation and framework test corpus pressure.",
           inquiry: {
             lens: LensId.FrameworkCorpus,
             locus: RepoRootLocus,
@@ -359,7 +377,7 @@ export function answerRepoMap(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.SourceText],
-            "Aurelia docs/tests corpus and legacy replacement pressure.",
+            "Aurelia docs/tests corpus pressure.",
           ),
         },
         {

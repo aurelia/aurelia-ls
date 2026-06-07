@@ -1,0 +1,57 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "sourceLoweringAppShell": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "app-shell"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "minimal-app-shell-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "minimal app shell explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Aurelia App"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

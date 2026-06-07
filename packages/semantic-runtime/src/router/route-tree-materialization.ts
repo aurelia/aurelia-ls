@@ -48,12 +48,13 @@ import {
   routeConfigContextIndex,
   routeConfigIndex,
 } from './route-topology-index.js';
+import { ROUTE_RECOGNIZER_RESIDUE_PARAMETER } from './route-configurable-path.js';
 import { redirectMigrationUnsupported } from './route-redirect-migration.js';
 import { routerIssueProductRecords } from './router-issue-publication.js';
 import { routerOpenSeamRecords, routerProductRecords } from './router-product-records.js';
 
 const DEFAULT_VIEWPORT_NAME = 'default';
-const RESIDUE = '$$residue';
+const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
 
 const enum OpenViewportResolutionKind {
   MissingComponentName = 'missing-component-name',

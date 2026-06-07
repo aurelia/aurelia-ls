@@ -1,0 +1,35 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Done</th>
+      <th>Update</th>
+      <th>Delete</th>
+      <th>Archive</th>
+      <th>Assign</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of taskItems">
+      <td>${taskItem.title}</td>
+      <td>
+        <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+      </td>
+      <td>
+        <button type="button" click.trigger="updateTask(taskItem)">Update</button>
+      </td>
+      <td>
+        <button type="button" click.trigger="deleteTask(taskItem)">Delete</button>
+      </td>
+      <td>
+        <button type="button" click.trigger="archiveTask(taskItem)">Archive</button>
+      </td>
+      <td>
+        <button type="button" click.trigger="assignTask(taskItem)">Assign</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<button type="button" click.trigger="submitTaskReport()">Submit report</button>
+<button type="button" click.trigger="refreshTaskItems()">Refresh tasks</button>

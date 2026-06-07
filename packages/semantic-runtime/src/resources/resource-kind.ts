@@ -21,6 +21,17 @@ export const enum ResourceDefinitionKind {
   AttributePattern = 'attribute-pattern',
 }
 
+/** Stable value list for public schemas and catalog filters that cannot reflect over const enums. */
+export const RESOURCE_DEFINITION_KINDS = [
+  ResourceDefinitionKind.CustomElement,
+  ResourceDefinitionKind.CustomAttribute,
+  ResourceDefinitionKind.TemplateController,
+  ResourceDefinitionKind.ValueConverter,
+  ResourceDefinitionKind.BindingBehavior,
+  ResourceDefinitionKind.BindingCommand,
+  ResourceDefinitionKind.AttributePattern,
+] as const;
+
 export type NamedResourceDefinitionKind =
   | ResourceDefinitionKind.CustomElement
   | ResourceDefinitionKind.CustomAttribute

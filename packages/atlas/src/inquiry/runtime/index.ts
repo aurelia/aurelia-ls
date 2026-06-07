@@ -1,4 +1,5 @@
 export * from "./api.js";
+export * from "./app-builder-capability-reconciliation.js";
 export * from "./atlas-memory-contracts.js";
 export * from "./atlas-memory-lenses.js";
 export * from "./atlas-memory-next-actions.js";
@@ -18,6 +19,8 @@ export * from "./framework-admission-world-formation.js";
 export * from "./framework-api-lenses.js";
 export * from "./framework-compiler-lenses.js";
 export * from "./framework-composition-lenses.js";
+export * from "./framework-capability-lenses.js";
+export * from "./framework-capability-territory.js";
 export * from "./framework-di-lenses.js";
 export * from "./framework-emulation-report.js";
 export * from "./framework-emulation-view.js";

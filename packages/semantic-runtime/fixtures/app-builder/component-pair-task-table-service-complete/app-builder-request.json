@@ -1,0 +1,297 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/service-complete-task-table.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "service-complete-task-table-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "service complete task table explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "complete",
+                      "kind": "complete",
+                      "scope": "entity",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Service Complete Task Table",
+                    "baseName": "Service Complete Task Table"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/service-complete-task-table.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    },
+                    {
+                      "actionName": "complete",
+                      "header": "Complete",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "app-section"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "loading-empty-error-state"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "service-complete-task-table"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "service-complete-task-table__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "service-complete-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "service-complete-task-table__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Trace row command service call",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Keep completed rows visible",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "serviceCollections": [
+        {
+          "sourceTargetPath": "src/services/task-item-service.ts",
+          "serviceClassName": "TaskItemService",
+          "componentMemberName": "taskItemService",
+          "collectionEntityName": "TaskItem",
+          "recordTypeName": "TaskItemRecord",
+          "loadMethodName": "listTaskItems",
+          "updateMethods": [
+            {
+              "methodName": "completeTaskItem",
+              "inputFieldNames": [
+                "done"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "loading-empty-error-state"
+            },
+            "compositionKind": "loading-empty-error-state",
+            "promiseExpression": "taskItemsPromise",
+            "pendingText": "Loading tasks...",
+            "fulfilledLocalName": "loadedTaskItems",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+            "rejectedLocalName": "error",
+            "rejectedText": "Could not load tasks.",
+            "fulfilledContentComposition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "collection-table"
+              },
+              "compositionKind": "collection-table",
+              "collectionExpression": "loadedTaskItems",
+              "itemLocalName": "taskItem",
+              "actionHandlerExpressions": [
+                {
+                  "actionName": "complete",
+                  "handlerExpression": "complete(taskItem)"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "ReturnType<TaskItemService['listTaskItems']>",
+          "asyncDataInitializerExpression": "this.taskItemService.listTaskItems()",
+          "asyncDataMemberMutability": "mutable"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "complete",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItemRecord"
+            }
+          ],
+          "serviceMemberName": "taskItemService",
+          "serviceMethodName": "completeTaskItem",
+          "serviceCallResultMemberName": "taskItemsPromise",
+          "serviceCallArgumentExpressions": [
+            "taskItem.id",
+            "true"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+<p if.bind="contacts.length === 0">No contacts yet.</p>
+<section else>
+  <article repeat.for="contact of contacts">
+    <h3>${contact.fullName}</h3>
+    <p>${contact.email}</p>
+    <p>
+      Active:
+      <input type="checkbox" checked.to-view="contact.active" disabled aria-label="Active">
+    </p>
+  </article>
+</section>

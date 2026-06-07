@@ -3728,11 +3728,155 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 80, evidencePerSubject: 4 },
   },
   {
+    id: LensId.FrameworkCapabilities,
+    family: LensFamily.Framework,
+    stage: LensStage.Implemented,
+    summary:
+      "Map curated Aurelia capability terrain across framework concepts, app-author source forms, locality, resource kinds/source support, effects, requirements, constraints, and evidence.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.Symbol,
+    ],
+    requiredSubstrates: [
+      SubstrateId.AtlasContracts,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Capability rollup with compact sample rows for framework orientation.",
+      },
+      {
+        id: "catalog",
+        summary:
+          "Paged capability rows with user-facing forms, locality, resource kinds, resource source support, effects, typed requirements, constraints, and evidence descriptors.",
+      },
+      {
+        id: "matrix",
+        summary:
+          "Alias of catalog focused on framework-local constraints and resource source-form relationships.",
+      },
+      {
+        id: "evidence",
+        summary:
+          "Materialized evidence descriptors with grounding strength for Atlas lens, auLink, docs, tests, and curated terrain evidence.",
+      },
+      {
+        id: "evidence-trace",
+        summary:
+          "Evidence descriptors joined to backing lens answers, sampled backing value rows, source anchors, seams, and continuation counts.",
+      },
+      {
+        id: "grounding",
+        summary:
+          "Neutral grounding rows derived from evidence strength, prerequisites, and framework-local exclusivity without mutating pure capability rows.",
+      },
+      {
+        id: "inventory",
+        summary:
+          "Source-derived concrete framework inventory constructs (the ground-truth layer beneath the curated category rows), enumerated from the framework.* lenses across catalog and relationship-graph families.",
+      },
+      {
+        id: "clusters",
+        summary:
+          "Derived capability clusters: catalog constructs grouped by the framework's own structure (source-file co-location, refined by binding-command instruction-target). Each cluster is a forced capability unit; a curated category is a named cluster.",
+      },
+      {
+        id: "coverage",
+        summary:
+          "Per-family forward coverage: which source-derived constructs are accounted for by a curated category (grounded), kind-aware and non-hiding. Pair with reverse-coverage for the category x semantic-runtime accounting matrix.",
+      },
+      {
+        id: "reverse-coverage",
+        summary:
+          "Per-family reverse coverage: which source-derived constructs are mirrored by a semantic-runtime auLink anchor, kind-aware and non-hiding.",
+      },
+    ],
+    parameters: [
+      {
+        id: "id",
+        role: ParameterRole.Filter,
+        summary: "Filter capability rows by exact stable id.",
+      },
+      {
+        id: "capabilityId",
+        role: ParameterRole.Filter,
+        summary: "Alias for id when callers carry capability-oriented filter names.",
+      },
+      {
+        id: "domain",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by broad capability domain such as resource, styling, router, state, observation, binding, template-controller, composition, dependency-injection, configuration, plugin, expression, or lifecycle.",
+      },
+      {
+        id: "locality",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by where the capability is selected: app-global, package-global-registration, resource-local, template-local, area-local, binding-site, or route-local.",
+      },
+      {
+        id: "resourceKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by resource definition kind such as custom-element, custom-attribute, template-controller, value-converter, binding-behavior, binding-command, or attribute-pattern.",
+      },
+      {
+        id: "resourceSourceForm",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by resource-scoped source carrier form such as convention, decorator, static-$au, define-call, or attribute-pattern-create.",
+      },
+      {
+        id: "effect",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by framework effect such as resource-definition, feature-admission, di-registration, binding-data-flow, source-observation, route-recognition, viewport-composition, or tooling-transform.",
+      },
+      {
+        id: "requirement",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by requirement kind or requirement id, such as capability, tooling, router:admission, or css-modules-transform.",
+      },
+      {
+        id: "groundingStrength",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by derived grounding strength: source-backed, corpus-backed, or ungrounded.",
+      },
+      {
+        id: "targetRows",
+        role: ParameterRole.Budget,
+        summary:
+          "For evidence-trace, control how many backing rows each evidence descriptor asks target lenses to return.",
+      },
+      {
+        id: "targetEvidenceRows",
+        role: ParameterRole.Budget,
+        summary:
+          "For evidence-trace, control how many backing evidence rows are sampled from each target answer.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter capability rows by token-aware substring across ids, concepts, source forms, constraints, summaries, and evidence descriptors.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.MaintenanceSignal,
+    ],
+    defaultBudget: { rows: 80, evidencePerSubject: 4 },
+  },
+  {
     id: LensId.FrameworkCorpus,
     family: LensFamily.Framework,
     stage: LensStage.Implemented,
     summary:
-      "Read Aurelia documentation, framework tests, documentation snippets, test snippets, and legacy replacement package inventory as internal fixture and authoring pressure.",
+      "Read Aurelia documentation, framework tests, documentation snippets, and test snippets as internal fixture and authoring pressure.",
     supportedLoci: [LocusKind.Repo, LocusKind.RepoArea, LocusKind.Package],
     requiredSubstrates: [SubstrateId.FrameworkCorpus, SubstrateId.SourceFiles],
     projections: [
@@ -3760,11 +3904,6 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "test-snippets",
         summary:
           "Framework test describe/it/createFixture call-site snippets suitable for behavior-grounding pressure.",
-      },
-      {
-        id: "legacy",
-        summary:
-          "Old package inventory used to steer semantic-runtime replacement pressure.",
       },
       {
         id: "expected-effects",
@@ -3858,10 +3997,10 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter fixture-seed rows by the exact value of a structured expected-effect filter; pair with expectedEffectFilterField and effectKind for precise fixture seed selection.",
       },
       {
-        id: "recipeKey",
+        id: "appPatternKey",
         role: ParameterRole.Filter,
         summary:
-          "Filter fixture-seed rows by authoring recipe hint such as state-backed-form, service-backed-form, routed-state-backed-form, or pressure-fixture.",
+          "Filter fixture-seed rows by app-pattern pressure hint such as form-state-surface, router-shell-surface, table-collection-operations, or pressure-fixture.",
       },
     ],
     outputKinds: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
@@ -4751,10 +4890,10 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter routes that declare an expected semantic effect kind anchor.",
       },
       {
-        id: "recipeKey",
+        id: "appPatternKey",
         role: ParameterRole.Filter,
         summary:
-          "Filter routes that declare an authoring recipe key anchor.",
+          "Filter routes that declare an app-pattern pressure key anchor.",
       },
       {
         id: "seedUse",

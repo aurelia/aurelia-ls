@@ -1,0 +1,22 @@
+<section>
+  <h2>Projects</h2>
+  <form submit.trigger="createProject()">
+    <div>
+      <label for="name-field">Name</label>
+      <input value.bind="name" id="name-field">
+    </div>
+    <div>
+      <label for="phase-field">Phase</label>
+      <input value.bind="phase" id="phase-field">
+    </div>
+    <button type="submit">Create project</button>
+  </form>
+  <p if.bind="state.projects.length === 0">No projects yet.</p>
+  <ul else>
+    <li repeat.for="project of state.projects">
+      <span>${project.name}</span>
+      <a load="route: project-detail; params.bind: { projectId: project.id }">Open project</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>

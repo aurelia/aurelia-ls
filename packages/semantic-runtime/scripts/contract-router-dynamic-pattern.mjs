@@ -152,6 +152,29 @@ const expectedEffects = [
     ],
     'signature',
   ),
+  ExpectedSemanticEffect.fact(
+    'Inline load route plus closed params multi-binding should materialize eager child route instructions with closed params.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=espresso'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.absent(
+    'Inline load route plus dynamic params must not treat the route id as the route parameter value.',
+    'route',
+    'route',
+    null,
+    [
+      effectFilter('routeProductKind', 'route-node'),
+      effectFilter('parameterValuePairs', 'productId=product-detail'),
+    ],
+  ),
   ExpectedSemanticEffect.atLeast(
     'Router href methods, receiver-aware object methods, direct binary load bindings, and repeated state-backed lookup methods with static route prefixes should materialize recognized dynamic route facts.',
     'route',

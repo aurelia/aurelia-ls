@@ -10,16 +10,43 @@ import {
 export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   {
     id: "semantic-runtime.app-builder-pattern-ontology",
-    aliases: ["app-builder-pattern-ontology", "app-builder-reference-scenario-separation"],
+    aliases: [
+      "app-builder-pattern-ontology",
+      "app-builder-read-only-ontology",
+      "app-builder-source-lowering-invocation",
+      "app-builder-source-lowering-composition",
+      "app-builder-source-lowering-source-plan",
+      "app-builder-part-source",
+      "app-builder-control-manifest",
+      "app-builder-style-input-boundary",
+      "app-builder-generated-fixture-contracts",
+      "app-builder-component-pair-app-shell-assembly",
+      "app-builder-v1-scope-recalibration",
+      "app-builder-v1-readiness",
+      "app-builder-v1-substrate-gaps",
+    ],
     title: "App Builder Pattern Ontology",
     summary:
-      "Route AI-first app-building algebra, reusable pattern composition, domain-slot accounting, public reference-scenario separation, and catalog/storefront demotion through a durable Atlas-owned direction instead of temporary run notes or example-domain recipe keys.",
+      "Route current app-builder v1 work through the June 7 recalibration packet, AI-first ontology, target/readiness/detail surfaces, explicit source-lowering, SourcePlan effects, and generated fixture contracts. Older interviews are background texture, and the old starter/golden lane is intentionally absent.",
     domains: [
       "semantic-runtime",
       "app-builder",
       "ontology",
       "fixtures",
       "mcp",
+      "controls",
+      "binding",
+      "accessibility",
+      "web-standards",
+      "component-manifest",
+      "styling",
+      "design-system",
+      "recommendation-policy",
+      "source-plan",
+      "v1",
+      "startup",
+      "validation",
+      "handoff",
     ],
     roles: ["orient", "author", "refactor", "document", "improve-atlas"],
     terms: [
@@ -32,484 +59,2233 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "AI-first app builder",
       "AI-facing app builder",
       "token-saving app builder",
-      "authoring catalog retired",
-      "authoring catalog",
-      "semantic-runtime saves tokens",
-      "pattern composition",
-      "pattern composition domain slots",
-      "seed profile",
-      "seed profile axes",
-      "minimal runnable",
-      "clean starter",
-      "service-backed foundation",
-      "large app foundation",
-      "seed scale",
-      "data posture",
-      "sample data",
-      "service stub",
-      "real api boundary",
-      "architecture depth",
-      "routing depth",
-      "presentation posture",
-      "code economy",
-      "solution space",
-      "canonical solution space",
-      "commerce storefront",
-      "catalog directory",
-      "operations backoffice",
-      "support workspace",
-      "content knowledge base",
-      "learning portal",
-      "reporting analytics",
-      "account settings",
-      "intent pattern composition domain slots lowering axes verification",
-      "domain slot",
-      "domain-slot accounting",
-      "Aurelia lowering",
-      "semantic reopen",
-      "syntax-neutral app mechanics",
-      "Aurelia-aware app mechanics",
-      "app-builder pattern descriptor",
-      "app-builder source policy",
-      "Aurelia lowering axes",
-      "conventions vs decorators",
-      "app convention policy",
-      "conventions enabled",
-      "explicit resource declarations",
-      "inline custom element",
-      "DI state class",
-      "state plugin store",
-      "view model local state",
-      "bindable pass through",
-      "router admission",
-      "area navigation policy",
-      "binding driven view selection",
-      "router driven view selection",
-      "nested viewports as consequence",
-      "direct state template binding",
-      "cssModules",
-      "shadowCSS",
-      "app-builder AI workflow",
-      "available seed profiles",
-      "profile-filtered starter intents",
-      "available intents",
-      "starter intent",
-      "intent menu",
-      "pattern menu",
-      "staged menu",
-      "starter source workflow",
-      "app-builder new starter menu",
-      "AppBuilderNewStarterMenu",
-      "appBuilderNewStarterMenu",
-      "previewAppBuilderStarterLowering",
-      "buildAppBuilderStarter",
-      "SourcePlan",
-      "appBuilderMinimalAppSourcePlan",
-      "fixtures:app-builder",
-      "app-builder goldens",
-      "minimal-app-shell.convention",
-      "minimal-app-shell.decorator",
-      "no app yet generate starter",
-      "existing app suggest extension intents",
-      "typed menu input",
-      "lowering preview",
-      "verification promise",
-      "north-star prose masquerading as algebra",
-      "recipe key",
-      "fixture vs recipe",
-      "reference scenario",
-      "reference-scenario pack",
-      "reference-scenario separation",
-      "structured record management",
-      "collection browse and compare",
-      "primary-detail workspace",
-      "transactional form flow",
-      "metrics overview dashboard",
-      "task navigation shell",
-      "example domain",
-      "domain-specific recipe",
-      "storefront fixture",
-      "catalog storefront",
-      "catalog-storefront",
-      "routed-catalog-storefront",
-      "demote catalog storefront",
-      "collection browser",
-      "collection-browser",
-      "collection-card-browser",
-      "collection table browser",
-      "resource-index",
-      "routed collection detail",
-      "routed-collection-detail",
-      "draft-form",
-      "routed-edit-form",
-      "service-backed-submit-form",
-      "sectioned-navigation-shell",
-      "state domain integration boundary",
-      "interaction mechanism",
-      "source-plan policy",
-      "apply-as-source-start",
-      "adapt-before-emitting",
-      "merge-selectively",
-      "analysis-pressure-only",
-      "public MCP guidance source parameters",
-      "reference app dump",
+      "read-only app-builder ontology",
+      "ontology-catalog",
+      "target-catalog",
+      "input-readiness",
+      "input-contract-detail",
+      "app-builder-v1-scope-recalibration",
+      "v1 scope recalibration",
+      "app-builder v1 recalibration packet",
+      "app-builder immediate v1 substrate gaps",
+      "app-builder v1 scope recalibration with.bind startup validation handoff control affordance",
+      "rung advancement over maintenance",
+      "domain materialization",
+      "materializeAppBuilderCallerDomainForTarget",
+      "domainAssignmentIndexFrame",
+      "domainMaterializedSlotFrame",
+      "domainSlotAssignmentShapeIssues",
+      "domainDerivedNameFrame",
+      "affordance-detail",
+      "application-pattern-detail",
+      "applicationPatternDetailSelectionFrame",
+      "applicationPatternDetailReadinessFrame",
+      "applicationPatternDetailRowsFrame",
+      "applicationPatternDetailSummaryFrame",
+      "inputContractDetailsForApplicationPattern",
+      "collection-concept-detail",
+      "collection projection facets",
+      "collection projection frame",
+      "selectCollectionProjectionFrame",
+      "selectCollectionTableColumnPayload",
+      "collectionTableRenderedFrame",
+      "collection-display-fields",
+      "collection-table-columns",
+      "collection-query-features",
+      "control-pattern-detail",
+      "controlPatternDetailSelectionFrame",
+      "controlPatternDetailReadinessFrame",
+      "controlPatternDetailRowsFrame",
+      "controlPatternDetailSummaryFrame",
+      "inputContractDetailsForControlPattern",
+      "control-manifest-detail",
+      "controlManifestDetailSelectionFrame",
+      "controlManifestDetailReadinessFrame",
+      "controlManifestDetailRowsFrame",
+      "controlManifestDetailSummaryFrame",
+      "inputContractDetailsForControlManifest",
+      "effect-contract-detail",
+      "effectContractDetailSelectionFrame",
+      "effectContractDetailReadinessFrame",
+      "effectContractDetailRowsFrame",
+      "effectContractDetailSummaryFrame",
+      "inputContractDetailsForAffordance",
+      "policy-detail",
+      "recommendation-policy",
+      "recommendation-policy-detail",
+      "style-detail",
+      "styleDetailSelectionFrame",
+      "styleDetailReadinessFrame",
+      "styleDetailRowsFrame",
+      "styleDetailSummaryFrame",
+      "class-binding styling mechanism",
+      "state-dependent class hooks",
+      "source-lowering-preflight",
+      "sourceLoweringPreflightSelectionFrame",
+      "sourceLoweringPreflightReadinessFrame",
+      "sourceLoweringPreflightRowsFrame",
+      "sourceLoweringPreflightSummaryFrame",
+      "source-lowering-invocation",
+      "sourceLoweringInvocationPreflightFrame",
+      "sourceLoweringInvocationTargetFrame",
+      "lowerSourceLoweringInvocationTarget",
+      "AppBuilderSourceLoweringInvocationRouteKind",
+      "source-lowering-composition",
+      "source-lowering-source-plan",
+      "source-lowering-gallery",
+      "fragmentGalleryFragmentSections",
+      "fragmentGalleryControlLowerings",
+      "fragmentGalleryCollectionLowerings",
+      "fragmentGalleryStatusLowerings",
+      "fragmentGalleryFormLowerings",
+      "fragmentGallerySectionLowerings",
+      "part-source-gallery",
+      "appBuilderPartSourceGallerySourcePlanFrame",
+      "appBuilderPartSourceGallerySourcePlanAssembly",
+      "galleryAppSourceFrame",
+      "galleryResourceDeclarationsSource",
+      "galleryRouteAndServiceSource",
+      "galleryRootAppClassSource",
+      "gallerySharedTypesSource",
+      "directSourcePlanTargetFrame",
+      "direct SourcePlan target frame",
+      "direct SourcePlan target preflight",
+      "source-lowering-implemented",
+      "SourceLoweringImplemented",
+      "not-implemented source path",
+      "source-lowering request fields",
+      "focused source-lowering request fields",
+      "surface-scoped request fields",
+      "sourceLoweringRequestFieldSummary",
+      "SourcePlan wrapper request fields",
+      "source-plan placement request fields",
+      "canRequestSourceLowering",
+      "canContinueSourceLoweringSurface",
+      "preflight author continuation request fields",
+      "surface required request fields",
+      "source-lowering surface",
+      "target invocation",
+      "fragment composition",
+      "source plan preview",
+      "sourceLoweringComponentPair",
+      "custom element pair source plan",
+      "component pair runnable app shell",
+      "component-pair app-shell assembly",
+      "component pair expected effects",
+      "component pair project tooling",
+      "component-pair local draft state",
+      "component-pair demand-driven draft fields",
+      "componentPairLocalViewModelStateFieldNames",
+      "componentPairDirectSelection",
+      "lowerComponentPairNestedSources",
+      "lowerComponentPairLocalState",
+      "componentPairFragments",
+      "componentPairIssues",
+      "componentPairSourcePlan",
+      "componentPairAggregates",
+      "appBuilderLocalViewModelFieldsForNames",
+      "action inputFieldNames local state",
+      "compact generated form-save hidden collection fields",
+      "app section child composition",
+      "AppBuilderApplicationPatternId.AppSection",
+      "AppBuilderSourceLoweringCompositionKind.AppSection",
+      "ChildCompositions",
+      "childCompositions",
+      "fulfilledContentComposition",
+      "sourceLoweringCompositionChildSuppliedInputs",
+      "nested composition supplied inputs",
+      "nested target-scoped supplied inputs",
+      "fulfilled content target-scoped visual hooks",
+      "loading empty error nested collection table hooks",
+      "lowerLoadingEmptyErrorStructuralParts",
+      "loadingEmptyErrorSelectedInputs",
+      "loadingEmptyErrorSelectionIssues",
+      "loadingEmptyErrorReadyFrame",
+      "loadingEmptyErrorRenderedFragments",
+      "loadingEmptyErrorCompositionResult",
+      "lowerAppSectionComposition",
+      "component-pair-task-section-create-and-table",
+      "component-pair-task-section-create-and-async-table",
+      "component-pair-task-list-local-collection",
+      "component-pair-task-card-local-collection",
+      "component-pair-contact-card-string-id",
+      "contact card string identity generated fixture",
+      "non-task generated fixture",
+      "non-task collection-card generated fixture",
+      "component-pair-task-draft-field-variety",
+      "CollectionDisplayFields generated fixture",
+      "collection display fields generated fixture",
+      "collection-list generated fixture",
+      "collection-card generated fixture",
+      "fieldControlSelections",
+      "field-control selections",
+      "fieldLabelContainerKind",
+      "visualHookDescendantTagName",
+      "leaf-control descriptor visual hook descendant",
+      "leaf-control descriptor field label container",
+      "fieldControlSourceSelectionFrame",
+      "fieldControlRenderedFrame",
+      "fieldGroupSelectionFrame",
+      "fieldGroupRenderedFragments",
+      "selectRequestedAccessibilityMessageKind",
+      "selectInferredAccessibilityMessageKind",
+      "native textarea range radio checkbox-list",
+      "fieldset legend field group",
+      "ControlAccessibility fieldName",
+      "field-scoped accessibility messages",
+      "AccessibilityHelpError fieldName",
+      "UnknownFieldAccessibilityMessageField",
+      "unknown-field-accessibility-message-field",
+      "UnknownFieldVisualHookField",
+      "unknown-field-visual-hook-field",
+      "stale field-scoped input",
+      "stale scoped fieldName",
+      "VisualClassHooks fieldName",
+      "form VisualClassHooks generated fixture",
+      "FieldGroup VisualClassHooks targetRefs",
+      "NativeSubmitForm FieldGroup target-scoped VisualClassHooks",
+      "lowerNativeSubmitFormComposition",
+      "nativeSubmitFormSelectionFrame",
+      "nativeSubmitFormReadyFrame",
+      "nativeSubmitFormRenderedFragments",
+      "nativeSubmitFormCompositionResult",
+      "generated-source-quality",
+      "duplicate static template attributes",
+      "trailing whitespace generated source quality",
+      "duplicate class generated fixture",
+      "aria-describedby generated field group",
+      "di-state-class source lowering",
+      "local-view-model-state source lowering",
+      "routed collection detail source lowering",
+      "app-builder pressure fixtures",
+      "fixtures:app-builder-pressure",
+      "app-builder generated fixtures",
+      "app-builder generated fixture contracts",
+      "app-builder generated fixture qualitative review",
+      "app-builder generated fixture source shape review",
+      "generated fixture qualitative review",
+      "generated fixture source shape",
+      "generated fixture source review",
+      "fixtures:app-builder-generated",
+      "materialize-app-builder-generated-fixtures",
+      "sourceLoweringTargetRegistryCoverageRows",
+      "sourceLoweringRequestFieldRegistryCoverageRows",
+      "sourceLoweringRequestFieldRegistryCoverageSummary",
+      "combined request-field coverage",
+      "generated-app plus focused-pressure coverage",
+      "source-lowering-target-ref coverage",
+      "generated-control-use coverage",
+      "collection table control-use",
+      "collection-table boolean control-use",
+      "collection list control-use",
+      "collection-list boolean control-use",
+      "collection card control-use",
+      "collection-card boolean control-use",
+      "selected-collection-field",
+      "AppBuilderSourceLoweringBindingExpressionSource.SelectedCollectionField",
+      "source-lowering request-field registry coverage",
+      "unused source-lowering request fields",
+      "unregistered used request fields",
+      "source-plan selection request fields",
+      "compositionKind request field coverage",
+      "form-message target ref coverage",
+      "static form message control-use boundary",
+      "di-state-class generated fixture coverage",
+      "part menu",
+      "part source invocation",
+      "part source lowering preview",
+      "part-source gallery",
+      "part-source primitive control lowerer",
+      "choiceInputGroupElement",
+      "selectElement",
+      "choice option control source",
+      "checkbox list source lowering",
+      "radio group source lowering",
+      "select option source lowering",
+      "source-lowering gallery",
+      "source-lowering authority",
+      "bindingBehaviorHostElement",
+      "binding behavior host element",
+      "part-source gallery binding behavior host",
+      "neutral part-source preview samples",
+      "neutral sample resource names",
+      "sample-card",
+      "SampleCard",
+      "sample-resource",
+      "SampleResource",
+      "defaultingCandidate",
+      "defaulting candidate",
+      "defaulting-candidate-policy",
+      "defaulting candidate policy",
+      "AppBuilderDefaultingCandidatePolicyScope",
+      "APP_BUILDER_DEFAULTING_CANDIDATE_POLICY_ROWS",
+      "recommendation status policy",
+      "recommendation applicability",
+      "applicability context",
+      "recommendation evidence",
+      "evidence lane",
+      "policy:app-builder-review",
+      "write-app-builder-policy-review",
+      "app-builder recommendation defaulting policy review",
+      "source-lowering request field policy review",
+      "policy review multiplicity",
+      "applicability x2",
+      "readiness applicability lanes",
+      "source-plan-substrate evidence",
+      "existing-app-analysis evidence",
+      "framework-capability evidence",
+      "control-manifest-contract evidence",
+      "legacy-source-backed-authority",
+      "source-backed authority canary",
+      "status projection",
+      "input-source-lowering-consumers",
+      "sourceLoweringConsumerCount",
+      "sourceLoweringConsumerRows",
+      "includeSourceLoweringConsumers",
+      "input facet source-lowering consumers",
+      "facet consumed by source lowering",
+      "input facet consumer continuations",
+      "source-lowering consumer preflight continuation",
+      "DomainActions source-lowering consumer",
+      "DomainRelationships source-lowering consumer",
+      "interview decision effect",
+      "decision effect class",
+      "effect horizon",
+      "immediate invariant",
+      "near canary",
+      "structural lane",
+      "roadmap frontier",
+      "deferred polish",
+      "decision bundle",
+      "decision-bundle",
+      "request-local decision bundle",
+      "AppBuilderDecisionBundleSource",
+      "appBuilderSuppliedInputsWithDecisionBundles",
+      "appBuilderSuppliedInputsWithDecisionBundlesForTarget",
+      "appBuilderSuppliedInputsForTarget",
+      "target-scoped supplied input",
+      "target-scoped decision bundle",
+      "decision bundle targetRefs",
+      "policy satisfaction target scope",
+      "contextual source-lowering policy satisfaction",
+      "policySatisfactionCandidates",
+      "policy-satisfaction candidate rows",
+      "contextual source-lowering candidates",
+      "SourcePlanContribution",
+      "SourcePlan metadata generated fixture",
+      "SourcePattern metadata generated fixture",
+      "sourcePlan.pattern generated fixture",
+      "sourcePlan.pattern null generated fixture",
+      "sourcePlanWitnessRows generated fixture",
+      "route title generated fixture",
+      "generated route title",
+      "source naming copy policy",
+      "human-facing copy generated source",
+      "expected effects",
+      "control use inventory",
+      "native first control patterns",
+      "visual input missing",
+      "application design pattern",
+      "collection list card table",
+      "loading empty error",
+      "promise valued property",
+      "promiseExpression caller supplied",
+      "async data source carrier",
+      "promise class member carrier",
+      "native submit form",
+      "DomainCommandAction",
+      "domain field value kind display",
+      "field value kind display",
+      "boolean display",
+      "read-only boolean display",
+      "checked.to-view",
+      "generated checkbox control-use",
+      "native-boolean-checkbox collection table",
+      "native-boolean-checkbox collection list",
+      "native-boolean-checkbox collection card",
+      "raw true false interpolation",
+      "collection empty state branch",
+      "empty state else branch",
+      "collection else",
+      "empty table visible",
+      "conditional else collection",
+      "router backed empty state else",
+      "routed list route empty branch",
+      "field control id policy",
+      "field group static id",
+      "wrapped label field group",
+      "duplicate DOM id generated form",
+      "route identity lookup",
+      "identity value kind lookup",
+      "string identity lookup",
+      "numeric identity route param",
+      "generic String projection",
+      "router-backed generated fixture load params",
+      "generated inline load params fixture",
+      "framework capabilities app-builder grounding",
+      "custom-element source layout",
+      "appBuilderCustomElementClassSource",
+      "empty generated custom element class",
       "legacy fixture-shaped recipe pollution",
+      "routed detail with.bind",
+      "with.bind routed detail",
+      "$parent.state",
+      "relationship view binding taste",
+      "runnable app startup root awareness",
+      "index.html root selector mount target",
+      "npx makes aurelia",
+      "plugin conventions availability",
+      "control affordance expansion",
+      "semantic field affordance",
+      "email input",
+      "url input",
+      "tel input",
+      "password input",
+      "search input",
+      "display link affordance",
+      "mailto display affordance",
+      "validation policy floor",
+      "native constraints validation library split brain",
+      "central default labels messages copy",
+      "LLM handoff seed local data handoff",
+      "state plugin v1 posture",
+      "lean accessibility policy",
+      "existing control library detection",
+      "existing plugin detect report",
     ],
     queryCanaries: [
       {
-        query: "app builder algebra authoring ontology reusable app-building patterns",
+        query:
+          "app-builder ontology-catalog target-catalog input-readiness source-lowering-preflight source-lowering-implemented",
         summary:
-          "Broad app-builder ontology work should route to the pattern ontology before adding more app-building pattern keys.",
-      },
-      {
-        query: "authoring catalog",
-        summary:
-          "Requests for the retired authoring catalog should route to app-builder direction and current app-query/API surfaces, not resurrect the removed recipe-authoring API.",
+          "Current app-builder option discovery should route through ontology and readiness surfaces before source lowering.",
       },
       {
         query:
-          "catalog storefront authoring fixture reference scenario app builder pattern ontology",
+          "app-builder v1 scope recalibration packet with.bind startup validation handoff control affordance",
         summary:
-          "Catalog/storefront should route as an ontology/reference-scenario split, not as a durable recipe expansion.",
-      },
-      {
-        query: "fixture vs recipe reference scenario collection-card-browser resource-index",
-        summary:
-          "Questions about scenario archetypes and reusable mechanics should route to app-builder pattern ontology.",
-      },
-      {
-        query: "MCP guidance should expose pattern composition not reference app dump",
-        summary:
-          "Public app-building output should route through source-parameter and pattern-composition policy.",
+          "Current app-builder v1 implementation should route through the June 7 recalibration packet before broad composition climbing or older interview texture.",
       },
       {
         query:
-          "AI-first app builder pattern composition domain slots Aurelia lowering verification effects token saving",
+          "app-builder routed detail with.bind parent state relationship helper generated source taste",
         summary:
-          "AI-first app-building work should route through compact pattern algebra before source generation.",
+          "Routed-detail taste questions should treat generated `with.bind` plus `$parent.state.*($this)` as a regression canary; default detail output should use explicit item-qualified fields and state helper calls with item arguments.",
       },
       {
         query:
-          "semantic-runtime should save tokens through app-builder pattern descriptors and required domain slots",
+          "app-builder runnable app startup root index.html root selector plugin conventions npx makes aurelia",
         summary:
-          "Token-saving MCP guidance should route to app-builder descriptors and slot accounting.",
+          "Runnable generated-app questions should route through startup/root awareness rather than treating component-pair output as a complete app by accident.",
       },
       {
         query:
-          "app-builder AI workflow available intents pattern menu domain slots lowering preview generate starter",
+          "app-builder email url tel password search display link mailto control affordance primitive completeness",
         summary:
-          "AI-facing workflow design should route to staged app-builder menus before source generation.",
+          "Control affordance completeness questions should not be answered solely from the current field value-kind enum or generated fixture coverage.",
       },
       {
         query:
-          "app-builder domain presets task-list todos starter domain slot filler collection list add item",
+          "app-builder validation policy floor native constraints validation library split brain",
         summary:
-          "Starter-domain menu questions should route to domain presets as slot fillers, not pattern identities.",
+          "Validation v1 questions should distinguish native constraints, validation-library posture, and app-builder policy before adding source output.",
       },
       {
         query:
-          "domain preset task-list collection list starter seed data menu",
+          "app-builder input-contract-detail includeSourceLoweringConsumers sourceLoweringConsumerRows DomainActions consumer target-catalog source-lowering-preflight continuation false sourceLoweringImplemented",
         summary:
-          "Short domain-preset starter queries should route to app-builder domain preset and seed-data menu design.",
+          "Input-facet source-lowering questions should distinguish exact executable target status from payload-consumer evidence and keep the MCP request schema aligned with semantic-runtime detail flags.",
       },
       {
         query:
-          "app-builder seed data sets public starter demo inspection fixture no seed data sample records",
+          "app-builder recommendation contextual applicability evidence source-backed authority canary defaultingCandidate",
         summary:
-          "Starter data questions should route to first-class seed data sets rather than domain preset records.",
+          "Recommendation-policy questions should route to posture, applicability/context, evidence, and axis-local defaultability projections rather than treating contextual/source-backed as complete explanations.",
       },
       {
         query:
-          "minimal runnable minimal app starter app-builder generated starter convention minimal app shell fixtures app-builder goldens",
+          "app-builder decision bundle supplied inputs defaulting policy preflight readiness",
         summary:
-          "The first executable vertical slice should route through the app-builder starter menu/lowering path and shared SourcePlan artifacts.",
+          "Request-local defaulting should route through decision-bundle expansion before readiness, preflight, and source-lowering gates.",
       },
       {
         query:
-          "clean starter collection list starter state-backed collection list DI state repeat checked value binding add task",
+          "app-builder target-scoped decision bundle supplied input targetRefs policy satisfaction preflight invocation",
         summary:
-          "The first nontrivial app-builder source option should route through the state-backed collection-list composition and domain preset lane.",
+          "Target-scoped defaulting should route through supplied-input target filtering so one selected ontology target does not satisfy neighboring source-lowering targets.",
       },
       {
         query:
-          "app-builder seed profile minimal starter large app foundation data posture sample data service boundary",
+          "app-builder fulfilledContentComposition nested composition supplied inputs target-scoped visual hooks collection-table loading-empty-error",
         summary:
-          "Seed-size/data-source questions should route to the seed-profile dimension before pattern composition.",
+          "Nested fulfilled-content composition should inherit parent supplied inputs broadly, then let the nested target filter target-scoped decisions.",
       },
       {
         query:
-          "app-builder canonical solution spaces storefront commerce catalog backoffice support analytics settings",
+          "app-builder interview answer effect class immediate invariant near canary structural lane roadmap frontier deferred polish",
         summary:
-          "Solution-space questions should route to menu biasing, not concrete domain slots or fixture copy.",
+          "Interview decisions should route through effect-horizon classification before being turned into immediate code, fixture structure, or roadmap work.",
       },
       {
         query:
-          "app-builder Aurelia lowering axes conventions decorators inline custom element local state bindable pass through router admission area navigation validation i18n Shadow DOM CSS modules shadowCSS",
+          "app-builder source-lowering-invocation selected ontology target preflight target frame scalar native control generated fragments",
         summary:
-          "Aurelia-specific choices should route to typed app-global, resource-local, and area-local lowering axes, not pattern or domain identities.",
+          "One-target source generation should route through appBuilderSourceLoweringInvocation, sourceLoweringInvocationPreflightFrame, and sourceLoweringInvocationTargetFrame after explicit inputs.",
       },
       {
         query:
-          "north star prose masquerading as algebra app-builder typed menu input",
+          "app-builder control-pattern-detail selection readiness row summary input contracts native control patterns",
         summary:
-          "Questions about what is executable algebra versus prose should route to app-builder pattern ontology.",
+          "Selected control-pattern inspection should route through controlPatternDetailSelectionFrame, controlPatternDetailReadinessFrame, controlPatternDetailRowsFrame, and controlPatternDetailSummaryFrame.",
+      },
+      {
+        query:
+          "app-builder source-lowering-composition collection table native submit form generated fragments SourcePlan contribution origins",
+        summary:
+          "Multi-fragment generated source should route through appBuilderSourceLoweringComposition and preserve contribution origins.",
+      },
+      {
+        query:
+          "app-builder boolean display checked.to-view generated fixture collection detail field value kind",
+        summary:
+          "Generated collection/detail display should spend domain field value kind and use read-only boolean display instead of raw true/false interpolation.",
+      },
+      {
+        query:
+          "app-builder collection list card table generated checkbox control-use selected-collection-field",
+        summary:
+          "Collection list/card/table display controls should route through generated control-use inventory rows with collection-field binding provenance.",
+      },
+      {
+        query:
+          "app-builder collection empty state else branch generated fixture table list card routed list route conditional else",
+        summary:
+          "Generated collection list/card/table and routed list-route source should pair explicit empty-state if branches with sibling else collection content.",
+      },
+      {
+        query:
+          "app-builder fieldControlSelections native submit form native textarea range radio checkbox-list fieldset legend",
+        summary:
+          "Native submit form control-selection questions should route through source-lowering request fields and field-group source shape rather than hidden value-kind defaults.",
+      },
+      {
+        query:
+          "app-builder named value sets choice controls model.bind value.bind optionBindingKind reusable option-domain generated fixture",
+        summary:
+          "Reusable named value-set fixtures should use the default model.bind option identity path; explicit value.bind remains caller override pressure.",
+      },
+      {
+        query:
+          "app-builder fieldLabelContainerKind visualHookDescendantTagName control manifest radio checkbox-list fieldset legend",
+        summary:
+          "Generated field label container and compound-control visual hook placement should route to leaf-control descriptor metadata and control-manifest detail, not local source-lowering switches.",
+      },
+      {
+        query:
+          "app-builder generated fixture sourceLoweringTargetRegistryCoverageRows form-message source-lowering-target-ref generated-control-use di-state-class coverage",
+        summary:
+          "Generated-app fixture target coverage should route through the registry coverage index, distinguishing target-ref coverage from authored/generated control-use rows.",
+      },
+      {
+        query:
+          "app-builder ControlAccessibility fieldName AccessibilityHelpError aria-describedby generated field group messages",
+        summary:
+          "Field-scoped accessibility message questions should route through app-builder control/input ontology and generated form fixture contracts.",
+      },
+      {
+        query:
+          "app-builder stale field-scoped ControlAccessibility VisualClassHooks fieldName UnknownFieldAccessibilityMessageField UnknownFieldVisualHookField",
+        summary:
+          "Stale field-scoped input questions should route through Native Submit Form composition issues, not generic payload parsing or silent source-lowering drops.",
+      },
+      {
+        query:
+          "app-builder submit button VisualClassHooks actionName unmatched-submit-button-visual-hook-action dropped class data hook",
+        summary:
+          "Submit-button visual hooks scoped to another action should route through Native Submit Form composition issues instead of silent class/data hook loss.",
+      },
+      {
+        query:
+          "app-builder field group static id duplicate DOM id wrapped label fieldControlId accessibility help error",
+        summary:
+          "Field-group source currently derives static fieldControlId values for label/help/error relationships; reusable-component id policy remains a design canary.",
+      },
+      {
+        query:
+          "app-builder loading empty error promiseExpression promise valued property source state carrier",
+        summary:
+          "Loading/empty/error lowerers spend caller-supplied promiseExpression exactly; nicer promise-property output needs a modeled source-state/class-member carrier.",
+      },
+      {
+        query:
+          "app-builder routed identity lookup identityValueKind string route param generated fixture String projection",
+        summary:
+          "Generated routed browse/detail state lookup should spend domain identity value kind: numeric identities project to route-param strings, string identities compare directly.",
+      },
+      {
+        query:
+          "app-builder router-backed generated fixture load params route id parameter value",
+        summary:
+          "Generated routed fixtures that use inline load route+params should route through both app-builder generated fixture contracts and router LoadCustomAttribute semantics.",
+      },
+      {
+        query:
+          "app-builder source-lowering-source-plan component pair source placement expected effects pressure fixtures",
+        summary:
+          "File-level previews should route through appBuilderSourceLoweringSourcePlan and the SourcePlan witness/effect surfaces.",
+      },
+      {
+        query:
+          "app-builder directSourcePlanTargetFrame direct SourcePlan target preflight effect contracts target refs",
+        summary:
+          "Direct app-shell/router/state SourcePlan targets should share the admission frame for preflight rows, target refs, effect contracts, and descriptor-backed issues.",
+      },
+      {
+        query:
+          "app-builder source-lowering preflight author continuation required request fields canRequestSourceLowering childCompositions",
+        summary:
+          "Preflight rows can expose source-lowering availability while author continuations wait for the selected surface's required request fields to be supplied.",
+      },
+      {
+        query:
+          "app-builder policy review focused source-lowering request fields rootDir templatePath source plan wrapper placement",
+        summary:
+          "The policy review artifact exposes per-call request fields separately from durable input facets, including repeated SourcePlan wrapper placement fields.",
+      },
+      {
+        query:
+          "app-builder component pair runnable app shell root component project tooling generated app fixture expected effects",
+        summary:
+          "Runnable component-pair output should route through explicit app-shell assembly, project tooling, expected effects, and generated-app contract fixtures.",
+      },
+      {
+        query:
+          "app-builder component-pair standalone form saveDraft local draft state hidden collection demand-driven fields action inputFieldNames compact generated native submit form",
+        summary:
+          "Component-pair standalone forms should derive local draft fields from selected composition fields, direct field invocations, and declared action inputFieldNames without adding hidden local collection state.",
+      },
+      {
+        query:
+          "app-builder app section childCompositions component-pair-task-section-create-and-table native submit form collection table",
+        summary:
+          "AppSection source lowering should route as an explicit child-composition boundary inside component-pair assembly, not as a named starter profile.",
+      },
+      {
+        query:
+          "app-builder app section childCompositions fulfilledContentComposition component-pair-task-section-create-and-async-table loading empty error collection table",
+        summary:
+          "Nested AppSection generated fixtures should route through explicit child-composition input, fulfilled-content composition, contribution provenance, and generated-app manifest verification.",
+      },
+      {
+        query:
+          "app-builder recommendation policy review input-dependency visual-input applicability lanes",
+        summary:
+          "Policy review applicability lanes should distinguish relation-backed readiness dependencies from targeted policy conditions without adding duplicate broad visual-input prose.",
+      },
+      {
+        query:
+          "app-builder class-binding styling mechanism state-dependent classes structural hooks visual policy",
+        summary:
+          "Class binding is framework-backed and recommendable only when a selected pattern/control/visual policy needs state-dependent classes or structural hooks.",
+      },
+      {
+        query:
+          "app-builder collection projection facets display fields table columns query features policy review",
+        summary:
+          "Recommendation policy should keep list/card/table collection projection facets narrow and leave query features as selected-rung constraints.",
+      },
+      {
+        query:
+          "app-builder collection projection frame selectCollectionProjectionFrame collectionTableRenderedFrame list card table empty state supplied inputs",
+        summary:
+          "Collection list/card/table setup should route through the shared projection frame while table fragment assembly stays in the table render frame.",
+      },
+      {
+        query:
+          "app-builder custom element source layout empty generated class appBuilderCustomElementClassSource",
+        summary:
+          "Generated custom-element view-model files should compose classes through the shared source layout so empty classes stay compact and carrier metadata remains centralized.",
+      },
+      {
+        query:
+          "app-builder part-source-invocation lower selected part kind id slots source fragments MCP callback",
+        summary:
+          "Primitive source callbacks should route through the public part-source-invocation query and lowerAppBuilderPartSourceInvocation.",
+      },
+      {
+        query:
+          "app-builder choiceInputGroupElement checkbox list radio group select option part-source primitive control lowerer",
+        summary:
+          "Choice-control primitive lowerers should route through part-source callbacks and control descriptors before growing form/composition-local source switches.",
+      },
+      {
+        query:
+          "app-builder bindingBehaviorHostElement part-source gallery binding behavior host element",
+        summary:
+          "Binding-behavior host element questions should route to part-source gallery scaffolding, not observation semantics or app-builder recommendation policy.",
+      },
+      {
+        query:
+          "app-builder sample-card SampleCard neutral part-source preview sample resource names",
+        summary:
+          "Reusable part-source preview samples should use neutral placeholder resource names; concrete domain names belong in generated fixture requests and tracked generated source.",
+      },
+      {
+        query:
+          "catalog storefront old authoring recipe fixture-like app-builder pollution",
+        summary:
+          "Old fixture-shaped app-builder material should route here as cleanup pressure, not as durable starter authority.",
       },
     ],
     coverage: [
       {
         dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
-        state: AtlasWorkRouteCoverageState.Missing,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Wired,
         ownerRouteId: "semantic-runtime.intent-aware-continuations",
         summary:
-          "The app-builder ontology is durable direction for future authoring intent, but it has no public continuation contract yet for choosing pattern composition, fixture generation, or verification follow-up.",
+          "App-builder answers have typed continuation plumbing, but each new ontology/detail/source-lowering answer still needs route-local truthfulness checks when added.",
       },
     ],
     anchors: [
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/seed-profile.ts",
-        symbolName: "AppBuilderSeedProfileId",
+        kind: "doc",
+        path: ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
         role: "primary",
         summary:
-          "Seed profile identities and axes for scale, data posture, architecture depth, routing depth, presentation posture, and code economy.",
+          "Current leading app-builder v1 scope and prioritization packet; read before older interviews for implementation priorities.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/app-builder-v1-investigation-answer-2026-06-07.md",
+        role: "grounding",
+        summary:
+          "Investigation answer that grounds immediate v1 substrate gaps behind the recalibration packet.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/app-builder-control-primitive-completeness-answer-2026-06-07.md",
+        role: "grounding",
+        summary:
+          "Control primitive completeness answer for native/display/control-affordance gaps exposed by v1 canaries.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/intent.ts",
-        symbolName: "AppBuilderStarterIntentId",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "SemanticRuntimeAppBuilderQueryKind",
         role: "primary",
         summary:
-          "Starter intent menu identities offered after seed-profile selection.",
+          "Public app-builder query vocabulary kept separate from app-world query kinds.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/domain-preset.ts",
-        symbolName: "AppBuilderDomainPresetId",
-        role: "primary",
-        summary:
-          "Public starter-domain preset identities that fill domain slots without becoming pattern ontology.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/seed-data.ts",
-        symbolName: "AppBuilderSeedDataSetId",
-        role: "primary",
-        summary:
-          "Seed data set identities and audience/density/purpose vocabulary for generated starter records.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderAureliaLoweringSelection",
-        role: "primary",
-        summary:
-          "Typed Aurelia lowering axes kept separate from patterns, scenarios, and domain slots.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderConventionPolicy",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "SemanticRuntimeAppBuilderQueryPosture",
         role: "supporting",
         summary:
-          "App-global convention admission policy for convention-enabled versus explicit resource declarations.",
+          "Public posture axis distinguishing ontology read model, source-lowering surface, part-source substrate, integrity probes, and catalog map.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderResourceDeclarationMode",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "readSemanticRuntimeAppBuilderCatalogIntegrity",
         role: "supporting",
         summary:
-          "Per-resource declaration mode for convention, decorator, or inline custom-element resources.",
+          "Public app-builder catalog-integrity assembler over registry, gallery coverage, and policy audit frames.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderAppStateOwnershipMode",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "semanticRuntimeAppBuilderCatalogRegistryIssueFrame",
         role: "supporting",
         summary:
-          "App-global shared-state ownership policy for DI state classes versus @aurelia/state stores.",
+          "Catalog-integrity frame for part descriptor, slot descriptor, and executable part-source callback registry issues.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderLocalStatePolicy",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "semanticRuntimeAppBuilderCatalogGalleryCoverageFrame",
         role: "supporting",
         summary:
-          "Local state mechanics for compact apps, small sections, and bindable pass-through boundaries.",
+          "Catalog-integrity frame for part-source and source-lowering gallery coverage issues.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderRouterAdmissionPolicy",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "semanticRuntimeAppBuilderCatalogPolicyAuditFrame",
         role: "supporting",
         summary:
-          "App-global router admission policy for no-router versus router-configured starters.",
+          "Catalog-integrity frame for status-audit rows and recommendation-policy summaries.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderAreaNavigationPolicy",
-        role: "supporting",
-        summary:
-          "Per-area view-selection policy for binding-driven versus router-driven menus and list/detail flows.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderResourceDomEncapsulationMode",
-        role: "supporting",
-        summary:
-          "Per-resource DOM encapsulation axis for light DOM versus open/closed Shadow DOM.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderAppStylePolicy",
-        role: "supporting",
-        summary:
-          "Stackable app-level stylesheet policies such as global stylesheets.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
-        symbolName: "AppBuilderResourceStylePolicy",
-        role: "supporting",
-        summary:
-          "Stackable per-resource style policies for component stylesheets, cssModules, and shadowCSS.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/solution-space.ts",
-        symbolName: "AppBuilderSolutionSpaceId",
+        filePath: "packages/semantic-runtime/src/api/runtime.ts",
+        symbolName: "SemanticRuntime.answerAppBuilderQuery",
         role: "primary",
         summary:
-          "Canonical product/application spaces used to bias pattern menus without becoming domain slots.",
+          "SemanticRuntime facade for static app-builder answers before MCP or other transports.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/pattern.ts",
-        symbolName: "AppBuilderPatternId",
-        role: "primary",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "withSemanticRuntimeAppBuilderQueryContinuations",
+        role: "supporting",
         summary:
-          "Durable syntax-neutral identities for reusable app-building mechanics.",
+          "Typed app-builder follow-up projection for detail/readiness/source-lowering answers.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/composition.ts",
-        symbolName: "AppBuilderPatternComposition",
-        role: "primary",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "canContinueSourceLoweringSurface",
+        role: "supporting",
         summary:
-          "Compact composition contract connecting pattern IDs, source policy, domain slots, and expected effects before source lowering.",
+          "Surface-scoped request-field gate for source-lowering author continuations.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/reference-scenario.ts",
-        symbolName: "AppBuilderReferenceScenarioId",
-        role: "primary",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "sourcePlanPreviewContinuationForPreflightRow",
+        role: "supporting",
         summary:
-          "Publicly grounded scenario archetypes for pressure/examples without app-specific recipe identity.",
+          "Direct SourcePlan-preview continuation builder for source-lowering preflight rows.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/composition-catalog.ts",
-        symbolName: "APP_BUILDER_STARTER_COMPOSITIONS",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "targetInvocationContinuationForPreflightRow",
+        role: "supporting",
+        summary:
+          "TargetInvocation continuation builder for source-lowering preflight rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "fragmentCompositionContinuationForPreflightRow",
+        role: "supporting",
+        summary:
+          "FragmentComposition continuation builder for source-lowering preflight rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/catalog.ts",
+        symbolName: "appBuilderOntologyCatalog",
         role: "primary",
         summary:
-          "Core app-builder compositions that can lower without going through the retired recipe-authoring API.",
+          "Read-only app-builder ontology catalog exposed as ontology-catalog without generated source.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/target-catalog.ts",
+        symbolName: "appBuilderTargetCatalog",
+        role: "primary",
+        summary:
+          "Selectable ontology target projection with status, readiness counts, paging, and source-lowering availability filters.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy.ts",
+        symbolName: "appBuilderRecommendationStatusRank",
+        role: "primary",
+        summary:
+          "Reviewable recommendation ranking for app-builder target menus without selecting blank-slate defaults.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy.ts",
+        symbolName: "AppBuilderRecommendationApplicabilityKind",
+        role: "primary",
+        summary:
+          "Enum-backed applicability/context lanes explaining when a recommendation row is truthfully spendable.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy.ts",
+        symbolName: "AppBuilderRecommendationEvidenceKind",
+        role: "primary",
+        summary:
+          "Enum-backed evidence lanes replacing the older compressed source-backed/operator-confirmed authority read.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy.ts",
+        symbolName: "appBuilderRecommendationPolicyRows",
+        role: "primary",
+        summary:
+          "Review projection joining recommendation posture, applicability/context rows, evidence rows, source-lowering support, explicit input, and local defaulting candidates.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy-detail.ts",
+        symbolName: "appBuilderRecommendationPolicyDetail",
+        role: "primary",
+        summary:
+          "Public read-only recommendation-policy query projection with target selection, row filters, compact summary counts by default, opt-in rows, and contextual executable policy-satisfaction candidates.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/recommendation-policy-detail.ts",
+        symbolName: "appBuilderPolicySatisfactionCandidateRow",
+        role: "supporting",
+        summary:
+          "Executable contextual row classifier that spends the shared policy-satisfaction predicate rather than redefining contextual source-lowering locally.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/policy-satisfaction.ts",
+        symbolName: "appBuilderPolicySatisfactionForTarget",
+        role: "primary",
+        summary:
+          "First-ring policy gate for contextual executable source-lowering targets; exact target selection satisfies the gate, broad/default preflight target sets do not.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/policy-satisfaction.ts",
+        symbolName: "appBuilderRequiresPolicySatisfaction",
+        role: "primary",
+        summary:
+          "Shared predicate for contextual executable app-builder targets that need explicit policy satisfaction before broad source-lowering readiness.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/defaulting-candidate-policy.ts",
+        symbolName: "appBuilderDefaultingCandidateForTarget",
+        role: "primary",
+        summary:
+          "Central policy projection for local defaulting candidates; this is not blank-slate app-builder defaulting.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/defaulting-candidate-policy.ts",
+        symbolName: "APP_BUILDER_DEFAULTING_CANDIDATE_POLICY_ROWS",
+        role: "primary",
+        summary:
+          "Operator-reviewable local defaulting-candidate policy table with scope and rationale rows kept separate from recommendation posture.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/decision-bundle.ts",
+        symbolName: "AppBuilderDecisionBundleSource",
+        role: "primary",
+        summary:
+          "Enum-backed request-local decision/defaulting provenance for supplied-input expansion.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/decision-bundle.ts",
+        symbolName: "appBuilderSuppliedInputsWithDecisionBundles",
+        role: "primary",
+        summary:
+          "Expansion helper used by readiness, preflight, and source-lowering surfaces before input gates run.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/decision-bundle.ts",
+        symbolName: "appBuilderSuppliedInputsWithDecisionBundlesForTarget",
+        role: "primary",
+        summary:
+          "Target-scoped expansion helper used by source-lowering surfaces when explicit decisions should satisfy one ontology row but not its neighbors.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/policy/status-projection.ts",
+        symbolName: "appBuilderProjectedOntologyStatus",
+        role: "primary",
+        summary:
+          "Projection from row-local declared status plus source-lowering registry facts to public ontology status.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/input-readiness.ts",
+        symbolName: "appBuilderInputReadiness",
+        role: "primary",
+        summary:
+          "Request-specific read model that reports satisfied, missing, rejected, and deferred input dependencies before source lowering.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/input-source-lowering-consumers.ts",
+        symbolName: "appBuilderSourceLoweringConsumersForInputFacet",
+        role: "supporting",
+        summary:
+          "Input-contract detail helper that reports executable source-lowering targets consuming an input facet without making the facet itself source-lowerable.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-materialization.ts",
+        symbolName: "materializeAppBuilderCallerDomainForTarget",
+        role: "primary",
+        summary:
+          "Caller-domain materialization boundary that validates explicit domain slots before source-lowering surfaces emit generated source.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-materialization.ts",
+        symbolName: "domainAssignmentIndexFrame",
+        role: "supporting",
+        summary:
+          "Domain materialization phase frame that indexes caller slot assignments and reports duplicate slot keys.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-materialization.ts",
+        symbolName: "domainMaterializedSlotFrame",
+        role: "supporting",
+        summary:
+          "Domain materialization phase frame that projects required slots, entity title, field schema, and identity value kind from caller input.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-materialization.ts",
+        symbolName: "domainSlotAssignmentShapeIssues",
+        role: "supporting",
+        summary:
+          "Domain materialization validation phase for per-slot value shape and TypeScript identifier requirements.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-materialization.ts",
+        symbolName: "domainDerivedNameFrame",
+        role: "supporting",
+        summary:
+          "Domain materialization phase frame for explicit or derived entity, collection, and identity member names.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "appBuilderApplicationPatternDetail",
+        role: "primary",
+        summary:
+          "Selected application design pattern detail projection joining patterns to input readiness, input contracts, coordinated collection/control/style concept rows, associated affordances, and semantic effect descriptors.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "applicationPatternDetailSelectionFrame",
+        role: "supporting",
+        summary:
+          "Application-pattern detail phase frame for selected patterns and opt-in readiness, input, concept, control, style, affordance, and semantic-effect descriptor flags.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "applicationPatternDetailReadinessFrame",
+        role: "supporting",
+        summary:
+          "Application-pattern detail phase frame that evaluates input-readiness once for selected pattern targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "applicationPatternDetailRowsFrame",
+        role: "supporting",
+        summary:
+          "Application-pattern detail phase frame that projects selected patterns with coordinated concept, control, style, affordance, semantic-effect, and input detail.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "applicationPatternDetailSummaryFrame",
+        role: "supporting",
+        summary:
+          "Application-pattern detail summary phase for compact public counts over input contracts, concepts, controls, style rows, affordances, semantic effects, and issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/application-pattern-detail.ts",
+        symbolName: "inputContractDetailsForApplicationPattern",
+        role: "supporting",
+        summary:
+          "Application-pattern input-contract bridge that returns no detail rows for empty contract sets instead of expanding the whole input-contract catalog.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "appBuilderControlPatternDetail",
+        role: "primary",
+        summary:
+          "Selected control pattern detail projection joining native/rich control rows to input readiness, input detail, coordinating patterns, realization policies, manifest/style/visual rows, and associated affordances.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "controlPatternDetailSelectionFrame",
+        role: "supporting",
+        summary:
+          "Control-pattern detail phase frame for selected control patterns and opt-in readiness, input, application-pattern, descriptor, realization, manifest, style, visual, and affordance flags.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "controlPatternDetailReadinessFrame",
+        role: "supporting",
+        summary:
+          "Control-pattern detail phase frame that evaluates input-readiness once for selected control-pattern targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "controlPatternDetailRowsFrame",
+        role: "supporting",
+        summary:
+          "Control-pattern detail phase frame that projects selected controls with readiness, input detail, coordinating patterns, descriptors, realization policies, manifest/style rows, and affordances.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "controlPatternDetailSummaryFrame",
+        role: "supporting",
+        summary:
+          "Control-pattern detail summary phase for compact public counts over input contracts, patterns, descriptors, realization policies, manifest/style rows, affordances, and issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-pattern-detail.ts",
+        symbolName: "inputContractDetailsForControlPattern",
+        role: "supporting",
+        summary:
+          "Control-pattern input-contract bridge that returns no detail rows for empty contract sets instead of expanding the whole input-contract catalog.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "appBuilderControlManifestDetail",
+        role: "primary",
+        summary:
+          "Selected control/component manifest detail projection joining manifest rows to input readiness, input detail, coordinating patterns, controls, style rows, direct effect contracts, and field descriptors.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "controlManifestDetailSelectionFrame",
+        role: "supporting",
+        summary:
+          "Control-manifest detail phase frame for selected manifests and opt-in readiness, input, pattern, control, style, effect, and field-descriptor flags.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "controlManifestDetailReadinessFrame",
+        role: "supporting",
+        summary:
+          "Control-manifest detail phase frame that evaluates input-readiness once for selected manifest targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "controlManifestDetailRowsFrame",
+        role: "supporting",
+        summary:
+          "Control-manifest detail phase frame that projects selected manifests with coordinated pattern, control, style, effect, and input detail.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "controlManifestDetailSummaryFrame",
+        role: "supporting",
+        summary:
+          "Control-manifest detail summary phase for compact public counts over input contracts, patterns, controls, style rows, effects, field descriptors, and issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-detail.ts",
+        symbolName: "inputContractDetailsForControlManifest",
+        role: "supporting",
+        summary:
+          "Manifest input-contract bridge that returns no detail rows for empty contract sets instead of expanding the whole input-contract catalog.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "appBuilderEffectContractDetail",
+        role: "primary",
+        summary:
+          "Selected effect-contract detail projection joining promised effects to witnesses, app-query rows, manifests, promising affordances, readiness, input detail, and patterns.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "effectContractDetailSelectionFrame",
+        role: "supporting",
+        summary:
+          "Effect-detail phase frame for selected effect contracts and opt-in witness, affordance, readiness, and manifest flags.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "effectContractDetailReadinessFrame",
+        role: "supporting",
+        summary:
+          "Effect-detail phase frame that gathers promising affordances and evaluates their input readiness once.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "effectContractDetailRowsFrame",
+        role: "supporting",
+        summary:
+          "Effect-detail phase frame that projects selected contract rows with witness, manifest, query, and promising-affordance detail.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "effectContractDetailSummaryFrame",
+        role: "supporting",
+        summary:
+          "Effect-detail summary phase for compact public counts over witnesses, queries, manifests, affordances, input detail, and issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/effect-detail.ts",
+        symbolName: "inputContractDetailsForAffordance",
+        role: "supporting",
+        summary:
+          "Affordance input-contract bridge that returns no detail rows for empty contract sets instead of expanding the whole input-contract catalog.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/style-detail.ts",
+        symbolName: "appBuilderStyleDetail",
+        role: "primary",
+        summary:
+          "Selected style detail projection joining styling mechanisms and visual policies to readiness, visual-style input detail, coordinating patterns, lower concept rows, and associated affordances.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/style-detail.ts",
+        symbolName: "styleDetailSelectionFrame",
+        role: "supporting",
+        summary:
+          "Style-detail phase frame for selected styling mechanisms, selected visual policies, and opt-in detail flags.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/style-detail.ts",
+        symbolName: "styleDetailReadinessFrame",
+        role: "supporting",
+        summary:
+          "Style-detail phase frame that evaluates input-readiness once for selected styling and visual-policy targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/style-detail.ts",
+        symbolName: "styleDetailRowsFrame",
+        role: "supporting",
+        summary:
+          "Style-detail phase frame that projects mechanism and visual-policy detail rows from the selected ontology facts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/style-detail.ts",
+        symbolName: "styleDetailSummaryFrame",
+        role: "supporting",
+        summary:
+          "Style-detail summary phase for compact public counts without turning styling rows into design policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "appBuilderSourceLoweringPreflight",
+        role: "primary",
+        summary:
+          "Source-generation feasibility projection over exact ontology targets, source-lowering availability, input gates, and request fields.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "sourceLoweringPreflightSelectionFrame",
+        role: "supporting",
+        summary:
+          "Preflight phase frame for request flags, supplied-input expansion, target normalization/defaulting, descriptor lookup, and unknown-target issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "sourceLoweringPreflightReadinessFrame",
+        role: "supporting",
+        summary:
+          "Preflight phase frame that runs input-readiness once for known targets and bridges readiness issues into source-lowering preflight issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "sourceLoweringPreflightRowsFrame",
+        role: "supporting",
+        summary:
+          "Preflight phase frame that builds target rows with availability, surfaces, policy satisfaction, target requirements, request-field summaries, and decision text.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "sourceLoweringPreflightSummaryFrame",
+        role: "supporting",
+        summary:
+          "Preflight summary phase for compact public counts over eligibility, request fields, implementation, input gates, and policy satisfaction.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-preflight.ts",
+        symbolName: "AppBuilderSourceLoweringAvailability",
+        role: "supporting",
+        summary:
+          "Enum-backed availability axis for SourceLoweringImplemented, NotImplemented, and UnknownTarget.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-surface.ts",
+        symbolName: "appBuilderSourceLoweringSurfaceKindsForTarget",
+        role: "supporting",
+        summary:
+          "Exact-target registry for callable source-lowering surfaces.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/control-catalog.ts",
+        symbolName: "AppBuilderControlDescriptor",
+        role: "primary",
+        summary:
+          "Leaf-control descriptor rows own source shape facts such as field-label container and visual-hook descendant placement.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/control-manifest-field.ts",
+        symbolName: "APP_BUILDER_CONTROL_MANIFEST_FIELD_DESCRIPTOR_ROWS",
+        role: "supporting",
+        summary:
+          "Control-manifest field descriptors expose leaf-control source-shape facts for Atlas/MCP detail inspection.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation-contracts.ts",
+        symbolName: "AppBuilderSourceLoweringInvocationRequest",
+        role: "primary",
+        summary:
+          "Public source-lowering invocation contract vocabulary for request DTOs, selection states, issue kinds, and answer rows; implementation lowerers spend these contracts from source-lowering-invocation.ts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "appBuilderSourceLoweringInvocation",
+        role: "primary",
+        summary:
+          "Generated-fragment bridge for one selected ontology target with explicit supplied inputs, preflight admission, target routing, and delegated part-source syntax.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "sourceLoweringInvocationPreflightFrame",
+        role: "supporting",
+        summary:
+          "Invocation admission phase that resolves the exact target, runs source-lowering preflight, and bridges missing/blocked target issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "sourceLoweringInvocationTargetFrame",
+        role: "supporting",
+        summary:
+          "Invocation route phase that admits application-pattern, control-pattern, and leaf-control source-lowering routes after preflight.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "lowerSourceLoweringInvocationTarget",
+        role: "supporting",
+        summary:
+          "Invocation dispatch phase that spends the admitted target route through the concrete source lowerer.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "selectFieldGroupControlId",
+        role: "pressure",
+        summary:
+          "Field-group DOM id selection helper; current static selected-field-name default may need a richer reusable-component identity policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "lowerFieldGroupSourceInvocation",
+        role: "pressure",
+        summary:
+          "Field-group source lowerer that owns label/control/help/error relationships and any future wrapped-label or scoped-id policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "fieldControlSourceSelectionFrame",
+        role: "supporting",
+        summary:
+          "Leaf field-control selection phase for binding expression, value domain, numeric constraints, and delegated part slot assignments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "fieldControlRenderedFrame",
+        role: "supporting",
+        summary:
+          "Leaf field-control render phase for part-source invocation, visual hooks, standalone accessibility, and generated fragments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-lowering.ts",
+        symbolName: "lowerAppBuilderPartSourceInvocation",
+        role: "primary",
+        summary:
+          "Primitive app-builder part-source lowerer that spends selected part descriptors and slot assignments before higher-order composition wraps generated fragments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-lowering.ts",
+        symbolName: "choiceInputGroupElement",
+        role: "pressure",
+        summary:
+          "Choice-control primitive template lowerer for checkbox-list and radio-group option domains.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-lowering.ts",
+        symbolName: "selectElement",
+        role: "pressure",
+        summary:
+          "Select-control primitive template lowerer for single- and multi-select option domains.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "fieldGroupSelectionFrame",
+        role: "supporting",
+        summary:
+          "Field-group selection phase for domain field, inner control, delegated field-control lowering, label text, and DOM id readiness.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "fieldGroupRenderedFragments",
+        role: "supporting",
+        summary:
+          "Field-group render phase for label/fieldset wrappers, help/error/status message fragments, described-by ids, and FormMessage target refs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "selectRequestedAccessibilityMessageKind",
+        role: "supporting",
+        summary:
+          "Form-message selection branch for explicit messageKind plus explicit messageText or exactly one matching help/error/status payload.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-invocation.ts",
+        symbolName: "selectInferredAccessibilityMessageKind",
+        role: "supporting",
+        summary:
+          "Form-message selection branch that infers message kind only from exactly one supplied help/error/status payload.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-contracts.ts",
+        symbolName: "AppBuilderSourceLoweringCompositionKind",
+        role: "supporting",
+        summary:
+          "Enum-backed composition vocabulary for app-section, collection projections, async state, and native submit form source-lowering requests.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition.ts",
+        symbolName: "appBuilderSourceLoweringComposition",
+        role: "primary",
+        summary:
+          "Generated-fragment bridge for one selected ontology target that owns several source fragments or member invocations.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-native-submit-form.ts",
+        symbolName: "lowerNativeSubmitFormComposition",
+        role: "primary",
+        summary:
+          "Native Submit Form composition lowerer for explicit field selections, field-group member invocations, submit event lowering, submit button control-use rows, and form fragments.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-native-submit-form.ts",
+        symbolName: "nativeSubmitFormSelectionFrame",
+        role: "supporting",
+        summary:
+          "Native Submit Form phase frame for field/action selection, scoped accessibility/visual input validation, field-control selections, and submit button text.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-native-submit-form.ts",
+        symbolName: "nativeSubmitFormReadyFrame",
+        role: "supporting",
+        summary:
+          "Native Submit Form readiness gate that proves selected action, submit text, submit attribute, and one member fragment per selected field before rendering.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-native-submit-form.ts",
+        symbolName: "nativeSubmitFormRenderedFragments",
+        role: "supporting",
+        summary:
+          "Native Submit Form render phase for the submit button, containing form, composition origin, visual hooks, and generated control-use row.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-native-submit-form.ts",
+        symbolName: "nativeSubmitFormCompositionResult",
+        role: "supporting",
+        summary:
+          "Native Submit Form result projector that keeps preflight, selected fields/action, submit event rows, fragments, control-use rows, and issues in one public composition envelope.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition.ts",
+        symbolName: "lowerAppSectionComposition",
+        role: "primary",
+        summary:
+          "AppSection source lowerer that composes explicit child composition requests into one section without becoming a starter profile.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition.ts",
+        symbolName: "sourceLoweringCompositionChildSuppliedInputs",
+        role: "primary",
+        summary:
+          "Nested composition supplied-input bridge that preserves parent context until the child target applies target-scoped filtering.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "lowerLoadingEmptyErrorStateComposition",
+        role: "primary",
+        summary:
+          "Loading/Empty/Error source composition owner for promise, pending, fulfilled, rejected, empty-state, and explicit nested fulfilled-content lowering.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "lowerLoadingEmptyErrorStructuralParts",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error phase frame that lowers promise, pending, fulfilled, rejected, conditional, and optional else template-controller attributes.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "loadingEmptyErrorSelectedInputs",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error request-normalization gate for explicit promise, status text, empty-state condition, and branch local names.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "loadingEmptyErrorSelectionIssues",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error issue gate that rejects missing required request fields and unsafe branch local names before structural lowering.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "loadingEmptyErrorReadyFrame",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error phase gate that proves required text, promise expressions, and structural attribute fragments exist before rendered source is emitted.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "loadingEmptyErrorRenderedFragments",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error phase frame that renders pending, fulfilled-empty, fulfilled-content, rejected, and outer promise region fragments.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-loading-empty-error.ts",
+        symbolName: "loadingEmptyErrorCompositionResult",
+        role: "supporting",
+        summary:
+          "Loading/Empty/Error result projector that keeps preflight, available fields/actions, selected request fields, nested fulfilled content, fragments, and issues in one public composition envelope.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-request-field-contracts.ts",
+        symbolName: "AppBuilderSourceLoweringRequestFieldId",
+        role: "supporting",
+        summary:
+          "Enum-backed request fields include ChildCompositions for AppSection source-lowering calls.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-collection.ts",
+        symbolName: "selectCollectionProjectionFrame",
+        role: "primary",
+        summary:
+          "Shared list/card/table collection projection setup for supplied inputs, binding context, optional empty-state branch, and compact availability metadata.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-collection.ts",
+        symbolName: "selectCollectionTableColumnPayload",
+        role: "supporting",
+        summary:
+          "Collection-table payload normalization boundary for explicit header plus exactly one fieldName or actionName before field/action column lowering.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-collection.ts",
+        symbolName: "collectionTableRenderedFrame",
+        role: "supporting",
+        summary:
+          "Collection Table render phase for repeat/header/body/table fragments, empty-state sibling fragments, visual hooks, member target ids, and control-use rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-collection.ts",
+        symbolName: "collectionTableCellElement",
+        role: "pressure",
+        summary:
+          "Collection table display lowerer that spends domain field value kind for read-only boolean display.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition-collection.ts",
+        symbolName: "lowerOptionalCollectionContentElseBranch",
+        role: "pressure",
+        summary:
+          "Collection empty-state branch helper that lowers sibling conditional-else content through the structural part-source substrate.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "routedCollectionDetailListTemplateSource",
+        role: "supporting",
+        summary:
+          "Routed list-route template renderer for the prepared browse/list template frame.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "routedCollectionDetailListTemplateFrame",
+        role: "supporting",
+        summary:
+          "Routed list-route template frame for empty/else branch control flow, repeat, router load links, title interpolation, and nested viewport placement.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "routedCollectionDetailTemplateFrame",
+        role: "supporting",
+        summary:
+          "Routed detail-route template frame for selected-item branch control flow, value scope, back navigation, title interpolation, field displays, and missing-item text.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "routedCollectionDetailFieldDisplays",
+        role: "pressure",
+        summary:
+          "Routed detail display lowerer that spends domain field value kind for read-only boolean display.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "routedCollectionDetailIdentityComparisonExpression",
+        role: "pressure",
+        summary:
+          "Routed lookup source helper that spends domain identity value kind while preserving string-valued route params.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan.ts",
+        symbolName: "appBuilderSourceLoweringSourcePlan",
+        role: "primary",
+        summary:
+          "SourcePlan preview bridge for direct app-shell/state/router targets and component-pair assembly with explicit placement.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-placement.ts",
+        symbolName: "sourcePlanPlacement",
+        role: "primary",
+        summary:
+          "SourcePlan placement resolver for direct transport fields and supplied SourcePlacement facets, including conflict/missing placement issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-selection.ts",
+        symbolName: "appBuilderSourceLoweringSourcePlanFrame",
+        role: "primary",
+        summary:
+          "Selected SourcePlan lowering frame that dispatches one explicit app-builder source-lowering branch before public answer projection.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "lowerComponentPairSourcePlan",
+        role: "primary",
+        summary:
+          "Component-pair SourcePlan assembly that joins template composition, local state, direct invocations, and optional runnable app shell output.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairLocalViewModelStateFieldNames",
+        role: "primary",
+        summary:
+          "Component-pair helper that keeps generated local draft state aligned with selected fields and declared action inputs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairDirectSelection",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame for app-shell, class-name, resource carrier, convention, and resource-name selection before nested lowering runs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "lowerComponentPairNestedSources",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that lowers nested template composition and direct invocations with shared plus target-scoped supplied inputs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "lowerComponentPairLocalState",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that derives demand-driven local view-model state from selected fields, actions, and value-set selections.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairFragments",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that separates template text, contribution fragments, TypeScript top-level fragments, and class-member fragments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairIssues",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that aggregates selection, nested-lowering, local-state, template, and TypeScript fragment issues before SourcePlan assembly.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairSourcePlan",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that turns validated direct selection and fragments into a custom-element pair or runnable root app-shell SourcePlan.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairAggregates",
+        role: "supporting",
+        summary:
+          "Component-pair phase frame that deduplicates target refs, effect contracts, and control-use rows for public projection.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+        symbolName: "appBuilderLocalViewModelFieldsForNames",
+        role: "supporting",
+        summary:
+          "Field filter used by component-pair local state while preserving full-field direct local-state previews.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+        symbolName: "directSourcePlanTargetFrame",
+        role: "primary",
+        summary:
+          "Shared direct SourcePlan target admission frame for preflight rows, target refs, effect contracts, and descriptor-backed issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-menu.ts",
+        symbolName: "appBuilderPartMenu",
+        role: "primary",
+        summary:
+          "AI-facing app-builder part menu over common part rows, filtered by application site, operation, resource identity, and slot availability.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-menu.ts",
+        symbolName: "appBuilderPartMenuAxisSummary",
+        role: "supporting",
+        summary:
+          "Compact part-menu aggregate frame for part kinds, tiers, sites, slot expectations, resource identities, and package dependencies.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-lowering.ts",
+        symbolName: "appBuilderPartSourceLoweringPreview",
+        role: "primary",
+        summary:
+          "Compact source-lowering preview over callable part samples, structural fragment hints, issues, and optional source text.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-lowering.ts",
+        symbolName: "lowerAppBuilderPartSourceInvocation",
+        role: "primary",
+        summary:
+          "Executable part source invocation callback over stable part IDs and typed slot assignments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "appBuilderSourceLoweringGalleryPlans",
+        role: "primary",
+        summary:
+          "Pressure fixture builder that materializes executable source-lowering target rows into SourcePlan fixtures.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGalleryFragmentSections",
+        role: "supporting",
+        summary:
+          "Dense source-lowering gallery section frame over local state, class-member lowerings, and template lowering groups.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGalleryControlLowerings",
+        role: "supporting",
+        summary:
+          "Focused source-lowering gallery section for first-ring native control and field-group invocation coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGalleryCollectionLowerings",
+        role: "supporting",
+        summary:
+          "Focused source-lowering gallery section for collection list/card/table composition coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGalleryStatusLowerings",
+        role: "supporting",
+        summary:
+          "Focused source-lowering gallery section for loading/empty/error status composition coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGalleryFormLowerings",
+        role: "supporting",
+        summary:
+          "Focused source-lowering gallery section for native submit-form composition coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-lowering-gallery.ts",
+        symbolName: "fragmentGallerySectionLowerings",
+        role: "supporting",
+        summary:
+          "Focused source-lowering gallery section for explicit app-section child-composition coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "appBuilderPartSourceGalleryCoverageIssues",
+        role: "primary",
+        summary:
+          "SourcePlan contribution coverage check proving the dense gallery spends public part-source sample shapes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "appBuilderPartSourceGallerySourcePlanFrame",
+        role: "supporting",
+        summary:
+          "Dense part-source gallery SourcePlan phase frame for paths, admissions, app tasks, entrypoint imports, generated app source, and generated state source.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "appBuilderPartSourceGalleryAdmissionFrame",
+        role: "supporting",
+        summary:
+          "Dense part-source gallery admission frame for router, state, i18n, validation, virtualization, and StandardConfiguration package setup.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "appBuilderPartSourceGallerySourcePlanAssembly",
+        role: "supporting",
+        summary:
+          "Dense part-source gallery SourcePlan assembly boundary that spends the frame into entrypoint, app, state, template, and configuration file artifacts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "galleryAppSourceFrame",
+        role: "supporting",
+        summary:
+          "Dense part-source gallery frame carrying TypeScript imports, source fragments, resource metadata fragments, route fragments, and route-parameter fragments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "galleryResourceDeclarationsSource",
+        role: "supporting",
+        summary:
+          "Part-source gallery TypeScript source section for custom-element, static metadata, define-call, and named-resource declarations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "galleryRouteAndServiceSource",
+        role: "supporting",
+        summary:
+          "Part-source gallery TypeScript source section for route components, sanitizer service, local dependencies, and route decorator source.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "galleryRootAppClassSource",
+        role: "supporting",
+        summary:
+          "Part-source gallery TypeScript source section for the generated root app class and its part-source-backed members.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "gallerySharedTypesSource",
+        role: "supporting",
+        summary:
+          "Part-source gallery TypeScript source section for shared fixture interfaces and required lifecycle-hook pressure.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "bindingStateElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery binding section for state plugin .state and .dispatch source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "bindingI18nElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery binding section for translation and translation-parameter source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "bindingBehaviorHostElement",
+        role: "pressure",
+        summary:
+          "Dense part-source gallery helper that chooses minimal host elements for binding behavior sample expressions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "iterationTemplateControllerElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery structural section for repeat and virtual-repeat source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "promiseTemplateControllerElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery structural section for promise, pending, fulfilled, and rejected source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "compositionFrameworkComponentElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery framework-component section for au-compose and au-slot source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "interactionFrameworkComponentElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery framework-component section for focus and show source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "routerFrameworkComponentElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery framework-component section for viewport, load, and href router source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "validationFrameworkComponentElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery framework-component section for validation-errors and validation-container source samples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-gallery.ts",
+        symbolName: "compilerSyntaxElements",
+        role: "supporting",
+        summary:
+          "Part-source gallery framework-syntax section for compiler-owned attributes such as as-element.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-samples.ts",
+        symbolName: "sampleSlotAssignmentSamplesForPart",
+        role: "primary",
+        summary:
+          "Reusable part-source preview sample slot values that should stay as neutral placeholders rather than fixture-domain examples.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/part-source-samples.ts",
+        symbolName: "APP_BUILDER_PART_SLOT_SAMPLE_VALUE_ROWS",
+        role: "supporting",
+        summary:
+          "Enum-keyed default slot sample value table for source-lowering previews; keep this as sample policy, not executable lowerer logic.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "appBuilderMinimalAppShellExpectedEffects",
+        role: "supporting",
+        summary:
+          "Shared expected-effect projection for public SourcePlan previews and app-builder pressure fixtures.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "routedCollectionDetailExpectedEffectFrame",
+        role: "supporting",
+        summary:
+          "Routed collection/detail expected-effect frame that normalizes route parameter and viewport names before fixture-verification promises are projected.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "routedCollectionDetailRouteConfigurationExpectedEffects",
+        role: "supporting",
+        summary:
+          "Routed collection/detail route-configuration expected effects for router options, route object literals, and viewport targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "routedCollectionDetailRouteConsumptionExpectedEffects",
+        role: "supporting",
+        summary:
+          "Routed collection/detail route-consumption expected effects for au-viewport declarations, route params, endpoint params, and route-context reads.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder-generated",
+        role: "primary",
+        summary:
+          "Materializes current generated-app contract fixtures from exact public app-builder SourcePlan requests.",
       },
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
-        symbolName: "SourcePlan",
-        role: "primary",
+        symbolName: "SourcePlanContribution",
+        role: "supporting",
         summary:
-          "Shared source artifact plan emitted by app-builder and app-builder patterns before any host writes files.",
+          "Generated-source contribution ledger that preserves part and source-lowering origins beside final text.",
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/minimal-app-source.ts",
-        symbolName: "appBuilderMinimalAppSourcePlan",
-        role: "primary",
+        filePath: "packages/mcp/src/runtime-adapter.ts",
+        symbolName: "AureliaMcpSemanticRuntimeAdapter",
+        role: "supporting",
         summary:
-          "First concrete source lowering for decorator and convention minimal app shells.",
+          "Thin MCP adapter method that forwards app-builder requests to SemanticRuntime.answerAppBuilderQuery.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/collection-list-source.ts",
-        symbolName: "appBuilderCollectionListSourcePlan",
-        role: "primary",
+        kind: "lens",
+        lensId: LensId.FrameworkCapabilities,
+        projection: "catalog",
+        role: "grounding",
         summary:
-          "First nontrivial source lowering for state-backed collection/add-item starters.",
+          "Framework capability terrain should ground app-builder ontology choices before consumer policy is derived.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "app-builder", "ontology"],
+        role: "grounding",
+        summary:
+          "Durable app-builder memory owns the current ontology direction and removal of the old starter/golden lane.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "app-builder", "policy", "fixtures", "atlas"],
+        role: "grounding",
+        summary:
+          "App-builder interview decision-effect memory classifies answers as immediate invariants, near canaries, structural lanes, roadmap frontiers, or deferred polish before scheduling work.",
       },
       {
         kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder-pressure",
         role: "primary",
         summary:
-          "Materializes app-builder generated source plans into committed inspection goldens.",
+          "Regenerates focused pressure fixtures from current app-builder source-lowering galleries.",
       },
       {
-        kind: "path",
-        pathPrefix: "packages/semantic-runtime/fixtures/app-builder/goldens/",
-        role: "pressure",
-        summary:
-          "Generated app-builder source goldens for direct inspection.",
-      },
-      {
-        kind: "source",
-        filePath: "packages/semantic-runtime/src/app-builder/starter.ts",
-        symbolName: "buildAppBuilderStarter",
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:app-builder-query-surface",
         role: "primary",
         summary:
-          "First executable no-app starter slice: staged menus, lowering preview, and generation through shared SourcePlan artifacts.",
+          "Public app-builder API contract covering catalog discovery, source-lowering surfaces, part-source invocation, and integrity answers.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:control-use-inventory",
+        role: "primary",
+        summary:
+          "Contract proving authored/generated native controls and button actions are classified through control-use inventory.",
       },
       {
         kind: "doc",
         path: "packages/semantic-runtime/src/app-builder/README.md",
         role: "grounding",
         summary:
-          "Starting-point framing for app-builder as an AI-first pattern algebra.",
+          "Starting-point framing for app-builder as an AI-first pattern algebra and source-lowering substrate.",
       },
       {
-        kind: "lens",
-        lensId: LensId.AtlasMemory,
-        projection: "next",
+        kind: "doc",
+        path: ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
         role: "grounding",
         summary:
-          "Atlas memory owns the durable app-builder direction; temporary run files may reference it but should not be authority for routing.",
+          "Reviewable synthesis across recommendation, ontology, design/control, and app-design interview notes.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/app-builder-source-lowering-authority-interview-2026-06-03.md",
+        role: "grounding",
+        summary:
+          "Reviewable interview for status/defaulting/recommendation policy, source-lowering authority, and generated fixture contract boundaries.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/app-builder-recommendation-defaulting-policy-review-2026-06-03.md",
+        role: "grounding",
+        summary:
+          "Generated review checklist for recommendation posture, applicability/context, evidence, defaulting candidates, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/app-builder-generated-fixture-review-rolling-2026-06-04.md",
+        role: "grounding",
+        summary:
+          "Qualitative rolling review of generated app-builder fixture source shape, request/response inspectability, SourcePattern metadata, and the app-builder versus fixture-verification boundary.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review",
+        role: "supporting",
+        summary:
+          "Report writer that refreshes recommendation/defaulting policy review rows, focused source-lowering request-field rows, and contextual source-lowering policy-satisfaction candidate rows from the compiled app-builder ontology and policy projection.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-builder-",
+        role: "pressure",
+        summary:
+          "Focused pressure fixture lane for current app-builder part/source-lowering behavior.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/app-builder/",
+        role: "pressure",
+        summary:
+          "Current tracked generated-app contract lane for end-user-shaped source, exact app-builder/MCP inputs, manifests, expected effects, and reopen verification.",
       },
     ],
     authority: [
-      "Atlas memory record intent:app-builder-pattern-ontology for durable direction.",
-      "semantic-runtime app-builder descriptors for seed profiles, starter intents, canonical solution spaces, reusable pattern identities, domain slots, public domain presets, seed data sets, public reference scenarios, Aurelia lowering axes, source policies, source plans, and starter goldens.",
-      "Aurelia lowering axes distinguish app-global policy from resource-local and area-local mechanics; nested viewports should fall out of router-driven area selection rather than become a standalone global taste.",
-      "Expected effects and fixture verification for proving generated app mechanics.",
-      "Public pattern/design-system grounding for reference scenarios; concrete app domains, sample records, copy, and presentation belong in domain presets, seed data sets, fixtures, or scenarios, not in reusable pattern identities.",
+      "App-builder memory and the 2026-06-07 v1 recalibration packet for current implementation priority.",
+      "June 2026 interview documents for durable product texture and background design intent.",
+      "Semantic-runtime app-builder ontology/source-lowering code for current public API authority.",
+      "Atlas framework.capabilities for framework-pure grounding before app-builder policy is derived.",
     ],
     cautions: [
-      "Stable IDs are appropriate for real selectable dimensions; avoid only opaque recipe keys that bundle independent choices invisibly.",
-      "Pattern identities name reusable mechanics. Domain presets, seed data sets, reference scenarios, solution spaces, and Aurelia lowering axes are separate selectable dimensions.",
-      "A public answer should expose typed selections and verification promises before source text when that prevents accidental fixture leakage or saves tokens.",
-      "North-star prose becomes executable ontology only when it constrains a typed next request.",
-      "Atlas should route to app-builder source and memory for new generation work; migrated app-pattern fixtures are pressure material, not a public generation taxonomy.",
+      "For app-builder v1 implementation, read the June 7 recalibration packet before older interview documents; older interviews should not become co-equal pressure when the packet gives a narrower current priority.",
+      "Read the app-builder interviews and memory when naming, input contracts, visual policy, or generation timing feels ambiguous.",
+      "Current app-builder work starts with read-only ontology breadth and explicit input readiness before source-lowering.",
+      "Do not continue broad composition rung climbing when immediate v1 substrate gaps from the packet remain unaccounted for.",
+      "Do not enum-first patch controls; inspect ontology, source-lowering request fields, policy/defaulting, fixtures, MCP presentation, and Atlas implications before declaring a control affordance complete.",
+      "Source-lowering availability is executable support, not evidence from an older generator path.",
+      "Pressure fixtures live under packages/semantic-runtime/fixtures/pressure/app-builder-* and should not become public starter authority.",
+      "MCP should forward through the semantic-runtime app-builder facade and not invent transport-local app-building policy.",
+      "Do not recreate the deleted starter menu/golden lane without explicit operator review.",
+      "Do not silently choose a sample domain, identity field, plugin, visual style, state boundary, routing policy, or generated CSS fallback when the caller has not supplied enough input.",
+      "Do not use optional to mean source lowering is absent. Optional, deferred, defaulting-candidate, source-lowering-implemented, recommendable, and blank-slate/starter defaulting are separate concepts.",
+      "Use request-local decision bundles for current defaulting decisions; do not reintroduce named blank-slate profiles until repeated bundle shapes prove they are stable.",
+      "Keep decision-bundle counts visible in compact answers and expansion rows behind detail/opt-in fields.",
+      "When a decision or supplied input has targetRefs, lowerers with a selected target must spend target-scoped supplied-input helpers instead of raw request.suppliedInputs.",
+      "Classify interview answers by effect horizon before acting: immediate invariant, near canary, structural lane, roadmap frontier, or deferred polish.",
+      "Use `policy-satisfaction.ts` as the shared first-ring gate for contextual executable source-lowering targets: exact target selection satisfies it, while broad/default preflight target sets keep contextual rows from reporting `canRequestSourceLowering=true`.",
+      "Do not treat contextual or legacy source-backed as complete explanations; inspect recommendation applicability and evidence rows before promoting a target.",
+      "Do not turn app-builder into a visual CSS author by hidden taste. Visual/style material should come from supplied inputs, explicit policy, or a later reviewed fallback.",
+      "Do not make missing-input reporting postures depend on the input they report as missing; for example visual-input-missing has no VisualStyleInput dependency, while style-spending visual policies do.",
+      "Do not materialize component-pair output as a generated-app contract fixture unless it also has runnable app-shell/tooling context and reopen expectations, or an explicit verification-only harness.",
     ],
     nextQuestions: [
-      "Which typed selection stage is being answered: seed profile, starter intent, scenario/solution bias, pattern composition, domain preset or slots, seed data set, Aurelia lowering axes, preview, or generation?",
-      "Which pattern composition and required domain slots satisfy the user's app-building intent before source text is emitted?",
-      "Which seed profile is the caller asking for: minimal runnable, clean starter, service-backed foundation, or large app foundation?",
-      "Should the caller supply a domain, use a public starter-domain preset such as task-list, or stay at the domain-slot menu?",
-      "Should the starter generate no seed data, public seed data, demo seed data, inspection seed data, or caller-supplied records?",
-      "Can the user's requested starter lower through `buildAppBuilderStarter`, or does it still need a new pattern composition/source-plan rule?",
-      "Which migrated app-pattern fixture exposed the pressure, and which app-builder dimension should own it now?",
-      "Where should reference-scenario packs live so generated fixtures, pressure fixtures, and public app-builder guidance remain distinct?",
+      "Is this task part of the June 7 immediate v1 substrate set, or is it broad app-builder rung climbing that should wait?",
+      "Is this work read-only ontology, status/policy projection, input-contract/readiness modeling, control/manifest modeling, style input modeling, SourcePlan effects, verification, or actual source generation?",
+      "Which applicability/context rows make the recommendation truthful, and which evidence lanes back the row without collapsing everything into source-backed authority?",
+      "Which current app-builder row, lowerer, fixture, MCP answer, or Atlas route would mislead a future agent if left stale?",
+      "Which input dependency is missing and should be returned to the AI through input-readiness instead of guessed?",
+      "If source is being generated, is this a one-target invocation, a fragment composition, a direct SourcePlan preview, or a component-pair assembly?",
+      "Which interview effect class applies, and is the next step code, contract, fixture structure, Atlas memory/router hygiene, or deferred roadmap work?",
+      "If a component pair is involved, is it being added to an existing app, wrapped in a runnable app shell, or only previewed as a component pair?",
+      "If a new source callback is added, does catalog-integrity still report zero gallery contribution coverage issues?",
     ],
     relatedRouteIds: [
-      "semantic-runtime.app-builder-pattern-ontology",
       "atlas.framework-capability-terrain",
       "semantic-runtime.source-plan",
-      "semantic-runtime.app-builder-ide-fixture-flywheel",
+      "semantic-runtime.app-builder-generated-fixture-contracts",
       "semantic-runtime.semantic-contract-verification",
-      "semantic-runtime.lsp-edit-affordance-substrate",
       "mcp.developer-preview-shell",
       "atlas.work-router.self-improvement",
     ],
@@ -524,7 +2300,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     title: "Framework Capability Terrain",
     summary:
-      "Route work that needs a compact map of what Aurelia can do, how app authors express those capabilities, which choices are global or local, and what semantic-runtime already understands before app-builder or MCP turns them into public guidance.",
+      "Route work that needs a compact map of what Aurelia can do, how app authors express those capabilities, and which framework choices are global, local, admitted, or consequential before any consumer turns them into guidance.",
     domains: [
       "atlas",
       "framework-capabilities",
@@ -570,9 +2346,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "state observation binding capability",
       "proxy observation ordinary getter @computed",
       "Shadow DOM cssModules shadowCSS",
+      "packages-tooling plugin-conventions cssExtensions useCSSModule",
+      "style tooling css modules conventions",
       "template controller capability",
+      "framework syntax catalog",
+      "compiler special template syntax",
+      "usage-site containerless",
+      "resource metadata catalog",
+      "resource definition dependencies source",
       "DI configuration app task capability",
-      "auLink coverage status",
+      "AppRoot actionless form submit",
+      "allowActionlessForm",
+      "submit.trigger preventDefault capability",
+      "configuration:actionless-form-submit",
+      "auLink grounding evidence",
     ],
     queryCanaries: [
       {
@@ -583,7 +2370,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "framework.capabilities semantic-runtime capability api MCP Atlas for app developers",
+          "framework.capabilities capability api MCP Atlas for app developers",
         summary:
           "Public capability API design should route through the internal Atlas terrain before becoming an MCP or semantic-runtime surface.",
       },
@@ -595,15 +2382,45 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
-          "proxy observation direct state template binding ordinary getter computed app builder low boilerplate",
+          "proxy observation getter computed observer locator collection observer target observer",
         summary:
-          "Clean-code app-builder guidance should route through observation capability terrain, not through boilerplate recipe inertia.",
+          "Observation capability questions should route through framework terrain before consumer guidance chooses a code style.",
       },
       {
         query:
           "StandardConfiguration bundle decomposed capabilities plugin admission framework capability terrain",
         summary:
           "Bundle questions should route to capability terrain because bundles are discovery/admission conveniences rather than the ontology.",
+      },
+      {
+        query:
+          "built in resources plugin resources resource inventory source forms template controllers converters behaviors commands",
+        summary:
+          "Resource questions should distinguish authoring source forms from built-in and plugin resource inventories.",
+      },
+      {
+        query:
+          "style tooling cssExtensions useCSSModule defaultShadowOptions stringModuleWrap cssModules shadowCSS injection semantic runtime css ownership",
+        summary:
+          "Styling questions should route through framework/tooling wiring and avoid making semantic-runtime own CSS design semantics.",
+      },
+      {
+        query:
+          "framework capability grounding corpus backed evidence prerequisites app-builder policy",
+        summary:
+          "Consumer-policy derivation should inspect neutral grounding facts before treating curated terrain rows as app-builder input.",
+      },
+      {
+        query:
+          "actionless form submit allowActionlessForm preventDefault AppRoot framework capability",
+        summary:
+          "Actionless form submit behavior should route through pure capability terrain before app-builder derives submit policy or generated form guidance.",
+      },
+      {
+        query:
+          "framework capability evidence trace backing lens rows source anchors expensive materialization",
+        summary:
+          "Capability proof questions should route to evidence-trace when descriptor-level evidence is too shallow.",
       },
     ],
     anchors: [
@@ -612,7 +2429,47 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         domains: ["atlas", "framework-capabilities"],
         role: "primary",
         summary:
-          "Durable memory record frontier:framework-capability-terrain owns the direction for this lens and app-builder grounding.",
+          "Durable memory record frontier:framework-capability-terrain owns the direction for the framework-pure capability lens.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCapabilities,
+        projection: "matrix",
+        role: "primary",
+        summary:
+          "Capability matrix projection that expands resource-kind/source-form support and framework-local capability cells.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCapabilities,
+        projection: "grounding",
+        role: "primary",
+        summary:
+          "Grounding projection that keeps evidence, prerequisites, and exclusivity factual before downstream consumer policy is derived.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCapabilities,
+        projection: "evidence-trace",
+        role: "supporting",
+        summary:
+          "Heavier Atlas-local projection that joins capability evidence descriptors to backing lens answers, sampled rows, source anchors, seams, and continuations.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCapabilities,
+        projection: "catalog",
+        role: "supporting",
+        summary:
+          "Implemented capability terrain rows with source forms, locality, resource kinds/source support, framework effects, typed requirements, framework-local constraints, and evidence.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+        symbolName: "answerFrameworkCapabilities",
+        role: "primary",
+        summary:
+          "Curated framework.capabilities answerer and pure framework row contract.",
       },
       {
         kind: "source",
@@ -620,7 +2477,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "LensId",
         role: "primary",
         summary:
-          "The future framework.capabilities surface should become a first-class Atlas lens when implemented.",
+          "framework.capabilities is a first-class Atlas lens id.",
       },
       {
         kind: "source",
@@ -700,7 +2557,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         projection: "anchors",
         role: "grounding",
         summary:
-          "Semantic-runtime coverage signal for framework concepts already mirrored through auLink.",
+          "Grounding signal for framework concepts mirrored through auLink.",
       },
       {
         kind: "source",
@@ -710,27 +2567,38 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Current app-builder lowering axes should be checked against the framework capability terrain before further expansion.",
       },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/app-root.ts",
+        symbolName: "AppRootConfig",
+        role: "grounding",
+        summary:
+          "Semantic-runtime mirror of IAppRootConfig, including allowActionlessForm provenance.",
+      },
     ],
     authority: [
       "Atlas memory record frontier:framework-capability-terrain for durable direction.",
+      "framework.capabilities catalog rows for source forms, locality, resource kinds/source support, framework effects, typed requirements, framework-local constraints, and evidence.",
+      "framework.capabilities matrix/evidence/evidence-trace/grounding projections for resource support, evidence descriptors, backing lens materialization, and prerequisite/exclusivity facts.",
       "Existing framework discovery capability enums for observer, router, expression, rendering, app-task, and export capabilities.",
       "framework.resources, framework.corpus, framework.router, framework.observation, framework.discovery, and bridge.aulink evidence rows.",
-      "semantic-runtime app-builder lowering axes as pressure consumers, not as the source of truth.",
+      "App-builder, MCP, and semantic-runtime coverage as downstream consumers, not as capability row fields or sources of truth.",
     ],
     cautions: [
-      "Do not infer app-builder ontology from one enum or one docs snippet when framework semantics cross source forms, locality, and admission policy.",
-      "Do not treat auLink coverage as proof that the capability terrain is complete; auLink marks semantic-runtime coverage for mirrored concepts.",
+      "Do not infer app-builder ontology from one enum or one docs snippet when framework semantics cross resource source forms, locality, and admission policy.",
+      "Do not treat auLink coverage as proof that the capability terrain is complete; auLink is only one grounding signal for mirrored concepts.",
       "Do not treat StandardConfiguration or other bundles as the ontology. Decompose the capabilities that bundles admit.",
       "Do not collapse convention/default policy, explicit metadata forms, programmatic definitions, local inline templates, and semantic consequences into one co-equal option list.",
+      "Do not let CSS modules stand in for all styling. Styling capability terrain should expose tooling, pairing, registry wiring, and asset topology without claiming CSS design ownership.",
+      "Do not conflate resource source forms with built-in or plugin resource inventory. Creation mechanisms and available resource catalogs are separate questions.",
       "Keep v1 curated and source-backed; broad heuristic generation can propose candidates later but should not own row identity.",
     ],
     nextQuestions: [
-      "Which Aurelia capability domain is being mapped: resources, styling, router, state/observation/binding, template controllers, DI/configuration/plugins, expressions/type-system, or diagnostics?",
-      "Which app-author source forms express this capability, and are they alternatives, stackable mechanisms, or consequences of another choice?",
+      "Which Aurelia capability domain is being mapped: resources, styling, router, state/observation/binding, template controllers, DI/configuration/plugins, expressions, or lifecycle?",
+      "Which app-author source forms express this capability, and if they are resource declaration forms, which resource kinds actually support them?",
       "Is the choice app-global, package/global registration, resource-local, template-local, area-local, binding-site, or route-local?",
       "What must be selected or admitted first before this capability can be used?",
-      "What semantic-runtime products or auLink anchors already cover the capability, and what remains Atlas-only or missing?",
-      "Should app-builder expose this as a selectable axis, derive it as a consequence, or keep it as analysis-only pressure?",
+      "Which framework lens, docs, tests, or auLink anchors ground the capability, and what evidence is still weak?",
     ],
     relatedRouteIds: [
       "semantic-runtime.app-builder-pattern-ontology",
@@ -764,15 +2632,53 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "source artifact envelope",
       "SourcePlan",
       "SourcePlanFile",
+      "SourcePlanAssembly",
+      "SourcePlanContribution",
+      "SourcePlanContributionOriginKind",
+      "SourcePlanTypeScriptImportContribution",
+      "SourcePlanSourceFragmentContribution",
+      "custom element pair SourcePlan",
+      "appBuilderCustomElementPairSourcePlan",
+      "appBuilderCustomElementClassFileArtifact",
+      "component pair runnable app shell",
+      "component pair project tooling",
+      "component pair generated app fixture",
+      "AppBuilderSourceLoweringInvocation origin",
+      "SourcePlanOperationKind",
       "SourcePlanPolicy",
+      "TypeScriptImportRequirement",
+      "TypeScript import ordering",
+      "package imports before relative imports",
+      "typeScriptImportStatements import grouping",
+      "typescript-import-source",
+      "TypeScriptSourceText",
+      "typeScriptSourceText",
+      "typescript-source-text",
+      "sourcePlanFileTypeScriptImportRequirements",
       "SourcePlanProjectTooling",
+      "aureliaSourcePlanProjectTooling",
+      "SourcePlanPackageToolingPolicy",
+      "SourcePlanBuildToolPolicy",
+      "aureliaRegistrationChain",
+      "configured Aurelia entrypoint",
+      "compact entrypoint registration",
+      "single RouterConfiguration registration",
+      "Aurelia register chain",
+      "AppBuilderBaseline package tooling",
       "SourcePattern",
       "SourcePatternModule",
+      "SourcePatternModules",
       "SourcePatternModuleKey",
       "SourcePatternParameter",
       "SourcePatternParameterKey",
       "SourcePatternAdaptationGroupKey",
       "SourcePatternUsePolicy",
+      "SourcePatternParameterValue",
+      "source-name.ts",
+      "sourceNameWords",
+      "pascalSourceName",
+      "lowerCamelSourceName",
+      "kebabSourceName",
       "ExpectedSemanticEffectKind",
       "AppBuilderDomainSlotKey",
       "sourcePatternUsePolicy",
@@ -781,13 +2687,33 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "source pattern modules",
       "sourcePlan.pattern.modules",
       "sourcePlan.pattern.parameters",
+      "AppBuilderSourcePatternKey",
+      "appBuilderMinimalAppShellSourcePattern",
       "sourceParameterValues",
       "source parameter applications",
+      "package dependency preview",
+      "project tooling preview",
+      "app-builder SourceNaming input contract",
+      "app-builder SourceProjectTooling input contract",
       "app-builder source lowering",
       "fixture materialization source plan",
+      "app-builder generated fixture materialization",
+      "sourcePlanPlacement",
+      "appBuilderSourceLoweringSourcePlanFrame",
+      "componentPairSourcePlan",
+      "directSourcePlanTargetFrame",
+      "direct SourcePlan target frame",
+      "direct SourcePlan target preflight",
       "diagnostic action source plan",
       "future edit planning source plan",
       "neutral source-plan substrate",
+      "route configuration source plan",
+      "routerRouteDecoratorSourceText",
+      "routerRouteConfigurationObjectExpressionSourceText",
+      "route configuration trailing commas",
+      "appBuilderRoutedCollectionDetailSourcePlan",
+      "routed collection detail generated source plan",
+      "i18n configuration source plan",
     ],
     queryCanaries: [
       {
@@ -800,6 +2726,77 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "fixture materialization source artifacts complete text project tooling SourcePlan",
         summary:
           "Fixture materialization should keep using the shared SourcePlan envelope rather than generator-local file models.",
+      },
+      {
+        query: "app-builder generated app package.json tsconfig dependency SourcePlanProjectTooling",
+        summary:
+          "Runnable generated-app tooling should route through SourcePlanProjectTooling rather than ordinary source files or app-builder-local metadata.",
+      },
+      {
+        query: "app-builder source placement input contract source naming SourcePatternParameterValue source-name",
+        summary:
+          "App-builder naming payloads should route through source-plan naming and source-pattern adaptation primitives before adding local naming helpers.",
+      },
+      {
+        query: "app-builder generated source pattern metadata SourcePattern modules",
+        summary:
+          "Complete generated SourcePlans should carry source-pattern metadata for domain/data/style/code-economy posture and reusable source modules.",
+      },
+      {
+        query: "generated TypeScript source imports origin-bearing SourcePlanContribution typeScriptSourceText",
+        summary:
+          "Generated TypeScript files should render imports from source-plan contributions rather than anonymous copies that lose fragment origin.",
+      },
+      {
+        query:
+          "source plan TypeScript import grouping package imports before relative imports typeScriptImportStatements",
+        summary:
+          "Generated TypeScript files should route through typeScriptImportStatements when package-vs-relative import order matters.",
+      },
+      {
+        query:
+          "app-builder custom element pair SourcePlan template artifact TypeScript class member fragments component pair",
+        summary:
+          "Companion TypeScript/template source plans should route through the custom-element pair assembler when template compositions and class-member fragments need one SourcePlan boundary.",
+      },
+      {
+        query:
+          "component pair generated app fixture app shell project tooling expected effects",
+        summary:
+          "A component pair is not a full generated app contract until app-shell/tooling assembly and reopen expectations are explicit.",
+      },
+      {
+        query:
+          "routed collection detail expected effects route configuration route consumption template reopen",
+        summary:
+          "Routed collection/detail SourcePlan expected effects should stay split by app/state, route configuration, route consumption, and template/runtime promise families.",
+      },
+      {
+        query: "app-builder source-lowering origin SourcePlan contribution origin kind",
+        summary:
+          "Composed app-builder fragments should preserve app-builder source-lowering origins through SourcePlanContribution instead of masquerading as direct part invocation fragments.",
+      },
+      {
+        query:
+          "directSourcePlanTargetFrame direct SourcePlan target preflight effect contracts target refs",
+        summary:
+          "Direct app-builder SourcePlan targets should share one frame for preflight rows, target refs, effect contracts, and descriptor-backed admission issues.",
+      },
+      {
+        query: "routed collection detail source plan route decorator router config route parameters",
+        summary:
+          "Generated routed collection/detail source should route through shared SourcePlan plus router-owned source serializers, not a composition-local file model.",
+      },
+      {
+        query: "route configuration source plan trailing commas nested routes routerRouteConfigurationObjectExpressionSourceText",
+        summary:
+          "Generated @route object literals should route through the router-owned serializer so multiline route arrays and objects stay reviewable.",
+      },
+      {
+        query:
+          "source plan compact entrypoint registration single RouterConfiguration register chain",
+        summary:
+          "Entrypoint source should route through aureliaRegistrationChain when single framework configuration registrations need compact generated Aurelia source.",
       },
       {
         query: "diagnostic action source plan future edit application host boundary",
@@ -819,6 +2816,86 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlanAssembly",
+        role: "primary",
+        summary:
+          "Stateful source-plan assembler carrying edit policy and text authority across generated file artifacts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-assembly.ts",
+        symbolName: "AppBuilderSourcePlanAssembly",
+        role: "supporting",
+        summary:
+          "App-builder-specific generated-source transaction over SourcePlanAssembly for generated app source, admission, dependencies, and project tooling.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+        symbolName: "appBuilderCustomElementPairSourcePlan",
+        role: "primary",
+        summary:
+          "App-builder custom-element SourcePlan pair assembler for companion TypeScript/template artifacts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+        symbolName: "appBuilderCustomElementClassFileArtifact",
+        role: "supporting",
+        summary:
+          "SourcePlan TypeScript class artifact builder that preserves imported class-member fragment contributions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlanContribution",
+        role: "primary",
+        summary:
+          "File-local generated-source ledger for import requirements and source fragments before final text assembly.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlanContributionOriginKind",
+        role: "supporting",
+        summary:
+          "Enum-backed contribution-origin family for app-builder part invocations, app-builder source-lowering invocations, and framework configuration admissions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+        symbolName: "TypeScriptImportRequirement",
+        role: "primary",
+        summary:
+          "Neutral static TypeScript import requirement merged by source-plan import assembly.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+        symbolName: "typeScriptImportStatements",
+        role: "supporting",
+        summary:
+          "Generated TypeScript import renderer that groups package/bare imports before relative imports while preserving caller order within each group.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/typescript-source-text.ts",
+        symbolName: "typeScriptSourceText",
+        role: "primary",
+        summary:
+          "Complete TypeScript source-text assembler that keeps import rendering and contribution provenance on one ledger.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
+        symbolName: "SourcePlanOperationKind",
+        role: "primary",
+        summary:
+          "Typed file-operation vocabulary for source-plan artifacts; use this instead of caller-owned magic strings.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
         symbolName: "SourcePattern",
         role: "primary",
         summary:
@@ -834,11 +2911,35 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-name.ts",
+        symbolName: "sourceNameWords",
+        role: "supporting",
+        summary:
+          "Shared generated-name word splitting used before app-builder renders PascalCase, lowerCamelCase, kebab-case, and title forms.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/source-plan/source-plan.ts",
         symbolName: "SourcePatternModuleKey",
         role: "supporting",
         summary:
           "Enum-backed source-pattern module identities for reusable app-building mechanics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/source-pattern-modules.ts",
+        symbolName: "SourcePatternModules",
+        role: "supporting",
+        summary:
+          "Shared source-pattern module vocabulary spent by app-builder source plans.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-patterns.ts",
+        symbolName: "AppBuilderSourcePatternKey",
+        role: "supporting",
+        summary:
+          "App-builder-owned source-pattern keys attached to generated SourcePlans.",
       },
       {
         kind: "source",
@@ -854,7 +2955,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "AppBuilderDomainSlotKey",
         role: "supporting",
         summary:
-          "Enum-backed app-builder domain slot keys so starter menus do not carry raw parameter ids.",
+          "Enum-backed app-builder domain slot keys so source-lowering request rows do not carry raw parameter ids.",
       },
       {
         kind: "source",
@@ -863,6 +2964,110 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Structured package/typecheck artifacts that travel beside source plans without becoming host execution policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/package-tooling.ts",
+        symbolName: "aureliaSourcePlanProjectTooling",
+        role: "supporting",
+        summary:
+          "Aurelia starter package/tooling baseline that emits package dependencies, scripts, package manifest, tsconfig, and local asset declarations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/source-plan/aurelia-entrypoint-source-plan.ts",
+        symbolName: "aureliaRegistrationChain",
+        role: "supporting",
+        summary:
+          "Entrypoint registration-chain formatter that keeps simple single registrations compact while preserving multiline registration expressions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "appBuilderRoutedCollectionDetailSourcePlan",
+        role: "supporting",
+        summary:
+          "Routed browse/detail app-builder composition that uses SourcePlanAssembly for nested routeable components, load params, and DI state lookup.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-placement.ts",
+        symbolName: "sourcePlanPlacement",
+        role: "supporting",
+        summary:
+          "App-builder SourcePlan placement resolver that keeps direct transport fields and supplied SourcePlacement facets in one conflict-checked model.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-selection.ts",
+        symbolName: "appBuilderSourceLoweringSourcePlanFrame",
+        role: "supporting",
+        summary:
+          "App-builder selected-lowering frame that dispatches one SourcePlan request branch before public projection.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+        symbolName: "directSourcePlanTargetFrame",
+        role: "supporting",
+        summary:
+          "Direct app-builder SourcePlan target admission frame over preflight rows, target refs, effect contracts, and descriptor-backed issues.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+        symbolName: "componentPairSourcePlan",
+        role: "supporting",
+        summary:
+          "Component-pair SourcePlan phase that assembles custom-element pair and root app-shell source artifacts after placement and selected-branch lowering.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/router/route-configuration-source.ts",
+        symbolName: "routerRouteDecoratorSourceText",
+        role: "supporting",
+        summary:
+          "Router-owned source serializer for generated @route object literals used by routed source plans.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/router/route-configuration-source.ts",
+        symbolName: "routerRouteConfigurationObjectExpressionSourceText",
+        role: "supporting",
+        summary:
+          "Router-owned route configuration object serializer for reviewable generated route trees.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "appBuilderRoutedCollectionDetailSourcePlanExpectedEffects",
+        role: "supporting",
+        summary:
+          "App-builder routed collection/detail SourcePlan effect projection that reads route parameters from SourcePattern metadata.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "routedCollectionDetailRouteConfigurationExpectedEffects",
+        role: "supporting",
+        summary:
+          "Routed SourcePlan route-configuration expected-effect group for router options, route config carriers, and viewport targets.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+        symbolName: "routedCollectionDetailRouteConsumptionExpectedEffects",
+        role: "supporting",
+        summary:
+          "Routed SourcePlan route-consumption expected-effect group for viewport declarations and route-parameter reads.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:source-plan-admission-origins",
+        role: "primary",
+        summary:
+          "SourcePlan admission-origin contract proving framework/plugin configuration fragments preserve contribution provenance through generated entrypoints.",
       },
       {
         kind: "path",
@@ -918,19 +3123,29 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     authority: [
       "source-plan owns source artifact and pattern envelopes; callers own generation intent, host writes, and verification policy.",
-      "app-builder may consume SourcePlan for clean-room source lowering after typed menus have selected intent, patterns, domain slots, seed data, and Aurelia lowering axes.",
+      "SourcePlanAssembly owns generated-file assembly when a caller creates multiple artifacts under one policy/text-authority lifetime.",
+      "AppBuilderSourcePlanAssembly owns the app-builder-specific generated-source transaction over SourcePlanAssembly so concrete source lowerers do not restate policy, entrypoint, dependency, and tooling details.",
+      "Custom-element pair SourcePlan assembly owns the file-pair boundary for generated template artifacts plus companion TypeScript class-member fragments; lower-level invocation and composition origins should remain visible through SourcePlanContribution rows.",
+      "SourcePlanProjectTooling owns generated package/build artifacts when a source plan needs a runnable project baseline.",
+      "app-builder may consume SourcePlan for clean-room source lowering after typed requests have selected ontology targets, caller/domain slots, seed data, and Aurelia lowering axes.",
       "fixture verification consumes materialized source facts and expected effects; it should not turn SourcePlan into a public recipe taxonomy.",
       "diagnostics-to-action and future editing may plan through SourcePlan, but host write policy remains separate until explicitly modeled.",
     ],
     cautions: [
       "Do not reintroduce generator-local SourcePlan aliases or compatibility shims when the shared SourcePlan model is available.",
+      "Do not copy repeated SourcePlanFile/SourcePlanText constructor blocks into each generator when SourcePlanAssembly can carry the shared policy.",
+      "Do not restate app-builder baseline SourcePlan policy, generated text authority, configured entrypoint admission, or project tooling in each source-starting lowerer when AppBuilderSourcePlanAssembly already owns that transaction.",
       "Do not hide sample domains, copy, seed data, or presentation defaults inside reusable source-pattern identities.",
+      "Do not represent package dependencies or tsconfig requirements as ordinary app source files when SourcePlanProjectTooling can carry them structurally.",
+      "Do not confuse a companion TypeScript/template component-pair SourcePlan with a runnable generated app fixture; the latter also needs project tooling, root/app-shell assembly, and semantic reopen expectations.",
       "Do not treat a complete SourcePlan as permission to write files; edit application is a future host boundary.",
     ],
     nextQuestions: [
       "Is this source artifact work shared SourcePlan policy, app-builder lowering, fixture verification, diagnostics-to-action, or future host edit application?",
       "Does the source plan need complete text now, or only pattern/adaptation metadata for a next menu or comparison answer?",
-      "Which SourcePattern modules and parameters are reusable mechanics, and which details belong to a reference scenario, seed data set, domain preset, or fixture?",
+      "Is this generated artifact a single file, a full SourcePlan transaction, or a component pair assembled from separate template and TypeScript fragment lowerers?",
+      "Does the source plan need projectTooling, package dependencies, or build-tool files for the generated source to be runnable?",
+      "Which SourcePattern modules and parameters are reusable mechanics, and which details belong to a reference scenario, seed data set, caller domain descriptor, or fixture?",
       "Which verifier or public API row will prove the materialized source plan did what it promised?",
     ],
     relatedRouteIds: [
@@ -943,16 +3158,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
-    id: "semantic-runtime.app-builder-ide-fixture-flywheel",
-    aliases: ["app-builder-ide-fixture-flywheel", "editing-fixture-flywheel"],
-    title: "App Builder IDE Fixture Flywheel",
+    id: "semantic-runtime.app-builder-generated-fixture-contracts",
+    aliases: [
+      "app-builder-generated-fixture-contracts",
+      "generated-app-fixture-contracts",
+      "ide-mcp-generated-fixture-contracts",
+      "control-use-generated-fixture-contracts",
+    ],
+    title: "App Builder Generated Fixture Contracts",
     summary:
-      "Connect app-builder-generated fixtures with Semantic IDE/MCP affordance contracts so editing, rename, references, diagnostics-to-repair, and future workspace edits are tested against realistic Aurelia pattern compositions.",
+      "Connect app-builder-generated fixture contracts with Semantic IDE/MCP affordance contracts so generated source, exact inputs, manifests, expected effects, references, diagnostics-to-repair, and future workspace edits are tested against realistic Aurelia pattern compositions.",
     domains: [
       "semantic-runtime",
       "app-builder",
       "fixtures",
-      "authoring",
       "lsp",
       "mcp",
       "edits",
@@ -966,8 +3185,57 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "generated editing fixtures",
       "app-builder generated fixtures",
       "app builder generated fixtures",
-      "IDE fixture flywheel",
-      "MCP fixture flywheel",
+      "app-builder generated fixture contracts",
+      "generated app fixture contracts",
+      "app-builder generated fixture index",
+      "generated-fixture-index",
+      "fixtureSummaryRows",
+      "generated fixture summary rows",
+      "generated-fixture-index fixtureSummaryRows",
+      "app-builder-source-lowering-fixture-index",
+      "source-lowering pressure fixture index",
+      "focused source-lowering pressure coverage",
+      "decisionBundleInputContractIds",
+      "decisionBundleInputFacetIds",
+      "decisionBundleInputSummaries",
+      "sourceLoweringRequestFieldUsageRows",
+      "sourceLoweringRequestFieldUsageIds",
+      "appBuilderSourceLoweringRequestFieldUsageRowsFromAppBuilderRequest",
+      "appBuilderSourceLoweringRequestFieldUsageRowsFromSourcePlanRequest",
+      "shared request-field usage extractor",
+      "source-lowering request-field usage extractor",
+      "sourceLoweringRequestFieldRegistryCoverageRows",
+      "sourceLoweringRequestFieldRegistryCoverageSummary",
+      "policySatisfactionCandidateCoverageRows",
+      "policySatisfactionCandidateCoverageSummary",
+      "domainModelCoverageSummary",
+      "domainModelKindCoverageSummary",
+      "domainModelCoverageRows",
+      "domain model kind coverage",
+      "domain kind coverage generated fixture",
+      "generated fixture domain concentration",
+      "generated fixture relationship kind coverage",
+      "generated fixture action kind coverage",
+      "relationship action kind coverage generated fixture",
+      "generatedControlUsePolicyRows",
+      "generatedControlUseRecommendationStatuses",
+      "generatedControlUsePolicySatisfactionCandidateTargetRefs",
+      "nested source-lowering request-field usage",
+      "source-lowering request-field registry coverage",
+      "policy-satisfaction candidate fixture coverage",
+      "generated control-use policy fixture coverage",
+      "unused source-lowering request fields",
+      "unregistered used request fields",
+      "unused required source-lowering request fields",
+      "combined generated and pressure request-field coverage",
+      "source-plan selection request fields",
+      "component-pair source-plan selection request fields",
+      "compositionKind request field coverage",
+      "component-pair request field usage rows",
+      "fixture index exact request response",
+      "generated fixture source-lowering coverage index",
+      "IDE generated fixture contract",
+      "MCP generated fixture contract",
       "rename fixture",
       "reference fixture",
       "definition fixture",
@@ -989,14 +3257,151 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "translation key references",
       "resource rename fixture",
       "source role editability",
-      "app-builder algebra generated edit fixtures",
+      "app-builder ontology source-lowering generated edit fixtures",
+      "control-use generated fixture contracts",
+      "static submit generated fixture contracts",
+      "containing form submit generated fixture",
+      "generated control-use row verification",
+      "row action generated fixture",
+      "table row action generated fixture",
+      "command action generated fixture",
+      "explicit command actions generated fixture",
+      "component-pair-task-command-actions",
+      "DomainCommandAction methodParameters",
+      "typed command method parameter",
+      "CollectionTableColumns actionName",
+      "field variety generated fixture",
+      "native field variety",
+      "native controls generated fixture",
+      "fieldControlSelections generated fixture",
+      "native textarea range radio checkbox-list generated fixture",
+      "ControlAccessibility generated fixture",
+      "AccessibilityHelpError fieldName generated fixture",
+      "field-scoped accessibility generated fixture",
+      "VisualClassHooks fieldName generated fixture",
+      "form VisualClassHooks generated fixture",
+      "FieldGroup VisualClassHooks targetRefs generated fixture",
+      "NativeSubmitForm FieldGroup target-scoped VisualClassHooks",
+      "stale field-scoped generated fixture",
+      "UnknownFieldAccessibilityMessageField generated fixture",
+      "UnknownFieldVisualHookField generated fixture",
+      "generated-source-quality fixture verification",
+      "trailing whitespace generated source quality",
+      "generated-app-builder-idempotency",
+      "same input same output generated fixture",
+      "app-builder request idempotency fixture verification",
+      "generated app-builder contract row idempotency",
+      "generated manifest contract rows",
+      "sourcePlanWitnessRows idempotency",
+      "duplicate static template attributes generated fixture",
+      "duplicate class generated fixture",
+      "aria-describedby generated fixture",
+      "domain field defaultValue",
+      "choice field defaultValue",
+      "domain field optionTypeName",
+      "finite option type alias",
+      "choice set plural value type",
+      "domain relationship kind",
+      "DomainRelationships generated fixture coverage",
+      "component-pair-task-assignment-section",
+      "local relationship source-lowering generated fixture",
+      "component-pair-task-reviewers-section",
+      "reference-many local relationship source-lowering generated fixture",
+      "AppBuilderDomainRelationshipKind generated fixture",
+      "AppBuilderDomainActionKind generated fixture",
+      "action scope generated fixture coverage",
+      "navigation action scope generated fixture coverage",
+      "number date checkbox select generated fixture",
+      "fieldset legend generated field group",
+      "loading empty error generated fixture",
+      "fulfilledContentComposition",
+      "fulfilled content composition",
+      "promise fulfilled branch generated fixture",
+      "loading empty error collection table generated fixture",
+      "collection list generated fixture",
+      "collection card generated fixture",
+      "collection table local filter generated fixture",
+      "local filtering collection query generated fixture",
+      "component-pair-task-table-local-filter",
+      "filterBindingExpressions generated fixture",
+      "filtered collection getter generated fixture",
+      "native search input generated control-use row",
+      "component-pair-task-list-local-collection",
+      "component-pair-task-card-local-collection",
+      "component-pair-contact-card-string-id",
+      "contact card string identity generated fixture",
+      "contact card email display link generated fixture canary",
+      "control affordance fixture canary",
+      "generated fixture coverage is not ontology completeness",
+      "non-task collection-card generated fixture",
+      "CollectionDisplayFields generated fixture",
     ],
     queryCanaries: [
       {
         query:
-          "editing fixtures app-builder algebra generated fixtures semantic IDE affordance authoring fixture flywheel",
+          "editing fixtures app-builder ontology source-lowering generated fixtures semantic IDE affordance generated fixture contracts",
         summary:
-          "The coupled editing/app-builder/fixture thread should route to this bridge before splitting into authoring or IDE affordance substrates.",
+          "The coupled editing/app-builder/fixture thread should route to this bridge before splitting into generated app contracts or IDE affordance substrates.",
+      },
+      {
+        query:
+          "app-builder generated fixture index exact request response semantic verification source-lowering coverage",
+        summary:
+          "Whole-set generated-app fixture review should start from generated-fixture-index.json before drilling into per-fixture requests, source, manifests, or verification snapshots.",
+      },
+      {
+        query:
+          "app-builder generated fixture qualitative review source shape SourcePattern metadata sourcePlan.pattern",
+        summary:
+          "Qualitative source-shape review should route through the rolling generated-fixture review note before changing SourcePattern metadata, sourcePlan.pattern expectations, or fixture-specific verification boundaries.",
+      },
+      {
+        query:
+          "app-builder generated fixture index decisionBundleInputContractIds decisionBundleInputFacetIds input contract facet coverage",
+        summary:
+          "Generated fixture input-coverage review should use the index contract/facet rollups before opening individual app-builder-request snapshots.",
+      },
+      {
+        query:
+          "app-builder generated fixture index sourceLoweringRequestFieldUsageRows component-pair nested request fields",
+        summary:
+          "Nested component-pair request-field review should use the generated fixture index usage rows before opening full request snapshots.",
+      },
+      {
+        query:
+          "app-builder shared request-field usage extractor appBuilderSourceLoweringRequestFieldUsageRowsFromAppBuilderRequest generated fixture materializer",
+        summary:
+          "Generated fixture materializers and future coverage tools should use the shared source-lowering request-field usage extractor instead of local request-tree walkers.",
+      },
+      {
+        query:
+          "app-builder generated fixture index sourceLoweringRequestFieldRegistryCoverageRows unused source-lowering request fields unregistered used request fields",
+        summary:
+          "Generated request-field coverage review should compare actual fixture request usage against the source-lowering request-field registry before adding fixture variants or changing request-field policy.",
+      },
+      {
+        query:
+          "app-builder generated fixture index policySatisfactionCandidateCoverageRows generatedControlUsePolicyRows contextual executable policy candidates",
+        summary:
+          "Generated policy-candidate coverage review should use the index rows before writing custom scripts or adding fixture variants.",
+      },
+      {
+        query:
+          "app-builder generated fixture index domainModelKindCoverageSummary relationship action kind coverage domain concentration",
+        summary:
+          "Generated domain-model coverage review should use the ontology-relative kind summary before adding fixture variants, especially for absent relationship kinds or action-scope variants versus covered identity, field, and action kinds.",
+      },
+      {
+        query:
+          "app-builder source-lowering pressure fixture index unused required request fields generated pressure combined coverage",
+        summary:
+          "Request-field coverage decisions should compare generated app fixtures with the focused source-lowering pressure index before adding end-user-shaped fixture variants.",
+      },
+      {
+        query:
+          "app-builder generated fixture idempotency same input same output SourcePlan tracked files contract rows sourcePlanWitnessRows",
+        summary:
+          "Generated app fixture idempotency should route through stored app-builder requests, SourcePlan file text comparison, generated manifest contract row comparison, and semantic verification snapshots.",
       },
       {
         query: "rename fixture expected reference set generated app builder source spans",
@@ -1006,24 +3411,123 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "larger editing fixtures require app-builder fixture generation",
         summary:
-          "Large edit fixtures should be generated from app-builder pattern compositions rather than hard-coded as another reference app.",
+          "Large edit fixtures should be generated from app-builder ontology/source-lowering selections rather than hard-coded as another reference app.",
       },
       {
         query: "diagnostics to repair expected edit plan exact source ranges",
         summary:
-          "Diagnostics-to-edit pressure should route through the IDE fixture flywheel before local repair payloads are invented.",
+          "Diagnostics-to-edit pressure should route through generated fixture contracts before local repair payloads are invented.",
+      },
+      {
+        query: "control-use generated fixture contracts static submit containing form submit",
+        summary:
+          "Generated control-use expectations should route through the fixture-contract lane before deciding whether authored app queries or semantic contract verification need a substrate fix.",
+      },
+      {
+        query: "app-builder generated table row action DomainCommandAction methodParameters",
+        summary:
+          "Generated row-action fixtures should route through this lane when checking table action columns, row-local handler expressions, typed command methods, and generated control-use rows.",
+      },
+      {
+        query: "app-builder generated command actions update delete archive assign submit refresh explicit method bodies",
+        summary:
+          "Generated command-action fixture work should route through component-pair task command actions when checking caller-owned DomainActions, native-button wiring, explicit DomainCommandAction method bodies, and local collection mutability.",
+      },
+      {
+        query: "app-builder native field variety domain field defaultValue optionTypeName generated fixture",
+        summary:
+          "Native field-control fixture work should route through this lane when checking first-ring native controls, explicit field defaults, finite option type aliases, and generated control-use rows.",
+      },
+      {
+        query: "app-builder fieldControlSelections native textarea range radio checkbox-list generated fixture fieldset legend",
+        summary:
+          "Explicit form field-control selection work should route through this lane when checking textarea/range/radio/checkbox-list generation, grouped-control fieldset semantics, and control-use verification.",
+      },
+      {
+        query: "app-builder ControlAccessibility fieldName AccessibilityHelpError aria-describedby generated fixture",
+        summary:
+          "Generated form accessibility-message work should route through this lane when checking exact caller input, field-scoped help/error/status messages, and control-use described-by verification.",
+      },
+      {
+        query: "app-builder form VisualClassHooks FieldGroup targetRefs generated-source-quality duplicate class generated fixture",
+        summary:
+          "Generated form visual-hook work should route through this lane when checking explicit NativeSubmitForm plus FieldGroup target scopes, generated class/data hooks, and duplicate static template attribute verification.",
+      },
+      {
+        query: "app-builder stale field-scoped ControlAccessibility VisualClassHooks UnknownFieldAccessibilityMessageField UnknownFieldVisualHookField generated fixture",
+        summary:
+          "Generated form scoped-input work should route through this lane when checking that field-scoped caller payloads are either spent by selected fields or rejected with typed issues.",
+      },
+      {
+        query: "app-builder collection list card generated fixture CollectionDisplayFields local collection state",
+        summary:
+          "Generated collection list/card fixture work should route through this lane when checking display-field projections as distinct from table-column payloads.",
+      },
+      {
+        query: "app-builder component-pair-task-table-local-filter local filtering collection query generated fixture",
+        summary:
+          "Generated local filtering work should route through the filterable table fixture, explicit filterBindingExpressions, generated local query state, and native search-input control-use verification.",
+      },
+      {
+        query: "app-builder contact card string identity non-task collection-card generated fixture trailing whitespace",
+        summary:
+          "Non-task/string-identity generated fixture work should route through this lane when checking domain-generic collection-card lowering and generated-source-quality whitespace guardrails.",
+      },
+      {
+        query:
+          "app-builder contact card email display link mailto control affordance fixture canary",
+        summary:
+          "Contact-card generated fixture review should treat email/display-link gaps as app-builder control-affordance pressure, not proof that current fixture/index coverage is complete.",
+      },
+      {
+        query: "app-builder loading empty error fulfilled content collection table generated fixture",
+        summary:
+          "Async generated-app fixture work should route through this lane when checking promise template-controller regions, empty-state branches, and explicit nested fulfilled-content compositions.",
       },
     ],
     coverage: [
       {
         dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
-        state: AtlasWorkRouteCoverageState.Missing,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Wired,
         ownerRouteId: "semantic-runtime.intent-aware-continuations",
         summary:
-          "Generated IDE/MCP fixture work needs intent-aware continuations to choose between reference inspection, edit feasibility, repair planning, and fixture generation; public app-query answers can now carry follow-ups, but edit/reference fixtures remain deferred.",
+          "Generated app-builder fixture work now exercises typed targetAppBuilderQuery continuations across catalog/readiness/detail/source-lowering surfaces, with source-writing follow-ups gated by source-lowering request-field summaries. IDE edit/reference fixture affordances remain deferred to the Semantic IDE surface.",
       },
     ],
     anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-field-source.ts",
+        symbolName: "appBuilderDomainFieldSourceModels",
+        role: "supporting",
+        summary:
+          "Domain field source models spend explicit finite option type aliases before deriving fallback source names.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-model.ts",
+        symbolName: "AppBuilderDomainFieldDescriptor",
+        role: "supporting",
+        summary:
+          "Caller/domain field descriptor owns optional optionTypeName input for finite choice fields.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-model.ts",
+        symbolName: "AppBuilderDomainRelationshipKind",
+        role: "supporting",
+        summary:
+          "Domain relationship-kind universe used by generated fixture domain kind coverage.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/domain-model.ts",
+        symbolName: "AppBuilderDomainActionKind",
+        role: "supporting",
+        summary:
+          "Domain action-kind universe used by generated fixture domain kind coverage.",
+      },
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/api/source-reference.ts",
@@ -1057,6 +3561,57 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Current source-plan metadata for generating realistic fixture source from pattern intent.",
       },
       {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/app-builder/ontology/source-lowering-request-field-coverage.ts",
+        symbolName: "appBuilderSourceLoweringRequestFieldRegistryCoverageRows",
+        role: "primary",
+        summary:
+          "Shared request-field usage/registry coverage helper for generated app fixtures and focused source-lowering pressure fixtures.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/app-builder/generated-fixture-index.json",
+        role: "primary",
+        summary:
+          "Root review map for generated app-builder fixture requests, responses, generated source files, source-lowering targets, effect kinds, decision-bundle counts, decision-bundle input contract/facet rollups, domain model kind coverage, advertised request-field surfaces, and actual nested request-field usage rows.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/app-builder-source-lowering-fixture-index.json",
+        role: "supporting",
+        summary:
+          "Focused source-lowering pressure review map for direct invocation/composition/SourcePlan request-field usage and registry coverage.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder-generated",
+        role: "primary",
+        summary:
+          "Regenerates generated app-builder app contract fixtures, the generated fixture index, and generated semantic verification snapshots.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime check:fixture-typecheck fixtures/app-builder",
+        role: "supporting",
+        summary:
+          "Typechecks generated app-builder fixture source through the shared semantic-runtime fixture typecheck lane.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests fixtures/app-builder",
+        role: "supporting",
+        summary:
+          "Fixture verifier reruns generated app-builder requests and compares SourcePlan source/tooling text plus generated manifest contract rows before semantic reopen verification.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder-pressure",
+        role: "supporting",
+        summary:
+          "Regenerates focused app-builder source-lowering pressure fixtures and their request-field coverage index.",
+      },
+      {
         kind: "lens",
         lensId: LensId.TsType,
         projection: "rename",
@@ -1066,10 +3621,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "memory",
-        domains: ["semantic-runtime", "app-builder", "authoring", "ontology"],
+        domains: ["semantic-runtime", "app-builder", "ontology"],
         role: "grounding",
         summary:
-          "App-builder ontology memory owns pattern intent and reference-scenario separation.",
+          "App-builder ontology memory owns current source-lowering intent and reference-scenario separation.",
       },
       {
         kind: "memory",
@@ -1081,11 +3636,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     authority: [
       "App-builder pattern ontology for generating realistic low-boilerplate source.",
-      "Semantic IDE Affordance Substrate for definition/reference/edit algebra and strict source precision.",
+      "Generated fixture index rows for exact request, generated source, domain kind coverage, source-lowering registry coverage, policy-satisfaction coverage, and semantic verification.",
       "Expected semantic effects and future edit/reference effects for fixture verification.",
+      "Semantic IDE Affordance Substrate for definition/reference/edit algebra and strict source precision when the fixture tier is edit/reference oriented.",
       "TypeSystemProject, overlays, binding/data-flow, router, i18n, resource, and source-reference products as reference inputs.",
     ],
     cautions: [
+      "Do not add generated-app fixture variants solely because a coverage count is nonzero; classify whether the gap is source-lowering, domain-design, pressure-only, or deferred app-design work.",
+      "Do not treat a green generated fixture index as app-builder v1 completeness when the current ontology only covers the control affordances it already knows how to name.",
       "Do not make large editing fixtures another hard-coded example domain inside app-builder.",
       "Do not treat overlay generated spans as authoritative edit ranges without joining authored source provenance.",
       "Do not start with a mutating rename tool when the reference family and editability contract are still incomplete.",
@@ -1093,9 +3651,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     nextQuestions: [
       "Which fixture tier is needed: reference-contract, edit-plan, generated app, or contrast fixture?",
-      "Which semantic subject and reference families must an edit fixture prove?",
-      "What exact source spans are editable, and which spans should explicitly block edit application?",
-      "Which app-builder pattern composition should generate the realistic source for this editing pressure?",
+      "Which generated index lane is driving the work: domain kind coverage, request-field registry coverage, policy-satisfaction coverage, source-quality/idempotency, expected effects, or semantic reopen verification?",
+      "Is the visible gap a fixture gap, a source-lowering substrate gap, a domain/app-design frontier, or pressure-only coverage?",
+      "Which exact request input and app-builder pattern composition should generate the realistic source without inventing app-builder defaults?",
+      "If this is edit/reference pressure, which semantic subjects, exact spans, and blockers must the fixture prove?",
     ],
     relatedRouteIds: [
       "semantic-runtime.app-builder-pattern-ontology",
@@ -1137,6 +3696,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "proxy observation contract",
       "runtime watcher expected effect",
       "expected semantic effect contract",
+      "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS",
+      "ExpectedSemanticEffectObservationSurface",
+      "semantic effect descriptor",
+      "expected effect descriptor",
+      "effect kind query families",
       "behavior grounding witness",
       "fast testing lane",
       "slow confidence lane",
@@ -1183,6 +3747,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Expected effects are the first semantic-contract vocabulary for generated and repaired apps.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/fixture-verification/effect-kind-descriptor.ts",
+        symbolName: "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS",
+        role: "primary",
+        summary:
+          "Expected-effect descriptor rows map effect kinds to observation surfaces, public query families, and docs/tests seed posture.",
       },
       {
         kind: "source",
@@ -1336,6 +3908,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "aurelia_app_overview",
       "query catalog",
       "aurelia_app_query_catalog",
+      "aurelia_app_builder_catalog",
+      "aurelia_app_builder_query",
+      "app-builder MCP tool",
+      "app-builder query MCP",
+      "SemanticRuntimeAppBuilderQueryKind",
+      "answerAppBuilderQuery",
       "aurelia_app_query",
       "aurelia_app_query_batch",
       "diagnostic overview",
@@ -1379,12 +3957,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "aurelia_build_app_feature prompt source edits low boilerplate",
         summary:
-          "Current app-building workflow prompts should admit the public generator is not ready and route to analysis/app-builder follow-up instead of legacy recipe tools.",
+          "Current app-building workflow prompts should route new-app generation through app-builder catalog/query tools and existing-app edits through analysis queries.",
       },
       {
-        query: "MCP app-builder future generation shell should not expose removed recipe tools",
+        query: "MCP app-builder generation shell should not expose removed recipe tools",
         summary:
-          "Public generation work should route to app-builder and semantic-runtime API design before adding MCP tools.",
+          "Public generation work should route to the semantic-runtime app-builder facade before MCP tools; removed recipe tools stay retired.",
       },
     ],
     coverage: [
@@ -1455,6 +4033,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
+        symbolName: "SemanticRuntimeAppBuilderQueryKind",
+        role: "grounding",
+        summary:
+          "Semantic-runtime-owned app-builder query vocabulary for MCP app-builder source-lowering preview tooling.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/tool-schemas.ts",
+        symbolName: "appBuilderQueryInputSchema",
+        role: "grounding",
+        summary:
+          "MCP schema boundary for app-builder query inputs; keep it aligned with semantic-runtime detail request envelopes.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/api/contracts.ts",
         symbolName: "SemanticAppQueryKind",
         role: "grounding",
@@ -1477,22 +4071,29 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Public package boundary, local invocation commands, and thin-shell constraints.",
       },
       {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
+        role: "supporting",
+        summary:
+          "Contract proving MCP forwards semantic-runtime app-query continuations and app-builder detail requests without adapter-local projection.",
+      },
+      {
         kind: "memory",
         domains: ["semantic-runtime", "app-builder", "ontology"],
         role: "supporting",
         summary:
-          "Future app generation belongs to app-builder before MCP exposes a public generation tool.",
+          "App generation belongs to app-builder and must stay a semantic-runtime facade before MCP transports expose it.",
       },
     ],
     authority: [
       "MCP is a public API shell; semantic-runtime owns product concepts and query results.",
       "Atlas remains the internal development navigation layer and should not be required for end-user MCP operation.",
-      "Future app generation must be exposed through app-builder after the app-building algebra is durable enough for public use.",
+      "App generation must be exposed through app-builder's semantic-runtime facade, not transport-local recipe or source-plan policy.",
     ],
     cautions: [
       "Do not reintroduce removed recipe/guidance tools just to make old prompts work.",
       "Do not let MCP adapters classify diagnostics, routes, app-building taste, or source-plan policy locally.",
-      "Do not expose a public app generator until app-builder owns the ontology, typed menus, lowering previews, and verification promises.",
+      "Do not bypass app-builder typed menus, lowering previews, SourcePlan generation, and verification promises when exposing generation through MCP.",
     ],
     nextQuestions: [
       "Is this a shell/transport concern or a semantic-runtime API concern?",
@@ -1559,6 +4160,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "InquiryContinuationKind canonical action vocabulary",
       "InquiryContinuationKind public app-query action",
       "targetQueryKind continuation ownership",
+      "targetAppBuilderQueryKind continuation ownership",
+      "targetAppBuilderQuery app-builder continuation",
       "SemanticRuntimeContinuationRow enum protocol",
       "continuation enum coupling",
       "type-surface-cooccurrence continuation",
@@ -1653,6 +4256,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         query:
+          "targetAppBuilderQueryKind app-builder continuation ownership continuationIntents",
+        summary:
+          "Public app-builder answers use targetAppBuilderQueryKind and targetAppBuilderQuery as the app-builder-specific continuation target carrier rather than adapter-local next-step text.",
+      },
+      {
+        query:
           "SemanticRuntimeContinuationRow enum protocol type-surface-cooccurrence",
         summary:
           "Continuation enum audits should inspect the DTO type surface that couples kind, app-query target, intent, cost, and evidence vocabulary.",
@@ -1664,7 +4273,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         state: AtlasWorkRouteCoverageState.Covered,
         depth: AtlasWorkRouteCoverageDepth.Verified,
         summary:
-          "This route owns the intent-aware and evidence-gated continuation substrate. Public app-query answers now share a catalog-aware continuation projector with catalog-shaped query identity, source/cursor locus normalization, target-query shaping, response-envelope intent filtering, canonical continuation action kinds, target-owned app-query specificity, evidence metadata, authoring deferral, and a fast semantic contract that verifies family-specific continuation targets across the large existing analysis query families. Kernel-side inquiry continuations now carry shared applicability metadata and have an AST contract guarding that requirement. Source precision also routes through the shared address-or-identity source resolver and source-reference evidence helper, with contracts proving generated addresses anchored to semantic identities resolve to authored source anchors, nested public row DTO source paths are runtime-reachable through the bounded carrier vocabulary, and continuation precision follows source-reference anchors without hiding generated-address evidence.",
+          "This route owns the intent-aware and evidence-gated continuation substrate. Public app-query answers now share a catalog-aware continuation projector with catalog-shaped query identity, source/cursor locus normalization, target-query shaping, response-envelope intent filtering, canonical continuation action kinds, target-owned app-query specificity, evidence metadata, authoring deferral, and a fast semantic contract that verifies family-specific continuation targets across the large existing analysis query families. Public app-builder answers now also carry typed targetAppBuilderQuery continuations for factual catalog/readiness/detail/part-source drilldowns. Kernel-side inquiry continuations now carry shared applicability metadata and have an AST contract guarding that requirement. Source precision also routes through the shared address-or-identity source resolver and source-reference evidence helper, with contracts proving generated addresses anchored to semantic identities resolve to authored source anchors, nested public row DTO source paths are runtime-reachable through the bounded carrier vocabulary, and continuation precision follows source-reference anchors without hiding generated-address evidence.",
       },
       {
         dimension: AtlasWorkRouteCoverageDimension.QueryClaimGraph,
@@ -1774,6 +4383,54 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "withSemanticRuntimeAppBuilderQueryContinuations",
+        role: "primary",
+        summary:
+          "Catalog-aware public continuation policy for app-builder answer envelopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "canContinueSourceLoweringSurface",
+        role: "supporting",
+        summary:
+          "App-builder authoring continuation guard that keeps source-lowering follow-ups aligned with surface-scoped request-field readiness.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "sourcePlanPreviewContinuationForPreflightRow",
+        role: "supporting",
+        summary:
+          "Direct SourcePlan-preview continuation constructor for ready preflight rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "targetInvocationContinuationForPreflightRow",
+        role: "supporting",
+        summary:
+          "TargetInvocation continuation constructor for ready preflight rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "fragmentCompositionContinuationForPreflightRow",
+        role: "supporting",
+        summary:
+          "FragmentComposition continuation constructor for ready preflight rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-builder-continuations.ts",
+        symbolName: "filterSemanticRuntimeAppBuilderQueryContinuations",
+        role: "supporting",
+        summary:
+          "App-builder response-envelope continuation filter keyed by continuationIntents.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/api/contracts.ts",
         symbolName: "SemanticRuntimeContinuationRow",
         role: "primary",
@@ -1836,6 +4493,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:app-builder-query-surface",
+        role: "supporting",
+        summary:
+          "Fast public app-builder query-surface contract for typed app-builder continuation targets and continuationIntents filtering.",
+      },
+      {
+        kind: "script",
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:source-anchor-identity",
         role: "supporting",
         summary:
@@ -1853,6 +4517,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
       "packages/semantic-runtime/src/inquiry/README.md",
       "packages/semantic-runtime/src/api/app-query-continuations.ts",
+      "packages/semantic-runtime/src/api/app-builder-continuations.ts",
       "packages/semantic-runtime/src/api/app-query-catalog.ts",
       "packages/semantic-runtime/src/api/source-reference.ts",
       "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
@@ -2012,6 +4677,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Opened-app query dispatch enters QueryClaimGraph immediately around answer materialization.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/runtime.ts",
+        symbolName: "SemanticApp.answerCatalogQuery",
+        role: "supporting",
+        summary:
+          "Non-router app-query dispatch follows semanticAppQueryCatalogRow(...).group before reaching family-specific answer methods.",
       },
       {
         kind: "source",
@@ -2643,6 +5316,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "binding behavior materializer",
       "runtime binding behavior",
       "validate binding behavior",
+      "listener binding",
+      "event listener binding",
+      "ListenerBinding",
+      "submit.trigger",
+      "form submit listener",
+      "actionless form submit",
+      "allowActionlessForm",
+      "preventDefault",
+      "native submit workflow",
       "ValidationController",
       "ValidationController getPropertyInfo",
       "validation property info",
@@ -2704,6 +5386,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "function-key computed observer",
     ],
     queryCanaries: [
+      {
+        query:
+          "event binding trigger submit preventDefault actionless form allowActionlessForm",
+        summary:
+          "Native form-submit and event-listener semantics should route through binding flow plus framework app-root configuration before judging generated form source.",
+      },
       {
         query: "ast-evaluator AccessMember connectable observe",
         summary:
@@ -2916,6 +5604,60 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Source projection boundary for binding expression typing, writeability, assignment target sources, and source open reasons.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-data-flow-source-info.ts",
+        symbolName: "BindingDataFlowSourceInfoProjector",
+        role: "primary",
+        summary:
+          "Binding source-info boundary that separates source descriptors, assignment-target source classification, and value-converter writeback hints from rendered source-scope selection.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-data-flow-source-info.ts",
+        symbolName: "bindingDataFlowSourceKindForRuntimeAssignmentTarget",
+        role: "supporting",
+        summary:
+          "Runtime assignment target source-kind classifier for data-flow rows, diagnostics, and future edit/repair loci.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-data-flow-source-info.ts",
+        symbolName: "sourceWriteCapabilityForRuntimeAssignmentTarget",
+        role: "supporting",
+        summary:
+          "Assignment-target writeability bridge that spends source-expression projection, TypeChecker context, and Aurelia astAssign policy.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/api/binding-projections.ts",
+        symbolName: "readBindingDataFlowSummary",
+        role: "supporting",
+        summary:
+          "Public compact binding data-flow summary answer for MCP/LSP source-target and issue rollups.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/api/binding-projections.ts",
+        symbolName: "bindingDataFlowSummaryGroups",
+        role: "supporting",
+        summary:
+          "Binding data-flow summary grouping phase before accumulator projection.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/api/binding-projections.ts",
+        symbolName: "addBindingDataFlowSummaryRow",
+        role: "supporting",
+        summary:
+          "Binding data-flow summary accumulator phase for source, type, assignment, and open-data-flow rollups.",
       },
       {
         kind: "source",
@@ -3358,6 +6100,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "runtime observed dependency publication",
       "runtime-observed-dependency-publication",
       "runtimeObservedDependencyRecords",
+      "runtimeObservedDependencyPublicationFrame",
+      "runtimeObservedDependencyKernelRecords",
       "runtime observed dependency draft",
       "distinctRuntimeObservedDependencyDrafts",
       "runtime-observed-dependency-draft",
@@ -3407,9 +6151,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Direct Observation.watch/run source effects should route to proxy observation and RuntimeEffect grounding before binding or resource-watch products.",
       },
       {
-        query: "runtime observed dependency publication",
+        query: "runtime observed dependency publication frame kernel records",
         summary:
-          "Runtime observed-dependency publication should route to the shared product/source/claim envelope before copying record construction into binding or watcher materializers.",
+          "Runtime observed-dependency publication should route to the shared product/source/claim frame and kernel-record assembly before copying record construction into binding or watcher materializers.",
       },
       {
         query: "expression AST traversal BindingBehavior ValueConverter observed dependency",
@@ -3424,12 +6168,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "larger app building recipe code economy direct state domain",
         summary:
-          "Clean-code app-building questions should route to generated recipe pressure and proxy-observation grounding, not only the MCP adapter.",
+          "Clean-code app-building questions should route to current app-builder generated-fixture pressure and proxy-observation grounding, not only the MCP adapter.",
       },
       {
         query: "component object boundary nullable object bindable direct Product template reads",
         summary:
-          "Local object-shaped component input pressure should route to component-interface type surfaces plus binding data-flow, not ID-only recipe policy.",
+          "Local object-shaped component input pressure should route to component-interface type surfaces plus binding data-flow, not ID-only generated-source policy.",
       },
     ],
     coverage: [
@@ -3439,7 +6183,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         depth: AtlasWorkRouteCoverageDepth.Semantic,
         ownerRouteId: "semantic-runtime.observation.binding-flow",
         summary:
-          "Proxy observation and clean domain-modeling pressure depends on binding data-flow, value-channel, and observed-dependency products for ordinary template reads, object-shaped component inputs, collection reads, watcher/computed dependency rows, and proxy escape diagnostics. Coverage is partial because authoring/taste guidance should not treat those observations as recipe policy until app-builder ontology replaces the hard-coded fixture-like recipes.",
+          "Proxy observation and clean domain-modeling pressure depends on binding data-flow, value-channel, and observed-dependency products for ordinary template reads, object-shaped component inputs, collection reads, watcher/computed dependency rows, and proxy escape diagnostics. Coverage is partial because authoring/taste guidance should not turn those observations into generated-source policy or revive legacy fixture-like recipe paths.",
       },
     ],
     anchors: [
@@ -3607,6 +6351,38 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Shared runtime observed-dependency product/source/claim envelope for binding-owned and watcher-owned dependency rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+        symbolName: "runtimeObservedDependencyPublicationFrame",
+        role: "primary",
+        summary:
+          "Runtime observed-dependency publication frame for exact source-address expansion and owner-specific usage claims before records are assembled.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-publication.ts",
+        symbolName: "runtimeObservedDependencyKernelRecords",
+        role: "supporting",
+        summary:
+          "Runtime observed-dependency kernel record assembly boundary after the publication frame has selected source address and claims.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/source-observation-product-publication.ts",
+        symbolName: "sourceObservationProductPublicationFrame",
+        role: "supporting",
+        summary:
+          "Source-backed observation product frame for exact source span, evidence/provenance handles, and product identity before computed/effect products publish records.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
+        symbolName: "sourceObservedDependencyPublicationFrame",
+        role: "supporting",
+        summary:
+          "Source-observer-owned dependency publication frame for exact spans, fallback owner address, semantic claim, and observed-dependency identity before records are assembled.",
       },
       {
         kind: "source",
@@ -4051,6 +6827,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "runtime renderer catalog",
       "framework service customization",
       "compiler issue publication",
+      "content projection",
+      "custom element child projection",
+      "HydrateElement projection",
+      "HydrateElementProjectionInstructionSequence",
+      "compiler open content projection",
       "TemplateCompilerIssue",
       "compiler-world construction",
     ],
@@ -4074,6 +6855,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "template value site binding command lowering",
         summary:
           "Value-site and command-lowering work belongs to compiler-world/lowering before observation consumes value channels.",
+      },
+      {
+        query: "custom element child content projection HydrateElement projection sequence",
+        summary:
+          "Custom-element child projection should route to compiled-template DOM transform modeling, not app-builder generation or runtime renderer shortcuts.",
       },
     ],
     anchors: [
@@ -4186,6 +6972,23 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Configured renderer catalog selection admitted by framework registrations.",
       },
       {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/instruction-ir.ts",
+        symbolName: "HydrateElementProjectionInstructionSequence",
+        role: "supporting",
+        summary:
+          "Slot-name plus instruction-sequence handle carried by HydrateElementInstruction projections.",
+      },
+      {
+        kind: "script",
+        command:
+          "pnpm --filter @aurelia-ls/semantic-runtime contract:template-content-projection",
+        role: "supporting",
+        summary:
+          "Focused contract for custom-element child content lowering into projection instruction sequences.",
+      },
+      {
         kind: "path",
         pathPrefix: "packages/semantic-runtime/src/template/",
         role: "pressure",
@@ -4279,6 +7082,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not let compiler-world pressure disappear into recursive rendering, resource convergence, or authoring fixture routes just because all three consume compiler products.",
       "If a template inquiry does not need the full compiler world, treat that as inquiry-algebra pressure rather than duplicating partial compiler state.",
       "Compiler issue products should keep exact framework error authority instead of reopening generic API-local wording checks.",
+      "Ordinary custom-element child projection is a compiled-template transform; do not reopen compiler.open-content-projection for cases the framework `_extractProjections(...)` closes.",
     ],
     nextQuestions: [
       "Is the pressure compiler-world construction, standalone authoring world construction, value-site lowering, binding-command lowering, or rendered consumption?",
@@ -4426,6 +7230,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "runtime scope value carrier",
       "BindingContext local item",
       "TemplateControllerScopeMaterializer",
+      "IteratorScopeMaterializationFrame",
+      "iteratorScopeMaterializationFrame",
+      "publishIteratorScopeIssues",
+      "iteratorLocalSlots",
+      "LetStaticValueEvaluationFrame",
+      "letStaticValueEvaluationFrame",
+      "evaluateLetStaticValue",
+      "let static value",
+      "let binding source value",
       "TemplateControllerFlowScopeMaterializer",
       "recursive hydration repeat value",
       "if else",
@@ -4445,6 +7258,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "CompositionController",
       "runtime composition materializer",
       "RuntimeCompositionMaterializer",
+      "ComposedChildControllerMaterializationFrame",
+      "createComposedChildControllerFrame",
+      "materializeComposedChildControllerFrame",
+      "materializeComposedChildContainer",
+      "createComposedRuntimeController",
+      "recordComposedChildControllerProducts",
       "composition controller hydration",
       "composed controller hydration",
       "dynamic component composition",
@@ -4453,6 +7272,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "activation model handoff",
       "overloaded activate model",
       "activate model overload",
+      "ActivateMethodProjection",
+      "activateMethodProjection",
+      "ActivationParameterProjectionFrame",
+      "activationParameterProjectionFrame",
+      "activationParameterProjectionIssue",
+      "activationModelHandoffForParameterProjection",
       "checker signature candidate basis",
       "renderingContextKind",
       "definition-resource",
@@ -4510,6 +7335,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Repeat-local value carriers belong with template-controller scope semantics, not router-specific href patching.",
       },
       {
+        query: "let static value source-value evaluation frame",
+        summary:
+          "Let binding static-value projection should route through template-controller scope materialization and the shared binding-source value evaluator.",
+      },
+      {
         query: "TemplateControllerScopeMaterializer recursive rendering",
         summary:
           "The live template-controller scope frontier should route directly to recursive rendering.",
@@ -4535,9 +7365,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Runtime composition product work should route through the existing composition materializer instead of ad hoc API logic.",
       },
       {
+        query: "ComposedChildControllerMaterializationFrame composed child controller runtime composition child container",
+        summary:
+          "Closed AuCompose child-controller handoff should route through the composed child materialization frame, child container, controller publication, and finite aggregate rendering boundary.",
+      },
+      {
         query: "AuCompose overloaded activate model checker signature candidate basis",
         summary:
           "Overloaded activate(model) handoff should route to runtime composition plus shared TypeChecker signature parameter projection, not a first-signature local shortcut.",
+      },
+      {
+        query: "ActivateMethodProjection ActivationParameterProjectionFrame activate model handoff",
+        summary:
+          "AuCompose lifecycle handoff should route through the method projection and overload-parameter frame before comparing model assignability.",
       },
       {
         query: "AuCompose bound controller Array.find property method this binding",
@@ -4600,6 +7440,60 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "IteratorScopeMaterializationFrame",
+        role: "supporting",
+        summary:
+          "Repeat/iterator scope frame for source-value evaluator, source-expression scope projector, iterator projection, local type map, and static local value handoff.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "iteratorScopeMaterializationFrame",
+        role: "supporting",
+        summary:
+          "Repeat/iterator scope setup phase before local issues, local slots, override slots, and BindingScope publication.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "iteratorLocalSlots",
+        role: "supporting",
+        summary:
+          "Repeat local-slot construction that attaches TypeChecker-projected local types plus representative static values.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "LetStaticValueEvaluationFrame",
+        role: "supporting",
+        summary:
+          "Let binding static-value frame for parse recovery, runtime binding lookup, source-expression context projection, and evaluator handoff.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "letStaticValueEvaluationFrame",
+        role: "supporting",
+        summary:
+          "Let binding source-value setup phase before evaluating or publishing a binding-scope boundary value.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+        symbolName: "evaluateLetStaticValue",
+        role: "supporting",
+        summary:
+          "Let binding source-value consumer that spends the projected context through RuntimeBindingSourceValueEvaluator.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/template/template-controller-flow-scope-materializer.ts",
         symbolName: "TemplateControllerFlowScopeMaterializer",
         role: "supporting",
@@ -4617,6 +7511,42 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+        symbolName: "ComposedChildControllerMaterializationFrame",
+        role: "supporting",
+        summary:
+          "Closed AuCompose custom-element child handoff frame for parent container admission, resolved definition, child-container emission, controller creation, and publication side effects.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+        symbolName: "createComposedChildControllerFrame",
+        role: "supporting",
+        summary:
+          "Admission boundary for a closed static/value AuCompose candidate before materializing the aggregate child controller.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+        symbolName: "materializeComposedChildControllerFrame",
+        role: "supporting",
+        summary:
+          "Finite aggregate materialization phase for composed child container, runtime controller, lifecycle step, relation claim, and controller publication.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+        symbolName: "compositionControllerSemanticClaims",
+        role: "supporting",
+        summary:
+          "Runtime composition relation-claim boundary linking host controller, composition context, and resolved component definitions.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/template/runtime-composition.ts",
         symbolName: "CompositionController",
         role: "primary",
@@ -4631,6 +7561,33 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Checker-backed AuCompose activate(model) lifecycle handoff that reuses shared signature parameter projection and assignability.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+        symbolName: "activateMethodProjection",
+        role: "supporting",
+        summary:
+          "AuCompose activate member discovery and callable signature admission before activation parameter projection.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+        symbolName: "activationParameterProjectionFrame",
+        role: "supporting",
+        summary:
+          "Shared overload candidate and parameter-reference frame for AuCompose activate(model) lifecycle handoff.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+        symbolName: "activationModelHandoffForParameterProjection",
+        role: "supporting",
+        summary:
+          "Final AuCompose activation handoff fold that compares projected model and activate parameter types.",
       },
       {
         kind: "source",
@@ -6155,6 +9112,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Generated TypeScript overlay builder that spends materialized BindingScope ancestry and semantic products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayBuildFrame",
+        role: "supporting",
+        summary:
+          "One-overlay mutable build state for generated source, expression probes, skipped rows, base projection context, and runtime source-expression projectors.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "appendTemplateExpressionProbes",
+        role: "supporting",
+        summary:
+          "Overlay build phase that replays every parsed template expression through materialized scopes before generated TypeScript is finalized.",
       },
       {
         kind: "source",
@@ -7735,6 +10708,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "environment",
       "ModuleEnvironmentRecord",
       "EvaluationBinding",
+      "EvaluationBindingState",
+      "declaration-instantiation class lexical cells",
+      "static class property declaration order",
       "module graph",
       "module graph evaluator",
       "StaticModuleGraphEvaluator",
@@ -7771,6 +10747,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "string relational operator source-value",
       "relational operator source-value boundary",
       "Array.toSorted source-value closure",
+      "evaluateAureliaResolveCall",
+      "aureliaResolveDirectKey",
+      "evaluateAureliaResolveDirectClassKey",
+      "Aurelia resolve direct class key",
+      "ambient resolve ClassKey static evaluator host",
+      "evaluator-local resolve ClassKey",
+      "resolve(ClassKey) activation-like frame",
+      "RuntimeBindingSourceActivationContext evaluateResolveCall",
+      "RuntimeBindingSourceActivationContext resolveCallFrame",
+      "resolveCallFrame",
+      "resolveCallWithoutActiveContainer",
+      "evaluationValueForResolvedKey",
+      "binding-source DI activation resolve frame",
+      "binding-source DI activation context",
     ],
     queryCanaries: [
       {
@@ -7812,6 +10802,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Method-breakdown questions about the evaluator should route through evaluator/world construction and product architecture before refactoring.",
       },
       {
+        query:
+          "static class property local const dependency declaration instantiation class lexical cell",
+        summary:
+          "Static class field/source-value order bugs should route to declaration-instantiation and class-values before fixture-local source rewrites.",
+      },
+      {
         query: "synthetic evaluation context",
         summary:
           "Speculative context questions should preserve already-resolved evaluator/module state.",
@@ -7841,6 +10837,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Kernel analyzed-module bridge-role questions should route to module-loader and evaluator/world-construction substrate.",
       },
+      {
+        query:
+          "evaluateAureliaResolveCall ambient resolve ClassKey activation-like frame RuntimeBindingSourceActivationContext",
+        summary:
+          "Ambient resolve(...) value-closure questions should route through evaluator host direct class-key support first, then binding-source DI activation context for registered/interface keys.",
+      },
+      {
+        query:
+          "RuntimeBindingSourceActivationContext resolveCallFrame active container resolver lookup",
+        summary:
+          "Binding-source DI resolve(...) questions should route to the activation resolve frame before adding evaluator-, router-, or template-local active-container policy.",
+      },
     ],
     anchors: [
       {
@@ -7853,11 +10861,59 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "aureliaStaticEvaluationRuntimeHost",
+        role: "primary",
+        summary:
+          "Aurelia runtime host intrinsics for app admission, including browser ambient boundaries and narrow ambient resolve(ClassKey) closure.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "evaluateAureliaResolveCall",
+        role: "supporting",
+        summary:
+          "Host-bound direct ambient resolve(...) evaluator path; only activation-like direct class keys close here.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "aureliaResolveDirectKey",
+        role: "supporting",
+        summary:
+          "Direct-key admission for evaluator-local ambient resolve(...); wrappers and non-direct key shapes remain open.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "evaluateAureliaResolveDirectClassKey",
+        role: "supporting",
+        summary:
+          "Evaluator-local class-key instantiation path for direct ambient resolve(ClassKey) when an activation-like `this` frame exists.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/di/container.ts",
         symbolName: "Container",
         role: "primary",
         summary:
           "DI emulator is a high-fidelity substrate and should remain framework-grounded.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
+        symbolName: "RuntimeBindingSourceActivationContext",
+        role: "supporting",
+        summary:
+          "Binding-source DI activation join for registered/interface keys when a modeled active container is available; do not duplicate this in the generic evaluator host.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-activation-context.ts",
+        symbolName: "RuntimeBindingSourceActivationContext.resolveCallFrame",
+        role: "supporting",
+        summary:
+          "Activation-scoped resolve(...) frame that separates call/key admission from active-container resolver lookup and open-row wording.",
       },
       {
         kind: "source",
@@ -7947,6 +11003,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Focused contract for runtime import/export graph admission, including type-only edge erasure.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-class-declaration-order",
+        role: "supporting",
+        summary:
+          "Focused contract for class static field evaluation after prior module const initialization.",
       },
       {
         kind: "source",
@@ -8081,6 +11144,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Static evaluator open seams and TypeScript checker facts.",
       "Aurelia DI/configuration framework source through auLink and framework lenses.",
       "KernelStore record ownership and world-construction entrypoint topology.",
+      "ECMAScript declaration-instantiation order: class lexical cells are declared early, but static class properties evaluate when the class declaration executes.",
       "Atlas performance/profile lenses when evaluator growth obscures navigation.",
     ],
     cautions: [
@@ -8297,6 +11361,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "router instruction",
       "router resource",
       "router resource instruction",
+      "routerSourceExpressionEvaluationFrame",
+      "evaluateRouterSourceExpression",
+      "router source expression evaluation frame",
+      "router source-value evaluation frame",
+      "router route instruction source",
+      "route-instruction-source",
+      "routerLoadAttributeSourceText",
+      "routerHrefAttributeSourceText",
+      "route-configuration-source",
+      "routerRouteDecoratorSourceText",
+      "generated route config decorator source",
       "viewport instruction",
       "load custom attribute",
       "LoadCustomAttribute.active",
@@ -8304,6 +11379,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "load active",
       "load active bind",
       "load.active.bind",
+      "load params.bind",
+      "load context.bind",
+      "load route params",
+      "inline load params",
+      "router-backed generated fixture load params",
+      "generated inline load params fixture",
+      "route id parameter value",
+      "load attribute segment",
       "href custom attribute",
       "href externality",
       "router href externality",
@@ -8422,6 +11505,28 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Router active navigation queries should route to activeClass and load.active from-view semantics before recipe-local code changes.",
       },
       {
+        query: "router load params.bind context.bind active.bind source lowering",
+        summary:
+          "Router load source generation should route through route-instruction-source and inline multi-binding semantics, not app-builder-local string formatting.",
+      },
+      {
+        query: "routerSourceExpressionEvaluationFrame evaluateRouterSourceExpression RuntimeBindingSourceValueEvaluationContext",
+        summary:
+          "Router-resource source-value reads should route to the router instruction materialization bridge plus shared binding-source value context projection, not router-local expression evaluation.",
+      },
+      {
+        query:
+          "router backed generated fixture load params route id parameter value",
+        summary:
+          "Generated routed fixture canaries for inline load route+params should route through LoadCustomAttribute semantics and route-instruction materialization.",
+      },
+      {
+        query:
+          "generated @route config source route decorator object literal routerRouteDecoratorSourceText",
+        summary:
+          "Generated route config source should route through the router-owned decorator serializer rather than app-builder-local object literal formatting.",
+      },
+      {
         query: "authoring fixture route parameter aggregation activation lifecycle",
         summary:
           "Routed fixture pressure for getRouteParameters, active route-node values, activation, and lifecycle should route through router/viewport semantics.",
@@ -8444,7 +11549,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         depth: AtlasWorkRouteCoverageDepth.Verified,
         ownerRouteId: "semantic-runtime.binding-source-value-evaluation",
         summary:
-          "Dynamic router-resource values consume RuntimeBindingSourceValueEvaluationContext through RouteInstructionMaterializationProjectPass, including active-container DI closure for route instruction sites. Router-dynamic-pattern and active-link contracts verify the current consumer path, while broader router lifecycle and viewport state remain owned by router/viewport semantics.",
+          "Dynamic router-resource values consume RuntimeBindingSourceValueEvaluationContext through RouteInstructionMaterializationProjectPass and projectRuntimeBindingSourceValueContextInScope(...), including active-container DI closure for route instruction sites. Router-dynamic-pattern and active-link contracts verify the current consumer path, while broader router lifecycle and viewport state remain owned by router/viewport semantics.",
       },
     ],
     anchors: [
@@ -8503,6 +11608,38 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Static router-resource value closure into typed navigation and viewport instruction products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+        symbolName: "routerSourceExpressionEvaluationFrame",
+        role: "supporting",
+        summary:
+          "Router-resource bridge from rendered instruction/source scope through shared binding-source value context projection into a source-value context or explicit open row.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/router/route-instruction-source.ts",
+        symbolName: "routerLoadAttributeSourceText",
+        role: "supporting",
+        summary:
+          "Product-free source serializer for router load/href custom-attribute forms.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/router/route-configuration-source.ts",
+        symbolName: "routerRouteDecoratorSourceText",
+        role: "supporting",
+        summary:
+          "Router-owned source serializer for generated @route object literals and route config entries.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/routed-collection-detail-source.ts",
+        symbolName: "appBuilderRoutedCollectionDetailSourcePlan",
+        role: "supporting",
+        summary:
+          "Current app-builder consumer proving route-param ID lookup, nested au-viewport ownership, and generated routeable components.",
       },
       {
         kind: "path",
@@ -8592,16 +11729,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         kind: "framework-corpus",
         projection: "expected-effects",
         effectKind: "route",
-        recipeKey: "routed-app-shell",
+        appPatternKey: "router-shell-surface",
         role: "grounding",
         summary:
-          "Generic route-shell authoring should prove route expected effects through the shared router effect contract before domain recipes reuse it.",
+          "Generic route-shell app-pattern pressure should prove route expected effects through the shared router effect contract before generated app sections reuse it.",
       },
       {
         kind: "framework-corpus",
         projection: "expected-effects",
         effectKind: "route",
-        recipeKey: "routed-state-backed-form",
+        appPatternKey: "router-form-state-surface",
         role: "grounding",
         summary:
           "Router authoring should connect fixture seeds to the route expected-effect contract instead of only browsing examples.",
@@ -8610,19 +11747,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         kind: "framework-corpus",
         projection: "expected-effects",
         effectKind: "route",
-        recipeKey: "routed-catalog-storefront",
+        appPatternKey: "router-commerce-solution-space",
         role: "grounding",
         summary:
-          "Routed storefront authoring should prove route expected effects through the shared router effect contract.",
+          "Routed commerce solution-space pressure should prove route expected effects through the shared router effect contract.",
       },
       {
         kind: "framework-corpus",
         projection: "expected-effects",
         effectKind: "route",
-        recipeKey: "routed-searchable-data-table",
+        appPatternKey: "router-table-collection-operations",
         role: "grounding",
         summary:
-          "Routed data-table authoring should prove route expected effects through the shared router effect contract.",
+          "Routed table/collection operation pressure should prove route expected effects through the shared router effect contract.",
       },
       {
         kind: "memory",
@@ -8893,6 +12030,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "@aurelia/state",
       "StateDefaultConfiguration",
       "StateStores",
+      "StateGetterBindings",
       "StateIssues",
       "state store",
       "state store configuration",
@@ -8900,6 +12038,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "IStore",
       "IStoreRegistry",
       "fromState",
+      "FromStateDecoratorBindingSite",
+      "StateGetterBinding",
+      "fromState selector expression",
+      "fromStateDecoratorSourceText",
       "state-store-list",
       "store item source parameter",
       "store collection source parameter",
@@ -8938,6 +12080,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "State lookup diagnostics need post-template state binding products and store-registry semantics.",
       },
       {
+        query: "fromState selector StateGetterBinding valid decorator field setter source site",
+        summary:
+          "Positive @fromState flow should route through FromStateDecoratorBindingSite and StateGetterBindingMaterializationProjectPass before adding diagnostics or app-builder source policy.",
+      },
+      {
+        query: "state-getter-bindings @fromState selector target type projection",
+        summary:
+          "Public @fromState StateGetterBinding rows should route to the state product projection rather than generic TypeScript decorator inspection.",
+      },
+      {
         query: "state dispatch payload action literal target value value-channel",
         summary:
           "State dispatch payload typing should route through state command value-channel flow before generic template repair policy.",
@@ -8964,6 +12116,38 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Materializes missing named-store lookup failures from @fromState(...), state/dispatch commands, and state binding behavior arguments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/from-state-decorator-recognition.ts",
+        symbolName: "FromStateDecoratorBindingSite",
+        role: "primary",
+        summary:
+          "Valid @fromState field/setter decorator source site with store-name classification, selector source, and target member spans.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+        symbolName: "StateGetterBindingMaterializationProjectPass",
+        role: "primary",
+        summary:
+          "Materializes StateGetterBinding products from @fromState source sites with store resolution and selector/target type projection.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/state-projections.ts",
+        symbolName: "readStateGetterBindingRows",
+        role: "supporting",
+        summary:
+          "Projects state-getter-bindings API rows for @fromState-created StateGetterBinding products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/from-state-decorator-source.ts",
+        symbolName: "fromStateDecoratorSourceText",
+        role: "supporting",
+        summary:
+          "State-owned source serializer for app-builder framework API source fragments.",
       },
       {
         kind: "source",
@@ -9015,17 +12199,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:state-store-list",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests",
         role: "supporting",
         summary:
-          "Generated @aurelia/state store-list smoke for store configuration, .state/.dispatch, and & state binding behavior.",
-      },
-      {
-        kind: "script",
-        command: "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture generated-state-store-list",
-        role: "pressure",
-        summary:
-          "Reopen the generated state-store-list fixture through the app API pressure lane.",
+          "Fixture manifest verification includes the generated @aurelia/state starter and its .state/.dispatch expected effects.",
       },
       {
         kind: "memory",

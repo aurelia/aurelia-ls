@@ -1,4 +1,7 @@
+import { parseConfigurableRoutePath } from '../router/route-configurable-path.js';
+import type { AureliaConfigurationAdmissionKind } from './aurelia-configuration-admission-kind.js';
 import type { SourcePlanProjectTooling } from './package-tooling.js';
+import type { TypeScriptImportRequirement } from './typescript-import-source.js';
 
 /** Source language family for a planned source artifact. */
 export enum SourcePlanLanguage {
@@ -50,13 +53,28 @@ export enum SourcePlanEditKind {
   Upsert = 'upsert',
 }
 
-/** Caller-owned opaque operation key associated with a planned file, when an upstream planner owns one. */
-export type SourcePlanOperationKind = string;
+/** Source operation that caused a planned file artifact to exist. */
+export enum SourcePlanOperationKind {
+  /** Create an Aurelia entrypoint that boots a root component. */
+  CreateEntrypoint = 'create-entrypoint',
+  /** Create a custom-element view-model or routeable component class. */
+  CreateComponentViewModel = 'create-component-view-model',
+  /** Create an HTML template owned by a component or routeable surface. */
+  CreateComponentTemplate = 'create-component-template',
+  /** Create a caller/domain entity, value object, or domain model file. */
+  CreateDomainModel = 'create-domain-model',
+  /** Create a DI state, store, or shared application state model file. */
+  CreateStateModel = 'create-state-model',
+  /** Create a service, repository, or adapter boundary used by state or components. */
+  CreateServiceModel = 'create-service-model',
+  /** Create or update package/build/tooling configuration. */
+  CreateProjectTooling = 'create-project-tooling',
+}
 
 /** Who owns the concrete text in this source plan. */
 export enum SourcePlanTextAuthority {
-  /** Semantic-runtime produced this as canonical recipe output. */
-  SemanticRuntimeRecipe = 'semantic-runtime-recipe',
+  /** Semantic-runtime produced this as canonical generated source. */
+  SemanticRuntimeGenerated = 'semantic-runtime-generated',
   /** App-builder produced complete source text from an app-building workflow. */
   AppBuilderGenerated = 'app-builder-generated',
   /** Semantic-runtime produced this as a complete reference instantiation of a reusable pattern. */
@@ -66,6 +84,103 @@ export enum SourcePlanTextAuthority {
   /** A human/operator supplied the exact text. */
   OperatorSupplied = 'operator-supplied',
 }
+
+/** Source-plan contribution family carried alongside final generated file text. */
+export enum SourcePlanContributionKind {
+  /** Static TypeScript import requirement contributed before final import assembly. */
+  TypeScriptImportRequirement = 'typescript-import-requirement',
+  /** Concrete source fragment that participated in a generated file. */
+  SourceFragment = 'source-fragment',
+}
+
+/** Source of a generated file contribution before final host application. */
+export enum SourcePlanContributionOriginKind {
+  /** Contribution originated from an app-builder part source invocation. */
+  AppBuilderPartSourceInvocation = 'app-builder-part-source-invocation',
+  /** Contribution originated from a direct app-builder ontology target. */
+  AppBuilderSourceLoweringTarget = 'app-builder-source-lowering-target',
+  /** Contribution originated from an app-builder ontology source-lowering invocation. */
+  AppBuilderSourceLoweringInvocation = 'app-builder-source-lowering-invocation',
+  /** Contribution originated from an app-builder source-lowering composition. */
+  AppBuilderSourceLoweringComposition = 'app-builder-source-lowering-composition',
+  /** Contribution originated from a framework configuration admission. */
+  AureliaConfigurationAdmission = 'aurelia-configuration-admission',
+}
+
+/** App-builder part invocation identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAppBuilderPartSourceInvocationOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AppBuilderPartSourceInvocation;
+  readonly partKind: string;
+  readonly partId: string;
+  readonly operationKind: string;
+  readonly applicationSite: string | null;
+  readonly slotKinds: readonly string[];
+}
+
+/** Direct app-builder ontology target identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAppBuilderSourceLoweringTargetOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AppBuilderSourceLoweringTarget;
+  readonly targetKind: string;
+  readonly targetId: string;
+  readonly surfaceKind: string;
+}
+
+/** App-builder ontology source-lowering identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAppBuilderSourceLoweringInvocationOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AppBuilderSourceLoweringInvocation;
+  readonly targetKind: string;
+  readonly targetId: string;
+  readonly controlPatternId: string | null;
+  readonly controlId: string | null;
+  readonly innerControlPatternId: string | null;
+}
+
+/** App-builder source-lowering composition identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAppBuilderSourceLoweringCompositionOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AppBuilderSourceLoweringComposition;
+  readonly compositionKind: string;
+  readonly targetKind: string;
+  readonly targetId: string;
+  readonly memberTargetIds: readonly string[];
+}
+
+/** Framework configuration admission identity carried by a neutral source-plan contribution. */
+export interface SourcePlanAureliaConfigurationAdmissionOrigin {
+  readonly kind: SourcePlanContributionOriginKind.AureliaConfigurationAdmission;
+  readonly admissionKind: AureliaConfigurationAdmissionKind;
+}
+
+/** Source-plan contribution origin before a concrete file span exists. */
+export type SourcePlanContributionOrigin =
+  | SourcePlanAppBuilderPartSourceInvocationOrigin
+  | SourcePlanAppBuilderSourceLoweringTargetOrigin
+  | SourcePlanAppBuilderSourceLoweringInvocationOrigin
+  | SourcePlanAppBuilderSourceLoweringCompositionOrigin
+  | SourcePlanAureliaConfigurationAdmissionOrigin;
+
+/** Base fields shared by source-plan file contributions. */
+interface SourcePlanContributionBase {
+  readonly kind: SourcePlanContributionKind;
+  readonly origin: SourcePlanContributionOrigin | null;
+}
+
+/** Static import requirement contributed to a TypeScript source-plan file. */
+export interface SourcePlanTypeScriptImportContribution extends SourcePlanContributionBase {
+  readonly kind: SourcePlanContributionKind.TypeScriptImportRequirement;
+  readonly importRequirement: TypeScriptImportRequirement;
+}
+
+/** Concrete source fragment contributed to a source-plan file before final text assembly. */
+export interface SourcePlanSourceFragmentContribution extends SourcePlanContributionBase {
+  readonly kind: SourcePlanContributionKind.SourceFragment;
+  readonly language: SourcePlanLanguage;
+  readonly text: string;
+}
+
+/** One contribution that participated in a generated source-plan file. */
+export type SourcePlanContribution =
+  | SourcePlanTypeScriptImportContribution
+  | SourcePlanSourceFragmentContribution;
 
 /** Conflict policy is explicit so edit application never hides overwrite behavior. */
 export enum SourcePlanConflictPolicy {
@@ -79,8 +194,8 @@ export enum SourcePlanConflictPolicy {
 
 /** Formatting policy is explicit because semantic-runtime should not silently own project style. */
 export enum SourcePlanFormattingPolicy {
-  /** Formatting follows a legacy recipe baseline. */
-  RecipeBaseline = 'recipe-baseline',
+  /** Formatting follows a semantic-runtime source-plan baseline. */
+  SemanticRuntimeBaseline = 'semantic-runtime-baseline',
   /** Formatting follows the app-builder source baseline. */
   AppBuilderBaseline = 'app-builder-baseline',
   /** The host formatter should own final formatting. */
@@ -95,11 +210,13 @@ export enum SourcePlanPackageToolingPolicy {
   NotModeled = 'not-modeled',
   /** The host owns package and build tooling. */
   HostOwned = 'host-owned',
-  /** Package and build tooling follow a recipe/source-plan baseline. */
-  RecipeBaseline = 'recipe-baseline',
+  /** Package and build tooling follow a semantic-runtime source-plan baseline. */
+  SemanticRuntimeBaseline = 'semantic-runtime-baseline',
+  /** Package and build tooling follow the app-builder source-plan baseline. */
+  AppBuilderBaseline = 'app-builder-baseline',
 }
 
-/** How recipe-owned source text relates to the caller's actual domain model. */
+/** How source-pattern text relates to the caller's actual domain model. */
 export enum SourcePatternDomainModelPolicy {
   /** The source text is an app-shell or framework pattern with no meaningful sample domain nouns. */
   DomainNeutral = 'domain-neutral',
@@ -125,9 +242,9 @@ export enum SourcePatternStylePolicy {
 
 /** What kind of artifact this source pattern should be treated as by source-generation clients. */
 export enum SourcePatternRole {
-  /** Public recipe output that is intended to be a recommendable starting point for app source. */
-  RecommendableRecipe = 'recommendable-recipe',
-  /** Focused reusable capability example that should be merged into another recipe rather than scaffolded wholesale. */
+  /** Public generated output that is intended to be a recommendable starting point for app source. */
+  RecommendableSourceStart = 'recommendable-source-start',
+  /** Focused reusable capability example that should be merged into another source plan rather than scaffolded wholesale. */
   PatternReference = 'pattern-reference',
   /** Complete concrete scenario used for transfer/verification; adapt nouns, data, and presentation before app use. */
   ScenarioReference = 'scenario-reference',
@@ -141,8 +258,8 @@ export enum SourcePatternDataPolicy {
   None = 'none',
   /** Data shape is a service/state contract and caller data should arrive through that boundary. */
   ServiceContract = 'service-contract',
-  /** Small generated seed records follow caller source parameters and exist only to make the starter runnable. */
-  StarterSampleData = 'starter-sample-data',
+  /** Small generated seed records follow caller source parameters and exist only to make generated source runnable. */
+  GeneratedSampleData = 'generated-sample-data',
   /** Small synthetic records are included only to make the scenario runnable and analyzable. */
   SyntheticReferenceData = 'synthetic-reference-data',
   /** Caller or host must provide the data shape before source should be emitted as application code. */
@@ -189,13 +306,13 @@ export enum SourcePatternParameterKind {
   FeatureCopy = 'feature-copy',
   /** Inline records or defaults included to make the reference instantiation runnable and analyzable. */
   SampleData = 'sample-data',
-  /** CSS, layout names, or visual tokens included as reference presentation rather than recipe ontology. */
+  /** CSS, layout names, or visual tokens included as reference presentation rather than source-pattern ontology. */
   Presentation = 'presentation',
 }
 
 /** Expected caller value shape for a source-pattern parameter. */
 export enum SourcePatternParameterValueShape {
-  /** Human domain noun phrase such as "Support Ticket"; recipe code may derive identifiers from it. */
+  /** Human domain noun phrase such as "Support Ticket"; source generation may derive identifiers from it. */
   DomainTitle = 'domain-title',
   /** Lower/upper source identifier member, variable, method, property, or scalar ID name. */
   SourceMemberName = 'source-member-name',
@@ -211,7 +328,7 @@ export enum SourcePatternParameterValueShape {
   WorkflowStepList = 'workflow-step-list',
   /** Semicolon-separated named workflow section fields such as `Shipping: address; Payment: payment method select`. */
   WorkflowSectionFieldSchemaList = 'workflow-section-field-schema-list',
-  /** Comma-separated field/control descriptors that still need a recipe-owned schema model before full source rewriting. */
+  /** Comma-separated field/control descriptors that still need a source-owned schema model before full source rewriting. */
   FieldSchemaList = 'field-schema-list',
   /** Semicolon-separated option groups such as `roles: admin, editor; permissions: read, write`. */
   OptionSchemaList = 'option-schema-list',
@@ -227,12 +344,14 @@ export enum SourcePatternParameterValueShape {
   FreeformSummary = 'freeform-summary',
 }
 
-/** Reusable semantic source-pattern capability that may appear in many recipes or fixtures. */
+/** Reusable semantic source-pattern capability that may appear in many source plans or fixtures. */
 export enum SourcePatternModuleKind {
   /** Root app source, entrypoint, root component, or external template shell. */
   AppShell = 'app-shell',
   /** Convention-based resource admission instead of explicit component metadata. */
   ResourceConvention = 'resource-convention',
+  /** Explicit resource declaration through decorator, static metadata, or define-style source. */
+  ResourceDefinition = 'resource-definition',
   /** RouterConfiguration, route config, navigation links, or au-viewport shell wiring. */
   RouterAdmission = 'router-admission',
   /** RouteContext, route parameters, query values, fragments, or route-owned selection handoff. */
@@ -273,6 +392,8 @@ export enum SourcePatternModuleKey {
   AureliaAppShell = 'aurelia-app-shell',
   /** Convention-based resource discovery. */
   ConventionResourceAdmission = 'convention-resource-admission',
+  /** Explicit resource declaration source such as `@customElement(...)`. */
+  ExplicitResourceDefinition = 'explicit-resource-definition',
   /** Router configuration and viewport shell. */
   RouterShell = 'router-shell',
   /** Route context owns current selection. */
@@ -281,6 +402,8 @@ export enum SourcePatternModuleKey {
   RouteParameterSelection = 'route-parameter-selection',
   /** Templates produce route instructions. */
   RouteLinkNavigation = 'route-link-navigation',
+  /** Child route configs and routed components create nested viewport areas. */
+  NestedViewportLayout = 'nested-viewport-layout',
   /** Aurelia DI owns state access. */
   DiStateBoundary = 'di-state-boundary',
   /** State composes nested state/model instances. */
@@ -359,7 +482,7 @@ export enum SourcePatternAdaptationGroupKey {
 export enum SourcePatternParameterApplicationPolicy {
   /** The parameter is a marker for AI/host adaptation; semantic-runtime does not rewrite source for it yet. */
   AdvisoryOnly = 'advisory-only',
-  /** The parameter has a recipe-owned source application that changes generated source text. */
+  /** The parameter has a source-owned application that changes generated source text. */
   SourceTextInput = 'source-text-input',
 }
 
@@ -373,6 +496,10 @@ export enum SourcePatternParameterApplicationState {
   AdvisoryOnly = 'advisory-only',
   /** The value named no parameter on the selected source pattern. */
   UnknownParameter = 'unknown-parameter',
+  /** More than one value was supplied for the same source-pattern parameter. */
+  DuplicateParameterValue = 'duplicate-parameter-value',
+  /** The supplied value does not match the parameter's declared value shape. */
+  InvalidParameterValue = 'invalid-parameter-value',
 }
 
 /** Reusable source-pattern module metadata. */
@@ -403,7 +530,8 @@ export class SourcePatternParameter {
     readonly applicationPolicy: SourcePatternParameterApplicationPolicy,
     readonly valueShape: SourcePatternParameterValueShape,
     readonly title: string,
-    readonly defaultValue: string | null,
+    /** Current value reflected by generated source for this parameter, or null when no source-owned value exists. */
+    readonly sourceValue: string | null,
     readonly summary: string,
   ) {}
 }
@@ -411,6 +539,15 @@ export class SourcePatternParameter {
 export interface SourcePatternParameterValue {
   readonly key: SourcePatternParameterKey;
   readonly value: string;
+}
+
+/** Observable result of applying one caller value to a lowered source pattern. */
+export interface SourcePatternParameterApplication {
+  readonly key: SourcePatternParameterKey;
+  readonly value: string;
+  readonly parameter: SourcePatternParameter | null;
+  readonly state: SourcePatternParameterApplicationState;
+  readonly summary: string;
 }
 
 /** Reusable source pattern metadata, separate from a particular fixture/default instantiation. */
@@ -431,6 +568,79 @@ export class SourcePattern {
     readonly modules: readonly SourcePatternModule[] = [],
     readonly adaptationGroups: readonly SourcePatternAdaptationGroup[] = [],
   ) {}
+}
+
+/** Read the first caller value for a source-pattern parameter key. */
+export function sourcePatternParameterValue(
+  values: readonly SourcePatternParameterValue[],
+  key: SourcePatternParameterKey,
+): string | null {
+  return values.find((value) => value.key === key)?.value ?? null;
+}
+
+/** Read the source-reflected value for a source-pattern parameter from a built source pattern. */
+export function sourcePatternParameterSourceValue(
+  pattern: SourcePattern | null,
+  key: SourcePatternParameterKey,
+): string | null {
+  return pattern?.parameters.find((parameter) => parameter.key === key)?.sourceValue ?? null;
+}
+
+/** Evaluate caller source-pattern values against a generated pattern and its reflected source values. */
+export function sourcePatternParameterApplications(
+  pattern: SourcePattern | null,
+  values: readonly SourcePatternParameterValue[] = [],
+): readonly SourcePatternParameterApplication[] {
+  const seen = new Set<SourcePatternParameterKey>();
+  return values.map((value) => {
+    const parameter = pattern?.parameters.find((candidate) => candidate.key === value.key) ?? null;
+    if (seen.has(value.key)) {
+      return sourcePatternParameterApplication(
+        value,
+        parameter,
+        SourcePatternParameterApplicationState.DuplicateParameterValue,
+        `Source-pattern parameter '${value.key}' was supplied more than once.`,
+      );
+    }
+    seen.add(value.key);
+    if (parameter == null) {
+      return sourcePatternParameterApplication(
+        value,
+        null,
+        SourcePatternParameterApplicationState.UnknownParameter,
+        `Source-pattern parameter '${value.key}' is not declared by the selected source pattern.`,
+      );
+    }
+    const validationSummary = sourcePatternParameterValueValidationSummary(parameter, value.value);
+    if (validationSummary != null) {
+      return sourcePatternParameterApplication(
+        value,
+        parameter,
+        SourcePatternParameterApplicationState.InvalidParameterValue,
+        validationSummary,
+      );
+    }
+    switch (parameter.applicationPolicy) {
+      case SourcePatternParameterApplicationPolicy.AdvisoryOnly:
+        return sourcePatternParameterApplication(
+          value,
+          parameter,
+          SourcePatternParameterApplicationState.AdvisoryOnly,
+          `Source-pattern parameter '${value.key}' is advisory for this pattern; the host must adapt concrete source manually.`,
+        );
+      case SourcePatternParameterApplicationPolicy.SourceTextInput:
+        return sourcePatternParameterApplication(
+          value,
+          parameter,
+          parameter.sourceValue === value.value
+            ? SourcePatternParameterApplicationState.AppliedToSourcePlan
+            : SourcePatternParameterApplicationState.NotAppliedToSourcePlan,
+          parameter.sourceValue === value.value
+            ? `Source-pattern parameter '${value.key}' was reflected in the generated source pattern.`
+            : `Source-pattern parameter '${value.key}' requested '${value.value}', but generated source still reports '${parameter.sourceValue ?? '<none>'}'.`,
+        );
+    }
+  });
 }
 
 export function sourcePatternUsePolicy(
@@ -472,27 +682,63 @@ export function sourcePatternUseSummary(
   }
 }
 
-function defaultSourcePatternParameterValueShape(
-  kind: SourcePatternParameterKind,
-): SourcePatternParameterValueShape {
-  switch (kind) {
-    case SourcePatternParameterKind.DomainEntity:
-      return SourcePatternParameterValueShape.DomainTitle;
-    case SourcePatternParameterKind.SelectionIdentity:
-      return SourcePatternParameterValueShape.SourceMemberName;
-    case SourcePatternParameterKind.RouteIdentity:
-      return SourcePatternParameterValueShape.RoutePath;
-    case SourcePatternParameterKind.FieldSchema:
-      return SourcePatternParameterValueShape.FieldSchemaList;
-    case SourcePatternParameterKind.DomainCollection:
-      return SourcePatternParameterValueShape.DomainCollectionSummary;
-    case SourcePatternParameterKind.FeatureCopy:
-      return SourcePatternParameterValueShape.CopyText;
-    case SourcePatternParameterKind.SampleData:
-      return SourcePatternParameterValueShape.SampleDataSummary;
-    case SourcePatternParameterKind.Presentation:
-      return SourcePatternParameterValueShape.PresentationSummary;
+function sourcePatternParameterApplication(
+  value: SourcePatternParameterValue,
+  parameter: SourcePatternParameter | null,
+  state: SourcePatternParameterApplicationState,
+  summary: string,
+): SourcePatternParameterApplication {
+  return {
+    key: value.key,
+    value: value.value,
+    parameter,
+    state,
+    summary,
+  };
+}
+
+function sourcePatternParameterValueValidationSummary(
+  parameter: SourcePatternParameter,
+  value: string,
+): string | null {
+  switch (parameter.valueShape) {
+    case SourcePatternParameterValueShape.DomainTitle:
+    case SourcePatternParameterValueShape.RouteTitle:
+    case SourcePatternParameterValueShape.CopyText:
+    case SourcePatternParameterValueShape.SampleDataSummary:
+    case SourcePatternParameterValueShape.PresentationSummary:
+    case SourcePatternParameterValueShape.DomainCollectionSummary:
+    case SourcePatternParameterValueShape.FieldSchemaList:
+    case SourcePatternParameterValueShape.OptionSchemaList:
+    case SourcePatternParameterValueShape.RouteSectionList:
+    case SourcePatternParameterValueShape.WorkflowStepList:
+    case SourcePatternParameterValueShape.WorkflowSectionFieldSchemaList:
+    case SourcePatternParameterValueShape.FreeformSummary:
+      return value.length > 0 && !/[\r\n]/.test(value)
+        ? null
+        : `Source-pattern parameter '${parameter.key}' expected a non-empty single-line ${parameter.valueShape}.`;
+    case SourcePatternParameterValueShape.SourceMemberName:
+    case SourcePatternParameterValueShape.RouteParameterName:
+      return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value)
+        ? null
+        : `Source-pattern parameter '${parameter.key}' expected an identifier-like ${parameter.valueShape}.`;
+    case SourcePatternParameterValueShape.RoutePath:
+      return routePathParameterValueValidationSummary(parameter, value);
   }
+}
+
+function routePathParameterValueValidationSummary(
+  parameter: SourcePatternParameter,
+  value: string,
+): string | null {
+  if (value.length === 0 || /[\r\n<>&]/.test(value)) {
+    return `Source-pattern parameter '${parameter.key}' expected a non-empty route path safe for generated TypeScript and HTML attribute source.`;
+  }
+  const parse = parseConfigurableRoutePath(value, false);
+  if (parse.issues.length === 0) {
+    return null;
+  }
+  return `Source-pattern parameter '${parameter.key}' expected a valid Aurelia configurable route path: ${parse.issues[0]!.message}`;
 }
 
 /** Concrete file text, when a producer can emit it without another policy decision. */
@@ -527,6 +773,7 @@ export class SourcePlanFile {
     readonly editKind: SourcePlanEditKind,
     readonly operationKind: SourcePlanOperationKind | null,
     readonly text: SourcePlanText | null,
+    readonly contributions: readonly SourcePlanContribution[] = [],
   ) {}
 }
 
@@ -538,9 +785,9 @@ export class SourcePlan {
     readonly rootDir: string,
     readonly policy: SourcePlanPolicy,
     readonly files: readonly SourcePlanFile[],
-    /** Structured package/typecheck artifacts that are applied beside app source, when the recipe owns them. */
+    /** Structured package/typecheck artifacts that are applied beside app source, when the source plan owns them. */
     readonly projectTooling: SourcePlanProjectTooling | null = null,
-    /** Pattern/default-instantiation metadata so clients do not mistake sample domains for recipe ontology. */
+    /** Pattern/reference-instantiation metadata so clients do not mistake sample domains for source-pattern ontology. */
     readonly pattern: SourcePattern | null = null,
   ) {}
 
@@ -550,12 +797,69 @@ export class SourcePlan {
   }
 }
 
-export function recipeSourceEditPolicy(
+/** File artifact staged by SourcePlanAssembly before it becomes a SourcePlanFile. */
+export interface SourcePlanFileArtifact {
+  readonly path: string;
+  readonly role: SourcePlanFileRole;
+  readonly language: SourcePlanLanguage;
+  readonly operationKind: SourcePlanOperationKind | null;
+  readonly text: string | null;
+  readonly editKind?: SourcePlanEditKind;
+  readonly textAuthority?: SourcePlanTextAuthority;
+  readonly contributions?: readonly SourcePlanContribution[];
+}
+
+/** Stateful source-plan assembler that carries edit policy and text authority across generated files. */
+export class SourcePlanAssembly {
+  private readonly stagedFiles: SourcePlanFile[] = [];
+
+  constructor(
+    readonly rootDir: string,
+    readonly policy: SourcePlanPolicy,
+    readonly defaultTextAuthority: SourcePlanTextAuthority,
+    readonly defaultEditKind: SourcePlanEditKind = SourcePlanEditKind.Create,
+  ) {}
+
+  addFile(artifact: SourcePlanFileArtifact): this {
+    this.stagedFiles.push(new SourcePlanFile(
+      artifact.path,
+      artifact.role,
+      artifact.language,
+      artifact.editKind ?? this.defaultEditKind,
+      artifact.operationKind,
+      artifact.text == null
+        ? null
+        : new SourcePlanText(artifact.text, artifact.textAuthority ?? this.defaultTextAuthority),
+      artifact.contributions ?? [],
+    ));
+    return this;
+  }
+
+  addSourcePlanFile(file: SourcePlanFile): this {
+    this.stagedFiles.push(file);
+    return this;
+  }
+
+  build(
+    projectTooling: SourcePlanProjectTooling | null = null,
+    pattern: SourcePattern | null = null,
+  ): SourcePlan {
+    return new SourcePlan(
+      this.rootDir,
+      this.policy,
+      [...this.stagedFiles],
+      projectTooling,
+      pattern,
+    );
+  }
+}
+
+export function semanticRuntimeSourceEditPolicy(
   packageToolingPolicy: SourcePlanPackageToolingPolicy = SourcePlanPackageToolingPolicy.NotModeled,
 ): SourcePlanPolicy {
   return new SourcePlanPolicy(
     SourcePlanConflictPolicy.MustNotExist,
-    SourcePlanFormattingPolicy.RecipeBaseline,
+    SourcePlanFormattingPolicy.SemanticRuntimeBaseline,
     packageToolingPolicy,
   );
 }
@@ -588,5 +892,68 @@ export function sourceFileWithTextAuthority(
     file.text == null
       ? null
       : new SourcePlanText(file.text.text, textAuthority),
+    file.contributions,
   );
+}
+
+/** Create a source-plan import contribution from a static TypeScript import requirement. */
+export function sourcePlanTypeScriptImportContribution(
+  importRequirement: TypeScriptImportRequirement,
+  origin: SourcePlanContributionOrigin | null = null,
+): SourcePlanTypeScriptImportContribution {
+  return {
+    kind: SourcePlanContributionKind.TypeScriptImportRequirement,
+    origin,
+    importRequirement,
+  };
+}
+
+/** Create source-plan import contributions from static TypeScript import requirements. */
+export function sourcePlanTypeScriptImportContributions(
+  importRequirements: readonly TypeScriptImportRequirement[],
+  origin: SourcePlanContributionOrigin | null = null,
+): readonly SourcePlanTypeScriptImportContribution[] {
+  return importRequirements.map((importRequirement) =>
+    sourcePlanTypeScriptImportContribution(importRequirement, origin));
+}
+
+/** Create a source-plan source-fragment contribution before concrete file spans are known. */
+export function sourcePlanSourceFragmentContribution(
+  language: SourcePlanLanguage,
+  text: string,
+  origin: SourcePlanContributionOrigin | null = null,
+): SourcePlanSourceFragmentContribution {
+  return {
+    kind: SourcePlanContributionKind.SourceFragment,
+    origin,
+    language,
+    text,
+  };
+}
+
+/** Create a source-plan origin for a framework configuration admission. */
+export function sourcePlanAureliaConfigurationAdmissionOrigin(
+  admissionKind: AureliaConfigurationAdmissionKind,
+): SourcePlanAureliaConfigurationAdmissionOrigin {
+  return {
+    kind: SourcePlanContributionOriginKind.AureliaConfigurationAdmission,
+    admissionKind,
+  };
+}
+
+/** Read static TypeScript import requirements contributed to a source-plan file. */
+export function sourcePlanFileTypeScriptImportRequirements(
+  file: SourcePlanFile,
+): readonly TypeScriptImportRequirement[] {
+  return sourcePlanContributionTypeScriptImportRequirements(file.contributions);
+}
+
+/** Read static TypeScript import requirements from source-plan contributions. */
+export function sourcePlanContributionTypeScriptImportRequirements(
+  contributions: readonly SourcePlanContribution[],
+): readonly TypeScriptImportRequirement[] {
+  return contributions
+    .filter((contribution): contribution is SourcePlanTypeScriptImportContribution =>
+      contribution.kind === SourcePlanContributionKind.TypeScriptImportRequirement)
+    .map((contribution) => contribution.importRequirement);
 }

@@ -1,0 +1,137 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-draft.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-draft-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task draft component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "saveDraft",
+                      "kind": "save",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Draft",
+                    "baseName": "Task Draft"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-draft.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": "native-submit-form",
+        "fieldNames": [
+          "title",
+          "done"
+        ],
+        "actionName": "saveDraft",
+        "submitButtonText": "Save draft"
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "saveDraft",
+          "methodBodyStatements": "this.title = this.title.trim();"
+        }
+      ]
+    }
+  }
+}

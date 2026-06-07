@@ -57,11 +57,12 @@
       "rationale": "The API README explicitly keeps runtime.ts as the boot/app facade while pushing public contracts, row projections, and query-family answerers into focused modules. Future authoring or LSP expansion should preserve that boundary rather than letting runtime.ts become another private summary table.",
       "guidance": [
         "Use SemanticRuntime for workspace boot, app opening, project selection, cursor-locus convenience methods, and app-world cache policy.",
-        "Use SemanticApp for public query dispatch and compact app-level query methods; move substrate-family answerers into focused modules when the facade starts owning projection logic.",
+        "Use SemanticApp for public query dispatch and compact app-level query methods. Non-router dispatch is grouped by semantic app query catalog group before calling focused family methods; move substrate-family answerers into focused modules when the facade starts owning projection logic beyond dispatch.",
         "MCP and IDE/LSP should consume the same semantic-runtime public API and catalog surfaces. Treat MCP as an IDE-for-AI adapter over semantic-runtime, not as a lower-fidelity or separate reasoning layer.",
         "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
         "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
         "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
+        "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
         "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
         "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO."
@@ -71,15 +72,50 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticRuntime",
-          "line": 112,
+          "line": 384,
           "summary": "Workspace boot and app-opening facade."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticApp",
-          "line": 392,
+          "line": 2083,
           "summary": "Opened app-world query facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerCatalogQuery",
+          "line": 2167,
+          "summary": "Catalog-group public app-query dispatch boundary for non-router query families."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerOverviewSourceDiagnosticQuery",
+          "line": 2200,
+          "summary": "Grouped overview, source, diagnostics, evaluation, configuration, DI, plugin issue, and router overview query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerObservationStateQuery",
+          "line": 2252,
+          "summary": "Grouped observation, state, and i18n query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerResourceTemplateRenderingQuery",
+          "line": 2286,
+          "summary": "Grouped resource, template, and rendering query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerBindingControlQuery",
+          "line": 2318,
+          "summary": "Grouped binding and control query dispatch."
         },
         {
           "kind": "source",
@@ -143,9 +179,9 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/app-builder/starter.ts",
-          "symbolName": "buildAppBuilderStarter",
-          "summary": "Future public generation should grow through app-builder, not the retired recipe-authoring facade."
+          "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
+          "symbolName": "SemanticRuntimeAppBuilderQueryKind",
+          "summary": "Current public app-builder query-kind catalog without starter menu/golden generation lanes."
         }
       ],
       "liveChecks": [
@@ -172,7 +208,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-06-05"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -472,7 +508,7 @@
         "router",
         "plugins"
       ],
-      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia answers and leave app generation to app-builder until that algebra is ready.",
+      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia answers; app generation belongs only behind the typed app-builder semantic-runtime facade.",
       "rationale": "A not-yet-complete au-compose or router/viewport model can be explained for an early preview, but a tool that repeatedly guides AI toward verbose or suboptimal Aurelia code undermines the product thesis. Aurelia's short-term MCP value is trust: low-token answers that help agents write small, readable, object-oriented Aurelia apps using core observation, common routing, plugins, and advertised patterns.",
       "guidance": [
         "Use this decision before expanding public MCP prompts, tools, or app-generation output.",
@@ -483,7 +519,9 @@
         "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
         "Treat au-compose as lower priority for the first public cut unless it blocks a common advertised pattern or an existing semantic-runtime query surface.",
         "When a public MCP answer would be verbose, improve the semantic-runtime summary query or structuredContent shape before accepting token-heavy guidance as the preview behavior.",
-        "Do not expose app-builder as an MCP generation tool until its typed menus, source-plan previews, generated source, and verification promises are coherent enough to save tokens rather than produce fixture-shaped code."
+        "Expose app-builder through MCP only as a thin forwarder over `SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`; do not put generation policy, catalog joins, source-fragment construction, or source-plan interpretation in the transport.",
+        "MCP app-builder detail requests should be proved at the schema and adapter boundary. The shell may accept public query envelopes such as `controlManifestDetail`, but it must forward them to semantic-runtime unchanged rather than reconstructing app-builder rows locally.",
+        "Public generation should remain staged: typed menu, source-plan preview, generated SourcePlan, and semantic verification promises before any host writes files."
       ],
       "anchors": [
         {
@@ -491,6 +529,12 @@
           "filePath": "packages/mcp/src/runtime-adapter.ts",
           "symbolName": "AureliaMcpSemanticRuntimeAdapter",
           "summary": "Thin MCP adapter that should forward compact semantic-runtime answers rather than owning product semantics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tool-schemas.ts",
+          "symbolName": "appBuilderQueryInputSchema",
+          "summary": "MCP schema boundary that should stay aligned with semantic-runtime app-builder query envelopes."
         },
         {
           "kind": "source",
@@ -503,6 +547,12 @@
           "filePath": "packages/semantic-runtime/src/api/runtime.ts",
           "symbolName": "SemanticRuntime",
           "summary": "Public semantic-runtime API boundary used by the MCP shell."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
+          "symbolName": "SemanticRuntimeAppBuilderQueryKind",
+          "summary": "Public app-builder query vocabulary for typed menu/source-plan workflow answers."
         },
         {
           "kind": "source",
@@ -520,10 +570,15 @@
           "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
           "symbolName": "SourcePlan",
           "summary": "Source artifact boundary app-builder should emit before any host write policy."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
+          "summary": "Contract proving MCP pass-through for app-query continuations and app-builder detail request envelopes."
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-26"
+      "updatedAt": "2026-06-02"
     },
     {
       "id": "reuse:runtime-resource-local-binding-ownership",

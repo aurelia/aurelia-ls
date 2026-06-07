@@ -16,6 +16,7 @@ import {
   type ApplicationServiceInjectionSite,
   type ApplicationServiceInteractionOperationKind,
   type ApplicationServiceInteractionSite,
+  type ApplicationServiceTopology,
   type ApplicationStyleAssetKind,
   type ApplicationStyleAssetSite,
   type ApplicationStyleSourceKind,
@@ -40,6 +41,7 @@ import {
   classifyCheckerTypeShape,
   type CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
+import { checkerNumberIndexValueType } from '../type-system/checker-related-types.js';
 import {
   normalizeTypeSystemSourceFileName,
   typeSystemSourcePathIndex,
@@ -52,6 +54,7 @@ import type {
 } from '../router/model.js';
 import { projectBindableTypeSurface } from './bindable-type-projection.js';
 import {
+  readBindingObservedDependencyRows,
   readBindingTargetAccessRows,
   readBindingDataFlowRows,
   readTargetOperationRows,
@@ -68,6 +71,7 @@ import {
 import { readRuntimeControllerRows } from './controller-projections.js';
 import type {
   SemanticBindingDataFlowRow,
+  SemanticBindingObservedDependencyRow,
   SemanticBindingTargetAccessRow,
   SemanticRuntimeControllerRow,
   SemanticTargetOperationRow,
@@ -397,9 +401,9 @@ export function readSemanticApplicationTopology(
     injections,
     serviceInteractions,
   );
-  const stateCompositions = applicationStateCompositionRows(store, emission);
+  const stateCompositions = applicationStateCompositionRows(store, emission, serviceTopology);
   const routes = applicationRouteRows(store, emission);
-  const files = applicationFileRows(store, emission, appRoots, components, styles, routes);
+  const files = applicationFileRows(store, emission, appRoots, components, services, stateCompositions, styles, routes);
   return {
     projectKey: emission.project.projectKey,
     rootDir: emission.project.rootDir,
@@ -424,6 +428,7 @@ export function readSemanticApplicationTopologySummary(
   const componentDefinitions = uniqueCustomElementDefinitions(emission);
   const styleSites = applicationStyleSites(store, emission, componentDefinitions);
   const serviceTopology = readApplicationServiceTopology(emission.project, emission.typeSystem);
+  const stateCompositions = applicationStateCompositionRows(store, emission, serviceTopology);
   const routeConfigs = emission.routes.readRouteConfigs();
   const files = applicationTopologySummaryFilePaths(
     store,
@@ -431,6 +436,8 @@ export function readSemanticApplicationTopologySummary(
     configuration.appRoots,
     componentDefinitions,
     styleSites,
+    serviceTopology,
+    stateCompositions,
     routeConfigs,
   );
   return {
@@ -448,7 +455,7 @@ export function readSemanticApplicationTopologySummary(
         serviceTopology.injections,
         serviceTopology.interactions,
       ),
-      stateCompositions: applicationStateCompositionRows(store, emission).length,
+      stateCompositions: stateCompositions.length,
       styles: styleSites.length,
       routes: routeConfigs.length,
     },
@@ -1193,6 +1200,8 @@ function applicationFileRows(
   emission: AureliaAppWorldProjectEmission,
   appRoots: readonly SemanticApplicationRootRow[],
   components: readonly SemanticApplicationComponentRow[],
+  services: readonly SemanticApplicationServiceRow[],
+  stateCompositions: readonly SemanticApplicationStateCompositionRow[],
   styles: readonly SemanticApplicationStyleAsset[],
   routes: readonly SemanticApplicationRouteRow[],
 ): readonly SemanticApplicationFileRow[] {
@@ -1235,6 +1244,14 @@ function applicationFileRows(
   for (const route of routes) {
     addRole(route.source, 'route-source');
   }
+  for (const service of services) {
+    addRole(service.source, service.role);
+  }
+  for (const stateComposition of stateCompositions) {
+    if (stateComposition.valueDeclarationRole != null) {
+      addRole(stateComposition.valueDeclarationSource, stateComposition.valueDeclarationRole);
+    }
+  }
   for (const source of emission.project.sourceFiles) {
     const role = supportSourceRoleForPath(source.path);
     if (role == null) {
@@ -1258,6 +1275,8 @@ function applicationTopologySummaryFilePaths(
   appRoots: readonly AppRoot[],
   definitions: readonly CustomElementDefinition[],
   styles: readonly ApplicationStyleAssetSite[],
+  serviceTopology: ApplicationServiceTopology,
+  stateCompositions: readonly SemanticApplicationStateCompositionRow[],
   routes: readonly RouteConfigModel[],
 ): ReadonlySet<string> {
   const files = new Set<string>();
@@ -1281,6 +1300,12 @@ function applicationTopologySummaryFilePaths(
   }
   for (const route of routes) {
     addAddress(route.sourceAddressHandle);
+  }
+  for (const service of serviceTopology.services) {
+    addPath(service.path);
+  }
+  for (const stateComposition of stateCompositions) {
+    addPath(stateComposition.valueDeclarationSourcePath);
   }
   for (const source of emission.project.sourceFiles) {
     if (supportSourceRoleForPath(source.path) != null) {
@@ -1446,6 +1471,9 @@ function applicationServiceInteractionBindingRows(
   const componentClassByElementName = componentClassNameByElementName(components);
   const injectionsByComponentMember = serviceInjectionsByComponentMember(injections);
   const interactionsByComponentMember = serviceInteractionsByComponentMember(interactions);
+  const observedDependenciesByDataFlow = bindingObservedDependenciesByDataFlow(
+    readBindingObservedDependencyRows(emission, store, true),
+  );
   return readBindingDataFlowRows(emission, store, true).flatMap((dataFlow) => [
     ...directInjectionServiceInteractionBindingRowsForDataFlow(
       store,
@@ -1453,6 +1481,7 @@ function applicationServiceInteractionBindingRows(
       dataFlow,
       componentClassByElementName,
       injectionsByComponentMember,
+      observedDependenciesByDataFlow,
     ),
     ...applicationServiceInteractionBindingRowsForDataFlow(
       dataFlow,
@@ -1484,6 +1513,9 @@ function applicationServiceInteractionBindingCount(
   );
   const injectionSitesByComponentMember = serviceInjectionSitesByComponentMember(injections, componentSourcePaths);
   const interactionsByComponentMember = serviceInteractionSitesByComponentMember(interactions, componentSourcePaths);
+  const observedDependenciesByDataFlow = bindingObservedDependenciesByDataFlow(
+    readBindingObservedDependencyRows(emission, store, true),
+  );
   let count = 0;
   for (const dataFlow of readBindingDataFlowRows(emission, store, true)) {
     const componentClassName = componentClassByElementName.get(dataFlow.definitionName) ?? null;
@@ -1498,7 +1530,8 @@ function applicationServiceInteractionBindingCount(
       && (injectionSitesByComponentMember.get(semanticApplicationComponentMemberKey(componentClassName, directRootName)) ?? [])
         .some((injection) => dataFlowRootSlotMatchesSourcePath(store, emission, dataFlow, directRootName, injection.sourcePath))
     ) {
-      count += serviceInteractionOperationKindsForDataFlow(dataFlow).length;
+      count += serviceInteractionOperationKindsForDataFlow(dataFlow).length
+        * serviceInteractionBindingMemberNames(dataFlow, directRootName, observedDependenciesByDataFlow).length;
     }
   }
   return count;
@@ -1587,6 +1620,7 @@ function directInjectionServiceInteractionBindingRowsForDataFlow(
   dataFlow: SemanticBindingDataFlowRow,
   componentClassByElementName: ReadonlyMap<string, string>,
   injectionsByComponentMember: ReadonlyMap<string, readonly SemanticApplicationInjectionRow[]>,
+  observedDependenciesByDataFlow: ReadonlyMap<ProductHandle, readonly SemanticBindingObservedDependencyRow[]>,
 ): readonly SemanticApplicationServiceInteractionBindingRow[] {
   const componentClassName = componentClassByElementName.get(dataFlow.definitionName) ?? null;
   const sourceName = dataFlow.sourceName;
@@ -1604,7 +1638,9 @@ function directInjectionServiceInteractionBindingRowsForDataFlow(
     if (targetRole == null || targetClassName == null) {
       return [];
     }
-    return serviceInteractionOperationKindsForDataFlow(dataFlow).map((operationKind) => ({
+    const memberNames = serviceInteractionBindingMemberNames(dataFlow, sourceRootName, observedDependenciesByDataFlow);
+    return serviceInteractionOperationKindsForDataFlow(dataFlow).flatMap((operationKind) =>
+      memberNames.map((memberName) => ({
       definitionName: dataFlow.definitionName,
       componentClassName,
       bindingSourceKind: dataFlow.sourceKind,
@@ -1615,12 +1651,28 @@ function directInjectionServiceInteractionBindingRowsForDataFlow(
       interactionOperationKind: operationKind,
       interactionTargetRole: targetRole,
       interactionTargetClassName: targetClassName,
-      interactionMemberName: serviceInteractionBindingMemberName(sourceName, sourceRootName),
+      interactionMemberName: memberName,
       interactionIsSelfInteraction: false,
       bindingSource: dataFlow.source,
       interactionSource: injection.source,
-    }));
+    })));
   });
+}
+
+function bindingObservedDependenciesByDataFlow(
+  rows: readonly SemanticBindingObservedDependencyRow[],
+): ReadonlyMap<ProductHandle, readonly SemanticBindingObservedDependencyRow[]> {
+  const rowsByDataFlow = new Map<ProductHandle, SemanticBindingObservedDependencyRow[]>();
+  for (const row of rows) {
+    const dataFlowProductHandle = row.handles?.dataFlowProductHandle ?? null;
+    if (dataFlowProductHandle == null) {
+      continue;
+    }
+    const existing = rowsByDataFlow.get(dataFlowProductHandle) ?? [];
+    existing.push(row);
+    rowsByDataFlow.set(dataFlowProductHandle, existing);
+  }
+  return rowsByDataFlow;
 }
 
 function dataFlowRootSlotMatchesSourcePath(
@@ -1689,6 +1741,7 @@ function serviceInteractionOperationKindsForDataFlow(
     return ['call'];
   }
   switch (dataFlow.direction) {
+    case RuntimeBindingDataFlowDirection.SourceRead:
     case RuntimeBindingDataFlowDirection.SourceToTarget:
       return ['read'];
     case RuntimeBindingDataFlowDirection.TargetToSource:
@@ -1710,6 +1763,46 @@ function serviceInteractionBindingMemberName(sourceName: string, sourceRootName:
     ? sourceName
     : sourceName.slice(sourceRootName.length + 1);
   return stripTrailingCallDisplay(memberName);
+}
+
+function serviceInteractionBindingMemberNames(
+  dataFlow: SemanticBindingDataFlowRow,
+  sourceRootName: string,
+  observedDependenciesByDataFlow: ReadonlyMap<ProductHandle, readonly SemanticBindingObservedDependencyRow[]>,
+): readonly string[] {
+  const sourceName = dataFlow.sourceName;
+  if (sourceName == null) {
+    return [];
+  }
+  if (dataFlow.valueChannelKind === RuntimeBindingValueChannelKind.EventHandlerInvocation) {
+    return [serviceInteractionBindingMemberName(sourceName, sourceRootName)];
+  }
+  const dataFlowProductHandle = dataFlow.handles?.dataFlowProductHandle ?? null;
+  const observedDependencies = dataFlowProductHandle == null
+    ? []
+    : observedDependenciesByDataFlow.get(dataFlowProductHandle) ?? [];
+  const memberNames = uniqueServiceInteractionObservedRootMemberNames(observedDependencies, sourceRootName);
+  return memberNames.length > 0
+    ? memberNames
+    : [serviceInteractionBindingMemberName(sourceName, sourceRootName)];
+}
+
+function uniqueServiceInteractionObservedRootMemberNames(
+  observedDependencies: readonly SemanticBindingObservedDependencyRow[],
+  sourceRootName: string,
+): readonly string[] {
+  const memberNames: string[] = [];
+  const prefix = `${sourceRootName}.`;
+  for (const dependency of observedDependencies) {
+    if (dependency.sourceRootName !== sourceRootName || dependency.sourceName?.startsWith(prefix) !== true) {
+      continue;
+    }
+    const memberName = dependency.sourceName.slice(prefix.length).split(/[.[(]/u)[0] ?? '';
+    if (memberName.length > 0 && !memberNames.includes(memberName)) {
+      memberNames.push(memberName);
+    }
+  }
+  return memberNames;
 }
 
 function stripTrailingCallDisplay(sourceName: string): string {
@@ -1839,15 +1932,17 @@ function applicationPathsReferToSameSource(leftPath: string, rightPath: string):
 function applicationStateCompositionRows(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
+  serviceTopology: ApplicationServiceTopology,
 ): readonly SemanticApplicationStateCompositionRow[] {
   const sourceByPath = sourceAdmissionsByPath(emission.project.sourceFiles);
   const sourcePathByFileName = typeSystemSourcePathIndex(emission.project, emission.typeSystem);
-  const rows = stateSourceClassDeclarations(emission).flatMap((stateClass) =>
+  const rows = stateSourceClassDeclarations(emission, serviceTopology).flatMap((stateClass) =>
     stateCompositionRowsForClass({
       store,
       emission,
       sourceByPath,
       sourcePathByFileName,
+      serviceTopology,
       stateClass,
     })
   );
@@ -1863,6 +1958,7 @@ interface StateCompositionReadContext {
   readonly emission: AureliaAppWorldProjectEmission;
   readonly sourceByPath: ReadonlyMap<string, SourceFileAdmission>;
   readonly sourcePathByFileName: ReadonlyMap<string, string>;
+  readonly serviceTopology: ApplicationServiceTopology;
   readonly stateClass: StateSourceClassDeclaration;
 }
 
@@ -1875,13 +1971,20 @@ interface StateSourceClassDeclaration {
 
 function stateSourceClassDeclarations(
   emission: AureliaAppWorldProjectEmission,
+  serviceTopology: ApplicationServiceTopology,
 ): readonly StateSourceClassDeclaration[] {
+  const stateClassKeys = new Set(
+    serviceTopology.services
+      .filter((service) => service.role === 'state-source')
+      .map((service) => `${service.sourcePath}\0${service.className}`),
+  );
   return emission.project.sourceFiles.flatMap((source) => {
-    if (supportSourceRoleForPath(source.path) !== 'state-source') {
-      return [];
-    }
     const sourceFile = emission.typeSystem.readProgramSourceFileByPath(source.path);
-    return sourceFile == null ? [] : topLevelNamedClasses(source, sourceFile);
+    return sourceFile == null
+      ? []
+      : topLevelNamedClasses(source, sourceFile)
+        .filter((entry) => supportSourceRoleForPath(source.path) === 'state-source'
+          || stateClassKeys.has(`${source.path}\0${entry.ownerClassName}`));
   });
 }
 
@@ -1926,7 +2029,8 @@ function stateCompositionRowForMember(
 
 interface StateCompositionTarget {
   readonly type: ts.Type;
-  readonly symbol: ts.Symbol | null;
+  readonly shapeSymbol: ts.Symbol | null;
+  readonly valueSymbol: ts.Symbol | null;
   readonly valueDeclaration: ts.ClassDeclaration;
   readonly valueDeclarationSourcePath: string;
   readonly valueDeclarationRole: ApplicationFileRole | null;
@@ -1941,8 +2045,10 @@ function stateCompositionTarget(
   if (type == null) {
     return null;
   }
-  const symbol = type.aliasSymbol ?? type.getSymbol() ?? null;
-  const valueDeclaration = symbol?.declarations?.[0] ?? null;
+  const shapeSymbol = type.aliasSymbol ?? type.getSymbol() ?? null;
+  const valueType = stateCompositionValueType(context.emission.typeSystem.checker, type);
+  const valueSymbol = valueType.aliasSymbol ?? valueType.getSymbol() ?? null;
+  const valueDeclaration = valueSymbol?.declarations?.[0] ?? null;
   if (valueDeclaration == null || !ts.isClassDeclaration(valueDeclaration)) {
     return null;
   }
@@ -1952,13 +2058,18 @@ function stateCompositionTarget(
   if (valueDeclarationSourcePath == null) {
     return null;
   }
-  const valueDeclarationRole = supportSourceRoleForPath(valueDeclarationSourcePath);
+  const valueDeclarationRole = stateCompositionValueDeclarationRole(
+    context,
+    valueDeclarationSourcePath,
+    valueDeclaration.name?.text ?? valueSymbol?.getName() ?? null,
+  );
   if (!stateCompositionValueIsLocalStateShape(member, valueDeclarationSourcePath, valueDeclarationRole)) {
     return null;
   }
   return {
     type,
-    symbol,
+    shapeSymbol,
+    valueSymbol,
     valueDeclaration,
     valueDeclarationSourcePath,
     valueDeclarationRole,
@@ -1979,9 +2090,9 @@ function stateCompositionRow(
     memberName,
     memberKind: 'property',
     valueType: emission.typeSystem.checker.typeToString(target.type),
-    valueTypeShapeKind: classifyCheckerTypeShape(target.type, target.symbol),
+    valueTypeShapeKind: classifyCheckerTypeShape(target.type, target.shapeSymbol),
     valueDeclarationKind: 'class',
-    valueDeclarationName: target.valueDeclaration.name?.text ?? target.symbol?.getName() ?? null,
+    valueDeclarationName: target.valueDeclaration.name?.text ?? target.valueSymbol?.getName() ?? null,
     valueDeclarationSourcePath: target.valueDeclarationSourcePath,
     valueDeclarationRole: target.valueDeclarationRole,
     source: sourceSpanReference(
@@ -1995,6 +2106,28 @@ function stateCompositionRow(
       ? null
       : describeAddress(store, target.valueSource.addressHandle),
   };
+}
+
+function stateCompositionValueType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type {
+  return checkerNumberIndexValueType(checker, type) ?? type;
+}
+
+function stateCompositionValueDeclarationRole(
+  context: StateCompositionReadContext,
+  valueDeclarationSourcePath: string,
+  valueDeclarationName: string | null,
+): ApplicationFileRole | null {
+  const role = valueDeclarationName == null
+    ? null
+    : context.serviceTopology.services.find((service) =>
+      service.sourcePath === valueDeclarationSourcePath && service.className === valueDeclarationName
+    )?.role ?? null;
+  return role
+    ?? supportSourceRoleForPath(valueDeclarationSourcePath)
+    ?? 'model-source';
 }
 
 function stateCompositionMemberIsPublic(member: ts.PropertyDeclaration): boolean {

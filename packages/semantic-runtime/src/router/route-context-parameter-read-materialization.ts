@@ -16,6 +16,7 @@ import {
 } from '../kernel/evidence.js';
 import type { AddressHandle, IdentityHandle } from '../kernel/handles.js';
 import { localKeyPart, sourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
+import { uniqueStrings } from '../kernel/collections.js';
 import {
   sourceSpanAddressForSite,
   type SourceSpanAddressPublication,
@@ -469,10 +470,10 @@ function routeParameterFactsByComponentClassName(
       continue;
     }
     const existing = factsByClassName.get(className);
-    const parameterNames = uniqueSorted([
+    const parameterNames = uniqueStrings([
       ...(existing?.routePathParameterNames ?? []),
       ...routePathParameterNames(configurableRoutesByRouteConfig.get(routeConfig.identityHandle) ?? []),
-    ]);
+    ], 'sorted');
     factsByClassName.set(className, {
       component: existing?.component ?? routeConfig.component,
       routeConfigs: [...(existing?.routeConfigs ?? []), routeConfig],
@@ -511,7 +512,7 @@ function routeConfigComponentDefinition(
 function routePathParameterNames(
   configurableRoutes: readonly ConfigurableRouteModel[],
 ): readonly string[] {
-  return uniqueSorted(configurableRoutes.flatMap((route) => route.parameters.map((parameter) => parameter.name)));
+  return uniqueStrings(configurableRoutes.flatMap((route) => route.parameters.map((parameter) => parameter.name)), 'sorted');
 }
 
 function emitRouteContextParameterRead(
@@ -622,8 +623,4 @@ function classElementRouteContextParameterMemberName(
 ): string | null {
   const name = (element as { readonly name?: ts.PropertyName }).name;
   return name == null ? null : readPropertyName(name) ?? name.getText(sourceFile);
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

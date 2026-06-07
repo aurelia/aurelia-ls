@@ -75,6 +75,11 @@ import { appendRuntimeBindingProductValue } from './runtime-binding-product-inde
 import {
   bindingModeForBindingBehaviorName,
 } from './runtime-binding-mode-behavior.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
+
+type RateLimitBindingBehaviorName =
+  | BuiltInBindingBehaviorName.Debounce
+  | BuiltInBindingBehaviorName.Throttle;
 
 export class RuntimeBindingBehaviorMaterializationRequest {
   constructor(
@@ -134,7 +139,7 @@ class RuntimeBindingBehaviorPublication {
 }
 
 class BindingBehaviorBindState {
-  private rateLimitBehaviorName: 'debounce' | 'throttle' | null = null;
+  private rateLimitBehaviorName: RateLimitBindingBehaviorName | null = null;
   private targetSubscriberBehaviorName: string | null = null;
 
   constructor(
@@ -149,12 +154,12 @@ class BindingBehaviorBindState {
     this.currentBindingMode = bindingMode;
   }
 
-  hasDifferentRateLimitBehavior(behaviorName: 'debounce' | 'throttle'): boolean {
+  hasDifferentRateLimitBehavior(behaviorName: RateLimitBindingBehaviorName): boolean {
     return this.rateLimitBehaviorName != null
       && this.rateLimitBehaviorName !== behaviorName;
   }
 
-  markRateLimitBehavior(behaviorName: 'debounce' | 'throttle'): void {
+  markRateLimitBehavior(behaviorName: RateLimitBindingBehaviorName): void {
     this.rateLimitBehaviorName ??= behaviorName;
   }
 
@@ -296,34 +301,34 @@ export class RuntimeBindingBehaviorMaterializer {
       return null;
     }
     switch (behavior.name.name) {
-      case 'attr':
+      case BuiltInBindingBehaviorName.Attr:
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.attr.bind({
           bindingIsPropertyBinding: binding instanceof PropertyBinding,
         }));
-      case 'debounce':
+      case BuiltInBindingBehaviorName.Debounce:
         return this.afterTargetSubscriberEffects(
           behavior.name.name,
           bindState,
           effects,
           this.rateLimitIssue(binding, bindState, this.debounce.name),
         );
-      case 'self':
+      case BuiltInBindingBehaviorName.Self:
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.self.bind({
           bindingIsListenerBinding: binding instanceof ListenerBinding,
         }));
-      case 'signal':
+      case BuiltInBindingBehaviorName.Signal:
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.signal.bind({
           bindingCanHandleChange: bindingSupportsHandleChange(binding),
           signalArgumentCount: behavior.args.length,
         }));
-      case 'throttle':
+      case BuiltInBindingBehaviorName.Throttle:
         return this.afterTargetSubscriberEffects(
           behavior.name.name,
           bindState,
           effects,
           this.rateLimitIssue(binding, bindState, this.throttle.name),
         );
-      case 'updateTrigger':
+      case BuiltInBindingBehaviorName.UpdateTrigger:
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.updateTrigger.bind({
           eventArgumentCount: behavior.args.length,
           bindingIsPropertyBinding: binding instanceof PropertyBinding,
@@ -335,7 +340,7 @@ export class RuntimeBindingBehaviorMaterializer {
             : null,
           targetProperty: binding instanceof PropertyBinding ? binding.target : null,
         }));
-      case 'validate':
+      case BuiltInBindingBehaviorName.Validate:
         if (!resourceResolved) {
           return undefined;
         }
@@ -391,7 +396,7 @@ export class RuntimeBindingBehaviorMaterializer {
   private rateLimitIssue(
     binding: RuntimeBinding,
     bindState: BindingBehaviorBindState,
-    behaviorName: 'debounce' | 'throttle',
+    behaviorName: RateLimitBindingBehaviorName,
   ): BuiltInBindingBehaviorBindIssue | null {
     if (!bindingSupportsRateLimit(binding)) {
       return null;

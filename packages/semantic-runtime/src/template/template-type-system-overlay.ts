@@ -210,6 +210,18 @@ interface OverlayExpressionSourceProjectors {
   readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
 }
 
+/** Mutable build-state for one generated template TypeScript overlay file. */
+interface TemplateTypeSystemOverlayBuildFrame {
+  readonly resource: TemplateResourceRuntimeAnalysisEmission;
+  readonly localKey: string;
+  readonly overlayFileName: string;
+  readonly builder: TypeSystemOverlaySourceBuilder;
+  readonly probes: TemplateTypeSystemOverlayExpressionProbe[];
+  readonly skipped: TemplateTypeSystemOverlaySkippedExpression[];
+  readonly baseExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext;
+  readonly expressionSourceProjectors: OverlayExpressionSourceProjectors;
+}
+
 class TemplateTypeSystemOverlayAliasReplayCursor {
   private currentBindingContextAlias: string | null = '$this';
   private currentParentBindingContextAlias: string | null = null;
@@ -283,37 +295,59 @@ export class TemplateTypeSystemOverlayBuilder {
       fileName: overlayFileName,
       originKey: `template-type-system-overlay:${localKey}`,
     });
-    const probes: TemplateTypeSystemOverlayExpressionProbe[] = [];
-    const skipped: TemplateTypeSystemOverlaySkippedExpression[] = [];
-    const baseExpressionContext = this.expressionProjectionContext(resource, overlayFileName, builder);
-    const expressionSourceProjectors: OverlayExpressionSourceProjectors = {
-      sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
-        resource.runtimeAnalysis.runtimeRendering,
-        instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
-        new RuntimeBindingExpressionScopeProjector(this.store, resource.runtimeAnalysis.expressionWorld),
-      ),
-    };
+    const frame = this.overlayBuildFrame(resource, localKey, overlayFileName, builder);
 
     this.appendHeader(builder, viewModel);
     this.appendRootAliases(builder, resource.runtimeAnalysis.scopes.rootScope, overlayFileName);
+    this.appendTemplateExpressionProbes(frame);
+    this.appendFooter(builder);
+    return new TemplateTypeSystemOverlayEmission(builder.build(), frame.probes, frame.skipped);
+  }
 
+  private overlayBuildFrame(
+    resource: TemplateResourceRuntimeAnalysisEmission,
+    localKey: string,
+    overlayFileName: string,
+    builder: TypeSystemOverlaySourceBuilder,
+  ): TemplateTypeSystemOverlayBuildFrame {
+    return {
+      resource,
+      localKey,
+      overlayFileName,
+      builder,
+      probes: [],
+      skipped: [],
+      baseExpressionContext: this.expressionProjectionContext(resource, overlayFileName, builder),
+      expressionSourceProjectors: {
+        sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
+          resource.runtimeAnalysis.runtimeRendering,
+          instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
+          new RuntimeBindingExpressionScopeProjector(this.store, resource.runtimeAnalysis.expressionWorld),
+        ),
+      },
+    };
+  }
+
+  private appendTemplateExpressionProbes(
+    frame: TemplateTypeSystemOverlayBuildFrame,
+  ): void {
     let index = 0;
-    for (const parse of templateExpressionParsesForResource(resource)) {
-      if (this.expressionParseIsTemplateControllerLocalTarget(resource, parse)) {
+    for (const parse of templateExpressionParsesForResource(frame.resource)) {
+      if (this.expressionParseIsTemplateControllerLocalTarget(frame.resource, parse)) {
         continue;
       }
       for (const expressionSpan of expressionSpansForOverlay(parse)) {
-        const scopes = bindingScopesForTemplateExpressionParse(resource, parse);
-        const bindings = runtimeExpressionBindingsForTemplateExpressionParse(resource, parse);
+        const scopes = bindingScopesForTemplateExpressionParse(frame.resource, parse);
+        const bindings = runtimeExpressionBindingsForTemplateExpressionParse(frame.resource, parse);
         const expressionScopes = scopes.length === 0
-          ? [resource.runtimeAnalysis.scopes.rootScope]
+          ? [frame.resource.runtimeAnalysis.scopes.rootScope]
           : scopes;
         for (const scope of expressionScopes) {
           const scopedBindings = bindings.length === 0
             ? []
-            : runtimeExpressionBindingsForTemplateExpressionParseInScope(resource, parse, scope);
+            : runtimeExpressionBindingsForTemplateExpressionParseInScope(frame.resource, parse, scope);
           if (bindings.length > 0 && scopedBindings.length === 0) {
-            skipped.push(skippedTemplateTypeSystemOverlayExpression(
+            frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
               TemplateTypeSystemOverlaySkippedReason.UnsupportedExpressionSyntax,
               parse.productHandle,
               expressionSpan.span,
@@ -321,72 +355,80 @@ export class TemplateTypeSystemOverlayBuilder {
             ));
             continue;
           }
-          const expression = this.copyRuntimeSourceExpression(
-            expressionSpan.ast,
-            parse.productHandle,
-            scope,
-            scopedBindings,
-            expressionSourceProjectors,
-            baseExpressionContext,
-            overlayFileName,
-            `${localKey}:overlay-expression:${index}`,
-          );
-          if (expression.kind === TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax) {
-            skipped.push(skippedTemplateTypeSystemOverlayExpression(
-              TemplateTypeSystemOverlaySkippedReason.UnsupportedExpressionSyntax,
-              parse.productHandle,
-              expressionSpan.span,
-              expression.unsupportedSyntax?.summary ?? 'Template expression is not representable in a TypeScript overlay yet.',
-            ));
-            continue;
-          }
-          if (expression.kind === TemplateTypeSystemOverlayExpressionProjectionKind.MissingSource) {
-            skipped.push(skippedTemplateTypeSystemOverlayExpression(
-              TemplateTypeSystemOverlaySkippedReason.MissingExpressionSource,
-              parse.productHandle,
-              expressionSpan.span,
-              'Template expression had no readable authored source text.',
-            ));
-            continue;
-          }
-          const localName = `__au_expr_${index}`;
-          const layers = this.scopeLayers(
-            resource,
-            scope,
-            skipped,
-            parse,
-            baseExpressionContext,
-            expressionSourceProjectors,
-            overlayFileName,
-          );
-          if (layers == null) {
-            continue;
-          }
-          const block = appendTemplateTypeSystemOverlayScopeBlock(builder, layers);
-          builder.append(`${block.indent}const ${localName} = `);
-          appendTemplateTypeSystemOverlayExpressionProjection(builder, expression, `template expression ${index}`);
-          builder
-            .append(';\n')
-            .append(`${block.indent}void ${localName};\n`);
-          for (let close = 0; close < block.closeCount; close += 1) {
-            const indent = '  '.repeat(block.closeCount - close - 1);
-            builder.append(`${indent}}\n`);
-          }
-          probes.push({
-            localName,
-            expressionText: expression.text,
-            semanticProductHandle: projectionSemanticProductHandle(expression),
-            sourceAddressHandle: projectionSourceAddressHandle(expression, expressionSpan.span),
-            sourceStart: projectionSourceStart(expression, expressionSpan.span),
-            sourceEnd: projectionSourceEnd(expression, expressionSpan.span),
-          });
-          index += 1;
+          index = this.appendTemplateExpressionProbe(frame, parse, expressionSpan, scope, scopedBindings, index);
         }
       }
     }
+  }
 
-    this.appendFooter(builder);
-    return new TemplateTypeSystemOverlayEmission(builder.build(), probes, skipped);
+  private appendTemplateExpressionProbe(
+    frame: TemplateTypeSystemOverlayBuildFrame,
+    parse: TemplateExpressionParse,
+    expressionSpan: OverlayExpressionSpan,
+    scope: BindingScope,
+    scopedBindings: readonly RuntimeExpressionBinding[],
+    index: number,
+  ): number {
+    const expression = this.copyRuntimeSourceExpression(
+      expressionSpan.ast,
+      parse.productHandle,
+      scope,
+      scopedBindings,
+      frame.expressionSourceProjectors,
+      frame.baseExpressionContext,
+      frame.overlayFileName,
+      `${frame.localKey}:overlay-expression:${index}`,
+    );
+    if (expression.kind === TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax) {
+      frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
+        TemplateTypeSystemOverlaySkippedReason.UnsupportedExpressionSyntax,
+        parse.productHandle,
+        expressionSpan.span,
+        expression.unsupportedSyntax?.summary ?? 'Template expression is not representable in a TypeScript overlay yet.',
+      ));
+      return index;
+    }
+    if (expression.kind === TemplateTypeSystemOverlayExpressionProjectionKind.MissingSource) {
+      frame.skipped.push(skippedTemplateTypeSystemOverlayExpression(
+        TemplateTypeSystemOverlaySkippedReason.MissingExpressionSource,
+        parse.productHandle,
+        expressionSpan.span,
+        'Template expression had no readable authored source text.',
+      ));
+      return index;
+    }
+    const layers = this.scopeLayers(
+      frame.resource,
+      scope,
+      frame.skipped,
+      parse,
+      frame.baseExpressionContext,
+      frame.expressionSourceProjectors,
+      frame.overlayFileName,
+    );
+    if (layers == null) {
+      return index;
+    }
+    const localName = `__au_expr_${index}`;
+    const block = appendTemplateTypeSystemOverlayScopeBlock(frame.builder, layers);
+    frame.builder.append(`${block.indent}const ${localName} = `);
+    appendTemplateTypeSystemOverlayExpressionProjection(frame.builder, expression, `template expression ${index}`);
+    frame.builder
+      .append(';\n')
+      .append(`${block.indent}void ${localName};\n`);
+    for (let close = 0; close < block.closeCount; close += 1) {
+      const indent = '  '.repeat(block.closeCount - close - 1);
+      frame.builder.append(`${indent}}\n`);
+    }
+    frame.probes.push({
+      localName,
+      expressionText: expression.text,
+      semanticProductHandle: projectionSemanticProductHandle(expression),
+      sourceAddressHandle: projectionSourceAddressHandle(expression, expressionSpan.span),
+      sourceStart: projectionSourceStart(expression, expressionSpan.span),
+      sourceEnd: projectionSourceEnd(expression, expressionSpan.span),
+    });
+    return index + 1;
   }
 
   private appendHeader(

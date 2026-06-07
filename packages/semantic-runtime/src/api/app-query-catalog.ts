@@ -36,6 +36,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.RuntimeEffectObservedDependencies, 'observation', 'Expression, function-key, and synchronous RunEffect dependency reads collected by direct Observation source effects.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.ProxyObservableEscapes, 'observation', 'Source-level ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) escape calls.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.StateStores, 'state', 'Discovered state-store products and state ownership rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.StateGetterBindings, 'state', '@fromState-created StateGetterBinding rows with store resolution and selector/target type projection.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.StateIssues, 'state', 'State modeling issues and state-source diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.I18nTranslationKeys, 'i18n', 'Static i18n translation keys admitted from I18nConfiguration init resources.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.I18nTranslationBindings, 'i18n', 'Rendered i18n TranslationBinding target groups and lifecycle issue counts.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
@@ -72,6 +73,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.BindingValueChannelSummary, 'binding', 'Grouped runtime value-channel and observer-coupling mechanisms for compact form/control explanation.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingDataFlows, 'binding', 'Source-to-target and target-to-source binding data-flow rows with TypeChecker pressure.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingDataFlowSummary, 'binding', 'Grouped binding data-flow directions, value channels, assignability, and writeback pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.ControlUseInventory, 'controls', 'Concrete authored native/control uses classified through runtime binding value-channel, data-flow, static submit-control, static route-link, and static message products.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingObservedDependencySummary, 'binding', 'Grouped binding observed-dependency reads, source roots, member source states, and source-backed observation pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingObservedDependencies, 'binding', 'Source-side expression dependency reads collected through template connectable observation during binding evaluation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
 ] satisfies readonly SemanticAppQueryCatalogRow[];
@@ -144,6 +146,14 @@ export function semanticAppQueryCatalogRow(
     throw new Error(`Semantic app query catalog is missing '${queryKind}'.`);
   }
   return row;
+}
+
+/** Resolve query catalog rows in catalog order for selected public app-query kinds. */
+export function semanticAppQueryCatalogRowsForKinds(
+  queryKinds: readonly (SemanticAppQueryKind | `${SemanticAppQueryKind}`)[],
+): readonly SemanticAppQueryCatalogRow[] {
+  const selected = new Set(queryKinds);
+  return semanticAppQueryCatalogRows.filter((row) => selected.has(row.queryKind));
 }
 
 /** Drop query envelope fields that the target catalog row cannot consume. */

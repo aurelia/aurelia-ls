@@ -6,6 +6,12 @@
   <button repeat.for="product of products" type="button" load.bind="'/products/' + product.id">
     Load ${product.name}
   </button>
+  <button type="button" load="route: product-detail; params.bind: { productId: 'espresso' }">
+    Inline espresso
+  </button>
+  <button repeat.for="product of products" type="button" load="route: product-detail; params.bind: { productId: product.id }">
+    Inline ${product.name}
+  </button>
   <a href="${stateBackedHref('state-coffee')}">State Coffee</a>
   <a repeat.for="product of products" href="${stateBackedHref(product.id)}">
     State lookup ${product.name}

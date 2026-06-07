@@ -16,6 +16,7 @@ import {
 } from '../type-system/type-shape.js';
 import {
   BuiltInResourcePackage,
+  builtInResourcePackageModuleSpecifier,
   type BuiltInResource,
 } from './built-in-resources.js';
 
@@ -80,20 +81,7 @@ function builtInResourceModuleSpecifiers(
 function builtInResourcePublicModuleSpecifier(
   packageId: BuiltInResourcePackage,
 ): string | null {
-  switch (packageId) {
-    case BuiltInResourcePackage.RuntimeHtml:
-      return '@aurelia/runtime-html';
-    case BuiltInResourcePackage.I18n:
-      return '@aurelia/i18n';
-    case BuiltInResourcePackage.Router:
-      return '@aurelia/router';
-    case BuiltInResourcePackage.UiVirtualization:
-      return '@aurelia/ui-virtualization';
-    case BuiltInResourcePackage.State:
-      return '@aurelia/state';
-    case BuiltInResourcePackage.ValidationHtml:
-      return '@aurelia/validation-html';
-  }
+  return builtInResourcePackageModuleSpecifier(packageId);
 }
 
 function builtInResourceInternalModuleSpecifier(

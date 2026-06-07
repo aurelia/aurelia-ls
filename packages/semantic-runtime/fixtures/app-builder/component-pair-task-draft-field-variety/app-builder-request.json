@@ -1,0 +1,385 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-draft-fields.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-draft-field-variety-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task draft field variety explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "saveDraft",
+                      "kind": "save",
+                      "scope": "form",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "description",
+                      "title": "Description",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "estimateHours",
+                      "title": "Estimate Hours",
+                      "valueKind": "number",
+                      "numericConstraints": {
+                        "minimum": 0,
+                        "maximum": 40,
+                        "step": 1
+                      }
+                    },
+                    {
+                      "name": "progressPercent",
+                      "title": "Progress",
+                      "valueKind": "number",
+                      "numericConstraints": {
+                        "minimum": 0,
+                        "maximum": 100,
+                        "step": 5
+                      }
+                    },
+                    {
+                      "name": "dueDate",
+                      "title": "Due Date",
+                      "valueKind": "date"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "name": "priority",
+                      "title": "Priority",
+                      "valueKind": "choice",
+                      "defaultValue": "normal",
+                      "options": [
+                        {
+                          "value": "low",
+                          "title": "Low"
+                        },
+                        {
+                          "value": "normal",
+                          "title": "Normal"
+                        },
+                        {
+                          "value": "urgent",
+                          "title": "Urgent"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reviewType",
+                      "title": "Review Type",
+                      "valueKind": "choice",
+                      "defaultValue": "manual",
+                      "options": [
+                        {
+                          "value": "manual",
+                          "title": "Manual"
+                        },
+                        {
+                          "value": "automated",
+                          "title": "Automated"
+                        },
+                        {
+                          "value": "peer",
+                          "title": "Peer"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "labels",
+                      "title": "Labels",
+                      "valueKind": "choice-set",
+                      "options": [
+                        {
+                          "value": "frontend",
+                          "title": "Frontend"
+                        },
+                        {
+                          "value": "review",
+                          "title": "Review"
+                        },
+                        {
+                          "value": "docs",
+                          "title": "Docs"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "checkpoints",
+                      "title": "Checkpoints",
+                      "valueKind": "choice-set",
+                      "options": [
+                        {
+                          "value": "requirements",
+                          "title": "Requirements"
+                        },
+                        {
+                          "value": "implementation",
+                          "title": "Implementation"
+                        },
+                        {
+                          "value": "review",
+                          "title": "Review"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Field Variety",
+                    "baseName": "Task Draft Fields"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-draft-fields.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "control-accessibility",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "title",
+                    "helpText": "Enter a short task title before saving the draft."
+                  }
+                },
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "description",
+                    "helpText": "Describe the expected outcome in one or two sentences."
+                  }
+                },
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "progressPercent",
+                    "statusText": "Use the slider to capture a rough completion signal."
+                  }
+                },
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "priority",
+                    "helpText": "Pick the urgency that should drive review order."
+                  }
+                },
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "reviewType",
+                    "helpText": "Choose the review mode that fits the task."
+                  }
+                },
+                {
+                  "inputFacetId": "accessibility-help-error",
+                  "value": {
+                    "fieldName": "checkpoints",
+                    "statusText": "Select every checkpoint already completed."
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "native-submit-form"
+                },
+                {
+                  "kind": "control-pattern",
+                  "domain": "control",
+                  "id": "field-group"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "task-form"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "native-submit-form"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "field-group",
+                      "classTokens": [
+                        "task-form__field"
+                      ]
+                    },
+                    {
+                      "target": "field-label",
+                      "classTokens": [
+                        "task-form__label"
+                      ]
+                    },
+                    {
+                      "target": "field-control",
+                      "classTokens": [
+                        "task-form__control"
+                      ]
+                    },
+                    {
+                      "target": "field-message",
+                      "classTokens": [
+                        "task-form__message"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "saveDraft",
+                      "classTokens": [
+                        "task-form__submit"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-action",
+                          "value": "save-draft"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": "native-submit-form",
+        "fieldNames": [
+          "title",
+          "description",
+          "estimateHours",
+          "progressPercent",
+          "dueDate",
+          "done",
+          "priority",
+          "labels",
+          "reviewType",
+          "checkpoints"
+        ],
+        "fieldControlSelections": [
+          {
+            "fieldName": "description",
+            "innerControlPatternId": "native-textarea"
+          },
+          {
+            "fieldName": "progressPercent",
+            "innerControlPatternId": "native-range-input"
+          },
+          {
+            "fieldName": "reviewType",
+            "innerControlPatternId": "native-radio-group"
+          },
+          {
+            "fieldName": "checkpoints",
+            "innerControlPatternId": "native-checkbox-list"
+          }
+        ],
+        "actionName": "saveDraft",
+        "submitButtonText": "Save draft"
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "saveDraft",
+          "methodBodyStatements": "this.title = this.title.trim();\nthis.description = this.description.trim();"
+        }
+      ]
+    }
+  }
+}

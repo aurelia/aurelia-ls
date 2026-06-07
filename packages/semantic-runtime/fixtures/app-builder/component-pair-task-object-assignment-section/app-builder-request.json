@@ -1,0 +1,326 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-object-assignment-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-object-assignment-section-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task object assignment section component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Contact",
+                      "entityTypeName": "ContactEntry",
+                      "collectionMemberName": "contacts",
+                      "identityMemberName": "contactId",
+                      "identityValueKind": "string"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "targetEntityName": "TaskItem",
+                      "inputFieldNames": [
+                        "title",
+                        "done",
+                        "assignee"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "assignee",
+                      "title": "Assignee",
+                      "kind": "reference-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "assignee",
+                      "localValueKind": "object",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": true
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Object Assignment Section",
+                    "baseName": "Task Object Assignment Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-object-assignment-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state",
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "relationshipName": "assignee",
+                      "header": "Assignee",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "task-object-assignment"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "app-section"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "task-object-assignment__form"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "task-object-assignment__table"
+                      ]
+                    },
+                    {
+                      "target": "collection-empty-state",
+                      "classTokens": [
+                        "task-object-assignment__empty"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "records": [
+                        {
+                          "id": 1,
+                          "title": "Prepare release notes",
+                          "done": false,
+                          "assignee": "ada"
+                        },
+                        {
+                          "id": 2,
+                          "title": "Check deployment checklist",
+                          "done": true,
+                          "assignee": "grace"
+                        }
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "records": [
+                        {
+                          "contactId": "ada",
+                          "fullName": "Ada Lovelace",
+                          "email": "ada@example.test"
+                        },
+                        {
+                          "contactId": "grace",
+                          "fullName": "Grace Hopper",
+                          "email": "grace@example.test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "native-submit-form"
+            },
+            "compositionKind": "native-submit-form",
+            "fieldNames": [
+              "title",
+              "done"
+            ],
+            "relationshipNames": [
+              "assignee"
+            ],
+            "relationshipControlSelections": [
+              {
+                "relationshipName": "assignee",
+                "innerControlPatternId": "native-single-select",
+                "bindingExpression": "assignee",
+                "fieldControlId": "task-assignee-select",
+                "labelText": "Assignee",
+                "valueDomainExpression": "contacts",
+                "optionLocalName": "contact",
+                "optionBindingKind": "model",
+                "optionValueExpression": "contact",
+                "optionLabelExpression": "contact.fullName",
+                "matcherExpression": "matchContactEntry"
+              }
+            ],
+            "actionName": "create",
+            "submitButtonText": "Create task"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "collection-table"
+            },
+            "compositionKind": "collection-table",
+            "collectionExpression": "taskItems",
+            "itemLocalName": "taskItem",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "taskItems.length === 0"
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "create"
+        }
+      ]
+    }
+  }
+}

@@ -36,7 +36,6 @@ import {
   type FrameworkCorpusDocSnippetRow,
   type FrameworkCorpusExpectedEffectDescriptorRow,
   type FrameworkCorpusFixtureSeedRow,
-  type FrameworkCorpusLegacyPackageRow,
   type FrameworkCorpusTestRow,
   type FrameworkCorpusTestSnippetRow,
 } from "./framework-corpus-analysis.js";
@@ -56,9 +55,9 @@ import {
   normalizeFrameworkCorpusClassificationFilter,
 } from "./framework-corpus-classification.js";
 import {
-  frameworkCorpusFixtureSeedMatchesRecipeFilter,
-  frameworkCorpusFixtureSeedRecipeFilterScore,
-} from "./framework-corpus-recipe-matching.js";
+  frameworkCorpusFixtureSeedAppPatternFilterScore,
+  frameworkCorpusFixtureSeedMatchesAppPatternFilter,
+} from "./framework-corpus-app-pattern-matching.js";
 import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 
 export interface FrameworkCorpusValue {
@@ -69,7 +68,6 @@ export interface FrameworkCorpusValue {
   readonly docSnippets?: readonly FrameworkCorpusDocSnippetRow[];
   readonly tests?: readonly FrameworkCorpusTestRow[];
   readonly testSnippets?: readonly FrameworkCorpusTestSnippetRow[];
-  readonly legacyPackages?: readonly FrameworkCorpusLegacyPackageRow[];
   readonly expectedEffectDescriptors?: readonly FrameworkCorpusExpectedEffectDescriptorRow[];
   readonly fixtureSeeds?: readonly FrameworkCorpusFixtureSeedRow[];
 }
@@ -80,7 +78,6 @@ type FrameworkCorpusProjection =
   | "doc-snippets"
   | "tests"
   | "test-snippets"
-  | "legacy"
   | "expected-effects"
   | "fixture-seeds";
 
@@ -137,16 +134,6 @@ export function answerFrameworkCorpus(
         evidenceForTestSnippetRow,
         sourceForCorpusRow,
       );
-    case "legacy":
-      return answerFrameworkCorpusRows(
-        inquiry,
-        "framework.corpus:legacy",
-        "legacy replacement package row(s)",
-        filterLegacyPackageRows(analysis.legacyPackages, inquiry),
-        basis,
-        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), legacyPackages: rows }),
-        evidenceForLegacyPackageRow,
-      );
     case "expected-effects":
       return answerFrameworkCorpusRows(
         inquiry,
@@ -189,7 +176,7 @@ function answerFrameworkCorpusSummary(
   return createAnswer(
     inquiry,
     OutcomeKind.Hit,
-    `Read ${analysis.rollup.docFileCount} doc file(s), ${analysis.rollup.docSnippetCount} doc snippet(s), ${analysis.rollup.testFileCount} framework test file(s), ${analysis.rollup.testSnippetCount} framework test snippet(s), and ${analysis.rollup.legacyPackageCount} legacy package row(s). ${analysis.sourceState.summary}`,
+    `Read ${analysis.rollup.docFileCount} doc file(s), ${analysis.rollup.docSnippetCount} doc snippet(s), ${analysis.rollup.testFileCount} framework test file(s), and ${analysis.rollup.testSnippetCount} framework test snippet(s). ${analysis.sourceState.summary}`,
     {
       value: {
         ...frameworkSourceStateBaseValue(analysis),
@@ -248,7 +235,6 @@ function frameworkCorpusProjection(
     case "doc-snippets":
     case "tests":
     case "test-snippets":
-    case "legacy":
     case "expected-effects":
     case "fixture-seeds":
       return inquiry.projection;
@@ -343,24 +329,6 @@ function filterTestSnippetRows(
   );
 }
 
-function filterLegacyPackageRows(
-  rows: readonly FrameworkCorpusLegacyPackageRow[],
-  inquiry: Inquiry,
-): readonly FrameworkCorpusLegacyPackageRow[] {
-  const filters = frameworkCorpusFilters(inquiry);
-  return rows.filter((row) =>
-    (filters.path === undefined || row.packagePath.includes(filters.path)) &&
-    corpusQueryMatches(filters, [
-      row.id,
-      row.packagePath,
-      row.name ?? "",
-      row.summary,
-      ...row.aureliaDependencies,
-      ...row.topSourceGroups.map((group) => group.name),
-    ]),
-  );
-}
-
 function filterExpectedEffectDescriptorRows(
   rows: readonly FrameworkCorpusExpectedEffectDescriptorRow[],
   inquiry: Inquiry,
@@ -397,7 +365,7 @@ function filterFixtureSeedRows(
     (filters.seedUse === undefined || row.seedUse === filters.seedUse) &&
     (filters.effectKind === undefined || row.effectHints.some((effect) => effect === filters.effectKind)) &&
     matchesExpectedEffectFilter(row, filters) &&
-    frameworkCorpusFixtureSeedMatchesRecipeFilter(row, filters.recipeKey) &&
+    frameworkCorpusFixtureSeedMatchesAppPatternFilter(row, filters.appPatternKey) &&
     frameworkCorpusFixtureSeedMatchesClassification(row, filters) &&
     (filters.language === undefined || row.language === filters.language) &&
     (filters.snippetKind === undefined || row.snippetKind === filters.snippetKind) &&
@@ -484,9 +452,9 @@ function fixtureSeedFilterFocusScore(
       score += runtimeCompositionFixtureSeedFocusScore(row);
     }
   }
-  const recipeFilterScore = frameworkCorpusFixtureSeedRecipeFilterScore(row, filters.recipeKey);
-  if (recipeFilterScore > 0) {
-    score += recipeFilterScore === 2 ? 30 : 18;
+  const appPatternFilterScore = frameworkCorpusFixtureSeedAppPatternFilterScore(row, filters.appPatternKey);
+  if (appPatternFilterScore > 0) {
+    score += appPatternFilterScore === 2 ? 30 : 18;
   }
   if (
     filters.classificationKind !== undefined &&
@@ -558,7 +526,7 @@ function runtimeCompositionFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeed
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "au-compose")) {
     score += 80;
   }
-  if (row.recipeHints.includes("composed-dashboard")) {
+  if (row.appPatternHints.includes("dynamic-composition-surface")) {
     score += 80;
   }
   if (path.includes("dynamic-composition")) {
@@ -675,7 +643,7 @@ interface FrameworkCorpusFilters {
   readonly effectKind?: string;
   readonly effectRole?: string;
   readonly effectSeedPolicy?: string;
-  readonly recipeKey?: string;
+  readonly appPatternKey?: string;
   readonly classificationKind?: string;
   readonly classificationKey?: string;
   readonly expectedEffectFilterField?: string;
@@ -697,7 +665,7 @@ function frameworkCorpusFilters(inquiry: Inquiry): FrameworkCorpusFilters {
     effectKind: inquiryStringFilter(inquiry, "effectKind"),
     effectRole: inquiryStringFilter(inquiry, "effectRole"),
     effectSeedPolicy: inquiryStringFilter(inquiry, "effectSeedPolicy"),
-    recipeKey: inquiryStringFilter(inquiry, "recipeKey"),
+    appPatternKey: inquiryStringFilter(inquiry, "appPatternKey"),
     classificationKind: inquiryStringFilter(inquiry, "classificationKind"),
     classificationKey: inquiryStringFilter(inquiry, "classificationKey"),
     expectedEffectFilterField: inquiryStringFilter(inquiry, "expectedEffectFilterField"),
@@ -837,24 +805,6 @@ function evidenceForTestSnippetRow(row: FrameworkCorpusTestSnippetRow): Evidence
   );
 }
 
-function evidenceForLegacyPackageRow(
-  row: FrameworkCorpusLegacyPackageRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.MaintenanceSignal,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Strong,
-    summary: row.summary,
-    data: {
-      packagePath: row.packagePath,
-      sourceFiles: row.sourceFiles,
-      sourceLines: row.sourceLines,
-      aureliaDependencies: row.aureliaDependencies,
-    },
-  };
-}
-
 function evidenceForExpectedEffectDescriptorRow(
   row: FrameworkCorpusExpectedEffectDescriptorRow,
 ): Evidence {
@@ -873,7 +823,7 @@ function evidenceForFixtureSeedRow(row: FrameworkCorpusFixtureSeedRow): Evidence
     .join(", ");
   return sourceEvidence(
     row.id,
-    `${row.sourceKind} fixture seed at ${row.filePath}:${row.source.start.line + 1} hints expected effects ${row.effectHints.join(", ") || "<none>"} and recipes ${row.recipeHints.join(", ") || "<none>"}; reasons ${reasonSummary || "<none>"}.`,
+    `${row.sourceKind} fixture seed at ${row.filePath}:${row.source.start.line + 1} hints expected effects ${row.effectHints.join(", ") || "<none>"} and app patterns ${row.appPatternHints.join(", ") || "<none>"}; reasons ${reasonSummary || "<none>"}.`,
     row.source,
   );
 }
@@ -902,7 +852,7 @@ function frameworkCorpusBasis(sourceProject: SourceProject): readonly Basis[] {
       freshness: BasisFreshness.Live,
       identity: sourceProject.snapshot().identity,
       summary:
-        "Scanned the local Aurelia documentation, framework test corpus, and legacy package roots as fixture and authoring pressure seeds.",
+        "Scanned the local Aurelia documentation and framework test corpus as fixture and authoring pressure seeds.",
       limitations: [
         "Concept tags are lexical steering signals for fixture selection, not proof of framework semantics.",
         "Documentation and framework test files are not all admitted into the TypeScript Program, so source evidence may point at filesystem text rather than checker-backed declarations.",
@@ -971,7 +921,6 @@ function frameworkCorpusContinuations(inquiry: Inquiry): readonly Continuation[]
     corpusProjectionContinuation(inquiry, "doc-snippets", "Inspect documentation code fences as fixture recipe seeds."),
     corpusProjectionContinuation(inquiry, "tests", "Inspect framework test files as behavior-grounding pressure."),
     corpusProjectionContinuation(inquiry, "test-snippets", "Inspect framework test call sites and fixture examples."),
-    corpusProjectionContinuation(inquiry, "legacy", "Inspect legacy package replacement inventory."),
     corpusProjectionContinuation(inquiry, "expected-effects", "Inspect semantic-runtime expected-effect contracts used to interpret fixture seed hints."),
     corpusProjectionContinuation(inquiry, "fixture-seeds", "Inspect docs/test snippets ranked as authoring fixture seeds with expected-effect hints."),
   ];

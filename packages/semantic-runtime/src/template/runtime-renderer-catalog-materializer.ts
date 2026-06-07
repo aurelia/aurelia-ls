@@ -646,6 +646,7 @@ function runtimeRendererCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
       case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
+      case FrameworkRegistrationCapability.UiVirtualizationServiceResolvers:
       case FrameworkRegistrationCapability.AppTask:
         break;
     }

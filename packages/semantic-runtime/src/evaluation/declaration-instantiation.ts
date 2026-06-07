@@ -1,6 +1,5 @@
 import ts from 'typescript';
 
-import { readStaticClassProperties, type StaticClassEvaluationHost } from './class-values.js';
 import {
   EvaluationBindingKind,
   type ModuleEnvironmentRecord,
@@ -8,15 +7,12 @@ import {
 import type { StaticEvaluationImportValues } from './evaluator.js';
 import { EvaluationOpenSeamKind } from './seams.js';
 import {
-  EvaluationClassValue,
   EvaluationFunctionValue,
   EvaluationUnknownValue,
 } from './values.js';
 import { hasModifier } from './ts-syntax.js';
 
 export interface StaticDeclarationInstantiationHost {
-  readonly classHost: StaticClassEvaluationHost;
-
   open(
     seamKind: EvaluationOpenSeamKind,
     summary: string,
@@ -25,7 +21,7 @@ export interface StaticDeclarationInstantiationHost {
   ): void;
 }
 
-/** Instantiate import, function, and class bindings before a module body executes. */
+/** Instantiate import/function bindings and declare class lexical cells before a module body executes. */
 export function instantiateStaticModuleDeclarations(
   sourceFile: ts.SourceFile,
   environment: ModuleEnvironmentRecord,
@@ -48,14 +44,8 @@ export function instantiateStaticModuleDeclarations(
       if (localName == null) {
         continue;
       }
-      environment.initializeBinding(
+      environment.declareBinding(
         localName,
-        new EvaluationClassValue(
-          statement,
-          environment,
-          statement,
-          readStaticClassProperties(statement, environment, moduleKey, 0, host.classHost),
-        ),
         EvaluationBindingKind.Class,
         false,
         statement,

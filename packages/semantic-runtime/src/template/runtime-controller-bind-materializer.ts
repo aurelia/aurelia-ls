@@ -22,6 +22,10 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { StateStoreConfiguration } from '../state/model.js';
+import {
+  configuredStateStoreForName,
+} from '../state/state-store-identity.js';
 import { HtmlElement, HtmlText } from './html-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
@@ -84,6 +88,8 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly resourceScope: TemplateResourceScope | null;
   /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
   readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
+  /** App-authored @aurelia/state store configurations visible to binding-source operation analysis. */
+  readonly stateStores?: readonly StateStoreConfiguration[] | null;
 }
 
 export class RuntimeControllerBindEmission {
@@ -545,11 +551,12 @@ export class RuntimeControllerBindMaterializer {
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
     if (binding instanceof StateDispatchBinding) {
+      const configuredStore = configuredStateStoreForName(input.stateStores ?? [], binding.storeName);
       return new RuntimeBindingSourceOperationTarget(
         RuntimeBindingTargetKind.StateStore,
         null,
         null,
-        null,
+        configuredStore?.initialStateType ?? null,
         null,
       );
     }

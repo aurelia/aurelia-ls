@@ -1,0 +1,423 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-router-backed-list-detail",
+  "appPatternKey": "app-builder-source-lowering-router-backed-list-detail",
+  "expectedEffects": [
+    {
+      "summary": "App-builder routed collection/detail SourcePlan has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder routed collection/detail SourcePlan has TypeScript project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder routed collection/detail SourcePlan has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should expose the injected state class in app topology.",
+      "topologyNodeKind": "state-model",
+      "effectKind": "service-class",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "discriminator",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should expose composed domain entities owned by state.",
+      "topologyNodeKind": "domain-model",
+      "effectKind": "state-composition",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "valueDeclarationRole",
+          "value": "model-source",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should register router options.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should use route decorator object-literal configs.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should use child route object-literal configs.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "child-routes-property",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail list route config should target the main viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "viewport",
+          "value": "main",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail child route config should target the nested detail viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "viewport",
+          "value": "detail",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail shell should declare the main au-viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "name",
+          "value": "main",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail list route should declare the nested detail au-viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "name",
+          "value": "detail",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail route pattern should expose its route parameter.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail route endpoint should expose its route parameter.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail detail route should read the route parameter.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context-parameter-read",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "routePathParameterNames",
+          "value": "itemId",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail list should read state collection through repeat iteration.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "sourceRootName",
+          "value": "state",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "template-controller-iteration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail templates should read through DI state/domain objects.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "service-interaction-binding",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 2,
+      "filters": [
+        {
+          "field": "interactionTargetRole",
+          "value": "state-source",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should compile route templates.",
+      "topologyNodeKind": null,
+      "effectKind": "template-compilation",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should hydrate runtime controllers.",
+      "topologyNodeKind": null,
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Routed collection/detail SourcePlan should have no open semantic seams.",
+      "topologyNodeKind": null,
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "cardinality": "absent",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    }
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "router-backed-list-detail"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "sourceLoweringSourcePlan.rootDir",
+      "ownerKind": "source-plan",
+      "fieldId": "root-dir",
+      "requestFieldName": "rootDir",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringRouterBackedListDetail",
+      "ownerKind": "source-plan",
+      "fieldId": "source-lowering-router-backed-list-detail",
+      "requestFieldName": "sourceLoweringRouterBackedListDetail",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 2
+      }
+    }
+  ]
+}

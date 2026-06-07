@@ -40,6 +40,17 @@ export function sourceText(text: string): string {
   return text.replace(/\r\n/g, '\n');
 }
 
+/** Normalize caller-supplied source text input by trimming whitespace and treating empty text as absent. */
+export function normalizedSourceInputText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** Emit a single-quoted TypeScript string literal for small generated source fragments. */
+export function singleQuotedTypeScriptStringLiteralText(value: string): string {
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
 export function indentSourceLines(text: string, indent: string): string {
   return text.split('\n').map((line) => line.length === 0 ? '' : `${indent}${line}`).join('\n');
 }

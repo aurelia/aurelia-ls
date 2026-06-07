@@ -1,0 +1,17 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Done</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of taskItems">
+      <td>${taskItem.title}</td>
+      <td>
+        <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+      </td>
+    </tr>
+  </tbody>
+</table>

@@ -28,12 +28,16 @@ import {
   RouteRecognizerSegmentKind,
   RouteRecognizerStateKind,
   StateModel,
-  type RouteRecognizerSegmentModel,
   StarSegmentModel,
   StaticSegmentModel,
   type RouteConfigContextModel,
   type RouteConfigModel,
 } from './model.js';
+import {
+  parseConfigurableRoutePath,
+  ROUTE_RECOGNIZER_RESIDUE_PARAMETER,
+  type ConfigurableRouteParse,
+} from './route-configurable-path.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
 import {
   requiredRouteConfigForContext,
@@ -45,9 +49,11 @@ import {
   type RouteRecognizerRawErrorAuthority as RouteRecognizerRawErrorAuthorityValue,
 } from './framework-raw-error-authority.js';
 import { routeRecognizerProductRecords } from './router-product-records.js';
+import {
+  isNonEmptyRoutePathSegment,
+} from './route-string.js';
 
-const RESIDUE = '$$residue';
-const ROUTE_PARAMETER_PATTERN = /^:(?<name>[^?\s{}]+)(?:\{\{(?<constraint>.+)\}\})?(?<optional>\?)?$/;
+const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
 
 class ConfigurableRouteEmission {
   constructor(
@@ -418,7 +424,7 @@ function eagerParentPaths(
     );
     current = requiredParentContext(current, routeConfigContextsByIdentity);
   }
-  const nonEmptyParentPaths = parentPaths.filter(isNotEmpty);
+  const nonEmptyParentPaths = parentPaths.filter(isNonEmptyRoutePathSegment);
   return nonEmptyParentPaths.length === 0 ? [null] : nonEmptyParentPaths;
 }
 
@@ -986,122 +992,6 @@ function routeRecognizerIssueModel(
     state,
     sourceAddressHandle,
   );
-}
-
-interface ConfigurableRouteParse {
-  readonly segments: readonly RouteRecognizerSegmentModel[];
-  readonly parameters: readonly ParameterModel[];
-  readonly issues: readonly ConfigurableRouteParseIssue[];
-}
-
-interface ConfigurableRouteParseIssue {
-  readonly kind: RouteRecognizerIssueKind;
-  readonly frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue | null;
-  readonly message: string;
-  readonly path: string;
-}
-
-function parseConfigurableRoutePath(
-  path: string,
-  caseSensitive: boolean,
-  allowGeneratedResidueStar: boolean = false,
-): ConfigurableRouteParse {
-  const parts = path === '' ? [''] : path.split('/').filter(isNotEmpty);
-  const segments: RouteRecognizerSegmentModel[] = [];
-  const parameters: ParameterModel[] = [];
-  const issues: ConfigurableRouteParseIssue[] = [];
-
-  for (const part of parts) {
-    if (part.startsWith(':')) {
-      const match = ROUTE_PARAMETER_PATTERN.exec(part);
-      ROUTE_PARAMETER_PATTERN.lastIndex = 0;
-      const name = match?.groups?.name ?? part.slice(1);
-      const optional = match?.groups?.optional === '?';
-      const pattern = match?.groups?.constraint ?? null;
-      if (name === RESIDUE) {
-        issues.push(reservedParameterNameIssue(path, RouteRecognizerRawErrorAuthority.ReservedParameterNameDynamic));
-        continue;
-      }
-      if (pattern != null && !isValidRouteParameterConstraint(pattern)) {
-        issues.push(invalidParameterConstraintIssue(path, name, pattern));
-        continue;
-      }
-      if (name !== RESIDUE) {
-        parameters.push(new ParameterModel(name, optional, false, pattern));
-      }
-      segments.push(new DynamicSegmentModel(
-        part,
-        name,
-        optional,
-        pattern,
-      ));
-      continue;
-    }
-
-    if (part.startsWith('*')) {
-      const name = part.slice(1);
-      if (name === RESIDUE && !allowGeneratedResidueStar) {
-        issues.push(reservedParameterNameIssue(path, RouteRecognizerRawErrorAuthority.ReservedParameterNameStar));
-        continue;
-      }
-      const segmentKind = name === RESIDUE
-        ? RouteRecognizerSegmentKind.Residue
-        : RouteRecognizerSegmentKind.Star;
-      parameters.push(new ParameterModel(name, true, true, null));
-      segments.push(new StarSegmentModel(
-        segmentKind,
-        part,
-        name,
-      ));
-      continue;
-    }
-
-    segments.push(new StaticSegmentModel(
-      part,
-      part,
-      caseSensitive,
-    ));
-  }
-
-  return { segments, parameters, issues };
-}
-
-function reservedParameterNameIssue(
-  path: string,
-  frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue,
-): ConfigurableRouteParseIssue {
-  return {
-    kind: RouteRecognizerIssueKind.ReservedParameterName,
-    frameworkRawErrorAuthority,
-    message: `Invalid parameter name; usage of the reserved parameter name '${RESIDUE}' is used.`,
-    path,
-  };
-}
-
-function invalidParameterConstraintIssue(
-  path: string,
-  name: string,
-  pattern: string,
-): ConfigurableRouteParseIssue {
-  return {
-    kind: RouteRecognizerIssueKind.InvalidParameterConstraint,
-    frameworkRawErrorAuthority: null,
-    message: `Invalid route parameter constraint for '${name}': ${pattern}`,
-    path,
-  };
-}
-
-function isValidRouteParameterConstraint(pattern: string): boolean {
-  try {
-    void new RegExp(pattern);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isNotEmpty(segment: string): boolean {
-  return segment.length > 0;
 }
 
 function shouldAddResidualEndpoint(parameters: readonly ParameterModel[]): boolean {

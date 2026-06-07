@@ -1,0 +1,180 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "actionName": "openTask",
+      "linkText": "Open",
+      "createForm": {
+        "actionName": "create",
+        "fieldNames": [
+          "title",
+          "done"
+        ],
+        "submitButtonText": "Create task"
+      },
+      "serviceCollection": {
+        "sourceTargetPath": "src/api/task-repository.ts",
+        "serviceClassName": "TaskRepository",
+        "loadMethodName": "fetchTaskItems",
+        "findMethodName": "readTaskItem",
+        "createMethodName": "addTaskItem"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "task-service-vocabulary-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task service vocabulary browser explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "openTask",
+                      "kind": "custom",
+                      "scope": "navigation",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Service Vocabulary Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "task-service-vocabulary"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "taskId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Prepare onboarding checklist",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Send invoice reminder",
+                      "done": false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task saved.",
+                      "statusId": "task-create-status"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

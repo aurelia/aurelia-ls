@@ -52,6 +52,10 @@ static type surfaces rather than hydrated runtime values.
   watcher/computed execution product exists.
   `computed-dependency-config.ts` owns the shared dependency-envelope primitives used by both getter metadata and
   method trackability, so `@computed` and `@astTrack` do not drift into separate parsers for the same `deps` language.
+  `computed-decorator-source.ts` owns product-free source serialization for `@computed(...)` when another layer, such
+  as app-builder, needs to generate that explicit dependency metadata. It must not be used as shorthand for enabling
+  proxy observation, because ordinary getters and template reads already enter observation through the observer locator
+  and active connectable path.
   The decorator is not a generic switch for "make this observable." Ordinary template reads such as `state.member`
   are already connected by `astEvaluate` and the active connectable. For getters, explicit computed deps feed
   `ControlledComputedObserver`: string deps become expression observers, and direct function deps re-enter

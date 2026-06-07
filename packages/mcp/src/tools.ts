@@ -3,6 +3,8 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 import {
   appDiagnosticsInputSchema,
+  appBuilderCatalogInputSchema,
+  appBuilderQueryInputSchema,
   appOverviewInputSchema,
   appQueryCatalogInputSchema,
   appQueryBatchInputSchema,
@@ -20,6 +22,8 @@ import {
 import {
   aureliaMcpToolNames,
   type AureliaMcpAnalysisCacheOverviewInput,
+  type AureliaMcpAppBuilderCatalogInput,
+  type AureliaMcpAppBuilderQueryInput,
   type AureliaMcpAppDiagnosticsInput,
   type AureliaMcpAppOverviewInput,
   type AureliaMcpAppQueryBatchInput,
@@ -97,6 +101,30 @@ export function registerAureliaSemanticRuntimeTools(
       annotations: readOnlyClosedWorldToolAnnotations,
     },
     async (input) => jsonResultFrom(() => adapter.appQueryCatalog(input as AureliaMcpAppQueryCatalogInput)),
+  );
+
+  server.registerTool(
+    aureliaMcpToolNames.appBuilderCatalog,
+    {
+      title: 'Aurelia App Builder Catalog',
+      description: 'Return supported semantic-runtime app-builder query kinds for app-builder ontology, recommendation policy, input readiness, source lowering, and reusable part source lowering.',
+      inputSchema: appBuilderCatalogInputSchema,
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(() => adapter.appBuilderCatalog(input as AureliaMcpAppBuilderCatalogInput)),
+  );
+
+  server.registerTool(
+    aureliaMcpToolNames.appBuilderQuery,
+    {
+      title: 'Aurelia App Builder Query',
+      description: 'Forward a semantic-runtime app-builder query such as ontology-catalog, target-catalog, recommendation-policy, source-lowering-preflight, source-lowering-invocation, source-lowering-composition, source-lowering-source-plan, input-readiness, input-contract-detail, affordance-detail, application-pattern-detail, collection-concept-detail, control-manifest-detail, control-pattern-detail, effect-contract-detail, policy-detail, style-detail, paged part-menu, paged part-source-lowering-preview, or part-source-invocation; ontology, target, recommendation-policy, source-preflight, readiness, input-detail, affordance-detail, application-pattern-detail, collection-concept-detail, control-manifest-detail, control-pattern-detail, effect-contract-detail, policy-detail, and style-detail queries are read-only, source-lowering-source-plan requires explicit source-root/source-target-path placement through rootDir/templatePath or SourcePlacement suppliedInputs, and part menus/previews default to preferred authoring-tier rows unless exact part, package/resource-package, or explicit tier intent is supplied.',
+      inputSchema: appBuilderQueryInputSchema,
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(() => adapter.appBuilderQuery(input as AureliaMcpAppBuilderQueryInput)),
   );
 
   server.registerTool(
@@ -262,18 +290,29 @@ function resourceLinksForResult(value: unknown) {
       return [
         semanticRuntimeResourceLink('app-queries'),
       ];
+    case aureliaMcpToolNames.appBuilderQuery:
+      return [
+        semanticRuntimeResourceLink('app-builder'),
+      ];
+    case aureliaMcpToolNames.appBuilderCatalog:
+      return [
+        semanticRuntimeResourceLink('app-builder'),
+      ];
     default:
       return [];
   }
 }
 
-function semanticRuntimeResourceLink(view: 'app-queries') {
+function semanticRuntimeResourceLink(view: 'app-queries' | 'app-builder') {
+  const isAppBuilder = view === 'app-builder';
   return {
     type: 'resource_link' as const,
     uri: `aurelia://semantic-runtime/${view}`,
-    name: 'Aurelia App Query Catalog',
+    name: isAppBuilder ? 'Aurelia App Builder Catalog' : 'Aurelia App Query Catalog',
     mimeType: 'application/json',
-    description: 'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
+    description: isAppBuilder
+      ? 'Supported semantic-runtime app-builder query kinds for app-builder ontology, input readiness, source lowering, and opinionated part source lowering.'
+      : 'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
   };
 }
 

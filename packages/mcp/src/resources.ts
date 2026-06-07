@@ -14,6 +14,14 @@ export function registerAureliaSemanticRuntimeResources(
     'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
     async () => (await adapter.appQueryCatalog({ workspaceRoot: process.cwd() })).value,
   );
+  registerStaticJsonResource(
+    server,
+    'aurelia_app_builder_catalog',
+    'aurelia://semantic-runtime/app-builder',
+    'Aurelia App Builder Catalog',
+    'Supported semantic-runtime app-builder query kinds for app-builder ontology/detail reads, recommendation policy, input readiness, source lowering, and opinionated part source lowering.',
+    async () => (await adapter.appBuilderCatalog({ workspaceRoot: process.cwd() })).value,
+  );
 }
 
 function registerStaticJsonResource(

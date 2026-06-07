@@ -1,0 +1,979 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringApplicationAssembly": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "application-assembly"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "application-assembly-root-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "application assembly root explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Project Milestone Hub"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "routeAreas": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          "primaryEntityName": "Project",
+          "actionName": "openProject",
+          "linkText": "Open project",
+          "createForm": {
+            "actionName": "createProject",
+            "fieldNames": [
+              "name",
+              "phase"
+            ],
+            "submitButtonText": "Create project"
+          },
+          "detailRelatedCollections": [
+            {
+              "relationshipName": "project",
+              "title": "Assignments",
+              "itemLocalName": "taskItem",
+              "tableColumns": [
+                {
+                  "fieldName": "title",
+                  "header": "Assignment",
+                  "displayKind": "text"
+                },
+                {
+                  "fieldName": "done",
+                  "header": "Done",
+                  "displayKind": "boolean"
+                },
+                {
+                  "header": "Open",
+                  "displayKind": "action",
+                  "routeBindingExpression": "'/assignments/' + taskItem.id",
+                  "linkText": "Open assignment"
+                }
+              ]
+            }
+          ],
+          "decisionBundles": [
+            {
+              "bundleId": "application-assembly-project-decisions",
+              "sourceId": "explicit-caller-selection",
+              "label": "project route-area explicit choices",
+              "decisions": [
+                {
+                  "inputContractId": "domain-model",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "domain-entities",
+                      "value": [
+                        {
+                          "entityTitle": "Project",
+                          "entityTypeName": "Project",
+                          "collectionMemberName": "projects",
+                          "identityMemberName": "id",
+                          "identityValueKind": "number"
+                        },
+                        {
+                          "entityTitle": "Assignment",
+                          "entityTypeName": "TaskItem",
+                          "collectionMemberName": "taskItems",
+                          "identityMemberName": "id",
+                          "identityValueKind": "number"
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-actions",
+                      "value": [
+                        {
+                          "name": "openProject",
+                          "kind": "custom",
+                          "scope": "navigation",
+                          "targetEntityName": "Project"
+                        },
+                        {
+                          "name": "createProject",
+                          "kind": "create",
+                          "scope": "form",
+                          "targetEntityName": "Project",
+                          "inputFieldNames": [
+                            "name",
+                            "phase"
+                          ],
+                          "mutatesState": true
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-fields",
+                      "value": [
+                        {
+                          "entityName": "Project",
+                          "name": "name",
+                          "title": "Name",
+                          "valueKind": "text",
+                          "required": true
+                        },
+                        {
+                          "entityName": "Project",
+                          "name": "phase",
+                          "title": "Phase",
+                          "valueKind": "text"
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "title",
+                          "title": "Title",
+                          "valueKind": "text",
+                          "required": true
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "done",
+                          "title": "Done",
+                          "valueKind": "boolean"
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "projectId",
+                          "title": "Project",
+                          "valueKind": "number",
+                          "defaultValue": 1
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-relationships",
+                      "value": [
+                        {
+                          "name": "project",
+                          "title": "Project",
+                          "kind": "reference-one",
+                          "fromEntityName": "TaskItem",
+                          "toEntityName": "Project",
+                          "localFieldName": "projectId",
+                          "foreignFieldName": "id",
+                          "displayFieldName": "name",
+                          "required": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "source-placement",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "source-naming",
+                      "value": {
+                        "appName": "Project Milestone Hub",
+                        "sourcePatternParameterValues": [
+                          {
+                            "key": "list-route-path",
+                            "value": "projects"
+                          },
+                          {
+                            "key": "detail-route-parameter",
+                            "value": "projectId"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "source-file-layout",
+                      "value": {
+                        "resourceCarrier": "convention"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "aurelia-policy",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "aurelia-convention-policy",
+                      "value": "conventions-enabled"
+                    },
+                    {
+                      "inputFacetId": "aurelia-routing-policy",
+                      "value": {
+                        "routerAdmission": "router-configuration",
+                        "areaNavigationPolicies": [
+                          "router-driven-view-selection"
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "aurelia-state-policy",
+                      "value": {
+                        "appStateOwnership": "di-state-class",
+                        "domainModeling": "plain-domain-composition"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "seed-data",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "seed-record-set",
+                      "value": [
+                        {
+                          "entityName": "Project",
+                          "records": [
+                            {
+                              "id": 1,
+                              "name": "Platform refresh",
+                              "phase": "Planning"
+                            },
+                            {
+                              "id": 2,
+                              "name": "Docs cleanup",
+                              "phase": "Active"
+                            }
+                          ]
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "records": [
+                            {
+                              "id": 1,
+                              "title": "Prepare release notes",
+                              "done": false,
+                              "projectId": 1
+                            },
+                            {
+                              "id": 2,
+                              "title": "Check deployment checklist",
+                              "done": true,
+                              "projectId": 2
+                            },
+                            {
+                              "id": 3,
+                              "title": "Collect preview feedback",
+                              "done": false,
+                              "projectId": 1
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          "actionName": "openMilestone",
+          "linkText": "Open milestone",
+          "decisionBundles": [
+            {
+              "bundleId": "application-assembly-milestone-decisions",
+              "sourceId": "explicit-caller-selection",
+              "label": "milestone route-area explicit choices",
+              "decisions": [
+                {
+                  "inputContractId": "domain-model",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "domain-entities",
+                      "value": {
+                        "entityTitle": "Milestone",
+                        "entityTypeName": "Milestone",
+                        "collectionMemberName": "milestones",
+                        "identityMemberName": "id",
+                        "identityValueKind": "number"
+                      }
+                    },
+                    {
+                      "inputFacetId": "domain-actions",
+                      "value": [
+                        {
+                          "name": "openMilestone",
+                          "kind": "custom",
+                          "scope": "navigation",
+                          "targetEntityName": "Milestone"
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-fields",
+                      "value": [
+                        {
+                          "name": "title",
+                          "title": "Title",
+                          "valueKind": "text",
+                          "required": true
+                        },
+                        {
+                          "name": "targetDate",
+                          "title": "Target Date",
+                          "valueKind": "date"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "source-placement",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "source-naming",
+                      "value": {
+                        "appName": "Project Milestone Hub",
+                        "sourcePatternParameterValues": [
+                          {
+                            "key": "list-route-path",
+                            "value": "milestones"
+                          },
+                          {
+                            "key": "detail-route-parameter",
+                            "value": "milestoneId"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "source-file-layout",
+                      "value": {
+                        "resourceCarrier": "convention"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "aurelia-policy",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "aurelia-convention-policy",
+                      "value": "conventions-enabled"
+                    },
+                    {
+                      "inputFacetId": "aurelia-routing-policy",
+                      "value": {
+                        "routerAdmission": "router-configuration",
+                        "areaNavigationPolicies": [
+                          "router-driven-view-selection"
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "aurelia-state-policy",
+                      "value": {
+                        "appStateOwnership": "di-state-class",
+                        "domainModeling": "plain-domain-composition"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "seed-data",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "seed-record-set",
+                      "value": [
+                        {
+                          "id": 1,
+                          "title": "Prototype review",
+                          "targetDate": "2026-06-15"
+                        },
+                        {
+                          "id": 2,
+                          "title": "Public preview",
+                          "targetDate": "2026-07-01"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          "primaryEntityName": "TaskItem",
+          "actionName": "openTask",
+          "linkText": "Open assignment",
+          "createForm": {
+            "actionName": "create",
+            "fieldNames": [
+              "title",
+              "done",
+              "projectId"
+            ],
+            "submitButtonText": "Create assignment"
+          },
+          "decisionBundles": [
+            {
+              "bundleId": "application-assembly-assignment-decisions",
+              "sourceId": "explicit-caller-selection",
+              "label": "assignment route-area explicit choices",
+              "decisions": [
+                {
+                  "inputContractId": "domain-model",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "domain-entities",
+                      "value": [
+                        {
+                          "entityTitle": "Project",
+                          "entityTypeName": "Project",
+                          "collectionMemberName": "projects",
+                          "identityMemberName": "id",
+                          "identityValueKind": "number"
+                        },
+                        {
+                          "entityTitle": "Assignment",
+                          "entityTypeName": "TaskItem",
+                          "collectionMemberName": "taskItems",
+                          "identityMemberName": "id",
+                          "identityValueKind": "number"
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-actions",
+                      "value": [
+                        {
+                          "name": "openTask",
+                          "kind": "custom",
+                          "scope": "navigation",
+                          "targetEntityName": "TaskItem"
+                        },
+                        {
+                          "name": "create",
+                          "kind": "create",
+                          "scope": "form",
+                          "mutatesState": true,
+                          "targetEntityName": "TaskItem",
+                          "inputFieldNames": [
+                            "title",
+                            "done",
+                            "projectId"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-fields",
+                      "value": [
+                        {
+                          "entityName": "Project",
+                          "name": "name",
+                          "title": "Name",
+                          "valueKind": "text",
+                          "required": true
+                        },
+                        {
+                          "entityName": "Project",
+                          "name": "phase",
+                          "title": "Phase",
+                          "valueKind": "text"
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "title",
+                          "title": "Title",
+                          "valueKind": "text",
+                          "required": true
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "done",
+                          "title": "Done",
+                          "valueKind": "boolean"
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "name": "projectId",
+                          "title": "Project",
+                          "valueKind": "number",
+                          "defaultValue": 1
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-relationships",
+                      "value": [
+                        {
+                          "name": "project",
+                          "title": "Project",
+                          "kind": "reference-one",
+                          "fromEntityName": "TaskItem",
+                          "toEntityName": "Project",
+                          "localFieldName": "projectId",
+                          "foreignFieldName": "id",
+                          "displayFieldName": "name",
+                          "required": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "source-placement",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "source-naming",
+                      "value": {
+                        "appName": "Project Milestone Hub",
+                        "sourcePatternParameterValues": [
+                          {
+                            "key": "list-route-path",
+                            "value": "assignments"
+                          },
+                          {
+                            "key": "detail-route-parameter",
+                            "value": "taskId"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "source-file-layout",
+                      "value": {
+                        "resourceCarrier": "convention"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "aurelia-policy",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "aurelia-convention-policy",
+                      "value": "conventions-enabled"
+                    },
+                    {
+                      "inputFacetId": "aurelia-routing-policy",
+                      "value": {
+                        "routerAdmission": "router-configuration",
+                        "areaNavigationPolicies": [
+                          "router-driven-view-selection"
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "aurelia-state-policy",
+                      "value": {
+                        "appStateOwnership": "di-state-class",
+                        "domainModeling": "plain-domain-composition"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "collection-projection",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "collection-table-columns",
+                      "value": [
+                        {
+                          "fieldName": "title",
+                          "header": "Title",
+                          "displayKind": "text"
+                        },
+                        {
+                          "relationshipName": "project",
+                          "header": "Project",
+                          "displayKind": "relation",
+                          "routeBindingExpression": "'/projects/' + taskItem.projectId"
+                        },
+                        {
+                          "fieldName": "done",
+                          "header": "Done",
+                          "displayKind": "boolean"
+                        },
+                        {
+                          "actionName": "openTask",
+                          "header": "Open",
+                          "displayKind": "action"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "interaction-feedback",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "action-feedback",
+                      "value": [
+                        {
+                          "actionName": "create",
+                          "statusMemberName": "createStatusMessage",
+                          "statusText": "Assignment saved.",
+                          "statusId": "assignment-create-status"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "seed-data",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "seed-record-set",
+                      "value": [
+                        {
+                          "entityName": "Project",
+                          "records": [
+                            {
+                              "id": 1,
+                              "name": "Platform refresh",
+                              "phase": "Planning"
+                            },
+                            {
+                              "id": 2,
+                              "name": "Docs cleanup",
+                              "phase": "Active"
+                            }
+                          ]
+                        },
+                        {
+                          "entityName": "TaskItem",
+                          "records": [
+                            {
+                              "id": 1,
+                              "title": "Prepare release notes",
+                              "done": false,
+                              "projectId": 1
+                            },
+                            {
+                              "id": 2,
+                              "title": "Check deployment checklist",
+                              "done": true,
+                              "projectId": 2
+                            },
+                            {
+                              "id": 3,
+                              "title": "Collect preview feedback",
+                              "done": false,
+                              "projectId": 1
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          "actionName": "openReview",
+          "linkText": "Open review",
+          "createForm": {
+            "actionName": "createReview",
+            "fieldNames": [
+              "title",
+              "done",
+              "reviewer"
+            ],
+            "submitButtonText": "Create review"
+          },
+          "serviceCollection": {
+            "sourceTargetPath": "src/services/review-assignment-service.ts",
+            "serviceClassName": "ReviewAssignmentService",
+            "loadMethodName": "loadReviews",
+            "findMethodName": "loadReview",
+            "createMethodName": "createReview"
+          },
+          "decisionBundles": [
+            {
+              "bundleId": "application-assembly-review-decisions",
+              "sourceId": "explicit-caller-selection",
+              "label": "review route-area explicit choices",
+              "decisions": [
+                {
+                  "inputContractId": "domain-model",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "domain-entities",
+                      "value": [
+                        {
+                          "entityTitle": "Review",
+                          "entityTypeName": "ReviewItem",
+                          "collectionMemberName": "reviewItems",
+                          "identityMemberName": "id",
+                          "identityValueKind": "number"
+                        },
+                        {
+                          "entityTitle": "Reviewer",
+                          "entityTypeName": "ReviewerProfile",
+                          "collectionMemberName": "reviewerProfiles",
+                          "identityMemberName": "reviewerId",
+                          "identityValueKind": "string"
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-actions",
+                      "value": [
+                        {
+                          "name": "openReview",
+                          "kind": "custom",
+                          "scope": "navigation",
+                          "targetEntityName": "ReviewItem"
+                        },
+                        {
+                          "name": "createReview",
+                          "kind": "create",
+                          "scope": "form",
+                          "targetEntityName": "ReviewItem",
+                          "inputFieldNames": [
+                            "title",
+                            "done",
+                            "reviewer"
+                          ],
+                          "mutatesState": true
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-fields",
+                      "value": [
+                        {
+                          "entityName": "ReviewItem",
+                          "name": "title",
+                          "title": "Title",
+                          "valueKind": "text"
+                        },
+                        {
+                          "entityName": "ReviewItem",
+                          "name": "done",
+                          "title": "Done",
+                          "valueKind": "boolean"
+                        },
+                        {
+                          "entityName": "ReviewerProfile",
+                          "name": "displayName",
+                          "title": "Display Name",
+                          "valueKind": "text"
+                        },
+                        {
+                          "entityName": "ReviewerProfile",
+                          "name": "email",
+                          "title": "Email",
+                          "valueKind": "text"
+                        }
+                      ]
+                    },
+                    {
+                      "inputFacetId": "domain-relationships",
+                      "value": [
+                        {
+                          "name": "reviewer",
+                          "title": "Reviewer",
+                          "kind": "reference-one",
+                          "fromEntityName": "ReviewItem",
+                          "toEntityName": "ReviewerProfile",
+                          "localFieldName": "reviewer",
+                          "localValueKind": "object",
+                          "foreignFieldName": "reviewerId",
+                          "displayFieldName": "displayName",
+                          "required": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "source-placement",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "source-naming",
+                      "value": {
+                        "appName": "Project Milestone Hub",
+                        "sourcePatternParameterValues": [
+                          {
+                            "key": "list-route-path",
+                            "value": "reviews"
+                          },
+                          {
+                            "key": "detail-route-parameter",
+                            "value": "reviewId"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "source-file-layout",
+                      "value": {
+                        "resourceCarrier": "convention"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "aurelia-policy",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "aurelia-convention-policy",
+                      "value": "conventions-enabled"
+                    },
+                    {
+                      "inputFacetId": "aurelia-routing-policy",
+                      "value": {
+                        "routerAdmission": "router-configuration",
+                        "areaNavigationPolicies": [
+                          "router-driven-view-selection"
+                        ]
+                      }
+                    },
+                    {
+                      "inputFacetId": "aurelia-state-policy",
+                      "value": {
+                        "appStateOwnership": "di-state-class",
+                        "domainModeling": "plain-domain-composition"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "collection-projection",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "collection-table-columns",
+                      "value": [
+                        {
+                          "fieldName": "title",
+                          "header": "Review",
+                          "displayKind": "text"
+                        },
+                        {
+                          "relationshipName": "reviewer",
+                          "header": "Reviewer",
+                          "displayKind": "relation"
+                        },
+                        {
+                          "fieldName": "done",
+                          "header": "Done",
+                          "displayKind": "boolean"
+                        },
+                        {
+                          "actionName": "openReview",
+                          "header": "Open",
+                          "displayKind": "action"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "interaction-feedback",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "action-feedback",
+                      "value": [
+                        {
+                          "actionName": "createReview",
+                          "statusMemberName": "createReviewStatusMessage",
+                          "statusText": "Review saved.",
+                          "statusId": "review-create-status"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputContractId": "seed-data",
+                  "facetPayloads": [
+                    {
+                      "inputFacetId": "seed-record-set",
+                      "value": [
+                        {
+                          "entityName": "ReviewItem",
+                          "records": [
+                            {
+                              "id": 1,
+                              "title": "Architecture review",
+                              "done": false,
+                              "reviewer": "ada"
+                            },
+                            {
+                              "id": 2,
+                              "title": "Launch checklist review",
+                              "done": true,
+                              "reviewer": "grace"
+                            }
+                          ]
+                        },
+                        {
+                          "entityName": "ReviewerProfile",
+                          "records": [
+                            {
+                              "reviewerId": "ada",
+                              "displayName": "Ada Lovelace",
+                              "email": "ada@example.test"
+                            },
+                            {
+                              "reviewerId": "grace",
+                              "displayName": "Grace Hopper",
+                              "email": "grace@example.test"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

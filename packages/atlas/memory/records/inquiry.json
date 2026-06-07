@@ -45,7 +45,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-24"
+      "updatedAt": "2026-06-01"
     },
     {
       "id": "intent:lsp-edit-affordance-substrate",
@@ -139,7 +139,7 @@
       "updatedAt": "2026-05-22"
     },
     {
-      "id": "reuse:app-builder-ide-fixture-flywheel",
+      "id": "reuse:app-builder-generated-fixture-contracts",
       "kind": "reuse-guide",
       "domains": [
         "semantic-runtime",
@@ -152,17 +152,23 @@
         "references",
         "expected-effects"
       ],
-      "summary": "Editing, rename, and other IDE/MCP affordances need fixtures generated from app-builder pattern intent, not isolated hand-written source snippets alone.",
-      "rationale": "Edit affordances are the strictest consumer of semantic-runtime source precision. Dedicated fixtures must cover exact definition/reference families, editability, non-editable spans, route/template/resource/i18n/binding references, and expected edit plans. Larger generated app fixtures should come from the same app-builder pattern algebra used for public authoring so MCP and IDE features are pressure-tested against realistic low-boilerplate Aurelia code.",
+      "summary": "Editing, rename, and other IDE/MCP affordances need generated fixture contracts rooted in current app-builder ontology/source-lowering intent, not isolated hand-written snippets alone.",
+      "rationale": "Edit affordances are the strictest consumer of semantic-runtime source precision. Dedicated fixtures must cover exact definition/reference families, editability, non-editable spans, route/template/resource/i18n/binding references, expected edit plans, generated source, exact app-builder/MCP inputs, and semantic-runtime analysis expectations. Larger generated app fixtures should come from the current app-builder ontology/source-lowering path used for public app generation so MCP and IDE features are pressure-tested against realistic low-boilerplate Aurelia code without reviving the deleted starter/golden or legacy authoring lane.",
       "guidance": [
         "Treat editing fixtures as a bridge between app-builder ontology and the Semantic IDE Affordance Algebra. Do not create a separate MCP-only or IDE-only fixture language.",
         "Use tiered fixture lanes: small reference-contract fixtures for exact semantic subjects, medium edit-plan fixtures for multi-file expected edits, generated app fixtures for realistic pattern compositions, and contrast fixtures for analyzable shapes that should not become recommendable source.",
+        "Generated app fixtures live under packages/semantic-runtime/fixtures/app-builder once policy/ontology authority is settled enough to emit tracked end-user-shaped source; each fixture should preserve exact compact public request input, compact public response snapshot, generated source, a detailed manifest, expected semantic effects, and a persisted `semantic-verification.json` snapshot from the external fixture verifier. Use `generated-fixture-index.json` as the root review map for generated-app fixture coverage, starting from `fixtureSummaryRows` before drilling into paths, source-lowering targets, decision-bundle counts, decision-bundle input contract/facet rollups, separate generated control-pattern ids versus leaf-control ids, advertised request-field surfaces, actual source-lowering request-field usage rows with compact request paths/value shapes, `sourceLoweringTargetRegistryCoverageRows`, `sourceLoweringRequestFieldRegistryCoverageRows`, `policySatisfactionCandidateCoverageRows`, `domainModelCoverageSummary`, `domainModelKindCoverageSummary`, `domainModelCoverageRows`, and `reviewArtifactByteCounts`. Use `domainModelCoverageSummary`, `domainModelKindCoverageSummary`, and `domainModelCoverageRows` before raw request spelunking when reviewing entity/domain concentration, identity kind coverage, field value-kind coverage, relationship-kind coverage, action-kind coverage, action-scope coverage, value-set coverage, or seed-data coverage. All app-builder relationship kinds, action kinds, and action scopes are covered by generated fixtures through explicit caller-owned command actions, router-backed route-navigation actions, relationship lookup/ownership/value display, and relationship-backed table columns; standalone navigation outside router-backed topology plus relationship editing/lifecycle/service workflows remain app-design/source-lowering frontier evidence, not fixture failures by themselves. Use `reviewArtifactByteCountSummary` to distinguish heavy persisted request/response/manifest review snapshots from generated source/tooling text size before treating a fixture as code-generation bloat. Use partitioned unused request-field counts to distinguish required gaps from conditional-only, optional-only, and mixed refinement knobs. Use `fixtures/pressure/app-builder-source-lowering-fixture-index.json` as the focused pressure review map for direct source-lowering invocation/composition/SourcePlan request-field coverage. Coverage summaries carry explicit summarized owner/surface scopes, and focused review detail rows should match that same scoped row set; read those scopes before comparing compact unused counts between generated-app and focused-pressure lanes. Actual request-field usage rows should be produced by the shared source-lowering request-field helper so IDE/MCP fixture coverage, generated-app materialization, and pressure-fixture indexing spend the same request-tree vocabulary. Current control coverage includes a field-variety generated fixture with explicit `fieldControlSelections` for textarea, range, radio-group, and checkbox-list plus field-scoped `ControlAccessibility` help/error/status relationships and form/field/button `VisualClassHooks`; `component-pair-task-draft-explicit-field-overrides` proves nested `fieldControlSelections` can carry caller-supplied ids, labels, messages, value-domain expressions, option locals, option value/label expressions, and option binding kind without dropping to manual one-control invocation; `component-pair-task-preferences-named-value-sets` proves composed choice controls can select reusable domain value sets by name while component-pair assembly keeps local view-model state compatible with those selected option members. `component-pair-task-command-actions` proves update/delete/archive/assign/submit/refresh action kinds through table row buttons, top-level native buttons, explicit `DomainCommandAction.methodBodyStatements`, and local collection mutability derived from mutating entity action `inputFieldNames`; it does not prove service/router integration or app-builder-invented behavior. Form-message fragments currently prove generated source-lowering target-ref coverage, not authored control-use inventory coverage. Request-field registry and policy-satisfaction candidate coverage should surface unused optional/conditional fixture pressure, contextual executable targets without generated-app coverage, and any used field without registry ownership without turning every optional field into an immediate generated-fixture obligation. The app-builder query-surface contract also rejects stale field-scoped `ControlAccessibility` and `VisualClassHooks` inputs for Native Submit Form instead of letting caller input disappear silently. Generated app-builder verification now records request idempotency failures when stored compact requests stop reproducing tracked SourcePlan source/tooling files, stored compact response snapshots, or detail-derived manifest contract rows such as expected effects, effect contracts, target refs, control-use rows, and `sourcePlanWitnessRows`; it also records generated-source-quality failures such as duplicate static template attributes and trailing whitespace outside app-builder lowerers. Current collection projection coverage includes separate generated contracts for list/card `CollectionDisplayFields`, a non-task/string-identity contact card canary, and table `CollectionTableColumns`.",
+        "Generated fixture index rows also join explicit source-lowering targets and generated control-use coverage to compact recommendation-policy posture, applicability/evidence kind ids, and contextual executable policy-satisfaction candidate flags. Use `sourceLoweringTargetPolicyRows` for SourcePlan-declared targets and `generatedControlUsePolicyRows` for leaf/native controls that appear through generated `ControlUse` inventory when reviewing whether realistic generated app output is exercising recommendable versus contextual terrain. Generated control-use policy rows may satisfy contextual controls through exact target refs, explicit nested `fieldControlSelections`, or deterministic domain-field control input; pure observation alone should still report missing selection. Fixture summary rows should carry policy-satisfaction count/source summaries by default, while full fixture rows carry per-target detail.",
+        "Use `generated-fixture-index.md` as the generated human-review companion for the same app-builder fixture index; it should stay a projection over `generated-fixture-index.json`, not a separate authority or a place to hand-record fixture truth.",
         "Generated editing fixtures should declare expected definition targets, reference sets, source roles, editability blockers, rename plans or preview edits, diagnostics-to-repair facts, and exact source spans where possible.",
-        "When an editing fixture requires larger source, generate it from app-builder pattern compositions plus expected semantic effects rather than hard-coding another example domain in app-builder.",
+        "When an editing fixture requires larger source, generate it from current app-builder ontology/source-lowering selections plus expected semantic effects rather than hard-coding another example domain in app-builder.",
         "App-builder expected effects should grow beyond app facts when needed: reference families and edit-plan expectations are semantic effects too, even if their first implementation lives in an IDE/edit contract layer.",
         "Use TypeSystemProject, template overlays, binding/data-flow products, router/i18n/resource products, and SemanticSourceReference provenance as inputs. Overlay segments are evidence, not the authoritative edit surface by themselves.",
         "A broad carrier span should fail an edit contract or report missing precision; it should not be silently used as a patch range.",
-        "If app-builder generated fixtures expose missing reference or provenance families, deepen the semantic-runtime substrate before adding fixture-local expectations."
+        "If app-builder generated fixtures expose missing reference or provenance families, deepen the semantic-runtime substrate before adding fixture-local expectations.",
+        "Use packages/semantic-runtime/fixtures/pressure/app-builder-* for focused current source-lowering/analyzer pressure. Use packages/semantic-runtime/fixtures/app-builder for current tracked generated-app contracts, starting from `generated-fixture-index.json` when reviewing the whole set. The deleted starter/golden lane and legacy authoring verification loop are intentionally not durable fixture authority. The persisted verification snapshot is fixture tooling output, not a public app-builder response field.",
+        "Generated component-pair templates may carry `sourceLoweringTemplateInvocations` beside a higher-level template composition; use `component-pair-task-draft-reset-button` to review native button event/type/text fields in realistic generated app source. Do not chase the remaining generated-app unused request fields mechanically: `bindingExpression` is pressure-covered for direct invocations, `bindingRootExpression` is covered by rooted draft-object generation but does not prove full edit-buffer semantics, and `matcherExpression` is covered by object-valued relationship controls while richer object-valued choice arrays remain deferred.",
+        "Generated fixture indexes include `sourceLoweringRequestFieldReviewSummary` and `sourceLoweringRequestFieldReviewRows` for unused generated-app request fields. Treat those rows as fixture-review posture: they can say a field is pressure-covered, covered by rooted draft-object generation, deferred for full edit-buffer modeling, or deferred for object-valued choice/domain relationship modeling without turning optional request-field counts into mechanical generated-fixture obligations; a nonzero needs-review count is the canary to classify new unused fields."
       ],
       "anchors": [
         {
@@ -203,13 +209,58 @@
         },
         {
           "kind": "fixture",
-          "path": "packages/semantic-runtime/fixtures/app-builder/goldens",
-          "summary": "Generated app-builder golden lane that should eventually include IDE pressure apps."
+          "path": "packages/semantic-runtime/fixtures/pressure",
+          "summary": "Contrast and analyzer-pressure fixture lane for shapes semantic-runtime must understand but MCP should not recommend."
         },
         {
           "kind": "fixture",
-          "path": "packages/semantic-runtime/fixtures/pressure",
-          "summary": "Contrast and analyzer-pressure fixture lane for shapes semantic-runtime must understand but MCP should not recommend."
+          "path": "packages/semantic-runtime/fixtures/app-builder",
+          "summary": "Current tracked generated-app contract lane for end-user-shaped app-builder output, exact inputs, manifests, expected effects, and reopen verification."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/generated-fixture-index.json",
+          "summary": "Root generated-app fixture review map listing compact fixture summary rows, exact request/response/manifest paths, generated source files, review artifact byte counts, source-lowering targets, target registry coverage rows, effect kinds, decision-bundle counts, advertised request-field surfaces, and actual nested request-field usage rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/generated-fixture-index.md",
+          "summary": "Generated human-review companion for the generated-app fixture index, with compact counts and per-fixture links into requests, responses, manifests, verification snapshots, and generated source."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety",
+          "summary": "Generated app-builder fixture that proves all first-ring native field controls, explicit fieldControlSelections, field-scoped ControlAccessibility messages, finite option type aliases, and control-use verification."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-explicit-field-overrides",
+          "summary": "Generated app-builder fixture that proves nested fieldControlSelections can carry caller-supplied ids, labels, messages, value-domain expressions, option locals, value/label expressions, and option binding kind through Native Submit Form."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-preferences-named-value-sets",
+          "summary": "Generated app-builder fixture that proves composed choice controls can select reusable domain value sets by name while local view-model state emits matching option members."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-list-local-collection",
+          "summary": "Generated app-builder fixture that proves collection-list source lowering spends CollectionDisplayFields over explicit local collection state."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-card-local-collection",
+          "summary": "Generated app-builder fixture that proves collection-card source lowering spends CollectionDisplayFields over explicit local collection state."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-contact-card-string-id",
+          "summary": "Generated app-builder fixture that proves collection-card source lowering over a non-task contact domain with string identity and explicit seed records."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-reset-button",
+          "summary": "Generated app-builder fixture that proves component-pair templates can combine a create-form composition with a direct native reset button invocation and caller-owned class-member action."
         }
       ],
       "liveChecks": [
@@ -225,7 +276,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-26"
+      "updatedAt": "2026-06-04"
     },
     {
       "id": "frontier:query-claim-graph",
@@ -450,6 +501,7 @@
         "Start here when testing strategy, semantic-runtime regression coverage, fixture verification, or public query budget checks are under discussion.",
         "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, app-builder, inquiry, or MCP surfaces.",
         "Assert semantic effects and product facts rather than source snapshots or whole DTO dumps: resources, routes, bindings, controller topology, value channels, diagnostics, expected effects, retention policy, and answer budgets.",
+        "Use expected-effect descriptor rows when a caller or route needs to explain which public query families and verifier observation surfaces prove an ExpectedSemanticEffectKind.",
         "Runtime watcher, watcher observed-dependency, binding-owned trackable method dependency, template collection observation, computed-observer-source, and computed-observer-observed-dependency rows are now expected-effect targets. Use the proxy-observation, trackable-method-observation, template-collection-observation, and computed-observer-source contracts as the first patterns for row-backed observation witnesses.",
         "Use Aurelia framework docs as promoted-pattern seeds and framework tests as behavior-grounding seeds; do not copy the full framework suite into the default lane.",
         "Keep app-builder/generated fixtures and contrastive analysis fixtures distinct so app-builder output quality and analyzer robustness can both be checked.",
@@ -465,6 +517,12 @@
           "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect",
           "summary": "Expected semantic effects are the contract vocabulary used by fixture verification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/effect-kind-descriptor.ts",
+          "symbolName": "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS",
+          "summary": "Runtime-readable expected-effect descriptor rows mapping effect kinds to observation surfaces, public query families, and seed posture."
         },
         {
           "kind": "source",
@@ -526,6 +584,11 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/effect-kind-descriptor.ts",
+          "symbolName": "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS"
         },
         {
           "kind": "source-declaration-exists",

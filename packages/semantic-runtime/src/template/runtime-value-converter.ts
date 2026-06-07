@@ -9,6 +9,7 @@ import {
   KernelVocabulary,
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
+import { BuiltInValueConverterName } from '../resources/built-in-resources.js';
 import {
   RuntimeHtmlValueConverterFrameworkErrorCode,
   type RuntimeHtmlValueConverterFrameworkErrorCode as RuntimeHtmlValueConverterFrameworkErrorCodeValue,
@@ -118,7 +119,7 @@ export type SanitizeValueConverterToViewContext = {
  */
 @auLink('runtime-html:SanitizeValueConverter', { facet: 'value-converter-semantics' })
 export class SanitizeValueConverter {
-  readonly name = 'sanitize';
+  readonly name = BuiltInValueConverterName.Sanitize;
 
   toView(context: SanitizeValueConverterToViewContext): BuiltInValueConverterInvocationIssue | null {
     if (context.hasCustomSanitizer) {

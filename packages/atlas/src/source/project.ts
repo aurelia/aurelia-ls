@@ -61,6 +61,9 @@ export type AureliaFrameworkPackageId =
 /** Prefix for public Aurelia plugin package ids admitted from the optional plugins submodule. */
 export const AURELIA_PLUGIN_PACKAGE_ID_PREFIX = "aurelia2-plugin:";
 
+/** Prefix for Aurelia framework tooling package ids admitted from the framework submodule. */
+export const AURELIA_TOOLING_PACKAGE_ID_PREFIX = "aurelia-tooling:";
+
 /** Prefix for environment-admitted external source packages. */
 export const EXTERNAL_SOURCE_PACKAGE_ID_PREFIX = "external:";
 
@@ -535,6 +538,9 @@ export class SourceProject {
     const frameworkPackageCount = this.#packageDefinitions.filter((definition) =>
       (AURELIA_FRAMEWORK_PACKAGE_IDS as readonly string[]).includes(definition.id)
     ).length;
+    const frameworkToolingPackageCount = this.#packageDefinitions.filter((definition) =>
+      definition.id.startsWith(AURELIA_TOOLING_PACKAGE_ID_PREFIX)
+    ).length;
     const publicPluginPackageCount = this.#packageDefinitions.filter((definition) =>
       definition.id.startsWith(AURELIA_PLUGIN_PACKAGE_ID_PREFIX)
     ).length;
@@ -545,6 +551,7 @@ export class SourceProject {
       this.#packageDefinitions.length -
       localPackageCount -
       frameworkPackageCount -
+      frameworkToolingPackageCount -
       publicPluginPackageCount -
       externalPackageCount;
     return [
@@ -552,6 +559,7 @@ export class SourceProject {
       `packages=${this.#packageDefinitions.length}`,
       `local=${localPackageCount}`,
       `framework=${frameworkPackageCount}`,
+      `framework-tooling=${frameworkToolingPackageCount}`,
       `public-plugin=${publicPluginPackageCount}`,
       `external=${externalPackageCount}`,
       `other=${otherPackageCount}`,
@@ -707,7 +715,7 @@ interface SourceProjectIndex {
   readonly topLevelDeclarationRows: readonly SourceDeclarationRow[];
 }
 
-/** Create the default source project over the internal inquiry, semantic-runtime, and MCP packages. */
+/** Create the default source project over internal product, framework, framework-tooling, plugin, and external packages. */
 export function createSourceProject(
   /** Optional source project construction options. */
   options: SourceProjectOptions = {},
@@ -789,6 +797,7 @@ export function defaultSourcePackageDefinitions(
   return [
     ...localPackages,
     ...defaultAureliaFrameworkPackageDefinitions(repoRoot),
+    ...defaultAureliaToolingPackageDefinitions(repoRoot),
     ...defaultAureliaPluginPackageDefinitions(repoRoot),
     ...defaultExternalSourcePackageDefinitions(repoRoot),
   ];
@@ -972,6 +981,37 @@ function frameworkRootSourcePathIfPresent(
     return null;
   }
   return repoRelativePath(repoRoot, absolutePath) ?? absolutePath;
+}
+
+function defaultAureliaToolingPackageDefinitions(
+  repoRoot: string,
+): readonly SourcePackageDefinition[] {
+  const frameworkRoot = findAureliaFrameworkRootSourcePath(repoRoot);
+  if (frameworkRoot === null) {
+    return [];
+  }
+  const packagesRoot = resolveSourcePath(
+    repoRoot,
+    path.posix.join(frameworkRoot, "packages-tooling"),
+  );
+  const packageDirs = safeReadDirectory(packagesRoot)
+    .filter((entry) =>
+      !entry.startsWith("__") &&
+      existsSync(path.join(packagesRoot, entry, "package.json")) &&
+      existsSync(path.join(packagesRoot, entry, "tsconfig.json")),
+    )
+    .sort((left, right) => left.localeCompare(right));
+
+  return packageDirs.map((dir) => {
+    const rootPath = path.posix.join(frameworkRoot, "packages-tooling", dir);
+    return {
+      id: `${AURELIA_TOOLING_PACKAGE_ID_PREFIX}${dir}`,
+      packageName:
+        readPackageName(path.join(packagesRoot, dir, "package.json")) ?? dir,
+      rootPath,
+      tsconfigPath: path.posix.join(rootPath, "tsconfig.json"),
+    };
+  });
 }
 
 function defaultAureliaPluginPackageDefinitions(

@@ -42,6 +42,7 @@ import {
   TemplateCompilationUnit,
   TemplateSource,
 } from './compilation-unit.js';
+import { isHtmlVoidElement } from './html-elements.js';
 import {
   HtmlAttribute,
   HtmlComment,
@@ -857,11 +858,11 @@ class HtmlScanner {
       }
     }
 
-    const children = selfClosing || isVoidElement(tagName)
+    const children = selfClosing || isHtmlVoidElement(tagName)
       ? []
       : this.parseNodes(tagName, namespace, path);
     const end = this.pos;
-    if (!selfClosing && !isVoidElement(tagName) && this.eof() && !this.endsWithEndTag(tagName)) {
+    if (!selfClosing && !isHtmlVoidElement(tagName) && this.eof() && !this.endsWithEndTag(tagName)) {
       recoveries.push(new HtmlRecoveryDraft(HtmlRecoveryKind.MissingEndTag, `Missing closing tag </${tagName}>.`, tagStart, end));
     }
 
@@ -988,28 +989,6 @@ function namespaceForElement(tagName: string, parentNamespace: HtmlNamespaceKind
     return HtmlNamespaceKind.Math;
   }
   return parentNamespace;
-}
-
-function isVoidElement(tagName: string): boolean {
-  switch (tagName.toLowerCase()) {
-    case 'area':
-    case 'base':
-    case 'br':
-    case 'col':
-    case 'embed':
-    case 'hr':
-    case 'img':
-    case 'input':
-    case 'link':
-    case 'meta':
-    case 'param':
-    case 'source':
-    case 'track':
-    case 'wbr':
-      return true;
-    default:
-      return false;
-  }
 }
 
 function isNameCharacter(value: string): boolean {

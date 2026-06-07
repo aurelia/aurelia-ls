@@ -1,0 +1,16 @@
+<section>
+  <a load="../">Back</a>
+  <section promise.bind="projectPromise">
+    <p pending>Loading project...</p>
+    <template then="project">
+      <article if.bind="project">
+        <section>
+          <h2>${project.name}</h2>
+          <p>Phase: ${project.phase}</p>
+        </section>
+      </article>
+      <p else>No project found for this route.</p>
+    </template>
+    <p catch>Could not load project.</p>
+  </section>
+</section>

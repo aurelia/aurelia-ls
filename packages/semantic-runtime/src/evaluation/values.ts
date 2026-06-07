@@ -24,6 +24,8 @@ export const enum EvaluationValueKind {
   StringPattern = 'string-pattern',
   /** RegExp object produced by a regular-expression literal. */
   RegularExpression = 'regular-expression',
+  /** Date object produced by a deterministic Date constructor form. */
+  Date = 'date',
   /** Array value with evaluator-local element values. */
   Array = 'array',
   /** Set value with evaluator-local membership. */
@@ -150,6 +152,18 @@ export class EvaluationRegularExpressionValue {
     readonly pattern: string,
     /** Literal flags text after the closing slash. */
     readonly flags: string,
+    /** Syntax node that produced the value, when one exists. */
+    readonly node: ts.Node | null = null,
+  ) {}
+}
+
+/** Date object with a deterministic UTC epoch value. */
+export class EvaluationDateValue {
+  readonly kind = EvaluationValueKind.Date;
+
+  constructor(
+    /** ECMAScript time value in milliseconds since the epoch. */
+    readonly epochMilliseconds: number,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
@@ -521,6 +535,7 @@ export type EvaluationValue =
   | EvaluationStringValue
   | EvaluationStringPatternValue
   | EvaluationRegularExpressionValue
+  | EvaluationDateValue
   | EvaluationArrayValue
   | EvaluationSetValue
   | EvaluationMapValue
@@ -592,6 +607,7 @@ export function readEvaluationTruthiness(value: EvaluationValue): boolean | null
     case EvaluationValueKind.StringPattern:
       return value.parts.some((part) => part.length > 0) ? true : null;
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:

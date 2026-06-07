@@ -1,0 +1,205 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=src/async-task-table.html, target=src/async-task-table.ts, source=component-pair, files=3, witnesses=38, controlUses=1, expectedEffects=8, decisionBundles=1, issues=0.",
+    "rootDir": ".",
+    "templatePath": "src/async-task-table.html",
+    "sourceTargetPath": "src/async-task-table.ts",
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "component-pair",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "loading-empty-error-state"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "collection-table"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "local-view-model-state"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "async-data-source"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "semantic-runtime-reopen",
+      "control-use-inventory"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "resource-definition",
+      "template-compilation",
+      "runtime-controller",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 8,
+    "controlUseInventoryRowCount": 1,
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 36,
+      "requiredCount": 4,
+      "conditionalCount": 22,
+      "optionalCount": 10,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 36,
+          "requiredCount": 4,
+          "conditionalCount": 22,
+          "optionalCount": 10,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceTargetPath",
+            "templatePath",
+            "sourceLoweringComponentPair"
+          ],
+          "conditionalRequestFieldNames": [
+            "sourceTargetPath",
+            "serviceClassName",
+            "collectionEntityName",
+            "loadMethodName",
+            "methodName",
+            "fieldName",
+            "parameterName",
+            "methodName",
+            "inputFieldNames",
+            "methodName",
+            "inputFieldNames",
+            "stateMemberName",
+            "stateTypeText",
+            "initialValueExpression",
+            "inactiveValueExpression",
+            "reloadMethodName",
+            "resultMemberName",
+            "filterMethodName",
+            "applyActionName",
+            "applyButtonText",
+            "clearActionName",
+            "clearButtonText"
+          ],
+          "optionalRequestFieldNames": [
+            "sourceLoweringTemplateInvocations",
+            "serviceCollections",
+            "componentMemberName",
+            "recordTypeName",
+            "filterMethods",
+            "predicateKind",
+            "createMethods",
+            "updateMethods",
+            "queryStates",
+            "queryControls"
+          ]
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 38,
+    "suppliedInputCount": 6,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 1,
+    "decisionBundleDecisionCount": 6,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 128,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/async-task-table.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 395,
+          "contributionCount": 3
+        },
+        {
+          "path": "src/async-task-table.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 835,
+          "contributionCount": 23
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 246
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": null
+    }
+  }
+}

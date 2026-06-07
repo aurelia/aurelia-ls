@@ -34,6 +34,7 @@ import {
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
   ResourceTargetObservation,
+  resourceTargetClassLikeNode,
 } from './resource-observation.js';
 import {
   ResourceCarrierKind,
@@ -57,11 +58,12 @@ function recognizeNamedResources(
   context: ResourceRecognitionContext,
   resourceKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
+  const defineCallTargets = collectDefineCallTargets(context, resourceKind);
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
       if (!isNestedInFunctionLike(node)) {
-        observations.push(...recognizeClassCarriers(context, node, resourceKind));
+        observations.push(...recognizeClassCarriers(context, node, resourceKind, defineCallTargets));
       }
     }
     if (ts.isCallExpression(node)) {
@@ -78,15 +80,34 @@ function recognizeNamedResources(
   return observations;
 }
 
+function collectDefineCallTargets(
+  context: ResourceRecognitionContext,
+  wantedKind: NamedResourceDefinitionKind | null,
+): ReadonlySet<ts.ClassLikeDeclarationBase> {
+  const targets = new Set<ts.ClassLikeDeclarationBase>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const target = readDefineCallTargetClass(context, node, wantedKind);
+      if (target != null) {
+        targets.add(target);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(context.sourceFile);
+  return targets;
+}
+
 function recognizeClassCarriers(
   context: ResourceRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
   wantedKind: NamedResourceDefinitionKind | null,
+  defineCallTargets: ReadonlySet<ts.ClassLikeDeclarationBase>,
 ): readonly ResourceRecognitionObservation[] {
   return [
     ...recognizeDecorators(context, classNode, wantedKind),
     ...recognizeStaticAu(context, classNode, wantedKind),
-    ...recognizeConventions(context, classNode, wantedKind),
+    ...recognizeConventions(context, classNode, wantedKind, defineCallTargets),
   ];
 }
 
@@ -257,11 +278,12 @@ function recognizeConventions(
   context: ResourceRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
   wantedKind: NamedResourceDefinitionKind | null,
+  defineCallTargets: ReadonlySet<ts.ClassLikeDeclarationBase>,
 ): readonly ResourceRecognitionObservation[] {
   if (!ts.isClassDeclaration(classNode) || classNode.name == null || hasDeclareModifier(classNode)) {
     return [];
   }
-  if (hasExplicitResourceCarrier(classNode)) {
+  if (hasExplicitResourceCarrier(classNode) || defineCallTargets.has(classNode)) {
     return [];
   }
 
@@ -298,12 +320,32 @@ function recognizeConventions(
   ];
 }
 
+function readDefineCallTargetClass(
+  context: ResourceRecognitionContext,
+  call: ts.CallExpression,
+  wantedKind: NamedResourceDefinitionKind | null,
+): ts.ClassLikeDeclarationBase | null {
+  const resourceKind = readDefineCallResourceKind(context, call);
+  if (
+    resourceKind == null
+    || resourceKind === ResourceDefinitionKind.AttributePattern
+    || !matchesNamedKind(resourceKind, wantedKind)
+  ) {
+    return null;
+  }
+  const targetExpression = call.arguments[1] ?? null;
+  if (targetExpression == null) {
+    return null;
+  }
+  return resourceTargetClassLikeNode(readEvaluatedExpressionTarget(targetExpression, context.expressionReader));
+}
+
 function recognizeDefineCall(
   context: ResourceRecognitionContext,
   call: ts.CallExpression,
   wantedKind: NamedResourceDefinitionKind | null,
 ): ResourceRecognitionObservation | null {
-  const resourceKind = readDefineCallKind(call);
+  const resourceKind = readDefineCallResourceKind(context, call);
   if (
     resourceKind == null
     || resourceKind === ResourceDefinitionKind.AttributePattern
@@ -341,6 +383,20 @@ function recognizeDefineCall(
     read.definition,
     openSeams,
   );
+}
+
+function readDefineCallResourceKind(
+  context: ResourceRecognitionContext,
+  call: ts.CallExpression,
+): ResourceDefinitionKind | null {
+  const resourceKind = readDefineCallKind(call);
+  if (
+    resourceKind === ResourceDefinitionKind.CustomAttribute
+    && readTemplateControllerFlag(call.arguments[0] ?? call, context.expressionReader)
+  ) {
+    return ResourceDefinitionKind.TemplateController;
+  }
+  return resourceKind;
 }
 
 function readNamedResourceDefinition(

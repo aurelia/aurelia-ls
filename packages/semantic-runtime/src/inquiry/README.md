@@ -310,7 +310,7 @@ targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed miss
 text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,
 resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` accepts a
 path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
-sampled without changing the script. The known `fixtures/pressure` and `fixtures/app-builder` collection roots expand to
+sampled without changing the script. The known `fixtures/pressure` collection root expands to
 their child fixture projects; `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY` mirrors
 `SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/package-tsconfig roots. The script requests paged runtime
 summary rows explicitly, because `runtime.summary()` defaults to no project rows for large workspaces. Use

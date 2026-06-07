@@ -19,12 +19,14 @@
         "RuntimeBindingExpressionScopeProjector spends the same state binding-behavior handoff for binding data-flow and observed dependencies: astBind lets StateBindingBehavior call binding.useScope(...), while astEvaluate later unwraps binding behaviors and evaluates the inner expression against that effective scope. Interpolation holes use the same handoff because runtime-html binds each hole through InterpolationPartBinding before evaluating it.",
         "RuntimeBindingSourceValueEvaluator reads StateBinding scope slots through the configured initial-state source expression when a static source-value consumer needs an actual value; this is initial-state reduction, not action/lifecycle emulation.",
         "Use StateIssues for builder/store-registry raw Error rows: withStore after registration, reserved default store names, duplicate store registration, missing named-store lookup, and invalid @fromState(...) target contexts.",
+        "FromStateDecoratorBindingSite is the valid decorator source handoff for positive StateGetterBinding materialization. StateGetterBindingMaterializationProjectPass spends it into state-getter-bindings rows with store resolution, selector return type, and target member type projection.",
         "State store lookup issues are post-template because state/dispatch binding commands and & state:'name' binding behaviors are visible only after template runtime products and expression parses exist.",
         ".state and .dispatch commands are full value-site/data-flow surfaces: StateBinding exposes store-state reads into target access/value-channel flow, and StateDispatchBinding exposes event listener target operations plus state-dispatch-action source operations/value channels.",
         "State-dispatch payload expressions reuse template listener event-scope typing: $event.currentTarget is refined from the authored host element, and native value-bearing form controls refine $event.target through the same DOM tag-name-map substrate as observer lookup.",
         "The state-store list authoring recipe now verifies store-backed .state, .dispatch, & state, and interpolation-part data flow plus observed dependencies for store-scope reads such as title, label, collection rows, draft === \"\", and $event.target.value; dispatch value-channel payloads should preserve known action type literals while refining form-control event target values.",
         "Framework corpus accepts state-store/store as query aliases for the stored state concept, so @aurelia/state route pressure can use plugin-specific vocabulary without splitting the corpus concept ontology.",
         "Remaining state-command pressure is dynamic store-name selection, broader non-form event-target policy, and a future policy for action payload target types, not basic command value-flow admission.",
+        "Remaining @fromState pressure is the bridge from source/store/type StateGetterBinding products into controller-owned runtime binding publication, target update operations, and connectable observed-dependency rows.",
         "Keep @fromState(...) target validation source-owned, not observation-owned; the shared decorator-target helper lives under type-system for this reason.",
         "Leave DevTools dispatch errors to runtime host/lifecycle substrates; semantic-runtime does not model browser extension availability or live DevTools message payloads."
       ],
@@ -61,6 +63,24 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/from-state-decorator-recognition.ts",
+          "symbolName": "FromStateDecoratorBindingSite",
+          "summary": "Valid @fromState field/setter decorator source site that preserves store-name, selector, and target member spans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass",
+          "summary": "Materializes positive StateGetterBinding products from @fromState decorator sites with store and TypeChecker projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/state-projections.ts",
+          "symbolName": "readStateGetterBindingRows",
+          "summary": "Public state-getter-bindings API projection for @fromState-created StateGetterBinding products."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/state/with-store-registration-order-issues.ts",
           "symbolName": "WithStoreAfterRegistrationIssueMaterializer",
           "summary": "Materializes source-order failures where StateDefaultConfiguration.withStore(...) follows registration of the same config object."
@@ -92,6 +112,13 @@
           "symbolName": "RuntimeBindingExpressionScopeProjector"
         },
         {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingExpressionScopeProjector",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        },
+        {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/state/framework-raw-error-authority.ts",
           "symbolName": "StateRawErrorAuthority"
@@ -103,12 +130,27 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/from-state-decorator-recognition.ts",
+          "symbolName": "FromStateDecoratorBindingSite"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-getter-binding-materialization.ts",
+          "symbolName": "StateGetterBindingMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/state-projections.ts",
+          "symbolName": "readStateGetterBindingRows"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/state/with-store-registration-order-issues.ts",
           "symbolName": "WithStoreAfterRegistrationIssueMaterializer"
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-05-30"
     }
   ]
 }

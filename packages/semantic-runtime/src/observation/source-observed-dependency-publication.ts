@@ -7,10 +7,13 @@ import type {
 } from '../kernel/handles.js';
 import { ObservationIdentity } from '../kernel/identity.js';
 import {
-  MaterializationRecord,
   MaterializedProduct,
+  MaterializationRecord,
 } from '../kernel/materialization.js';
-import { sourceSpanAddressForSite } from '../kernel/source-address.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -51,10 +54,30 @@ export class SourceObservedDependencyRecordSet {
   ) {}
 }
 
+interface SourceObservedDependencyPublicationFrame {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly source: SourceSpanAddressPublication | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly claim: SemanticClaim;
+}
+
 /** Publish a source-observer-owned dependency read without rediscovering source provenance from a carrier address. */
 export function sourceObservedDependencyRecords(
   input: SourceObservedDependencyRecordInput,
 ): SourceObservedDependencyRecordSet {
+  const frame = sourceObservedDependencyPublicationFrame(input);
+  return new SourceObservedDependencyRecordSet(
+    frame.productHandle,
+    frame.identityHandle,
+    frame.sourceAddressHandle,
+    sourceObservedDependencyKernelRecords(input, frame),
+  );
+}
+
+function sourceObservedDependencyPublicationFrame(
+  input: SourceObservedDependencyRecordInput,
+): SourceObservedDependencyPublicationFrame {
   const productHandle = input.store.handles.product(input.local);
   const identityHandle = input.store.handles.identity(input.local);
   const source = input.draft.spanStart == null || input.draft.spanEnd == null
@@ -72,33 +95,41 @@ export function sourceObservedDependencyRecords(
     productHandle,
     input.provenanceHandle,
   );
-  return new SourceObservedDependencyRecordSet(
+  return {
     productHandle,
     identityHandle,
+    source,
     sourceAddressHandle,
-    [
-      ...(source?.records ?? []),
-      new ObservationIdentity(
-        identityHandle,
-        KernelVocabulary.Binding.ObservedDependency.key,
-        input.owner.identityHandle,
-        sourceAddressHandle,
-        runtimeObservedDependencyIdentityLocalName(input.draft, input.index),
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Binding.ObservedDependency.key,
-        identityHandle,
-        sourceAddressHandle,
-        input.provenanceHandle,
-      ),
-      claim,
-      new MaterializationRecord(
-        input.store.handles.materialization(input.local),
-        identityHandle,
-        [productHandle],
-        [claim.handle],
-      ),
-    ],
-  );
+    claim,
+  };
+}
+
+function sourceObservedDependencyKernelRecords(
+  input: SourceObservedDependencyRecordInput,
+  frame: SourceObservedDependencyPublicationFrame,
+): readonly KernelStoreRecord[] {
+  return [
+    ...(frame.source?.records ?? []),
+    new ObservationIdentity(
+      frame.identityHandle,
+      KernelVocabulary.Binding.ObservedDependency.key,
+      input.owner.identityHandle,
+      frame.sourceAddressHandle,
+      runtimeObservedDependencyIdentityLocalName(input.draft, input.index),
+    ),
+    new MaterializedProduct(
+      frame.productHandle,
+      KernelVocabulary.Binding.ObservedDependency.key,
+      frame.identityHandle,
+      frame.sourceAddressHandle,
+      input.provenanceHandle,
+    ),
+    frame.claim,
+    new MaterializationRecord(
+      input.store.handles.materialization(input.local),
+      frame.identityHandle,
+      [frame.productHandle],
+      [frame.claim.handle],
+    ),
+  ];
 }

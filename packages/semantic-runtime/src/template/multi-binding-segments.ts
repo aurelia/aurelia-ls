@@ -1,3 +1,5 @@
+import { escapeDoubleQuotedAttributeValue } from './authored-template-source.js';
+
 /** Parsed segment from an inline custom-attribute multi-binding value. */
 export class ParsedMultiBindingSegment {
   constructor(
@@ -9,6 +11,22 @@ export class ParsedMultiBindingSegment {
     readonly valueStart: number,
     readonly valueEnd: number,
   ) {}
+}
+
+/** Source segment for an inline custom-attribute multi-binding value. */
+export interface InlineMultiBindingSourceSegment {
+  /** Segment name, optionally carrying a binding command suffix such as `params.bind`. */
+  readonly rawName: string;
+  /** Authored segment value before HTML attribute escaping. */
+  readonly rawValue: string;
+}
+
+/** Serialize inline multi-binding segments as an authored custom-attribute value. */
+export function inlineMultiBindingValueSourceText(
+  segments: readonly InlineMultiBindingSourceSegment[],
+): string {
+  return segments.map((segment) =>
+    `${segment.rawName}: ${escapeDoubleQuotedAttributeValue(segment.rawValue)}`).join('; ');
 }
 
 /** Parse Aurelia inline multi-binding syntax into source-offset-preserving segments. */

@@ -13,6 +13,8 @@ import { SemanticRuntimeSessionRegistry, normalizeRuntimeOptions } from './sessi
 import {
   aureliaMcpToolNames,
   type AureliaMcpAnalysisCacheOverviewInput,
+  type AureliaMcpAppBuilderCatalogInput,
+  type AureliaMcpAppBuilderQueryInput,
   type AureliaMcpAppDiagnosticsInput,
   type AureliaMcpAppOverviewInput,
   type AureliaMcpAppQueryBatchInput,
@@ -77,6 +79,53 @@ export class AureliaMcpSemanticRuntimeAdapter {
         group: input.group,
         queryKind: input.queryKind,
         inquiryProfile: 'mcp-orientation',
+      }),
+    );
+  }
+
+  async appBuilderCatalog(input: AureliaMcpAppBuilderCatalogInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+    const runtime = await this.sessions.runtime(runtimeOptions(input));
+    return toolResponse(
+      aureliaMcpToolNames.appBuilderCatalog,
+      input,
+      runtime.appBuilderQueryCatalog({
+        group: input.group,
+        queryKind: input.queryKind,
+        inquiryProfile: input.inquiryProfile,
+        continuationIntents: input.continuationIntents,
+      }),
+    );
+  }
+
+  async appBuilderQuery(input: AureliaMcpAppBuilderQueryInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+    const runtime = await this.sessions.runtime(runtimeOptions(input));
+    return toolResponse(
+      aureliaMcpToolNames.appBuilderQuery,
+      input,
+      runtime.answerAppBuilderQuery({
+        kind: input.queryKind,
+        inquiryProfile: input.inquiryProfile,
+        continuationIntents: input.continuationIntents,
+        page: input.page ?? undefined,
+        partMenu: input.partMenu,
+        ontologyCatalog: input.ontologyCatalog,
+        inputReadiness: input.inputReadiness,
+        inputContractDetail: input.inputContractDetail,
+        affordanceDetail: input.affordanceDetail,
+        applicationPatternDetail: input.applicationPatternDetail,
+        collectionConceptDetail: input.collectionConceptDetail,
+        controlManifestDetail: input.controlManifestDetail,
+        controlPatternDetail: input.controlPatternDetail,
+        effectContractDetail: input.effectContractDetail,
+        policyDetail: input.policyDetail,
+        styleDetail: input.styleDetail,
+        targetCatalog: input.targetCatalog,
+        sourceLoweringPreflight: input.sourceLoweringPreflight,
+        sourceLoweringInvocation: input.sourceLoweringInvocation,
+        sourceLoweringComposition: input.sourceLoweringComposition,
+        sourceLoweringSourcePlan: input.sourceLoweringSourcePlan,
+        partSourceLoweringPreview: input.partSourceLoweringPreview,
+        partSourceInvocation: input.partSourceInvocation,
       }),
     );
   }
@@ -220,8 +269,11 @@ function continuationFilteredQueries(
   }));
 }
 
-interface RuntimeOptionsInput extends Partial<Omit<SemanticRuntimeOptions, 'workspaceRoot'>> {
+interface RuntimeOptionsInput {
   readonly workspaceRoot?: string | null;
+  readonly storeKey?: string | null;
+  readonly projects?: SemanticRuntimeOptions['projects'] | null;
+  readonly projectDiscovery?: SemanticRuntimeOptions['projectDiscovery'] | null;
 }
 
 function runtimeOptions(input: RuntimeOptionsInput): SemanticRuntimeOptions {

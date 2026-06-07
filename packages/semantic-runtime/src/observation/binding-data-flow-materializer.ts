@@ -185,6 +185,7 @@ import {
   sourceAssignmentForDataFlow,
 } from './binding-data-flow-source-assignment.js';
 import {
+  bindingDataFlowDirectionIncludesSourceEvaluation,
   bindingDataFlowDirectionIncludesSourceToTarget,
   bindingDataFlowDirectionIncludesTargetToSource,
 } from './binding-data-flow-direction.js';
@@ -621,7 +622,7 @@ export class RuntimeBindingDataFlowMaterializer {
     draft: DataFlowDraft,
     context: BindingDataFlowContext,
   ): readonly RuntimeBindingObservedDependency[] {
-    if (draft.ast == null || !bindingDataFlowDirectionIncludesSourceToTarget(draft.direction)) {
+    if (draft.ast == null || !bindingDataFlowDirectionIncludesSourceEvaluation(draft.direction)) {
       return [];
     }
     const ast = draft.ast;
@@ -887,7 +888,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
   ): DataFlowDraft {
     const direction = directionForBinding(this.store, binding, resourceScope);
     const needsSourceWriteCapability = bindingDataFlowDirectionIncludesTargetToSource(direction);
-    const sourceEvaluationConnectable = bindingDataFlowDirectionIncludesSourceToTarget(direction);
+    const sourceEvaluationConnectable = bindingDataFlowDirectionIncludesSourceEvaluation(direction);
     const expressionFacts = this.dataFlowExpressionFacts(binding, scope, local);
     const targetTypes = this.dataFlowTargetTypes(binding, target);
     const sourceProjection = this.sourceProjector.dataFlowSourceProjection(
@@ -1254,6 +1255,9 @@ function directionForBinding(
   binding: RuntimeDataFlowBinding,
   resourceScope: TemplateResourceScope | null,
 ): RuntimeBindingDataFlowDirection {
+  if (isRuntimeSourceOnlyDataFlowBinding(binding)) {
+    return RuntimeBindingDataFlowDirection.SourceRead;
+  }
   if (binding instanceof PropertyBinding) {
     return directionForBindingMode(effectivePropertyBindingMode(store, binding, resourceScope));
   }

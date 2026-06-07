@@ -3,6 +3,13 @@
 This area owns source-backed `@aurelia/validation` products that do not belong to template binding behavior, DI, or
 configuration admission.
 
+`validation-html-source.ts` is the product-free source companion for
+`@aurelia/validation-html` display resources. It owns the `validation-errors`
+custom-attribute source form and the `validation-container` custom-element
+source form so app-builder and future source-editing surfaces spend the same
+resource names and bindable vocabulary that built-in resource materialization
+uses.
+
 The first modeled lane is validation rule construction and model-rule hydration:
 
 - Fluent `PropertyRule` modifier calls such as `.withMessage(...)`, `.withMessageKey(...)`, `.when(...)`, and `.tag(...)`

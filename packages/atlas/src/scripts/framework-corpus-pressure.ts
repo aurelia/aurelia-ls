@@ -15,18 +15,16 @@ const docSnippetAnswer = await askCorpus("doc-snippets", { rows: 12, evidencePer
 const testSnippetAnswer = await askCorpus("test-snippets", { rows: 12, evidencePerSubject: 0 });
 const fixtureSeedAnswer = await askCorpus("fixture-seeds", { rows: 12, evidencePerSubject: 0 });
 const expectedEffectAnswer = await askCorpus("expected-effects", { rows: 24, evidencePerSubject: 0 });
-const legacyAnswer = await askCorpus("legacy", { rows: 20, evidencePerSubject: 0 });
 
 const summary = answerValue<FrameworkCorpusValue>(summaryAnswer);
 const docSnippetValue = answerValue<FrameworkCorpusValue>(docSnippetAnswer);
 const testSnippetValue = answerValue<FrameworkCorpusValue>(testSnippetAnswer);
 const fixtureSeedValue = answerValue<FrameworkCorpusValue>(fixtureSeedAnswer);
 const expectedEffectValue = answerValue<FrameworkCorpusValue>(expectedEffectAnswer);
-const legacyValue = answerValue<FrameworkCorpusValue>(legacyAnswer);
 
 console.log("framework.corpus pressure");
-console.log("scope: public Aurelia docs/tests plus old package replacement inventory for Atlas-guided substrate work");
-console.log("note: docs are promoted-pattern pressure, tests are behavior-grounding pressure, old packages are replacement pressure");
+console.log("scope: public Aurelia docs/tests for Atlas-guided fixture and substrate work");
+console.log("note: docs are promoted-pattern pressure and tests are behavior-grounding pressure");
 
 if (summary?.rollup !== undefined) {
   console.log("");
@@ -37,8 +35,6 @@ if (summary?.rollup !== undefined) {
   console.log(`- framework test snippets: ${summary.rollup.testSnippetCount}`);
   console.log(`- fixture seeds: ${summary.rollup.fixtureSeedCount}`);
   console.log(`- expected effect descriptors: ${summary.rollup.expectedEffectDescriptorCount}`);
-  console.log(`- legacy packages: ${summary.rollup.legacyPackageCount}`);
-  console.log(`- legacy source lines: ${summary.rollup.legacySourceLineCount}`);
   console.log(`- source state: ${summary.sourceState.summary}`);
   printCounts("doc files by group", summary.rollup.docFilesByGroup, 20);
   printCounts("test files by group", summary.rollup.testFilesByGroup, 20);
@@ -48,7 +44,7 @@ if (summary?.rollup !== undefined) {
   printCounts("test rows by concept", summary.rollup.testRowsByConcept, 20);
   printCounts("test snippets by concept", summary.rollup.testSnippetsByConcept, 20);
   printCounts("fixture seeds by effect", summary.rollup.fixtureSeedsByEffect, 20);
-  printCounts("fixture seeds by recipe", summary.rollup.fixtureSeedsByRecipe, 20);
+  printCounts("fixture seeds by app pattern", summary.rollup.fixtureSeedsByAppPattern, 20);
   if (summary.rollup.fixtureSeedEffectHintsWithoutDescriptor.length > 0) {
     console.log(`- fixture effect hints without descriptor: ${summary.rollup.fixtureSeedEffectHintsWithoutDescriptor.join(", ")}`);
   }
@@ -115,23 +111,8 @@ for (const row of fixtureSeedValue?.fixtureSeeds ?? []) {
     .map((reason) => `${reason.kind}:${reason.key}`)
     .join(", ") || "<none>";
   console.log(
-    `- ${row.filePath}:${row.source.start.line + 1} ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}; filters=${filters.join(", ") || "<none>"}; recipes=${row.recipeHints.join(", ") || "<none>"}; reasons=${reasons}`,
+    `- ${row.filePath}:${row.source.start.line + 1} ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}; filters=${filters.join(", ") || "<none>"}; appPatterns=${row.appPatternHints.join(", ") || "<none>"}; reasons=${reasons}`,
   );
-}
-
-console.log("");
-console.log("legacy replacement inventory");
-for (const row of legacyValue?.legacyPackages ?? []) {
-  console.log(
-    `- ${row.packagePath}: source=${row.sourceFiles}, tests=${row.testFiles}, lines=${row.sourceLines}, ` +
-    `semantic-runtime=${row.dependsOnSemanticRuntime}, compiler=${row.dependsOnCompiler}, semantic-workspace=${row.dependsOnSemanticWorkspace}`,
-  );
-  if (row.aureliaDependencies.length > 0) {
-    console.log(`  aurelia deps: ${row.aureliaDependencies.join(", ")}`);
-  }
-  if (row.topSourceGroups.length > 0) {
-    console.log(`  top source groups: ${row.topSourceGroups.map((group) => `${group.name}:${group.count}`).join(", ")}`);
-  }
 }
 
 async function askCorpus(

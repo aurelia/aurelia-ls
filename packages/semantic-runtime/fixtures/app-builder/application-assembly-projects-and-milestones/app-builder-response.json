@@ -1,0 +1,1181 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 29 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=application-assembly, files=29, witnesses=231, controlUses=15, expectedEffects=17, decisionBundles=5, issues=0.",
+    "rootDir": ".",
+    "templatePath": null,
+    "sourceTargetPath": null,
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "application-assembly",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "application-assembly"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "route-navigation-action"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "native-submit-form"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-button"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "field-group"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-text-input"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-boolean-checkbox"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-single-select"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "action-feedback-status"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "service-backed-load-save"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "semantic-runtime-reopen",
+      "control-use-inventory",
+      "existing-app-fact-read",
+      "component-manifest-publication"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "route",
+      "template-compilation",
+      "runtime-controller",
+      "service-interaction-binding",
+      "service-class",
+      "service-interaction",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 17,
+    "controlUseInventoryRowCount": 15,
+    "controlUseInventoryRows": [
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-invocation",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "openProject",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: project-detail; params.bind: { projectId: project.id }",
+        "linkText": "Open project",
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Open project",
+        "labelTextSource": null,
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "text-input",
+        "innerControlPatternId": "native-text-input",
+        "fieldName": "name",
+        "actionName": null,
+        "bindingExpression": "name",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Name",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "name-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "text-input",
+        "innerControlPatternId": "native-text-input",
+        "fieldName": "phase",
+        "actionName": null,
+        "bindingExpression": "phase",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Phase",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "phase-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "createProject",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": "createProject()",
+        "handlerExpressionSource": "selected-action-name",
+        "eventName": "submit",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": "Create project",
+        "buttonType": "submit",
+        "labelText": "Create project",
+        "labelTextSource": "explicit-request",
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-invocation",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "openMilestone",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: milestone-detail; params.bind: { milestoneId: milestone.id }",
+        "linkText": "Open milestone",
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Open milestone",
+        "labelTextSource": null,
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-invocation",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "openTask",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open assignment",
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Open assignment",
+        "labelTextSource": null,
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "text-input",
+        "innerControlPatternId": "native-text-input",
+        "fieldName": "title",
+        "actionName": null,
+        "bindingExpression": "title",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Title",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "title-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "checkbox",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "fieldName": "done",
+        "actionName": null,
+        "bindingExpression": "done",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Done",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "done-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "single-select",
+        "innerControlPatternId": "native-single-select",
+        "fieldName": "projectId",
+        "actionName": null,
+        "bindingExpression": "projectId",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Project",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "project-id-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": "state.projects",
+        "valueDomainExpressionSource": "relationship-collection"
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "create",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": "create()",
+        "handlerExpressionSource": "selected-action-name",
+        "eventName": "submit",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": "Create assignment",
+        "buttonType": "submit",
+        "labelText": "Create assignment",
+        "labelTextSource": "explicit-request",
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-invocation",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "openReview",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: review-item-detail; params.bind: { reviewId: reviewItem.id }",
+        "linkText": "Open review",
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Open review",
+        "labelTextSource": null,
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "text-input",
+        "innerControlPatternId": "native-text-input",
+        "fieldName": "title",
+        "actionName": null,
+        "bindingExpression": "title",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Title",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "title-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "checkbox",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "fieldName": "done",
+        "actionName": null,
+        "bindingExpression": "done",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Done",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "done-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "single-select",
+        "innerControlPatternId": "native-single-select",
+        "fieldName": "reviewer",
+        "actionName": null,
+        "bindingExpression": "reviewer",
+        "bindingExpressionSource": "selected-relationship-local-value",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Reviewer",
+        "labelTextSource": "selected-relationship-title",
+        "fieldControlId": "reviewer-field",
+        "fieldControlIdSource": "selected-relationship-local-value",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": "state.reviewerProfiles",
+        "valueDomainExpressionSource": "relationship-collection"
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "createReview",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": "createReview()",
+        "handlerExpressionSource": "selected-action-name",
+        "eventName": "submit",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": "Create review",
+        "buttonType": "submit",
+        "labelText": "Create review",
+        "labelTextSource": "explicit-request",
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      }
+    ],
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 3,
+      "requiredCount": 3,
+      "conditionalCount": 0,
+      "optionalCount": 0,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 3,
+          "requiredCount": 3,
+          "conditionalCount": 0,
+          "optionalCount": 0,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceLoweringApplicationAssembly",
+            "routeAreas"
+          ],
+          "conditionalRequestFieldNames": [],
+          "optionalRequestFieldNames": []
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 231,
+    "suppliedInputCount": 22,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 5,
+    "decisionBundleDecisionCount": 22,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 188,
+          "contributionCount": 4
+        },
+        {
+          "path": "src/my-app.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 2205,
+          "contributionCount": 10
+        },
+        {
+          "path": "src/my-app.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 226,
+          "contributionCount": 5
+        },
+        {
+          "path": "src/routes/project-list-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 301,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/project-list-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 687,
+          "contributionCount": 16
+        },
+        {
+          "path": "src/routes/project-detail-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 470,
+          "contributionCount": 6
+        },
+        {
+          "path": "src/routes/project-detail-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 921,
+          "contributionCount": 18
+        },
+        {
+          "path": "src/project.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 127,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/task-item.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 161,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/project-browse-state.ts",
+          "role": "state-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-state-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 980,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/milestone-list-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 187,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/milestone-list-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 378,
+          "contributionCount": 8
+        },
+        {
+          "path": "src/routes/milestone-detail-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 492,
+          "contributionCount": 6
+        },
+        {
+          "path": "src/routes/milestone-detail-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 258,
+          "contributionCount": 5
+        },
+        {
+          "path": "src/milestone.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 266,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/milestone-browse-state.ts",
+          "role": "state-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-state-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 392,
+          "contributionCount": 1
+        },
+        {
+          "path": "src/routes/task-item-list-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 433,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/task-item-list-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1531,
+          "contributionCount": 30
+        },
+        {
+          "path": "src/routes/task-item-detail-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 475,
+          "contributionCount": 6
+        },
+        {
+          "path": "src/routes/task-item-detail-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 393,
+          "contributionCount": 9
+        },
+        {
+          "path": "src/task-item-browse-state.ts",
+          "role": "state-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-state-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1205,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/review-item-list-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 734,
+          "contributionCount": 3
+        },
+        {
+          "path": "src/routes/review-item-list-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1839,
+          "contributionCount": 32
+        },
+        {
+          "path": "src/routes/review-item-detail-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 472,
+          "contributionCount": 5
+        },
+        {
+          "path": "src/routes/review-item-detail-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 629,
+          "contributionCount": 13
+        },
+        {
+          "path": "src/review-item.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 236,
+          "contributionCount": 1
+        },
+        {
+          "path": "src/services/review-assignment-service.ts",
+          "role": "service",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-service-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1298,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/reviewer-profile.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 150,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/review-item-browse-state.ts",
+          "role": "state-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-state-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1430,
+          "contributionCount": 4
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "@aurelia/router",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 289
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": {
+        "key": "application-assembly.convention",
+        "title": "Application assembly",
+        "summary": "One Aurelia entrypoint and root route shell coordinating several generated routed app areas.",
+        "role": "recommendable-source-start",
+        "domainModelPolicy": "caller-applied",
+        "stylePolicy": "none",
+        "dataPolicy": "caller-supplied",
+        "codeEconomyPolicy": "production-terse",
+        "adaptationNotes": [
+          "The root app shell owns startup, router admission, top-level navigation, and shared viewport placement.",
+          "Child route areas own their domain state, route components, nested detail viewports, and service boundaries.",
+          "This pattern is the first app-builder rung where multiple app areas must compose without duplicating root tooling."
+        ],
+        "parameters": [],
+        "modules": [
+          {
+            "key": "aurelia-app-shell",
+            "kind": "app-shell",
+            "title": "Aurelia app shell",
+            "summary": "Public Aurelia entrypoint plus root component/template ownership."
+          },
+          {
+            "key": "convention-resource-admission",
+            "kind": "resource-convention",
+            "title": "Convention resource admission",
+            "summary": "Class/file/template naming is intentionally compatible with Aurelia convention resource discovery."
+          },
+          {
+            "key": "router-shell",
+            "kind": "router-admission",
+            "title": "Router shell",
+            "summary": "RouterConfiguration, route config, navigation links, and au-viewport shell wiring."
+          },
+          {
+            "key": "route-link-navigation",
+            "kind": "router-admission",
+            "title": "Route link navigation",
+            "summary": "Templates create static or data-driven route instructions instead of string-only DOM href plumbing."
+          },
+          {
+            "key": "nested-viewport-layout",
+            "kind": "router-admission",
+            "title": "Nested viewport layout",
+            "summary": "A child route area owns its own au-viewport so nested route components render inside the active parent route component."
+          },
+          {
+            "key": "di-state-boundary",
+            "kind": "di-boundary",
+            "title": "DI state boundary",
+            "summary": "Components resolve ordinary state/domain classes through Aurelia DI instead of passing facades around."
+          },
+          {
+            "key": "ordinary-domain-class-model",
+            "kind": "domain-model",
+            "title": "Ordinary domain classes",
+            "summary": "Domain entities and value objects are modeled as ordinary classes with readable properties and getters."
+          },
+          {
+            "key": "list-rendering",
+            "kind": "list-rendering",
+            "title": "List rendering",
+            "summary": "Repeated rows/cards/lists intentionally exercise item-scope template-controller handoff."
+          },
+          {
+            "key": "template-controller-flow",
+            "kind": "template-controller",
+            "title": "Template-controller flow",
+            "summary": "If, repeat, switch, promise, or let scopes are intentional semantic structure rather than markup decoration."
+          }
+        ],
+        "adaptationGroups": [],
+        "kind": "source-pattern"
+      }
+    }
+  }
+}

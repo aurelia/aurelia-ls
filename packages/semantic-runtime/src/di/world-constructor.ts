@@ -1447,6 +1447,7 @@ function frameworkRegistrationEffectsCloseRegistryBody(admission: RegistrationAd
     case FrameworkRegistrationKind.RouterDefaultResources:
     case FrameworkRegistrationKind.StateDefaultConfiguration:
     case FrameworkRegistrationKind.DialogConfiguration:
+    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
       return true;
     case FrameworkRegistrationKind.StandardConfiguration:
     case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
@@ -1455,7 +1456,6 @@ function frameworkRegistrationEffectsCloseRegistryBody(admission: RegistrationAd
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
     case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
-    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
     case null:
       return false;
     case FrameworkRegistrationKind.AppTask:
@@ -1521,7 +1521,7 @@ function summaryForFrameworkRegistrationOpen(frameworkKind: FrameworkRegistratio
     case FrameworkRegistrationKind.RouterDefaultResources:
       return null;
     case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return 'DefaultVirtualizationConfiguration resource headers can feed DI resource slots; collection-strategy and DOM-renderer service registrations are not spent yet.';
+      return null;
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return null;
     case FrameworkRegistrationKind.DialogConfiguration:

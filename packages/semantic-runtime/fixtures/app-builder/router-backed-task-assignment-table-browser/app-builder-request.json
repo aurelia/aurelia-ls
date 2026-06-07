@@ -1,0 +1,289 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "actionName": "openTask",
+      "linkText": "Open",
+      "createForm": {
+        "actionName": "create",
+        "fieldNames": [
+          "title",
+          "assigneeId",
+          "reviewerIds"
+        ],
+        "submitButtonText": "Create task"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "task-assignment-table-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task assignment table explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Contact",
+                      "entityTypeName": "ContactEntry",
+                      "collectionMemberName": "contacts",
+                      "identityMemberName": "contactId",
+                      "identityValueKind": "string"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "openTask",
+                      "kind": "custom",
+                      "scope": "navigation",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "assigneeId",
+                        "reviewerIds"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "assigneeId",
+                      "title": "Assignee",
+                      "valueKind": "text",
+                      "defaultValue": "ada"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "reviewerIds",
+                      "title": "Reviewers",
+                      "valueKind": "choice-set",
+                      "defaultValue": [
+                        "ada"
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "assignee",
+                      "title": "Assignee",
+                      "kind": "reference-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "assigneeId",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": true
+                    },
+                    {
+                      "name": "reviewers",
+                      "title": "Reviewers",
+                      "kind": "reference-many",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "reviewerIds",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    },
+                    {
+                      "relationshipName": "assignee",
+                      "header": "Assignee",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "reviewers",
+                      "header": "Reviewers",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "actionName": "openTask",
+                      "header": "Action",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Assignment Table Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "task-assignment-table"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "taskId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "records": [
+                        {
+                          "id": 1,
+                          "title": "Review the assignment flow",
+                          "done": false,
+                          "assigneeId": "ada",
+                          "reviewerIds": [
+                            "ada",
+                            "grace"
+                          ]
+                        },
+                        {
+                          "id": 2,
+                          "title": "Publish the handoff notes",
+                          "done": true,
+                          "assigneeId": "grace",
+                          "reviewerIds": [
+                            "ada"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "records": [
+                        {
+                          "contactId": "ada",
+                          "fullName": "Ada Lovelace",
+                          "email": "ada@example.test"
+                        },
+                        {
+                          "contactId": "grace",
+                          "fullName": "Grace Hopper",
+                          "email": "grace@example.test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

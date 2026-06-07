@@ -77,10 +77,25 @@ The preview exposes read-only semantic-runtime queries:
 - `aurelia_template_cursor_info`
 - `aurelia_template_completions`
 - `aurelia_template_diagnostics`
+- `aurelia_app_builder_catalog`
+- `aurelia_app_builder_query`
 
-It also exposes the app query catalog resource:
+It also exposes catalog resources:
 
 - `aurelia://semantic-runtime/app-queries`
+- `aurelia://semantic-runtime/app-builder`
+
+Use `aurelia_app_builder_query` with `queryKind=recommendation-policy` when a
+caller needs recommendation/defaulting posture, applicability lanes, evidence
+lanes, or contextual executable rows that require explicit policy/defaulting
+review before source lowering should be trusted. It returns compact counts by
+default; pass `recommendationPolicy.includeRows=true` for the detailed row
+table after the counts point at a policy area worth inspecting.
+Use `queryKind=source-lowering-preflight` after selecting targets and supplied
+inputs. Contextual executable targets reached only through a broad/default
+target set report policy satisfaction as missing and do not report
+`canRequestSourceLowering=true`; exact target selection is the current
+first-ring satisfaction source.
 
 And small workflow prompts:
 

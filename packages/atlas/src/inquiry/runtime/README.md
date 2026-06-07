@@ -85,7 +85,7 @@ This is not a compatibility layer for old readers and not the default caller sur
   memory, and corpus pressure. The router maps broad work
   intent to typed route plans over source anchors, Atlas memory, framework corpus seeds, expected effects, scripts,
   docs, and cautions. Prefer exact route/domain/lens/source/symbol/auLink/corpus filters, including `effectKind`,
-  `recipeKey`, and `seedUse`, before prose `query`; weak text matches are route-substrate pressure, not a success
+  `appPatternKey`, and `seedUse`, before prose `query`; weak text matches are route-substrate pressure, not a success
   condition. Framework corpus seed rows carry typed classification reasons, so broad or surprising route fixture seeds
   should be inspected through those reasons before being treated as authoring taste. Test fixture seeds are admitted from
   concrete behavior snippets (`it(...)`, `createFixture(...)`, and extracted object cases), while `describe(...)` suite
@@ -278,6 +278,16 @@ This is not a compatibility layer for old readers and not the default caller sur
   `pressure:framework-resources` when provenance breadth is the pressure rather than a specific resource row. Filtered
   summaries distinguish matching rows from total convergence rows, so a query miss should read as "no matching
   resource row" instead of "the framework resource substrate is empty".
+- [framework-capability-lenses.ts](framework-capability-lenses.ts) exposes `framework.capabilities`. It is the curated
+  "what can Aurelia do?" terrain before app-builder or public capability APIs derive consumer policy, with enum-backed dimensions for
+  domain, locality, resource kinds, resource-scoped source support, framework effect, typed requirements, framework-local constraints, and evidence.
+  Use it before reshaping app-builder lowering axes or MCP guidance so resource declaration carriers, runtime effect, and prerequisite shape do not collapse into one option enum. Rows point at
+  existing lenses as evidence descriptors; improve the framework/resource/router/observation/corpus lanes when the
+  backing proof is weak rather than turning the capability table into broad prose or consumer-specific guidance. Use
+  `projection=matrix` for concrete resource-kind/source-form cells, `projection=evidence` for cheap evidence
+  descriptors, `projection=evidence-trace` when Atlas should ask backing lenses and attach sampled target rows/source
+  anchors, and `projection=grounding` to inspect neutral evidence/prerequisite/exclusivity facts before any
+  consumer-specific policy is derived.
 - [framework-router-lenses.ts](framework-router-lenses.ts) exposes `framework.router`. It is the first router grounding
   map: rows stay source-backed and split router package pressure into an ordered route-config/navigation `flow`
   projection, including route-recognizer state population and recognition rows, plus route-context, route-tree,

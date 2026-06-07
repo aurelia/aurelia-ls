@@ -112,6 +112,9 @@ The tooling model should keep that split:
   admits that registry value; a standalone `AppTask.*(...)` expression should not produce app-world effects. Their
   callback bodies may be inspected later, but they are not spent into container state merely because the task was
   registered.
+- `app-task-source.ts` owns product-free source serialization for `AppTask.*(...)` registry expressions. App-builder
+  can spend that helper when it needs a TypeScript expression fragment, but semantic effects still require the
+  configuration admission path above.
 - Configuration records describe where app/world admission happens.
 - Registration records describe what is offered to registration admission.
 - DI world construction later spends registration records into container/resource reachability.

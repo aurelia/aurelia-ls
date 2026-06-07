@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "di-state-task-state",
+  "ok": true,
+  "expectedEffects": 0,
+  "effectResults": [],
+  "expectedControlUseRows": 0,
+  "controlUseResults": [],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 1824,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-state.ts",
+      "textLength": 310,
+      "summary": "Generated SourcePlan file 'src/task-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 0,
+      "jsonLength": 2,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 0,
+      "jsonLength": 2,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 3,
+      "jsonLength": 73,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 1,
+      "jsonLength": 85,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 0,
+      "jsonLength": 2,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 2,
+      "jsonLength": 531,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

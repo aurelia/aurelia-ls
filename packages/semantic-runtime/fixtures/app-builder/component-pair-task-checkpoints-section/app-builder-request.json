@@ -1,0 +1,255 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-checkpoints-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-checkpoints-section-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task checkpoints section component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Checkpoint",
+                      "entityTypeName": "CheckpointItem",
+                      "collectionMemberName": "checkpoints",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "CheckpointItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "CheckpointItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "checkpoints",
+                      "title": "Checkpoints",
+                      "kind": "owns-many",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "CheckpointItem",
+                      "localFieldName": "checkpoints",
+                      "displayFieldName": "title",
+                      "required": false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Checkpoints Section",
+                    "baseName": "Task Checkpoints Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-checkpoints-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "relationshipName": "checkpoints",
+                      "header": "Checkpoints",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "task-checkpoints"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "app-section"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "task-checkpoints__table"
+                      ]
+                    },
+                    {
+                      "target": "collection-empty-state",
+                      "classTokens": [
+                        "task-checkpoints__empty"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Prepare release notes",
+                      "done": false,
+                      "checkpoints": [
+                        {
+                          "id": 101,
+                          "title": "Draft summary",
+                          "done": true
+                        },
+                        {
+                          "id": 102,
+                          "title": "Review changes",
+                          "done": false
+                        }
+                      ]
+                    },
+                    {
+                      "id": 2,
+                      "title": "Check deployment checklist",
+                      "done": true,
+                      "checkpoints": [
+                        {
+                          "id": 201,
+                          "title": "Confirm owners",
+                          "done": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "collection-table"
+            },
+            "compositionKind": "collection-table",
+            "collectionExpression": "taskItems",
+            "itemLocalName": "taskItem",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "taskItems.length === 0"
+          }
+        ]
+      }
+    }
+  }
+}

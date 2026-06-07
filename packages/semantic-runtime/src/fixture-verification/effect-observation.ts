@@ -33,6 +33,7 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly runtimeWatcherObservedDependencies: ExpectedSemanticEffectObservableRows;
   readonly runtimeCompositions: readonly object[];
   readonly bindingTargetAccesses: ExpectedSemanticEffectObservableRows;
+  readonly bindingSourceOperations: ExpectedSemanticEffectObservableRows;
   readonly targetOperations: ExpectedSemanticEffectObservableRows;
   readonly bindingValueChannels: ExpectedSemanticEffectObservableRows;
   readonly bindingObservedDependencies: ExpectedSemanticEffectObservableRows;
@@ -141,6 +142,7 @@ const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKin
   [ExpectedSemanticEffectKind.RuntimeWatcherObservedDependency]: (snapshot) => snapshot.runtimeWatcherObservedDependencies,
   [ExpectedSemanticEffectKind.RuntimeComposition]: (snapshot) => snapshot.runtimeCompositions,
   [ExpectedSemanticEffectKind.BindingTargetAccess]: (snapshot) => snapshot.bindingTargetAccesses,
+  [ExpectedSemanticEffectKind.BindingSourceOperation]: (snapshot) => snapshot.bindingSourceOperations,
   [ExpectedSemanticEffectKind.TargetOperation]: (snapshot) => snapshot.targetOperations,
   [ExpectedSemanticEffectKind.BindingValueChannel]: (snapshot) => snapshot.bindingValueChannels,
   [ExpectedSemanticEffectKind.BindingObservedDependency]: (snapshot) => snapshot.bindingObservedDependencies,

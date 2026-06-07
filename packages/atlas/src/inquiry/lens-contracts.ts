@@ -83,7 +83,9 @@ export const enum LensId {
   FrameworkAdmission = "framework.admission",
   /** Aurelia framework actor-centered semantic composition graph. */
   FrameworkComposition = "framework.composition",
-  /** Aurelia docs, framework tests, and legacy package corpus used as fixture and authoring pressure. */
+  /** Curated Aurelia framework capability terrain before consumer-specific policy. */
+  FrameworkCapabilities = "framework.capabilities",
+  /** Aurelia docs and framework tests used as fixture and authoring pressure. */
   FrameworkCorpus = "framework.corpus",
   /** Atlas self-maintenance source surfaces. */
   AtlasSelf = "atlas.self",

@@ -12,27 +12,51 @@
         "semantic-runtime",
         "mcp"
       ],
-      "summary": "Atlas needs a framework capability terrain that answers what Aurelia can do, how app authors express it, where the choice is local or global, and what semantic-runtime already models.",
-      "rationale": "App-builder lowering exposed a granularity error by treating convention, decorator metadata, and inline/local custom elements as co-equal choices. The raw evidence already exists across framework resources, corpus, router, observation, discovery, and auLink, but it is not available as one compact terrain for app-builder and future MCP capability answers. A curated framework.capabilities lens should prevent app-builder axes from being inferred from local enum guesses or isolated docs snippets.",
-      "nextActionPolicy": "proactive",
+      "summary": "Atlas owns a framework.capabilities terrain that answers what Aurelia can do, how app authors express it, and where each framework capability is selected or admitted.",
+      "rationale": "App-builder lowering exposed a granularity error by treating convention, decorator metadata, and inline/local custom elements as co-equal choices. The raw evidence already exists across framework resources, corpus, router, observation, discovery, and auLink, and the curated framework.capabilities lens now gives future consumer projections a compact starting terrain without encoding app-builder policy, MCP guidance, or semantic-runtime coverage as row data.",
       "guidance": [
-        "Build `framework.capabilities` as an Atlas lens before further durable app-builder lowering-axis expansion. It should start curated and source-backed, then join existing framework/resource/router/observation/corpus/auLink evidence rather than using broad text heuristics as row identity.",
-        "Each capability row should distinguish framework concept, app-author source form, locality, policy nature, prerequisites, consequences, recommendation posture, semantic-runtime coverage, app-builder implication, and evidence.",
+        "Use `framework.capabilities` before further durable app-builder lowering-axis expansion. It starts curated and source-backed, then points at existing framework/resource/router/observation/corpus/auLink evidence rather than using broad text heuristics as row identity.",
+        "Each capability row should distinguish framework concept, app-author source form, locality, resource kind/source support when resource-scoped, framework effect, typed prerequisites, consequences, framework-local constraints, and evidence.",
         "Use locality as a first-class dimension: app-global, package/global registration, resource-local, template-local, area-local, binding-site, and route-local are not interchangeable.",
-        "Use policy nature as a first-class dimension: convention/default, explicit metadata, programmatic definition, local compression, feature or plugin admission, and semantic consequence should not be collapsed into one option enum.",
-        "Treat `auLink` as a coverage and grounding signal for semantic-runtime understanding, not as the only proof that a framework capability exists.",
-        "Start v1 from semantic-runtime-understood areas: resource/source forms and local templates, style/Shadow DOM policies, router admission and area navigation, state/observation/binding, template controllers/composition, and DI/configuration/plugin admissions.",
-        "App-builder should derive Aurelia lowering axes from this terrain. Convention-vs-explicit is app/project policy, decorator/static/define are source metadata forms, and inline custom elements are locality/code-economy choices.",
-        "Router admission can be app-global, but list/detail/menu area selection is area-local; nested or named viewports are consequences of router-driven area composition, not standalone app-global taste.",
-        "Observation capability should inform low-boilerplate app-builder guidance: direct state/domain template reads, object handoff, ID handoff, proxy observation, ordinary getter observation, and @computed metadata are separate modeling choices.",
+        "Do not use a single policy-nature enum for capability rows. Resource declaration carriers, framework effects, and requirements are separate axes because resource source support, runtime effect, and prerequisite shape are not co-equal.",
+        "Keep resource source algebra resource-scoped: convention, decorator, static $au, define-call, and AttributePattern.create belong with concrete resource kinds rather than with route configuration, template syntax, DI APIs, or package tooling.",
+        "Use effects for what the framework or framework-adjacent tooling actually does, such as resource definition, resource visibility, DI registration, binding data flow, source observation, route recognition, viewport composition, or tooling transforms.",
+        "Use typed requirements when a capability needs another capability, package, or tooling feature. For example, CSS modules are a styling capability expressed through package tooling and require a css-modules transform rather than being a policy nature.",
+        "Keep styling capability rows focused on configuration, stylesheet discovery/pairing, registry wiring, dependency injection, and asset topology. Do not make semantic-runtime own CSS design semantics unless the product direction changes later.",
+        "Use `framework.capabilities -- --projection=matrix` when the question is about concrete resource-kind/source-form combinations; this avoids reading shared source-form rows as if every supported resource kind were the current subject.",
+        "Use `framework.capabilities -- --projection=grounding --groundingStrength=corpus-backed` before deriving consumer policy. Grounding is a neutral projection over evidence and prerequisites, not a readiness judgement or field on the pure capability row.",
+        "Use `framework.capabilities -- --projection=evidence --groundingStrength=corpus-backed` to find capability rows that currently depend on corpus evidence before app-builder or MCP derives durable guidance.",
+        "Use `framework.capabilities -- --projection=evidence-trace --targetRows=... --targetEvidenceRows=...` when a descriptor must be joined to backing lens rows and source anchors. This projection is intentionally heavier and Atlas-local.",
+        "Treat `auLink` as a grounding signal for framework concepts mirrored by semantic-runtime, not as proof that a capability exists or as row-level coverage state.",
+        "Start v1 from framework/source-backed areas: resource/source forms and local templates, style/Shadow DOM/tooling policies, router admission and viewport mechanics, state/observation/binding, template controllers/composition, and DI/configuration/plugin admissions.",
+        "Consumer projections such as app-builder, MCP, semantic-runtime coverage, and public guidance may join against this terrain, but the capability rows themselves should remain framework-pure.",
+        "App-builder reconciliation should keep consumer lanes separate: lowering axes describe policy and source-shape choices; source-derived part rows describe concrete parts that realize binding channels, template controllers, router resources, composition resources, state commands, value converters, and binding behaviors; source-derived composition rows describe generated pattern effects; source-derived source-plan rows describe generated entrypoint/configuration admission.",
+        "Keep resource authoring forms separate from built-in/plugin resource inventory. `framework.resources` owns built-in framework resource convergence; `plugin.architecture` owns public plugin resource surfaces; app-builder should use both before choosing how to create or use resources.",
+        "Router admission can be app-global, while route patterns, route context reads, navigation instructions, and viewport outlets remain separate framework capabilities with their own localities and prerequisites.",
+        "Actionless form submit prevention is a framework app-root configuration capability, not an app-builder form heuristic. The pure capability row should expose the default prevention behavior and the `allowActionlessForm` override; app-builder can later decide when generated forms should rely on it or surface explicit submit policy.",
+        "Observation capability rows should distinguish proxy observation, ordinary getter observation, explicit @computed dependencies, collection observation, and target observer channels without prescribing app-builder code style.",
+        "State plugin capability rows should distinguish store admission from `& state`, `.state`, `.dispatch`, and `@fromState`. App-builder may use those rows, but the rows themselves should stay grounded in the framework plugin registrations, command lowering, binding scopes, and store lookup behavior.",
         "Do not use framework bundles such as StandardConfiguration as the ontology. Bundles are discovery and admission conveniences; the capabilities carried by bundles should remain visible independently."
       ],
+      "nextActionPolicy": "proactive",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/atlas/src/inquiry/lens-contracts.ts",
           "symbolName": "LensId",
-          "summary": "The future framework.capabilities lens should become a first-class Atlas lens id when implemented."
+          "summary": "framework.capabilities is a first-class Atlas lens id."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "answerFrameworkCapabilities",
+          "summary": "Implemented capability terrain answerer and curated row inventory."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "catalog",
+          "summary": "Primary capability terrain projection for framework orientation before consumer-specific policy is applied."
         },
         {
           "kind": "source",
@@ -92,16 +116,32 @@
           "kind": "lens",
           "lensId": "bridge.aulink",
           "projection": "anchors",
-          "summary": "Semantic-runtime coverage signal for framework concepts already mirrored through auLink."
+          "summary": "Grounding signal for framework concepts already mirrored through auLink."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
           "symbolName": "AppBuilderAureliaLoweringAxis",
           "summary": "Current app-builder lowering axes that should be rechecked against the framework capability terrain."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-root.ts",
+          "symbolName": "AppRootConfig",
+          "summary": "Semantic-runtime mirror of IAppRootConfig, including allowActionlessForm provenance."
         }
       ],
       "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "answerFrameworkCapabilities"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FrameworkCapabilityDomain"
+        },
         {
           "kind": "source-declaration-exists",
           "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
@@ -131,10 +171,80 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
           "symbolName": "AppBuilderAureliaLoweringAxis"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/app-root.ts",
+          "symbolName": "AppRootConfig"
         }
       ],
       "createdAt": "2026-05-26",
-      "updatedAt": "2026-05-26"
+      "updatedAt": "2026-06-04"
+    },
+    {
+      "id": "frontier:source-derived-capability-map",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-capabilities",
+        "aurelia-framework",
+        "semantic-runtime"
+      ],
+      "summary": "Source-derived framework inventory, clusters, coverage, and reverse-coverage are Atlas evidence lanes for auditing framework.capabilities, not capability identity by themselves.",
+      "rationale": "The curated capability rows remain the conceptual capability terrain. Source-derived inventory and clusters are valuable review handles because they put framework resources, compiler instructions, renderer products, expression entities, observation entities, and relation facets on the table. They should not be treated as forced ontology: source-file co-location and instruction targets can suggest groupings, but a framework capability may span files, one file may contain several capabilities, and some inventory constructs are implementation details rather than app-author capabilities. auLink reverse coverage is a semantic-runtime mirror signal, not a completeness criterion.",
+      "guidance": [
+        "DONE: framework.capabilities exposes curated projections (summary/catalog/matrix/evidence/evidence-trace/grounding) and source-derived evidence projections (inventory/coverage/reverse-coverage/clusters), backed by framework-capability-territory.ts.",
+        "Treat `inventory` as concrete framework evidence, not as a list of user-facing capabilities. It currently joins catalog-shaped families (resources, expression, observation, compiler, rendering) and relation-graph families (router, DI, admission) into one typed stream.",
+        "Treat `clusters` as candidate grouping evidence. Source-file co-location and binding-command instruction target are useful for resource/compiler/rendering review, but they are not enough to declare a capability boundary without human/model review against framework semantics.",
+        "Current cluster gap: expression and observation families each collapse to one `unfiled` cluster because their source rows do not carry declaration source spans. Fix the source/projection substrate before using those clusters for ontology accounting.",
+        "Forward `coverage` distinguishes exact source-derived construct identity, broad capability-kind coverage, broad-only coverage, and internal implementation constructs. Broad-only means an author-facing construct is covered by a curated framework capability kind but not represented as an exact named built-in/plugin row; internal constructs such as renderers stay visible without counting as app-author capability gaps. Replace or supplement this with explicit reviewed grounding/cluster membership before calling an inventory construct category-grounded.",
+        "Reverse coverage is an auLink mirror signal for semantic-runtime alignment. Use it to find product mirror gaps and split-brain, not to decide whether a framework capability exists.",
+        "A future accounting view should keep five dimensions separate: curated capability row, source-derived construct, reviewed cluster/evidence membership, auLink mirror status, and downstream consumer readiness. Do not collapse those dimensions into one completeness score.",
+        "Tool-time-only surfaces such as evaluation mini-VM, type-system, inquiry, API, app-builder, and fixture-verification are product substrates or consumers. They are not missing framework capabilities merely because they appear in semantic-runtime or Atlas.",
+        "Collection observers and dirty checking should be treated as capability/mirror/accounting questions, not as permanent 80/20 exclusions unless a later reviewed policy says so.",
+        "Remaining tooling: wire orient to advertise inventory/coverage/reverse-coverage/clusters; collapse standalone framework:territory/capability-coverage/reverse-coverage scripts into thin wrappers only if the unified framework.capabilities script remains ergonomic."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkCapabilityClusters",
+          "summary": "Candidate source-derived clustering; useful evidence handle, not capability identity by itself."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FRAMEWORK_CAPABILITY_ROWS",
+          "summary": "Curated capability rows that may cite source-derived evidence after review."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "clusters",
+          "summary": "Candidate cluster projection for auditing framework inventory groupings."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "reverse-coverage",
+          "summary": "auLink mirror coverage signal for semantic-runtime alignment."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkCapabilityClusters"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FRAMEWORK_CAPABILITY_ROWS"
+        }
+      ],
+      "createdAt": "2026-05-29",
+      "updatedAt": "2026-05-30"
     }
   ]
 }

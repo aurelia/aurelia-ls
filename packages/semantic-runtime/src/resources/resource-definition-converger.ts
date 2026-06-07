@@ -101,6 +101,7 @@ import {
 import {
   type ResourceRecognitionObservation,
   type ResourceTargetObservation,
+  resourceTargetClassLikeNode,
 } from './resource-observation.js';
 import {
   ResourceCarrierKind,
@@ -305,7 +306,7 @@ class CustomElementConvergenceFrame {
     private readonly provenanceHandle: ProvenanceHandle,
     private readonly sourceTextCache: AuthoredSourceTextCache,
   ) {
-    this.targetClass = classNodeForTarget(definition.target);
+    this.targetClass = resourceTargetClassLikeNode(definition.target);
     this.definitionExpression = expressionNode(observation.definitionNode);
     this.annotations = readCustomElementMetadataAnnotations(context, this.targetClass);
     this.localPrefix = `resource-definition-converged:${header.localKey}`;
@@ -934,7 +935,7 @@ export class ResourceDefinitionConverger {
       return null;
     }
 
-    const targetClass = classNodeForTarget(definition.target);
+    const targetClass = resourceTargetClassLikeNode(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
     const bindables = readBindables(
@@ -1032,7 +1033,7 @@ export class ResourceDefinitionConverger {
       return null;
     }
 
-    const targetClass = classNodeForTarget(definition.target);
+    const targetClass = resourceTargetClassLikeNode(definition.target);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
     const aliasNames = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
     const aliases = aliasNames.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
@@ -1223,19 +1224,6 @@ export class ResourceDefinitionConverger {
       evidenceRoles: [EvidenceRole.Diagnostic],
     });
   }
-}
-
-function classNodeForTarget(
-  target: ResourceTargetObservation | null,
-): ts.ClassLikeDeclarationBase | null {
-  if (target == null) {
-    return null;
-  }
-  if (ts.isClassDeclaration(target.node) || ts.isClassExpression(target.node)) {
-    return target.node;
-  }
-  const parent = target.node.parent;
-  return ts.isClassDeclaration(parent) || ts.isClassExpression(parent) ? parent : null;
 }
 
 function expressionNode(node: ts.Node | null): ts.Expression | null {

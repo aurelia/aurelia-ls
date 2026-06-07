@@ -340,7 +340,7 @@ export function readBindingObservedDependencySummary(
   };
 }
 
-function bindingProjectionResources(
+export function bindingProjectionResources(
   emission: AureliaAppWorldProjectEmission,
 ) {
   return [
@@ -498,125 +498,155 @@ interface BindingValueChannelCouplingSummaryAccumulator {
 function summarizeBindingDataFlows(
   rows: readonly SemanticBindingDataFlowRow[],
 ): readonly SemanticBindingDataFlowSummaryRow[] {
+  const groups = bindingDataFlowSummaryGroups(rows);
+  return [...groups.values()]
+    .map(bindingDataFlowSummaryRow)
+    .sort((left, right) =>
+      bindingDataFlowSummarySortKey(left).localeCompare(bindingDataFlowSummarySortKey(right))
+    );
+}
+
+function bindingDataFlowSummaryGroups(
+  rows: readonly SemanticBindingDataFlowRow[],
+): ReadonlyMap<string, BindingDataFlowSummaryAccumulator> {
   const groups = new Map<string, BindingDataFlowSummaryAccumulator>();
   for (const row of rows) {
-    const key = [
-      row.direction,
-      row.targetKind ?? '',
-      row.targetProperty ?? '',
-      row.valueChannelKind ?? '',
-      row.sourceKind,
-    ].join('|');
-    let group = groups.get(key);
-    if (group == null) {
-      group = {
-        direction: row.direction,
-        targetKind: row.targetKind,
-        targetProperty: row.targetProperty,
-        valueChannelKind: row.valueChannelKind,
-        sourceKind: row.sourceKind,
-        count: 0,
-        bindingKinds: new Set(),
-        valueSiteKinds: new Set(),
-        sourceRootNames: new Set(),
-        sourceNames: new Set(),
-        sourceTypes: new Set(),
-        sourceTypeOpenKinds: new Set(),
-        sourceTypeOpenCount: 0,
-        targetValueTypes: new Set(),
-        sourceWritable: emptyNullableBooleanCounts(),
-        sourceToTargetAssignable: emptyNullableBooleanCounts(),
-        targetToSourceAssignable: emptyNullableBooleanCounts(),
-        sourceAssignmentKinds: new Set(),
-        sourceAssignmentReasonKinds: new Set(),
-        sourceToTargetTypeMismatchKinds: new Set(),
-        targetToSourceTypeMismatchKinds: new Set(),
-        frameworkErrorCodes: new Set(),
-        openCount: 0,
-        definitionNames: new Set(),
-      };
-      groups.set(key, group);
-    }
-    group.count += 1;
-    group.bindingKinds.add(row.bindingKind);
-    if (row.valueSiteKind != null) {
-      group.valueSiteKinds.add(row.valueSiteKind);
-    }
-    addNameParts(group.sourceRootNames, row.sourceRootName);
-    if (row.sourceName != null) {
-      group.sourceNames.add(row.sourceName);
-    }
-    if (row.sourceType != null) {
-      group.sourceTypes.add(row.sourceType);
-    }
-    if (row.sourceTypeOpenKind != null) {
-      group.sourceTypeOpenKinds.add(row.sourceTypeOpenKind);
-      group.sourceTypeOpenCount += 1;
-    } else if (row.sourceTypeOpenReason != null) {
-      group.sourceTypeOpenCount += 1;
-    }
-    if (row.targetValueType != null) {
-      group.targetValueTypes.add(row.targetValueType);
-    }
-    incrementNullableBooleanCounts(group.sourceWritable, row.sourceWritable);
-    incrementNullableBooleanCounts(group.sourceToTargetAssignable, row.sourceToTargetAssignable);
-    incrementNullableBooleanCounts(group.targetToSourceAssignable, row.targetToSourceAssignable);
-    if (row.sourceAssignmentKind != null) {
-      group.sourceAssignmentKinds.add(row.sourceAssignmentKind);
-    }
-    for (const reason of row.sourceAssignmentReasonKinds) {
-      group.sourceAssignmentReasonKinds.add(reason);
-    }
-    for (const mismatch of row.sourceToTargetTypeMismatchKinds) {
-      group.sourceToTargetTypeMismatchKinds.add(mismatch);
-    }
-    for (const mismatch of row.targetToSourceTypeMismatchKinds) {
-      group.targetToSourceTypeMismatchKinds.add(mismatch);
-    }
-    if (row.frameworkErrorCode != null) {
-      group.frameworkErrorCodes.add(row.frameworkErrorCode);
-    }
-    if (row.openReason != null) {
-      group.openCount += 1;
-    }
-    group.definitionNames.add(row.definitionName);
+    const key = bindingDataFlowSummaryKey(row);
+    const group = groups.get(key) ?? bindingDataFlowSummaryAccumulator(row);
+    addBindingDataFlowSummaryRow(group, row);
+    groups.set(key, group);
   }
-  return [...groups.values()]
-    .map((group): SemanticBindingDataFlowSummaryRow => ({
-      direction: group.direction,
-      targetKind: group.targetKind,
-      targetProperty: group.targetProperty,
-      valueChannelKind: group.valueChannelKind,
-      sourceKind: group.sourceKind,
-      count: group.count,
-      bindingKinds: sortedValues(group.bindingKinds),
-      valueSiteKinds: sortedValues(group.valueSiteKinds),
-      sourceRootNames: sortedValues(group.sourceRootNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
-      sourceRootNameCount: group.sourceRootNames.size,
-      sampleSourceNames: sortedValues(group.sourceNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
-      sourceNameCount: group.sourceNames.size,
-      sourceTypes: sortedValues(group.sourceTypes).slice(0, BINDING_SUMMARY_TYPE_LIMIT),
-      sourceTypeCount: group.sourceTypes.size,
-      sourceTypeOpenKinds: sortedValues(group.sourceTypeOpenKinds),
-      sourceTypeOpenCount: group.sourceTypeOpenCount,
-      targetValueTypes: sortedValues(group.targetValueTypes).slice(0, BINDING_SUMMARY_TYPE_LIMIT),
-      targetValueTypeCount: group.targetValueTypes.size,
-      sourceWritable: group.sourceWritable,
-      sourceToTargetAssignable: group.sourceToTargetAssignable,
-      targetToSourceAssignable: group.targetToSourceAssignable,
-      sourceAssignmentKinds: sortedValues(group.sourceAssignmentKinds),
-      sourceAssignmentReasonKinds: sortedValues(group.sourceAssignmentReasonKinds),
-      sourceToTargetTypeMismatchKinds: sortedValues(group.sourceToTargetTypeMismatchKinds),
-      targetToSourceTypeMismatchKinds: sortedValues(group.targetToSourceTypeMismatchKinds),
-      frameworkErrorCodes: sortedValues(group.frameworkErrorCodes),
-      openCount: group.openCount,
-      definitionNames: sortedValues(group.definitionNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
-      definitionCount: group.definitionNames.size,
-    }))
-    .sort((left, right) =>
-      `${left.direction}:${left.valueChannelKind ?? ''}:${left.targetKind ?? ''}:${left.targetProperty ?? ''}:${left.sourceKind}`
-        .localeCompare(`${right.direction}:${right.valueChannelKind ?? ''}:${right.targetKind ?? ''}:${right.targetProperty ?? ''}:${right.sourceKind}`)
-    );
+  return groups;
+}
+
+function bindingDataFlowSummaryKey(row: SemanticBindingDataFlowRow): string {
+  return [
+    row.direction,
+    row.targetKind ?? '',
+    row.targetProperty ?? '',
+    row.valueChannelKind ?? '',
+    row.sourceKind,
+  ].join('|');
+}
+
+function bindingDataFlowSummaryAccumulator(
+  row: SemanticBindingDataFlowRow,
+): BindingDataFlowSummaryAccumulator {
+  return {
+    direction: row.direction,
+    targetKind: row.targetKind,
+    targetProperty: row.targetProperty,
+    valueChannelKind: row.valueChannelKind,
+    sourceKind: row.sourceKind,
+    count: 0,
+    bindingKinds: new Set(),
+    valueSiteKinds: new Set(),
+    sourceRootNames: new Set(),
+    sourceNames: new Set(),
+    sourceTypes: new Set(),
+    sourceTypeOpenKinds: new Set(),
+    sourceTypeOpenCount: 0,
+    targetValueTypes: new Set(),
+    sourceWritable: emptyNullableBooleanCounts(),
+    sourceToTargetAssignable: emptyNullableBooleanCounts(),
+    targetToSourceAssignable: emptyNullableBooleanCounts(),
+    sourceAssignmentKinds: new Set(),
+    sourceAssignmentReasonKinds: new Set(),
+    sourceToTargetTypeMismatchKinds: new Set(),
+    targetToSourceTypeMismatchKinds: new Set(),
+    frameworkErrorCodes: new Set(),
+    openCount: 0,
+    definitionNames: new Set(),
+  };
+}
+
+function addBindingDataFlowSummaryRow(
+  group: BindingDataFlowSummaryAccumulator,
+  row: SemanticBindingDataFlowRow,
+): void {
+  group.count += 1;
+  group.bindingKinds.add(row.bindingKind);
+  if (row.valueSiteKind != null) {
+    group.valueSiteKinds.add(row.valueSiteKind);
+  }
+  addNameParts(group.sourceRootNames, row.sourceRootName);
+  if (row.sourceName != null) {
+    group.sourceNames.add(row.sourceName);
+  }
+  if (row.sourceType != null) {
+    group.sourceTypes.add(row.sourceType);
+  }
+  if (row.sourceTypeOpenKind != null) {
+    group.sourceTypeOpenKinds.add(row.sourceTypeOpenKind);
+    group.sourceTypeOpenCount += 1;
+  } else if (row.sourceTypeOpenReason != null) {
+    group.sourceTypeOpenCount += 1;
+  }
+  if (row.targetValueType != null) {
+    group.targetValueTypes.add(row.targetValueType);
+  }
+  incrementNullableBooleanCounts(group.sourceWritable, row.sourceWritable);
+  incrementNullableBooleanCounts(group.sourceToTargetAssignable, row.sourceToTargetAssignable);
+  incrementNullableBooleanCounts(group.targetToSourceAssignable, row.targetToSourceAssignable);
+  if (row.sourceAssignmentKind != null) {
+    group.sourceAssignmentKinds.add(row.sourceAssignmentKind);
+  }
+  for (const reason of row.sourceAssignmentReasonKinds) {
+    group.sourceAssignmentReasonKinds.add(reason);
+  }
+  for (const mismatch of row.sourceToTargetTypeMismatchKinds) {
+    group.sourceToTargetTypeMismatchKinds.add(mismatch);
+  }
+  for (const mismatch of row.targetToSourceTypeMismatchKinds) {
+    group.targetToSourceTypeMismatchKinds.add(mismatch);
+  }
+  if (row.frameworkErrorCode != null) {
+    group.frameworkErrorCodes.add(row.frameworkErrorCode);
+  }
+  if (row.openReason != null) {
+    group.openCount += 1;
+  }
+  group.definitionNames.add(row.definitionName);
+}
+
+function bindingDataFlowSummaryRow(
+  group: BindingDataFlowSummaryAccumulator,
+): SemanticBindingDataFlowSummaryRow {
+  return {
+    direction: group.direction,
+    targetKind: group.targetKind,
+    targetProperty: group.targetProperty,
+    valueChannelKind: group.valueChannelKind,
+    sourceKind: group.sourceKind,
+    count: group.count,
+    bindingKinds: sortedValues(group.bindingKinds),
+    valueSiteKinds: sortedValues(group.valueSiteKinds),
+    sourceRootNames: sortedValues(group.sourceRootNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
+    sourceRootNameCount: group.sourceRootNames.size,
+    sampleSourceNames: sortedValues(group.sourceNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
+    sourceNameCount: group.sourceNames.size,
+    sourceTypes: sortedValues(group.sourceTypes).slice(0, BINDING_SUMMARY_TYPE_LIMIT),
+    sourceTypeCount: group.sourceTypes.size,
+    sourceTypeOpenKinds: sortedValues(group.sourceTypeOpenKinds),
+    sourceTypeOpenCount: group.sourceTypeOpenCount,
+    targetValueTypes: sortedValues(group.targetValueTypes).slice(0, BINDING_SUMMARY_TYPE_LIMIT),
+    targetValueTypeCount: group.targetValueTypes.size,
+    sourceWritable: group.sourceWritable,
+    sourceToTargetAssignable: group.sourceToTargetAssignable,
+    targetToSourceAssignable: group.targetToSourceAssignable,
+    sourceAssignmentKinds: sortedValues(group.sourceAssignmentKinds),
+    sourceAssignmentReasonKinds: sortedValues(group.sourceAssignmentReasonKinds),
+    sourceToTargetTypeMismatchKinds: sortedValues(group.sourceToTargetTypeMismatchKinds),
+    targetToSourceTypeMismatchKinds: sortedValues(group.targetToSourceTypeMismatchKinds),
+    frameworkErrorCodes: sortedValues(group.frameworkErrorCodes),
+    openCount: group.openCount,
+    definitionNames: sortedValues(group.definitionNames).slice(0, BINDING_SUMMARY_NAME_LIMIT),
+    definitionCount: group.definitionNames.size,
+  };
+}
+
+function bindingDataFlowSummarySortKey(row: SemanticBindingDataFlowSummaryRow): string {
+  return `${row.direction}:${row.valueChannelKind ?? ''}:${row.targetKind ?? ''}:${row.targetProperty ?? ''}:${row.sourceKind}`;
 }
 
 function summarizeBindingDataFlowIssues(

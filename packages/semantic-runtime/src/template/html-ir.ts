@@ -10,6 +10,9 @@ import {
   productDetailIdentityHandle,
 } from '../kernel/product-details.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import {
+  templateElementLookupNameFromAttributes,
+} from './special-attribute-source.js';
 
 export const enum HtmlIrNodeKind {
   Document = 'document',
@@ -420,10 +423,10 @@ export function htmlElementLookupName(
   element: HtmlElement,
   owner: HtmlElementAttributeOwner | null = null,
 ): string {
-  const asElement = owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === 'as-element') ?? null;
-  return asElement == null || asElement.rawValue === ''
-    ? element.tagName.toLowerCase()
-    : asElement.rawValue.toLowerCase();
+  return templateElementLookupNameFromAttributes(
+    element.tagName,
+    owner?.attributes ?? [],
+  );
 }
 
 function htmlElementAttributeOwners(

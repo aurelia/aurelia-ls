@@ -5,12 +5,16 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  BindableBindingMode,
   BindableDefinition,
   BindableSetterDefinition,
-  BindableSetterKind,
 } from './bindable-definition.js';
-import { bindableAttributeNameForProperty } from './bindable-attribute.js';
+import {
+  builtInAttributeBindableDescriptors,
+  builtInDefaultProperty,
+  builtInElementBindableDescriptors,
+  builtInNoMultiBindings,
+  type BuiltInResourceBindableDescriptor,
+} from './built-in-resource-bindables.js';
 import {
   BindingBehaviorDefinition,
 } from './binding-behavior-definition.js';
@@ -45,15 +49,6 @@ import {
 export interface BuiltInResourceDefinitionSource {
   readonly addressHandle: AddressHandle;
   readonly provenanceHandle: ProvenanceHandle;
-}
-
-interface BuiltInBindableInput {
-  readonly name: string;
-  readonly attribute?: string;
-  readonly callback?: string;
-  readonly mode?: BindableBindingMode;
-  readonly setterKind?: BindableSetterKind;
-  readonly setterName?: string;
 }
 
 export function materializeBuiltInResourceDefinition(
@@ -202,149 +197,27 @@ function builtInElementBindables(
   targetName: string,
   source: BuiltInResourceDefinitionSource,
 ): readonly BindableDefinition[] {
-  switch (targetName) {
-    case 'AuCompose':
-      return bindables(source, [
-        { name: 'template' },
-        { name: 'component' },
-        { name: 'model' },
-        { name: 'scopeBehavior', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.scopeBehavior.set' },
-        { name: 'composing', mode: BindableBindingMode.FromView },
-        { name: 'composition', mode: BindableBindingMode.FromView },
-        { name: 'tag' },
-        { name: 'flushMode', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.flushMode.set' },
-      ]);
-    case 'AuSlot':
-      return bindables(source, [
-        { name: 'expose' },
-        { name: 'slotchange' },
-      ]);
-    case 'ViewportCustomElement':
-      return bindables(source, [
-        { name: 'name' },
-        { name: 'usedBy' },
-        { name: 'default' },
-        { name: 'fallback' },
-      ]);
-    case 'ValidationContainerCustomElement':
-      return bindables(source, [
-        { name: 'controller' },
-        { name: 'errors' },
-      ]);
-    default:
-      return [];
-  }
+  return bindables(source, builtInElementBindableDescriptors(targetName));
 }
 
 function builtInAttributeBindables(
   targetName: string,
   source: BuiltInResourceDefinitionSource,
 ): readonly BindableDefinition[] {
-  switch (targetName) {
-    case 'If':
-      return bindables(source, [
-        { name: 'value' },
-        { name: 'cache', setterKind: BindableSetterKind.Function, setterName: 'If.cache.set' },
-      ]);
-    case 'Repeat':
-      return bindables(source, [{ name: 'items' }]);
-    case 'VirtualRepeat':
-      return bindables(source, [
-        { name: 'local' },
-        { name: 'items' },
-      ]);
-    case 'With':
-    case 'Switch':
-    case 'PromiseTemplateController':
-    case 'Show':
-      return bindables(source, [{ name: 'value' }]);
-    case 'PendingTemplateController':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.ToView }]);
-    case 'FulfilledTemplateController':
-    case 'RejectedTemplateController':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.FromView }]);
-    case 'Case':
-    case 'DefaultCase':
-      return bindables(source, [
-        { name: 'value' },
-        {
-          name: 'fallThrough',
-          mode: BindableBindingMode.OneTime,
-          setterKind: BindableSetterKind.Function,
-          setterName: `${targetName}.fallThrough.set`,
-        },
-      ]);
-    case 'Portal':
-      return bindables(source, [
-        { name: 'target' },
-        { name: 'position' },
-        { name: 'activated' },
-        { name: 'activating' },
-        { name: 'callbackContext' },
-        { name: 'renderContext', callback: 'targetChanged' },
-        { name: 'strict' },
-        { name: 'deactivated' },
-        { name: 'deactivating' },
-      ]);
-    case 'Focus':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.TwoWay }]);
-    case 'LoadCustomAttribute':
-      return bindables(source, [
-        { name: 'route' },
-        { name: 'params' },
-        { name: 'attribute' },
-        { name: 'active', mode: BindableBindingMode.FromView },
-        { name: 'context' },
-      ]);
-    case 'HrefCustomAttribute':
-      return bindables(source, [{ name: 'value' }]);
-    case 'ValidationErrorsCustomAttribute':
-      return bindables(source, [
-        { name: 'controller' },
-        { name: 'errors', mode: BindableBindingMode.TwoWay },
-      ]);
-    case 'Else':
-    default:
-      return [];
-  }
-}
-
-function builtInDefaultProperty(targetName: string): string {
-  switch (targetName) {
-    case 'Repeat':
-    case 'VirtualRepeat':
-      return 'items';
-    case 'Portal':
-      return 'target';
-    case 'LoadCustomAttribute':
-      return 'route';
-    case 'ValidationErrorsCustomAttribute':
-      return 'errors';
-    default:
-      return 'value';
-  }
-}
-
-function builtInNoMultiBindings(targetName: string): boolean {
-  switch (targetName) {
-    case 'HrefCustomAttribute':
-      return true;
-    default:
-      return false;
-  }
+  return bindables(source, builtInAttributeBindableDescriptors(targetName));
 }
 
 function bindables(
   source: BuiltInResourceDefinitionSource,
-  inputs: readonly BuiltInBindableInput[],
+  inputs: readonly BuiltInResourceBindableDescriptor[],
 ): readonly BindableDefinition[] {
   return inputs.map((input) => new BindableDefinition(
-    input.attribute ?? bindableAttributeNameForProperty(input.name),
-    input.callback ?? `${input.name}Changed`,
-    input.mode ?? BindableBindingMode.ToView,
+    input.attribute,
+    input.callback,
+    input.mode,
     input.name,
     new BindableSetterDefinition(
-      input.setterKind ?? BindableSetterKind.Default,
+      input.setterKind,
       input.setterName == null
         ? null
         : new ResourceTargetReference(null, source.addressHandle, input.setterName),

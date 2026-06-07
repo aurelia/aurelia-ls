@@ -1,0 +1,38 @@
+<section class="task-object-assignment" data-au-role="app-section">
+  <form submit.trigger="create()" class="task-object-assignment__form">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <div>
+      <label for="task-assignee-select">Assignee</label>
+      <select value.bind="assignee" matcher.bind="matchContactEntry" id="task-assignee-select">
+        <option repeat.for="contact of contacts" model.bind="contact">${contact.fullName}</option>
+      </select>
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="taskItems.length === 0" class="task-object-assignment__empty">No tasks yet.</p>
+  <table else class="task-object-assignment__table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Assignee</th>
+        <th>Done</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of taskItems">
+        <td>${taskItem.title}</td>
+        <td>${assigneeLabelForTaskItem(taskItem)}</td>
+        <td>
+          <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>

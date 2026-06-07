@@ -1,0 +1,33 @@
+<section>
+  <a load="../">Back</a>
+  <article if.bind="project">
+    <section>
+      <h2>${project.name}</h2>
+      <p>Phase: ${project.phase}</p>
+      <section>
+        <h3>Assignments</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Assignment</th>
+              <th>Done</th>
+              <th>Open</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of state.taskItemsForProject(project)">
+              <td>${taskItem.title}</td>
+              <td>
+                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+              </td>
+              <td>
+                <a load.bind="'/assignments/' + taskItem.id">Open assignment</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+  </article>
+  <p else>No project found for this route.</p>
+</section>

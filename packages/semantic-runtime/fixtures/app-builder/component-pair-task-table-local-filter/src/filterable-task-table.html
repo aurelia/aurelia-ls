@@ -1,0 +1,20 @@
+<p if.bind="filteredTaskItems.length === 0">No matching tasks.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>
+        <span>Title</span>
+        <input type="search" aria-label="Filter Title" value.bind="titleFilter">
+      </th>
+      <th>Done</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of filteredTaskItems">
+      <td>${taskItem.title}</td>
+      <td>
+        <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+      </td>
+    </tr>
+  </tbody>
+</table>

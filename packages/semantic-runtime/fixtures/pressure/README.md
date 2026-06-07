@@ -8,8 +8,8 @@ ownership, callback bindables, object bindables on non-leaf components, dynamic 
 template conventions.
 
 Pressure fixtures can be mixed or non-recommendation, but they should still be realistic app code rather than artificial
-parser torture cases. Future recommendable generation belongs in app-builder goldens and app-builder APIs, not in this
-folder's contract descriptions.
+parser torture cases. Future recommendable generation belongs in app-builder source-lowering APIs; this folder keeps
+pressure evidence and app-builder pressure fixtures, not reusable generated-code authority.
 
 ## Fixtures
 

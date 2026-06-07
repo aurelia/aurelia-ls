@@ -430,16 +430,22 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
         "Print framework resource convergence, lane, and exact source-site role pressure.",
     },
     {
+      id: "framework:capabilities",
+      command: "pnpm --filter @aurelia-ls/atlas framework:capabilities -- --projection=catalog --detail",
+      summary:
+        "Query curated Aurelia capability terrain before deriving app-builder or MCP guidance.",
+    },
+    {
       id: "pressure:framework-corpus",
       command: "pnpm --filter @aurelia-ls/atlas pressure:framework-corpus",
       summary:
-        "Print compact public Aurelia docs, tests, and legacy replacement corpus pressure.",
+        "Print compact public Aurelia docs and framework test corpus pressure.",
     },
     {
       id: "framework:corpus",
       command: "pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms",
       summary:
-        "Query framework.corpus docs/test/legacy rows for targeted fixture and authoring seeds.",
+        "Query framework.corpus docs/test rows for targeted fixture and authoring seeds.",
     },
     {
       id: "pressure:framework-observation",
@@ -587,6 +593,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
         locus: RepoRootLocus,
         projection: "summary",
         budget: { rows: 20, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "framework.capabilities",
+      family: "framework",
+      summary:
+        "Inspect curated Aurelia capability terrain before deriving consumer-specific app-builder or public MCP guidance.",
+      ask: {
+        lens: LensId.FrameworkCapabilities,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 30, evidencePerSubject: 2 },
       },
     },
     {

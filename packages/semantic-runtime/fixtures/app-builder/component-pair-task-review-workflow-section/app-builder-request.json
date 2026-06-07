@@ -1,0 +1,452 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-review-workflow-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-review-workflow-section-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task review workflow section component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Contact",
+                      "entityTypeName": "ContactEntry",
+                      "collectionMemberName": "contacts",
+                      "identityMemberName": "contactId",
+                      "identityValueKind": "string"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "targetEntityName": "TaskItem",
+                      "inputFieldNames": [
+                        "title",
+                        "done",
+                        "assigneeId",
+                        "reviewerIds"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "assigneeId",
+                      "title": "Assignee",
+                      "valueKind": "text",
+                      "defaultValue": "ada"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "reviewerIds",
+                      "title": "Reviewers",
+                      "valueKind": "choice-set",
+                      "defaultValue": [
+                        "ada"
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "assignee",
+                      "title": "Assignee",
+                      "kind": "reference-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "assigneeId",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": true
+                    },
+                    {
+                      "name": "reviewers",
+                      "title": "Reviewers",
+                      "kind": "reference-many",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "reviewerIds",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Review Workflow Section",
+                    "baseName": "Task Review Workflow Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-review-workflow-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state",
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "relationshipName": "assignee",
+                      "header": "Assignee",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "reviewers",
+                      "header": "Reviewers",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task saved.",
+                      "statusId": "task-create-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "task-review-workflow"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "app-section"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "task-review-workflow__form"
+                      ]
+                    },
+                    {
+                      "target": "action-feedback-status",
+                      "actionName": "create",
+                      "classTokens": [
+                        "task-review-workflow__status"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "task-review-workflow__status-region"
+                      ]
+                    },
+                    {
+                      "target": "status-pending",
+                      "classTokens": [
+                        "task-review-workflow__pending"
+                      ]
+                    },
+                    {
+                      "target": "status-empty",
+                      "classTokens": [
+                        "task-review-workflow__empty"
+                      ]
+                    },
+                    {
+                      "target": "status-error",
+                      "classTokens": [
+                        "task-review-workflow__error"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "task-review-workflow__table"
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "task-review-workflow__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "records": [
+                        {
+                          "id": 1,
+                          "title": "Prepare release notes",
+                          "done": false,
+                          "assigneeId": "ada",
+                          "reviewerIds": [
+                            "ada",
+                            "grace"
+                          ]
+                        },
+                        {
+                          "id": 2,
+                          "title": "Check deployment checklist",
+                          "done": true,
+                          "assigneeId": "grace",
+                          "reviewerIds": [
+                            "ada"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "records": [
+                        {
+                          "contactId": "ada",
+                          "fullName": "Ada Lovelace",
+                          "email": "ada@example.test"
+                        },
+                        {
+                          "contactId": "grace",
+                          "fullName": "Grace Hopper",
+                          "email": "grace@example.test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "native-submit-form"
+            },
+            "compositionKind": "native-submit-form",
+            "fieldNames": [
+              "title",
+              "done",
+              "assigneeId",
+              "reviewerIds"
+            ],
+            "fieldControlSelections": [
+              {
+                "fieldName": "assigneeId",
+                "innerControlPatternId": "native-single-select",
+                "fieldControlId": "task-assignee-select",
+                "labelText": "Assignee",
+                "valueDomainExpression": "contacts",
+                "optionLocalName": "contact",
+                "optionBindingKind": "value",
+                "optionValueExpression": "contact.contactId",
+                "optionLabelExpression": "contact.fullName"
+              },
+              {
+                "fieldName": "reviewerIds",
+                "innerControlPatternId": "native-multi-select",
+                "fieldControlId": "task-reviewers-select",
+                "labelText": "Reviewers",
+                "valueDomainExpression": "contacts",
+                "optionLocalName": "contact",
+                "optionBindingKind": "value",
+                "optionValueExpression": "contact.contactId",
+                "optionLabelExpression": "contact.fullName"
+              }
+            ],
+            "actionName": "create",
+            "submitButtonText": "Create task"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "action-feedback-status"
+            },
+            "compositionKind": "action-feedback-status",
+            "actionName": "create"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "loading-empty-error-state"
+            },
+            "compositionKind": "loading-empty-error-state",
+            "promiseExpression": "taskItemsPromise",
+            "pendingText": "Loading tasks...",
+            "fulfilledLocalName": "loadedTaskItems",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+            "rejectedLocalName": "error",
+            "rejectedText": "Could not load tasks.",
+            "fulfilledContentComposition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "collection-table"
+              },
+              "compositionKind": "collection-table",
+              "collectionExpression": "loadedTaskItems",
+              "itemLocalName": "taskItem"
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "create"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "Promise<TaskItem[]>",
+          "asyncDataInitializerExpression": "Promise.resolve(this.taskItems)"
+        }
+      ]
+    }
+  }
+}

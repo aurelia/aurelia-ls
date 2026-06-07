@@ -1,0 +1,215 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/async-task-table.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "async-task-table-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "async task table component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Async Task Table",
+                    "baseName": "Async Task Table"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/async-task-table.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "async-task-table__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "fulfilled-collection-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "async-task-table__row"
+                      ]
+                    },
+                    {
+                      "target": "collection-table-cell",
+                      "fieldName": "done",
+                      "classTokens": [
+                        "async-task-table__done-cell"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Collect vendor quotes",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Publish meeting summary",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "loading-empty-error-state"
+        },
+        "compositionKind": "loading-empty-error-state",
+        "promiseExpression": "taskItemsPromise",
+        "pendingText": "Loading tasks...",
+        "fulfilledLocalName": "loadedTaskItems",
+        "emptyStateText": "No tasks yet.",
+        "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+        "rejectedText": "Could not load tasks.",
+        "fulfilledContentComposition": {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          "compositionKind": "collection-table",
+          "collectionExpression": "loadedTaskItems",
+          "itemLocalName": "taskItem"
+        }
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "Promise<TaskItem[]>",
+          "asyncDataInitializerExpression": "Promise.resolve(this.taskItems)"
+        }
+      ]
+    }
+  }
+}

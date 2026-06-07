@@ -1,4 +1,9 @@
-import { SourcePlanTextAuthority } from './source-plan.js';
+import { uniqueStrings } from '../kernel/collections.js';
+import {
+  SourcePlan,
+  SourcePlanTextAuthority,
+  sourcePlanContributionTypeScriptImportRequirements,
+} from './source-plan.js';
 
 export enum SourcePlanPackageManager {
   /** The host chooses the package manager. */
@@ -16,8 +21,10 @@ export enum SourcePlanBuildToolPolicy {
   NotModeled = 'not-modeled',
   /** The host owns build tooling. */
   HostOwned = 'host-owned',
-  /** Build tooling follows a recipe/source-plan baseline. */
-  RecipeBaseline = 'recipe-baseline',
+  /** Build tooling follows a semantic-runtime source-plan baseline. */
+  SemanticRuntimeBaseline = 'semantic-runtime-baseline',
+  /** Build tooling follows the app-builder source-plan baseline. */
+  AppBuilderBaseline = 'app-builder-baseline',
 }
 
 export enum SourcePlanPackageDependencyScope {
@@ -70,7 +77,7 @@ export class SourcePlanProjectToolingFile {
     readonly fileKind: SourcePlanProjectToolingFileKind,
     readonly language: SourcePlanProjectToolingLanguage,
     readonly text: string,
-    readonly textAuthority: SourcePlanTextAuthority = SourcePlanTextAuthority.SemanticRuntimeRecipe,
+    readonly textAuthority: SourcePlanTextAuthority = SourcePlanTextAuthority.SemanticRuntimeGenerated,
   ) {}
 }
 
@@ -93,6 +100,8 @@ export class SourcePlanProjectTooling {
 export interface AureliaSourcePlanProjectToolingModel {
   readonly appName: string;
   readonly dependencySpecifiers?: readonly string[];
+  readonly buildToolPolicy?: SourcePlanBuildToolPolicy;
+  readonly textAuthority?: SourcePlanTextAuthority;
 }
 
 export function aureliaSourcePlanProjectTooling(
@@ -104,7 +113,7 @@ export function aureliaSourcePlanProjectTooling(
   ];
   return new SourcePlanProjectTooling(
     SourcePlanPackageManager.HostSelected,
-    SourcePlanBuildToolPolicy.NotModeled,
+    model.buildToolPolicy ?? SourcePlanBuildToolPolicy.NotModeled,
     dependencies,
     scripts,
     [
@@ -113,20 +122,56 @@ export function aureliaSourcePlanProjectTooling(
         SourcePlanProjectToolingFileKind.PackageManifest,
         SourcePlanProjectToolingLanguage.Json,
         packageManifestText(model.appName, dependencies, scripts),
+        model.textAuthority,
       ),
       new SourcePlanProjectToolingFile(
         'tsconfig.json',
         SourcePlanProjectToolingFileKind.TypeScriptConfig,
         SourcePlanProjectToolingLanguage.Json,
         tsconfigText(),
+        model.textAuthority,
       ),
       new SourcePlanProjectToolingFile(
         'src/aurelia-assets.d.ts',
         SourcePlanProjectToolingFileKind.ModuleDeclaration,
         SourcePlanProjectToolingLanguage.TypeScript,
         moduleDeclarationText(),
+        model.textAuthority,
       ),
     ],
+  );
+}
+
+/** Add package tooling to an assembled source plan using its contributed TypeScript package imports as dependency evidence. */
+export function sourcePlanWithAureliaProjectTooling(
+  sourcePlan: SourcePlan,
+  model: AureliaSourcePlanProjectToolingModel,
+): SourcePlan {
+  return new SourcePlan(
+    sourcePlan.rootDir,
+    sourcePlan.policy,
+    sourcePlan.files,
+    aureliaSourcePlanProjectTooling({
+      ...model,
+      dependencySpecifiers: uniqueStrings([
+        ...(model.dependencySpecifiers ?? []),
+        ...sourcePlanPackageImportDependencySpecifiers(sourcePlan),
+      ], 'sorted'),
+    }),
+    sourcePlan.pattern,
+  );
+}
+
+/** Read package-level import specifiers from TypeScript contributions in a source plan. */
+export function sourcePlanPackageImportDependencySpecifiers(
+  sourcePlan: SourcePlan,
+): readonly string[] {
+  return uniqueStrings(
+    sourcePlan.files.flatMap((file) =>
+      sourcePlanContributionTypeScriptImportRequirements(file.contributions)
+        .map((importRequirement) => importRequirement.moduleSpecifier)
+        .filter(isPackageModuleSpecifier)),
+    'sorted',
   );
 }
 
@@ -145,6 +190,12 @@ function packageDependencies(
     dependencyScopeRank(left.scope) - dependencyScopeRank(right.scope)
     || left.specifier.localeCompare(right.specifier)
   );
+}
+
+function isPackageModuleSpecifier(
+  moduleSpecifier: string,
+): boolean {
+  return !moduleSpecifier.startsWith('.') && !moduleSpecifier.startsWith('/') && !moduleSpecifier.startsWith('node:');
 }
 
 function aureliaPackageVersion(specifier: string): string {

@@ -150,6 +150,23 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   router-resource values that cannot be a route string, routeable component, or viewport instruction publish
   `instrInvalid` / `AUR3400`; routeable classes/functions/promises that are not yet modeled stay open so this
   diagnostic does not mask missing routeable-instruction support.
+  `route-instruction-source.ts` is the product-free source companion for this
+  lane. It serializes simple `load="route"` / `href="route"` attributes and the
+  richer `load` inline multi-binding form with `params.bind`, `context.bind`,
+  `active.bind`, and `attribute` segments; app-builder should spend that helper
+  instead of formatting router resource strings locally.
+  Inline `load` route plus object-shaped `params` mirrors
+  `LoadCustomAttribute.valueChanged(...)`: a `route` segment without params
+  remains `RouteExpression` input, while `route` plus params becomes eager
+  component+params instruction input before re-entering the route-expression
+  lane. Binding-scope parameter values may use dynamic placeholders so static
+  route shape can close, but the route id itself must never be reused as a
+  parameter value. A `context.bind` segment is an owning route-context override
+  boundary and stays open until semantic-runtime models the replacement context.
+  `viewport-source.ts` is the matching product-free source companion for
+  `<au-viewport>`. It owns the router resource name and bindable attributes so
+  app-builder and future edit surfaces do not grow router-viewport string
+  formatters beside the runtime topology model.
   Router-resource instruction products are emitted only for render contexts with an owning `RouteContext`. A child
   component's standalone definition render is a potential reuse surface; if the same `load`/`href` closes when that
   component is recursively rendered inside a routed parent, the standalone definition should not publish an app-level
@@ -326,6 +343,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Router resources (`au-viewport`, `load`, `href`) are ordinary Aurelia resources supplied by router configuration.
   They flow through the same resource/registration/DI/compiler-world machinery as framework resources, not through a
   router-only shortcut.
+- Router-owned source serializers live beside the router substrate. `route-instruction-source.ts` owns authored
+  `load`/`href` attributes, and `route-configuration-source.ts` owns generated route-decorator object literals. Keep
+  app-builder and MCP generation on those helpers so generated route source, route products, diagnostics, and future
+  edit loci do not split into separate string templates.
 - Authoring value completion for router resources should mirror that same shape. `load` and internal `href` values can
   offer modeled route-config ids/paths as candidates, but `href` remains open-ended because the framework intentionally
   allows external URLs and only turns non-external values into viewport instructions.

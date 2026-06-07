@@ -76,6 +76,12 @@ interface DiActivationResolvedValue {
   readonly openReason: string | null;
 }
 
+interface DiActivationResolveCallFrame {
+  readonly keyExpression: ts.Expression;
+  readonly key: DiActivationKeySignature;
+  readonly keyId: string;
+}
+
 interface DiActivationClassValue {
   readonly value: EvaluationClassValue;
   readonly moduleKey: string;
@@ -133,6 +139,22 @@ export class RuntimeBindingSourceActivationContext {
     host: StaticIntrinsicEvaluationHost,
     readActiveContainer: RuntimeBindingSourceActiveContainerReader,
   ): EvaluationValue | null {
+    const frame = this.resolveCallFrame(call, environment);
+    if (frame == null) {
+      return null;
+    }
+    const container = readActiveContainer();
+    if (container == null) {
+      return this.resolveCallWithoutActiveContainer(frame, host, moduleKey);
+    }
+    const resolved = this.resolveKey(container, frame.key, host, call, moduleKey, depth, new Set());
+    return this.evaluationValueForResolvedKey(frame, resolved, host, moduleKey);
+  }
+
+  private resolveCallFrame(
+    call: ts.CallExpression,
+    environment: ModuleEnvironmentRecord,
+  ): DiActivationResolveCallFrame | null {
     const expression = unwrapExpression(call.expression);
     if (!isAureliaResolveExpression(expression) || environment.readValue('this') == null) {
       return null;
@@ -148,27 +170,39 @@ export class RuntimeBindingSourceActivationContext {
     if (key == null) {
       return null;
     }
-    const container = readActiveContainer();
-    if (container == null) {
-      return key.kind === 'constructable'
-        ? null
-        : host.unknown(
-            `Aurelia resolve(...) for '${keySignatureId(key)}' needs an active controller/container activation context.`,
-            keyExpression,
-            moduleKey,
-            EvaluationOpenSeamKind.DynamicCall,
-          );
-    }
-    const resolved = this.resolveKey(container, key, host, call, moduleKey, depth, new Set());
+    return { keyExpression, key, keyId: keySignatureId(key) };
+  }
+
+  private resolveCallWithoutActiveContainer(
+    frame: DiActivationResolveCallFrame,
+    host: StaticIntrinsicEvaluationHost,
+    moduleKey: string,
+  ): EvaluationValue | null {
+    return frame.key.kind === 'constructable'
+      ? null
+      : host.unknown(
+          `Aurelia resolve(...) for '${frame.keyId}' needs an active controller/container activation context.`,
+          frame.keyExpression,
+          moduleKey,
+          EvaluationOpenSeamKind.DynamicCall,
+        );
+  }
+
+  private evaluationValueForResolvedKey(
+    frame: DiActivationResolveCallFrame,
+    resolved: DiActivationResolvedValue | null,
+    host: StaticIntrinsicEvaluationHost,
+    moduleKey: string,
+  ): EvaluationValue | null {
     if (resolved == null || resolved.value == null) {
       if (resolved?.openReason != null) {
-        return host.unknown(resolved.openReason, keyExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+        return host.unknown(resolved.openReason, frame.keyExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
       }
-      return key.kind === 'constructable'
+      return frame.key.kind === 'constructable'
         ? null
         : host.unknown(
-            `Aurelia resolve(...) for '${keySignatureId(key)}' did not match a modeled resolver in the active container ancestry.`,
-            keyExpression,
+            `Aurelia resolve(...) for '${frame.keyId}' did not match a modeled resolver in the active container ancestry.`,
+            frame.keyExpression,
             moduleKey,
             EvaluationOpenSeamKind.DynamicCall,
           );

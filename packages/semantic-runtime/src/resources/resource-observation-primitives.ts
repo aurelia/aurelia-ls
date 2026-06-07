@@ -1,4 +1,4 @@
-import type ts from 'typescript';
+import ts from 'typescript';
 
 /** Class, function, object, or expression that acts as the runtime resource target. */
 export class ResourceTargetObservation {
@@ -10,6 +10,20 @@ export class ResourceTargetObservation {
     /** Whether the node is an actual declaration/name site rather than a reference expression. */
     readonly isDeclaration: boolean,
   ) {}
+}
+
+/** Resolve the class declaration/expression represented by a resource target node when one is statically visible. */
+export function resourceTargetClassLikeNode(
+  target: { readonly node: ts.Node } | null,
+): ts.ClassLikeDeclarationBase | null {
+  if (target == null) {
+    return null;
+  }
+  if (ts.isClassDeclaration(target.node) || ts.isClassExpression(target.node)) {
+    return target.node;
+  }
+  const parent = target.node.parent;
+  return ts.isClassDeclaration(parent) || ts.isClassExpression(parent) ? parent : null;
 }
 
 /** One concrete AttributePattern.create(...) entry. */

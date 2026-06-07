@@ -1,0 +1,59 @@
+<form submit.trigger="saveDraft()" class="task-form" data-au-role="native-submit-form">
+  <div class="task-form__field">
+    <label for="title-field" class="task-form__label">Title</label>
+    <input value.bind="title" class="task-form__control" id="title-field" aria-describedby="title-field-help">
+    <p id="title-field-help" class="task-form__message">Enter a short task title before saving the draft.</p>
+  </div>
+  <div class="task-form__field">
+    <label for="description-field" class="task-form__label">Description</label>
+    <textarea value.bind="description" class="task-form__control" id="description-field" aria-describedby="description-field-help"></textarea>
+    <p id="description-field-help" class="task-form__message">Describe the expected outcome in one or two sentences.</p>
+  </div>
+  <div class="task-form__field">
+    <label for="estimate-hours-field" class="task-form__label">Estimate Hours</label>
+    <input type="number" value-as-number.bind="estimateHours" min="0" max="40" step="1" class="task-form__control" id="estimate-hours-field">
+  </div>
+  <div class="task-form__field">
+    <label for="progress-percent-field" class="task-form__label">Progress</label>
+    <input type="range" value-as-number.bind="progressPercent" min="0" max="100" step="5" class="task-form__control" id="progress-percent-field" aria-describedby="progress-percent-field-status">
+    <p id="progress-percent-field-status" role="status" class="task-form__message">Use the slider to capture a rough completion signal.</p>
+  </div>
+  <div class="task-form__field">
+    <label for="due-date-field" class="task-form__label">Due Date</label>
+    <input type="date" value-as-date.bind="dueDate" class="task-form__control" id="due-date-field">
+  </div>
+  <div class="task-form__field">
+    <label for="done-field" class="task-form__label">Done</label>
+    <input type="checkbox" checked.bind="done" class="task-form__control" id="done-field">
+  </div>
+  <div class="task-form__field">
+    <label for="priority-field" class="task-form__label">Priority</label>
+    <select value.bind="priority" class="task-form__control" id="priority-field" aria-describedby="priority-field-help">
+      <option repeat.for="option of priorityOptions" model.bind="option.value">${option.title}</option>
+    </select>
+    <p id="priority-field-help" class="task-form__message">Pick the urgency that should drive review order.</p>
+  </div>
+  <div class="task-form__field">
+    <label for="labels-field" class="task-form__label">Labels</label>
+    <select multiple value.bind="labels" class="task-form__control" id="labels-field">
+      <option repeat.for="option of labelOptions" model.bind="option.value">${option.title}</option>
+    </select>
+  </div>
+  <fieldset class="task-form__field" aria-describedby="review-type-field-help">
+    <legend class="task-form__label">Review Type</legend>
+    <label repeat.for="option of reviewTypeOptions">
+      <input type="radio" name="review-type" checked.bind="reviewType" model.bind="option.value" class="task-form__control">
+      <span>${option.title}</span>
+    </label>
+    <p id="review-type-field-help" class="task-form__message">Choose the review mode that fits the task.</p>
+  </fieldset>
+  <fieldset class="task-form__field" aria-describedby="checkpoints-field-status">
+    <legend class="task-form__label">Checkpoints</legend>
+    <label repeat.for="option of checkpointOptions">
+      <input type="checkbox" checked.bind="checkpoints" model.bind="option.value" class="task-form__control">
+      <span>${option.title}</span>
+    </label>
+    <p id="checkpoints-field-status" role="status" class="task-form__message">Select every checkpoint already completed.</p>
+  </fieldset>
+  <button type="submit" class="task-form__submit" data-action="save-draft">Save draft</button>
+</form>

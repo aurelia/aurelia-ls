@@ -11,8 +11,8 @@ interface RouteQuestionRule {
   readonly queryAny?: readonly string[];
   /** Exact expected-effect filter that can trigger the question. */
   readonly effectKind?: string;
-  /** Trigger when the caller supplied a recipeKey filter. */
-  readonly requiresRecipeKey?: boolean;
+  /** Trigger when the caller supplied an appPatternKey filter. */
+  readonly requiresAppPatternKey?: boolean;
   /** Trigger when the caller supplied a seedUse filter. */
   readonly requiresSeedUse?: boolean;
   /** Trigger when the query contains an exact Aurelia AUR error label. */
@@ -29,15 +29,33 @@ interface RouteQuestionRule {
 const RouteQuestionRules: readonly RouteQuestionRule[] = [
   {
     routeId: "semantic-runtime.app-builder-pattern-ontology",
-    queryAny: ["app-builder", "app builder", "pattern ontology"],
+    queryAny: ["app-builder", "app builder", "pattern ontology", "app-builder ontology"],
     question:
-      "Which app-builder selection stage is missing: seed profile, starter intent, pattern composition, domain slots, seed data, Aurelia lowering, source plan, or verification promise?",
+      "Which app-builder layer is being touched: read-only ontology, status/policy, affordance/input/effect graph, control/manifest, style input, SourcePlan effect, verification, or source generation?",
+  },
+  {
+    routeId: "semantic-runtime.app-builder-pattern-ontology",
+    queryAny: ["control pattern", "native first control", "component manifest", "controluse"],
+    question:
+      "Is this control work about ControlPattern, concrete ControlUse, realization policy, accessibility/value/style contracts, or the canonical component/control manifest?",
+  },
+  {
+    routeId: "semantic-runtime.app-builder-pattern-ontology",
+    queryAny: ["visual input", "style input", "token-driven", "tailwind", "css modules", "shadow dom"],
+    question:
+      "Is the styling choice supplied input, explicit policy, framework styling mechanism, missing visual input, or deferred style-flow analysis?",
   },
   {
     routeId: "semantic-runtime.source-plan",
-    queryAny: ["package tooling"],
+    queryAny: ["project tooling", "build tooling"],
     question:
-      "Is this package-tooling gap about source-plan typecheck files, runnable build profile policy, or missing project source-role evidence?",
+      "Is this project-tooling gap about source-plan typecheck files, runnable build profile policy, or missing project source-role evidence?",
+  },
+  {
+    routeId: "semantic-runtime.source-plan",
+    queryAny: ["component pair", "component-pair", "sourceLoweringComponentPair"],
+    question:
+      "Is this component-pair work a preview/add-section source plan, a runnable app-shell/root assembly, or a verification-only fixture harness?",
   },
   {
     routeId: "diagnostics.template-repair-policy",
@@ -60,11 +78,11 @@ const RouteQuestionRules: readonly RouteQuestionRule[] = [
   },
   {
     routeId: "semantic-runtime.semantic-contract-verification",
-    requiresRecipeKey: true,
+    requiresAppPatternKey: true,
     question: (filters) =>
-      filters.recipeKey === undefined
+      filters.appPatternKey === undefined
         ? undefined
-        : `Which expected semantic effects distinguish ${filters.recipeKey} from nearby app-pattern pressure fixtures?`,
+        : `Which expected semantic effects distinguish ${filters.appPatternKey} from nearby app-pattern pressure fixtures?`,
   },
   {
     routeId: "semantic-runtime.semantic-contract-verification",
@@ -187,7 +205,7 @@ function ruleMatchesRouteQuestion(
   return (
     (rule.queryAny?.some((term) => query.includes(term)) ?? false) ||
     (rule.effectKind !== undefined && filters.effectKind === rule.effectKind) ||
-    (rule.requiresRecipeKey === true && filters.recipeKey !== undefined) ||
+    (rule.requiresAppPatternKey === true && filters.appPatternKey !== undefined) ||
     (rule.requiresSeedUse === true && filters.seedUse !== undefined) ||
     (rule.requiresFrameworkErrorCode === true && frameworkErrorCode !== undefined)
   );

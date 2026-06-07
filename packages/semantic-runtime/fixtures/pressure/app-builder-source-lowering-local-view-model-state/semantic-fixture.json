@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-local-view-model-state",
+  "appPatternKey": "app-builder-source-lowering-local-view-model-state",
+  "expectedEffects": [],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen",
+    "control-use-inventory"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "local-view-model-state"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "sourceLoweringSourcePlan.rootDir",
+      "ownerKind": "source-plan",
+      "fieldId": "root-dir",
+      "requestFieldName": "rootDir",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringLocalViewModelState",
+      "ownerKind": "source-plan",
+      "fieldId": "source-lowering-local-view-model-state",
+      "requestFieldName": "sourceLoweringLocalViewModelState",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 2
+      }
+    }
+  ]
+}

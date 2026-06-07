@@ -11,6 +11,12 @@ import {
   InquiryContinuationKind,
 } from '../inquiry/answer.js';
 import {
+  AppBuilderControlManifestRowId,
+} from '../app-builder/ontology/control.js';
+import {
+  AppBuilderEffectContractId,
+} from '../app-builder/ontology/effect.js';
+import {
   semanticAppQueryCatalogRow,
   semanticAppQueryCatalogShape,
   semanticAppQuerySourceFileLocus,
@@ -35,18 +41,41 @@ import {
   type SemanticRuntimeSourceFileInput,
   type SemanticTemplateDiagnosticRow,
 } from './contracts.js';
+import {
+  SemanticRuntimeAppBuilderQueryKind,
+  type SemanticRuntimeAppBuilderQueryRequest,
+} from './app-builder.js';
+import {
+  mergeSemanticRuntimeContinuationRows,
+  semanticRuntimeContinuationMatchesRequestedIntents,
+  semanticRuntimeContinuationPageInput,
+  semanticRuntimeContinuationWithAppBuilderQueryIntentFilter,
+  semanticRuntimeContinuationWithAppQueryIntentFilter,
+} from './continuation-helpers.js';
 
-type ContinuationSeed = {
+type ContinuationSeedBase = {
   readonly kind: InquiryContinuationKind;
   readonly rationale: string;
-  readonly targetQuery: SemanticAppQuery;
   readonly intents: readonly InquiryContinuationIntent[];
   readonly evidenceState?: InquiryEvidenceState;
   readonly coverage?: InquiryEvidenceCoverage;
   readonly sourcePrecision?: InquirySourcePrecision;
   readonly staleness?: InquiryEvidenceStaleness;
+  readonly cost?: InquiryContinuationCost;
   readonly blockers?: readonly string[];
 };
+
+type AppQueryContinuationSeed = ContinuationSeedBase & {
+  readonly targetQuery: SemanticAppQuery;
+  readonly targetAppBuilderQuery?: never;
+};
+
+type AppBuilderContinuationSeed = ContinuationSeedBase & {
+  readonly targetQuery?: never;
+  readonly targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest;
+};
+
+type ContinuationSeed = AppQueryContinuationSeed | AppBuilderContinuationSeed;
 
 /** Issue query families that should be compared with unified diagnostic clusters. */
 const ISSUE_SUMMARY_QUERY_KINDS = new Set<SemanticAppQueryKind | `${SemanticAppQueryKind}`>([
@@ -173,7 +202,7 @@ export function withSemanticAppQueryContinuations<TValue>(
   }
   return {
     ...result,
-    continuations: mergeContinuationRows(result.continuations ?? [], continuations),
+    continuations: mergeSemanticRuntimeContinuationRows(result.continuations ?? [], continuations),
   };
 }
 
@@ -190,8 +219,11 @@ export function filterSemanticAppQueryContinuations<TValue>(
     return result;
   }
   const rows = result.continuations
-    .filter((row) => continuationMatchesRequestedIntents(row, requestedIntents))
-    .map((row) => continuationWithInheritedIntentFilter(row, requestedIntents));
+    .filter((row) => semanticRuntimeContinuationMatchesRequestedIntents(row, requestedIntents))
+    .map((row) => semanticRuntimeContinuationWithAppBuilderQueryIntentFilter(
+      semanticRuntimeContinuationWithAppQueryIntentFilter(row, requestedIntents),
+      requestedIntents,
+    ));
   return {
     ...result,
     continuations: rows,
@@ -206,7 +238,7 @@ function semanticAppQueryContinuationRows(
   const seeds: ContinuationSeed[] = [];
   const locusQuery = semanticAppQueryCatalogShape(query);
   const sourceFile = semanticAppQuerySourceFileLocus(locusQuery);
-  const page = pageFromQuery(query);
+  const page = semanticRuntimeContinuationPageInput(query);
   const answerSourcePrecision = semanticSourcePrecisionForAnswerRows(result.value);
 
   const nextPage = nextPageContinuation(query, result, catalogRow);
@@ -223,7 +255,7 @@ function semanticAppQueryContinuationRows(
   addStateAndI18nContinuations(query, seeds, page);
   addIssueContinuations(query, seeds, page);
 
-  return mergeContinuationRows(nextPage, seeds.map((seed) => seedToRow(seed, answerSourcePrecision)));
+  return mergeSemanticRuntimeContinuationRows(nextPage, seeds.map((seed) => seedToRow(seed, answerSourcePrecision)));
 }
 
 function addOverviewContinuations(
@@ -601,6 +633,24 @@ function addResourceContinuations(
           'Inspect compiled templates that consume these resources.',
           rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
         ),
+        appBuilderInspect(
+          'Inspect the app-builder component API manifest terrain that uses resource-definition rows as deterministic evidence.',
+          {
+            kind: SemanticRuntimeAppBuilderQueryKind.ControlManifestDetail,
+            controlManifestDetail: {
+              controlManifestIds: [AppBuilderControlManifestRowId.ComponentApiManifest],
+            },
+          },
+        ),
+        appBuilderInspect(
+          'Inspect the app-builder effect contract that names resource definitions as component-manifest publication evidence.',
+          {
+            kind: SemanticRuntimeAppBuilderQueryKind.EffectContractDetail,
+            effectContractDetail: {
+              effectContractIds: [AppBuilderEffectContractId.ComponentManifestPublication],
+            },
+          },
+        ),
       );
       break;
     case SemanticAppQueryKind.ResourceIssues:
@@ -748,13 +798,25 @@ function addBindingContinuations(
       seeds.push(bindingRow('Page detailed observed-dependency rows.', SemanticAppQueryKind.BindingObservedDependencies, query, page));
       break;
     case SemanticAppQueryKind.BindingValueChannels:
-      seeds.push(bindingSummary('Group value-channel rows.', SemanticAppQueryKind.BindingValueChannelSummary, query, page));
+      seeds.push(
+        bindingSummary('Group value-channel rows.', SemanticAppQueryKind.BindingValueChannelSummary, query, page),
+        bindingRow('Classify native control uses backed by value-channel, static submit, route-link, and message rows.', SemanticAppQueryKind.ControlUseInventory, query, page),
+      );
       break;
     case SemanticAppQueryKind.BindingDataFlows:
-      seeds.push(bindingSummary('Group binding data-flow rows.', SemanticAppQueryKind.BindingDataFlowSummary, query, page));
+      seeds.push(
+        bindingSummary('Group binding data-flow rows.', SemanticAppQueryKind.BindingDataFlowSummary, query, page),
+        bindingRow('Classify native control uses backed by binding data-flow, static submit, route-link, and message rows.', SemanticAppQueryKind.ControlUseInventory, query, page),
+      );
       break;
     case SemanticAppQueryKind.BindingObservedDependencies:
       seeds.push(bindingSummary('Group observed-dependency rows.', SemanticAppQueryKind.BindingObservedDependencySummary, query, page));
+      break;
+    case SemanticAppQueryKind.ControlUseInventory:
+      seeds.push(
+        bindingRow('Inspect runtime value channels that classify authored controls.', SemanticAppQueryKind.BindingValueChannels, query, page),
+        bindingRow('Inspect binding data-flow rows behind authored controls.', SemanticAppQueryKind.BindingDataFlows, query, page),
+      );
       break;
     case SemanticAppQueryKind.BindingTargetAccesses:
     case SemanticAppQueryKind.TargetOperations:
@@ -837,6 +899,11 @@ function addStateAndI18nContinuations(
   switch (query.kind) {
     case SemanticAppQueryKind.StateStores:
       seeds.push(
+        inspect(
+          'Inspect @fromState StateGetterBinding rows that consume configured stores.',
+          rowQuery(SemanticAppQueryKind.StateGetterBindings, query, page),
+          InquiryEvidenceState.TypeProjected,
+        ),
         diagnose(
           'Inspect state modeling issues for discovered state stores.',
           rowQuery(SemanticAppQueryKind.StateIssues, query, page),
@@ -845,6 +912,19 @@ function addStateAndI18nContinuations(
         inspect(
           'Inspect app topology around discovered state stores.',
           overviewQuery(SemanticAppQueryKind.AppTopology, query),
+        ),
+      );
+      break;
+    case SemanticAppQueryKind.StateGetterBindings:
+      seeds.push(
+        inspect(
+          'Inspect configured stores referenced by @fromState bindings.',
+          rowQuery(SemanticAppQueryKind.StateStores, query, page),
+        ),
+        diagnose(
+          'Inspect state lookup and decorator issues around @fromState bindings.',
+          rowQuery(SemanticAppQueryKind.StateIssues, query, page),
+          InquiryEvidenceState.Open,
         ),
       );
       break;
@@ -970,6 +1050,23 @@ function seedToRow(
   seed: ContinuationSeed,
   answerSourcePrecision?: InquirySourcePrecision,
 ): SemanticRuntimeContinuationRow {
+  if (isAppBuilderContinuationSeed(seed)) {
+    return {
+      kind: seed.kind,
+      rationale: seed.rationale,
+      targetAppBuilderQueryKind: seed.targetAppBuilderQuery.kind,
+      targetAppBuilderQuery: seed.targetAppBuilderQuery,
+      intents: seed.intents,
+      cost: seed.cost ?? InquiryContinuationCost.Free,
+      evidence: {
+        evidenceState: seed.evidenceState ?? InquiryEvidenceState.NotRequired,
+        coverage: seed.coverage ?? InquiryEvidenceCoverage.PartialKnownGaps,
+        sourcePrecision: seed.sourcePrecision ?? InquirySourcePrecision.NotRequired,
+        staleness: seed.staleness ?? InquiryEvidenceStaleness.CurrentEpoch,
+      },
+      blockers: seed.blockers ?? [],
+    };
+  }
   const targetQuery = semanticAppQueryCatalogShape(seed.targetQuery);
   const targetRow = semanticAppQueryCatalogRow(targetQuery.kind);
   return {
@@ -1002,10 +1099,28 @@ function inspect(
   targetQuery: SemanticAppQuery,
   evidenceState: InquiryEvidenceState = InquiryEvidenceState.Inferred,
   sourcePrecision?: InquirySourcePrecision,
-): ContinuationSeed {
+): AppQueryContinuationSeed {
   return {
     ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Inspect], evidenceState),
     ...withSourcePrecision(sourcePrecision),
+  };
+}
+
+function appBuilderInspect(
+  rationale: string,
+  targetAppBuilderQuery: SemanticRuntimeAppBuilderQueryRequest,
+): AppBuilderContinuationSeed {
+  return {
+    kind: InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetAppBuilderQuery,
+    intents: [InquiryContinuationIntent.Inspect],
+    evidenceState: InquiryEvidenceState.NotRequired,
+    coverage: InquiryEvidenceCoverage.PartialKnownGaps,
+    sourcePrecision: InquirySourcePrecision.NotRequired,
+    staleness: InquiryEvidenceStaleness.CurrentEpoch,
+    cost: InquiryContinuationCost.Free,
+    blockers: [],
   };
 }
 
@@ -1014,7 +1129,7 @@ function diagnose(
   targetQuery: SemanticAppQuery,
   evidenceState: InquiryEvidenceState = InquiryEvidenceState.TypeProjected,
   sourcePrecision?: InquirySourcePrecision,
-): ContinuationSeed {
+): AppQueryContinuationSeed {
   return {
     ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Diagnose], evidenceState),
     ...withSourcePrecision(sourcePrecision),
@@ -1026,7 +1141,7 @@ function diagnoseForRepair(
   targetQuery: SemanticAppQuery,
   evidenceState: InquiryEvidenceState = InquiryEvidenceState.TypeProjected,
   sourcePrecision?: InquirySourcePrecision,
-): ContinuationSeed {
+): AppQueryContinuationSeed {
   return {
     ...seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Diagnose, InquiryContinuationIntent.Repair], evidenceState),
     ...withSourcePrecision(sourcePrecision),
@@ -1036,7 +1151,7 @@ function diagnoseForRepair(
 function navigate(
   rationale: string,
   targetQuery: SemanticAppQuery,
-): ContinuationSeed {
+): AppQueryContinuationSeed {
   return seed(InquiryContinuationKind.FollowQuery, rationale, targetQuery, [InquiryContinuationIntent.Navigate, InquiryContinuationIntent.Inspect], InquiryEvidenceState.TypeProjected);
 }
 
@@ -1046,7 +1161,7 @@ function seed(
   targetQuery: SemanticAppQuery,
   intents: readonly InquiryContinuationIntent[],
   evidenceState: InquiryEvidenceState,
-): ContinuationSeed {
+): AppQueryContinuationSeed {
   return {
     kind,
     rationale,
@@ -1054,6 +1169,10 @@ function seed(
     intents,
     evidenceState,
   };
+}
+
+function isAppBuilderContinuationSeed(seed: ContinuationSeed): seed is AppBuilderContinuationSeed {
+  return seed.targetAppBuilderQuery != null;
 }
 
 function bindingRow(
@@ -1096,7 +1215,7 @@ function overviewQuery(
 function rowQuery(
   kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
   source: SemanticAppQuery,
-  page: SemanticRuntimePageInput = pageFromQuery(source),
+  page: SemanticRuntimePageInput = semanticRuntimeContinuationPageInput(source),
 ): SemanticAppQuery {
   return {
     kind,
@@ -1109,7 +1228,7 @@ function rowQuery(
 function pagedQuery(
   kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
   source: SemanticAppQuery,
-  page: SemanticRuntimePageInput = pageFromQuery(source),
+  page: SemanticRuntimePageInput = semanticRuntimeContinuationPageInput(source),
 ): SemanticAppQuery {
   return {
     kind,
@@ -1121,7 +1240,7 @@ function pagedQuery(
 function diagnosticQuery(
   kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
   source: SemanticAppQuery,
-  page: SemanticRuntimePageInput = pageFromQuery(source),
+  page: SemanticRuntimePageInput = semanticRuntimeContinuationPageInput(source),
 ): SemanticAppQuery {
   return {
     kind,
@@ -1172,12 +1291,6 @@ function diagnosticProjectionFromQuery(
   return semanticAppQueryCatalogRow(kind).supportsDiagnosticProjection && query.diagnosticProjection != null
     ? { diagnosticProjection: query.diagnosticProjection }
     : {};
-}
-
-function pageFromQuery(query: SemanticAppQuery): SemanticRuntimePageInput {
-  return {
-    size: query.page?.size ?? 50,
-  };
 }
 
 function costForQuery(
@@ -1354,57 +1467,6 @@ function templateDiagnosticValueRows(value: unknown): readonly SemanticTemplateD
     && typeof row.template === 'object'
     && 'source' in row.template
   );
-}
-
-function mergeContinuationRows(
-  existing: readonly SemanticRuntimeContinuationRow[],
-  added: readonly SemanticRuntimeContinuationRow[],
-): readonly SemanticRuntimeContinuationRow[] {
-  const rows: SemanticRuntimeContinuationRow[] = [];
-  const seen = new Set<string>();
-  for (const row of [...existing, ...added]) {
-    const key = continuationKey(row);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    rows.push(row);
-  }
-  return rows;
-}
-
-function continuationMatchesRequestedIntents(
-  row: SemanticRuntimeContinuationRow,
-  requestedIntents: readonly InquiryContinuationIntent[],
-): boolean {
-  return row.intents.length === 0 || row.intents.some((intent) => requestedIntents.includes(intent as InquiryContinuationIntent));
-}
-
-function continuationWithInheritedIntentFilter(
-  row: SemanticRuntimeContinuationRow,
-  requestedIntents: readonly InquiryContinuationIntent[],
-): SemanticRuntimeContinuationRow {
-  if (row.targetQuery == null) {
-    return row;
-  }
-  return {
-    ...row,
-    targetQuery: {
-      ...row.targetQuery,
-      continuationIntents: requestedIntents,
-    },
-  };
-}
-
-function continuationKey(row: SemanticRuntimeContinuationRow): string {
-  return [
-    row.kind,
-    row.targetQueryKind ?? '',
-    JSON.stringify(row.targetQuery ?? null),
-    JSON.stringify(row.intents ?? []),
-    JSON.stringify(row.evidence ?? null),
-    JSON.stringify(row.blockers ?? []),
-  ].join('\u0000');
 }
 
 function publicAppQueryBase(query: SemanticAppQuery): SemanticAppQuery {

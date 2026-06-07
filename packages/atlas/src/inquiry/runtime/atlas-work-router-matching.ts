@@ -30,7 +30,7 @@ export interface AtlasWorkRouterFilters {
   readonly auLinkId?: string;
   readonly concept?: string;
   readonly effectKind?: string;
-  readonly recipeKey?: string;
+  readonly appPatternKey?: string;
   readonly seedUse?: string;
   readonly coverageDimension?: string;
   readonly coverageState?: string;
@@ -60,7 +60,7 @@ export function atlasWorkRouterFilters(inquiry: Inquiry): AtlasWorkRouterFilters
     auLinkId: inquiryStringFilter(inquiry, "auLinkId"),
     concept: inquiryStringFilter(inquiry, "concept"),
     effectKind: inquiryStringFilter(inquiry, "effectKind"),
-    recipeKey: inquiryStringFilter(inquiry, "recipeKey"),
+    appPatternKey: inquiryStringFilter(inquiry, "appPatternKey"),
     seedUse: inquiryStringFilter(inquiry, "seedUse"),
     coverageDimension: inquiryStringFilter(inquiry, "coverageDimension"),
     coverageState: inquiryStringFilter(inquiry, "coverageState"),
@@ -167,10 +167,10 @@ function routeMatchesFilters(
     return false;
   }
   if (
-    filters.recipeKey !== undefined &&
+    filters.appPatternKey !== undefined &&
     !route.anchors.some((anchor) =>
       anchor.kind === "framework-corpus" &&
-      anchor.recipeKey === filters.recipeKey,
+      anchor.appPatternKey === filters.appPatternKey,
     )
   ) {
     return false;
@@ -368,13 +368,13 @@ function exactAnchorMatches(
     matches.push(`expected effect ${filters.effectKind}`);
   }
   if (
-    filters.recipeKey !== undefined &&
+    filters.appPatternKey !== undefined &&
     route.anchors.some((anchor) =>
       anchor.kind === "framework-corpus" &&
-      anchor.recipeKey === filters.recipeKey,
+      anchor.appPatternKey === filters.appPatternKey,
     )
   ) {
-    matches.push(`recipe ${filters.recipeKey}`);
+    matches.push(`app pattern ${filters.appPatternKey}`);
   }
   if (
     filters.seedUse !== undefined &&
@@ -704,7 +704,7 @@ function anchorIdentityValues(anchor: AtlasWorkRouteAnchor): readonly string[] {
         anchor.concept ?? "",
         anchor.query ?? "",
         anchor.effectKind ?? "",
-        anchor.recipeKey ?? "",
+        anchor.appPatternKey ?? "",
         anchor.seedUse ?? "",
       ];
     case "auLink":

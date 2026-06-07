@@ -3,6 +3,8 @@ import {
   sourceNameWords,
   titleSourceName,
 } from './source-name.js';
+import { normalizedSourceInputText } from './source-template.js';
+import { uniqueStrings } from '../kernel/collections.js';
 
 export interface SourceOptionSchemaGroup {
   readonly key: string | null;
@@ -30,8 +32,7 @@ export function sourceOptionSchemaGroups(
 export function normalizedSourceOptionsParameterValue(
   value?: string | null,
 ): string | null {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length === 0 ? null : trimmed;
+  return normalizedSourceInputText(value);
 }
 
 export function sourceOptionSchemaGroupForField<TField>(
@@ -157,18 +158,6 @@ function uniqueOptions(
     if (!seen.has(option.value)) {
       seen.add(option.value);
       unique.push(option);
-    }
-  }
-  return unique;
-}
-
-function uniqueStrings(values: readonly string[]): readonly string[] {
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    if (!seen.has(value)) {
-      seen.add(value);
-      unique.push(value);
     }
   }
   return unique;

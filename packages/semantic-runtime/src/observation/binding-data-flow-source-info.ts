@@ -99,75 +99,41 @@ export class BindingDataFlowSourceInfoProjector {
         targetValueType,
       )
       : {};
+    return {
+      sourceKind: bindingDataFlowSourceKindForRuntimeAssignmentTarget(unwrapped),
+      sourceName: bindingDataFlowSourceNameForRuntimeAssignmentTarget(unwrapped),
+      sourceRootName: bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(unwrapped),
+      sourceWriteCapability: needsSourceWriteCapability
+        ? this.sourceWriteCapabilityForRuntimeAssignmentTarget(unwrapped, checkerContext, evaluator, targetValueType)
+        : null,
+      ...syntheticWritebackSourceTypeHint(unwrapped, needsSourceWriteCapability, targetValueType),
+      ...writeback,
+    };
+  }
+
+  private sourceWriteCapabilityForRuntimeAssignmentTarget(
+    unwrapped: ExpressionAstNode,
+    checkerContext: CheckerExpressionTypeEvaluationContext,
+    evaluator: CheckerExpressionTypeEvaluator,
+    targetValueType: CheckerTypeReference | null,
+  ): SourceWriteCapability {
     switch (unwrapped.$kind) {
       case 'AccessScope':
-        const syntheticWritebackTypeHint = needsSourceWriteCapability && isSyntheticWritebackLocal(unwrapped)
-          ? targetValueType
-          : null;
-        return {
-          sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
-          sourceName: expressionSourceName(unwrapped),
-          sourceRootName: expressionSourceRootName(unwrapped),
-          sourceWriteCapability: needsSourceWriteCapability
-            ? this.sourceWriteCapability.forAccessScope(unwrapped, checkerContext.scope, targetValueType)
-            : null,
-          sourceTypeHint: syntheticWritebackTypeHint,
-          ...writeback,
-        };
+        return this.sourceWriteCapability.forAccessScope(unwrapped, checkerContext.scope, targetValueType);
       case 'AccessMember':
-        return {
-          sourceKind: RuntimeBindingDataFlowSourceKind.Member,
-          sourceName: expressionSourceName(unwrapped),
-          sourceRootName: expressionSourceRootName(unwrapped),
-          sourceWriteCapability: needsSourceWriteCapability
-            ? this.sourceWriteCapability.forAccessMember(
-              unwrapped,
-              checkerContext,
-              evaluator,
-            )
-            : null,
-          ...writeback,
-        };
+        return this.sourceWriteCapability.forAccessMember(unwrapped, checkerContext, evaluator);
       case 'AccessKeyed':
-        return {
-          sourceKind: RuntimeBindingDataFlowSourceKind.Keyed,
-          sourceName: expressionSourceName(unwrapped),
-          sourceRootName: expressionSourceRootName(unwrapped),
-          sourceWriteCapability: needsSourceWriteCapability
-            ? this.sourceWriteCapability.forAccessKeyed(
-              unwrapped,
-              checkerContext,
-              evaluator,
-            )
-            : null,
-          ...writeback,
-        };
+        return this.sourceWriteCapability.forAccessKeyed(unwrapped, checkerContext, evaluator);
       case 'AccessThis':
-        return {
-          sourceKind: RuntimeBindingDataFlowSourceKind.This,
-          sourceName: '$this',
-          sourceRootName: '$this',
-          sourceWriteCapability: needsSourceWriteCapability
-            ? sourceWriteCapabilityRuntimeUnassignable(
-              'Aurelia astAssign does not assign to AccessThis expressions.',
-              RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
-            )
-            : null,
-          ...writeback,
-        };
+        return sourceWriteCapabilityRuntimeUnassignable(
+          'Aurelia astAssign does not assign to AccessThis expressions.',
+          RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+        );
       default:
-        return {
-          sourceKind: RuntimeBindingDataFlowSourceKind.Other,
-          sourceName: expressionSourceName(unwrapped),
-          sourceRootName: expressionSourceRootName(unwrapped),
-          sourceWriteCapability: needsSourceWriteCapability
-            ? sourceWriteCapabilityRuntimeUnassignable(
-              `Aurelia astAssign does not assign to expression kind '${unwrapped.$kind}'.`,
-              RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
-            )
-            : null,
-          ...writeback,
-        };
+        return sourceWriteCapabilityRuntimeUnassignable(
+          `Aurelia astAssign does not assign to expression kind '${unwrapped.$kind}'.`,
+          RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+        );
     }
   }
 
@@ -222,6 +188,50 @@ export class BindingDataFlowSourceInfoProjector {
       targetToSourceValueTypeHint: writeback.targetToSourceValueType,
     };
   }
+}
+
+function bindingDataFlowSourceKindForRuntimeAssignmentTarget(
+  expression: ExpressionAstNode,
+): RuntimeBindingDataFlowSourceKind {
+  switch (expression.$kind) {
+    case 'AccessScope':
+      return RuntimeBindingDataFlowSourceKind.ScopeName;
+    case 'AccessMember':
+      return RuntimeBindingDataFlowSourceKind.Member;
+    case 'AccessKeyed':
+      return RuntimeBindingDataFlowSourceKind.Keyed;
+    case 'AccessThis':
+      return RuntimeBindingDataFlowSourceKind.This;
+    default:
+      return RuntimeBindingDataFlowSourceKind.Other;
+  }
+}
+
+function bindingDataFlowSourceNameForRuntimeAssignmentTarget(
+  expression: ExpressionAstNode,
+): string | null {
+  return expression.$kind === 'AccessThis' ? '$this' : expressionSourceName(expression);
+}
+
+function bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(
+  expression: ExpressionAstNode,
+): string | null {
+  return expression.$kind === 'AccessThis' ? '$this' : expressionSourceRootName(expression);
+}
+
+function syntheticWritebackSourceTypeHint(
+  expression: ExpressionAstNode,
+  needsSourceWriteCapability: boolean,
+  targetValueType: CheckerTypeReference | null,
+): Pick<SourceExpressionInfo, 'sourceTypeHint'> | Record<string, never> {
+  if (expression.$kind !== 'AccessScope') {
+    return {};
+  }
+  return {
+    sourceTypeHint: needsSourceWriteCapability && isSyntheticWritebackLocal(expression)
+      ? targetValueType
+      : null,
+  };
 }
 
 /** Retargets a spread binding source descriptor to the concrete property being spread into. */

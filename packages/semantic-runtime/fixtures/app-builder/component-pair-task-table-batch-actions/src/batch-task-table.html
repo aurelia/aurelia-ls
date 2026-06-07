@@ -1,0 +1,26 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<template else>
+  <div role="toolbar" aria-label="Batch actions">
+    <button type="button" click.trigger="deleteSelectedTaskItems()">Delete selected</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Select</th>
+        <th>Title</th>
+        <th>Done</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of taskItems">
+        <td>
+          <input type="checkbox" checked.to-view="selectedTaskItemIds.includes(taskItem.id)" change.trigger="toggleTaskItemSelection(taskItem)" aria-label.bind="'Select ' + taskItem.title">
+        </td>
+        <td>${taskItem.title}</td>
+        <td>
+          <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</template>

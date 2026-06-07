@@ -12,6 +12,7 @@ import {
 import type { TemplateResourceScope } from './compiler-world.js';
 import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import {
   type PropertyBinding,
 } from './runtime-binding.js';
@@ -20,13 +21,13 @@ import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 /** Binding mode selected by runtime-html BindingModeBehavior during astBind(...). */
 export function bindingModeForBindingBehaviorName(name: string): TemplateBindingMode | null {
   switch (name) {
-    case 'oneTime':
+    case BuiltInBindingBehaviorName.OneTime:
       return TemplateBindingMode.OneTime;
-    case 'toView':
+    case BuiltInBindingBehaviorName.ToView:
       return TemplateBindingMode.ToView;
-    case 'fromView':
+    case BuiltInBindingBehaviorName.FromView:
       return TemplateBindingMode.FromView;
-    case 'twoWay':
+    case BuiltInBindingBehaviorName.TwoWay:
       return TemplateBindingMode.TwoWay;
     default:
       return null;

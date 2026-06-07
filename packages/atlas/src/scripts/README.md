@@ -69,7 +69,7 @@ helpers.
 - [atlas-work-router.ts](atlas-work-router.ts) prints the `atlas.work-router` lens: typed work routes joined to live
   source anchors, Atlas memory, framework corpus fixture seeds, expected-effect descriptors, scripts, docs, and
   cautions. Prefer exact `--routeId=...` / `--route=...`, `--domain=...`, `--role=...`, `--lensId=...`, `--path=...`, `--symbolName=...`,
-  `--auLinkId=...`, `--concept=...`, `--effectKind=...`, `--recipeKey=...`, or `--seedUse=...` before `--query=...`;
+  `--auLinkId=...`, `--concept=...`, `--effectKind=...`, `--appPatternKey=...`, or `--seedUse=...` before `--query=...`;
   weak text matches are intentionally visible route-substrate pressure. Domain filters are structural over route
   domains and route-owned memory anchor domains. Query matching stays structural: distinctive multi-token route terms,
   source symbols, anchors, and canary phrases may be contained inside larger checkpoint prose, while single-token
@@ -183,27 +183,37 @@ helpers.
   `--productKind=...`, `--instantiationKind=...`, `--materializationSiteKind=...`, `--query=...`, `--rows=...`,
   `--detail`, and `--json` when resource convergence needs exact definition, backing declaration, bundle admission,
   syntax product, or materialization-site source rows instead of the broad pressure rollup.
-- [framework-corpus-pressure.ts](framework-corpus-pressure.ts) prints compact public Aurelia docs/test corpus counts and
-  old-package replacement inventory. Use it as Atlas-local pressure before treating docs as authoring pattern seeds,
-  choosing test clusters for behavior grounding, or mapping legacy package surfaces onto semantic-runtime APIs. It also
-  prints the semantic-runtime expected-effect contract rows that fixture seed hints are joined against. It is
-  intentionally not an MCP surface.
+- [framework-capabilities.ts](framework-capabilities.ts) prints the queryable `framework.capabilities` lens for
+  framework terrain and downstream capability API grounding. Use `--projection=catalog`, `--projection=matrix`, or
+  `--projection=evidence`, `--projection=evidence-trace`, or `--projection=grounding` with `--domain=router`, `--locality=resource-local`, `--resourceKind=custom-element`, `--resourceSourceForm=decorator`,
+  `--effect=binding-data-flow`, `--requirement=router:admission`, `--groundingStrength=corpus-backed`,
+  `--targetRows=...`, `--targetEvidenceRows=...`, `--query=...`, `--rows=...`, `--detail`, and `--json` before deriving app-builder lowering axes or MCP guidance
+  from what Aurelia can do.
+- [app-builder-reconciliation.ts](app-builder-reconciliation.ts) compares app-builder lowering axes, described
+  lowering choices, part/source-plan coverage, and framework capability terrain. Use `--detail` when review/information
+  findings matter; compact output hides non-risk findings so policy/taste choices do not look like missing framework
+  support. Missing capability ids are risks, while described-choice markers show named public descriptors; recommendation
+  and source-startability gates decide what app-builder should actually write.
+- [framework-corpus-pressure.ts](framework-corpus-pressure.ts) prints compact public Aurelia docs/test corpus counts.
+  Use it as Atlas-local pressure before treating docs as authoring pattern seeds or choosing test clusters for behavior
+  grounding. It also prints the semantic-runtime expected-effect contract rows that fixture seed hints are joined
+  against. It is intentionally not an MCP surface.
 - [framework-corpus.ts](framework-corpus.ts) prints the queryable `framework.corpus` lens for targeted fixture and
   authoring navigation. Use `--projection=docs`, `--projection=doc-snippets`, `--projection=tests`,
-  `--projection=test-snippets`, `--projection=expected-effects`, `--projection=fixture-seeds`, or
-  `--projection=legacy` with `--query=...`, `--queryMode=partial`, `--concept=forms`, `--group=router`, `--path=...`, `--language=html`,
+  `--projection=test-snippets`, `--projection=expected-effects`, or
+  `--projection=fixture-seeds` with `--query=...`, `--queryMode=partial`, `--concept=forms`, `--group=router`, `--path=...`, `--language=html`,
   `--snippetKind=it-call`, `--generated=false`, `--seedUse=authoring-taste`,
   `--effectKind=binding-data-flow`,
   `--expectedEffectFilterField=targetProperty`, `--expectedEffectFilterValue=value`,
   `--expectedEffectFilterField=channelKind`, `--expectedEffectFilterValue=style-property-value`,
   `--classificationKind=surface`, `--classificationKey=native-value-binding`,
   `--classificationKey=surface:au-compose`, `--classificationKey=surface:au-compose-flush-mode`,
-  `--classificationKey=surface:au-compose-object-component`, `--classificationKey=surface:searchable-data-table`,
-  `--recipeKey=searchable-data-table`, `--recipeKey=routed-searchable-data-table`, `--recipeKey=composed-dashboard`,
+  `--classificationKey=surface:au-compose-object-component`, `--classificationKey=surface:table-collection-operations`,
+  `--appPatternKey=table-collection-operations`, `--appPatternKey=router-table-collection-operations`, `--appPatternKey=dynamic-composition-surface`,
   `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
-  For `fixture-seeds`, prefer `effectKind` and `recipeKey` for structural narrowing and `query` for source/content
-  concepts. Composite `recipeKey` filters intentionally match the direct recipe lane plus declared ingredient seed lanes
-  such as routed recipe plus feature-surface recipe, because public docs/tests often ground those semantics in separate
+  For `fixture-seeds`, prefer `effectKind` and `appPatternKey` for structural narrowing and `query` for source/content
+  concepts. Composite `appPatternKey` filters intentionally match the direct app-pattern lane plus declared ingredient seed lanes
+  such as router pressure plus feature-surface pressure, because public docs/tests often ground those semantics in separate
   snippets. Use the default all-token `query` mode for exact-ish narrowing; use `--queryMode=partial` only for
   exploratory multi-term sweeps where adjacent corpus examples are more useful than a zero-row answer. Use
   `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether docs/tests are being
@@ -211,12 +221,12 @@ helpers.
   behavior-grounding even though they are documentation snippets. `authoring-taste` expected effects themselves are
   orientation contracts and should not be expected to have direct corpus seeds. Use expected-effect field/value filters when the seed must prove a
   concrete fact such as a validate trigger argument, a specific binding target property, or a class/style value-channel
-  kind. AuCompose fixture seeds carry `runtime-composition` effect hints, `composed-dashboard` recipe hints, and
+  kind. AuCompose fixture seeds carry `runtime-composition` effect hints, `dynamic-composition-surface` app-pattern hints, and
   narrow surface keys for component/model/template inputs, scope/flush/tag literals, composition/composing outputs, and
   object-shaped component values.
-  Searchable data-table and catalog storefront fixture seeds are keyed by explicit local syntax surfaces such as table/list
+  Table/collection operation and commerce solution-space fixture seeds are keyed by explicit local syntax surfaces such as table/list
   management controls, search/filter/sort/pagination/selection vocabulary, product/catalog/cart/checkout vocabulary, and
-  the matching structured recipe keys; use those recipe and surface filters before falling back to broad text queries.
+  the matching structured app-pattern keys; use those app-pattern and surface filters before falling back to broad text queries.
   Router fixture seeds require
   concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route config objects, or `au-viewport`;
   broad route/router prose remains corpus navigation pressure only. Use classification filters for exact reason lanes
@@ -224,7 +234,7 @@ helpers.
   `surface:validation-binding-behavior`; surface reasons are local to docs fences and test `createFixture(...)` calls,
   while parent `describe`/`it` ranges remain carrier pressure. In
   `--detail` mode, fixture seeds print typed classification reasons so a row explains which concept, surface, effect,
-  recipe, or contrastive pressure admitted it. Interpolation and bare `else` classification is context-aware, so
+  app pattern, or contrastive pressure admitted it. Interpolation and bare `else` classification is context-aware, so
   TypeScript template strings and JavaScript control flow do not masquerade as Aurelia template pressure.
   `--concept=expression` is the TypeChecker-expression lane for interpolation, expression-bearing binding commands,
   parser/evaluator terms, value converters, binding behaviors, and AST expression examples; `--concept=template`

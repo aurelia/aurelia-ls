@@ -1,0 +1,392 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "router-backed-task-service-vocabulary-browser",
+  "ok": true,
+  "expectedEffects": 21,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder routed collection/detail SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder routed collection/detail SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder routed collection/detail SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Routed collection/detail SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-class",
+      "summary": "Routed collection/detail SourcePlan should expose the injected state class in app topology. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail SourcePlan should register router options. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail SourcePlan should use route decorator object-literal configs. Observed 2 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail SourcePlan should use child route object-literal configs. Observed 6 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail list route config should target the main viewport. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail child route config should target the nested detail viewport. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail shell should declare the main au-viewport. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail list route should declare the nested detail au-viewport. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail route pattern should expose its route parameter. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail route endpoint should expose its route parameter. Observed 2 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Routed collection/detail detail route should read the route parameter. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction-binding",
+      "summary": "Routed collection/detail templates should read through DI state/domain objects. Observed 3 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Routed collection/detail SourcePlan should compile route templates. Observed 3 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Routed collection/detail SourcePlan should hydrate runtime controllers. Observed 38 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Routed collection/detail SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-class",
+      "summary": "Routed collection/detail service-backed SourcePlan should expose the generated service class. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction",
+      "summary": "Routed collection/detail service-backed SourcePlan should expose a generated call into the service boundary. Observed 6 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 4,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-link-navigation",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-static-template",
+        "classificationKind": "native-link-navigation",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-vocabulary-browser/src/routes/task-item-list-route.html",
+          "start": 770,
+          "end": 850
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-vocabulary-browser/src/routes/task-item-list-route.html",
+          "start": 130,
+          "end": 148
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-vocabulary-browser/src/routes/task-item-list-route.html",
+          "start": 260,
+          "end": 279
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "create()",
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-vocabulary-browser/src/routes/task-item-list-route.html",
+          "start": 312,
+          "end": 354
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 14480,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 188,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/my-app.ts",
+      "textLength": 716,
+      "summary": "Generated SourcePlan file 'src/my-app.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/my-app.html",
+      "textLength": 122,
+      "summary": "Generated SourcePlan file 'src/my-app.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-list-route.ts",
+      "textLength": 550,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-list-route.html",
+      "textLength": 1000,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-detail-route.ts",
+      "textLength": 460,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-detail-route.html",
+      "textLength": 538,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-item.ts",
+      "textLength": 129,
+      "summary": "Generated SourcePlan file 'src/task-item.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/api/task-repository.ts",
+      "textLength": 765,
+      "summary": "Generated SourcePlan file 'src/api/task-repository.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-item-browse-state.ts",
+      "textLength": 585,
+      "summary": "Generated SourcePlan file 'src/task-item-browse-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 299,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 21,
+      "jsonLength": 7409,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 9,
+      "jsonLength": 175,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 9,
+      "jsonLength": 743,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 4,
+      "jsonLength": 3851,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 73,
+      "jsonLength": 33746,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

@@ -540,15 +540,15 @@ function readBindableMode(value: EvaluationValue | null | undefined): BindableBi
   }
   if (value.kind === EvaluationValueKind.String) {
     switch (value.value) {
-      case 'default':
+      case BindableBindingMode.Default:
         return BindableBindingMode.Default;
-      case 'oneTime':
+      case BindableBindingMode.OneTime:
         return BindableBindingMode.OneTime;
-      case 'toView':
+      case BindableBindingMode.ToView:
         return BindableBindingMode.ToView;
-      case 'fromView':
+      case BindableBindingMode.FromView:
         return BindableBindingMode.FromView;
-      case 'twoWay':
+      case BindableBindingMode.TwoWay:
         return BindableBindingMode.TwoWay;
       default:
         return null;

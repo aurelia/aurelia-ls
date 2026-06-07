@@ -1141,6 +1141,7 @@ function isRegisterObjectMapValue(value: EvaluationValue): boolean {
     case EvaluationValueKind.String:
     case EvaluationValueKind.StringPattern:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:

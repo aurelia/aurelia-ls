@@ -81,6 +81,7 @@
         "Use TypeSystemProject.readProgramSourceFileByPath or readProgramSourceFileByModuleKey when scanning source for checker-backed materialization. Evaluator-owned AST access is deliberately named readEvaluatedSourceFileByPath/readEvaluatedSourceFileByModuleKey so call sites do not accidentally pair evaluation SourceFiles with the checker.",
         "Use source-address-expression.ts for the shared source-span address to exact TypeScript expression read. State initial-state type projection and binding-source value reduction both spend it; do not copy local smallestExpressionForSpan walks into evaluator, state, router, or template code.",
         "Use TypeSystemProject.readProgramNode, readProgramTypeAtLocation, readProgramTypeFromTypeNode, readProgramSymbolAtLocation, readProgramAliasedSymbolAtLocation, readProgramTypeOfSymbolAtLocation, or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
+        "Use readTypeScriptSourceSyntaxDiagnostics when a source generator, slot validator, or fixture/source-plan lowerer only needs isolated TypeScript syntax diagnostics. That helper is the no-Program source-syntax boundary; do not call ts.transpileModule directly from app-builder or future source-generation surfaces.",
         "Do not manufacture empty fallback SourceFiles as TypeChecker lookup locations. If a lookup needs a location, use a real Program-owned source, a checker-owned declaration, or return an open/null result that points back to missing source admission or overlay generation.",
         "Keep Program-node remap counters in app telemetry. A correctness guard that remaps by file/span/kind should stay visible as requests, cache hits, same-source hits, span hits, and misses so larger apps reveal unexpected remap volume. The current remap path uses a lazy per-Program-source span index instead of a DFS per miss.",
         "Use `pnpm --filter @aurelia-ls/atlas pressure:product-architecture` to see grouped TypeScript checker API call pressure before auditing checker ownership by hand. The compact lane groups getTypeAtLocation, getSymbolAtLocation, getTypeOfSymbolAtLocation, getPropertyOfType, getTypeFromTypeNode, getApparentType, getIndexTypeOfType, and getResolvedSignature calls by count, file, and owner samples. Detail mode opts into page-scoped first-argument origin rows so checker ownership audits can distinguish local Program-node remaps, checker-result carriers, parameters, and property-access arguments without making compact call-site analysis pay that cost.",
@@ -166,6 +167,12 @@
           "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
           "symbolName": "readSemanticTypeScriptDiagnostics",
           "summary": "Public API projection for TypeScript diagnostics and summaries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/source-syntax.ts",
+          "symbolName": "readTypeScriptSourceSyntaxDiagnostics",
+          "summary": "No-Program TypeScript source-syntax diagnostic helper for generated source and slot validation."
         },
         {
           "kind": "source",
@@ -282,6 +289,11 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
           "symbolName": "readSemanticTypeScriptDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/source-syntax.ts",
+          "symbolName": "readTypeScriptSourceSyntaxDiagnostics"
         },
         {
           "kind": "source-declaration-exists",

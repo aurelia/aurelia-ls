@@ -564,7 +564,7 @@ function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmissio
     case FrameworkRegistrationKind.DialogConfiguration:
       return null;
     case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
-      return 'DefaultVirtualizationConfiguration resource headers can feed DI resource slots; collection-strategy and DOM-renderer service registrations are not spent yet.';
+      return null;
     case FrameworkRegistrationKind.AppTask:
       return null;
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:

@@ -1,0 +1,5176 @@
+{
+  "schemaVersion": "semantic-generated-app-fixture.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "application-assembly-projects-and-milestones",
+  "title": "Application assembly with project, milestone, assignment, and review areas",
+  "description": "Multi-area generated app that assembles routed project, milestone, relationship-backed assignment workflow, and object-valued review domains under one root router shell without duplicating startup, root navigation, or project tooling.",
+  "appBuilderRequestPath": "app-builder-request.json",
+  "appBuilderResponsePath": "app-builder-response.json",
+  "expectedEffects": [
+    {
+      "summary": "App-builder application assembly SourcePlan has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=package-manifest",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=tooling-config",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=declaration",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly SourcePlan should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-shape:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly SourcePlan should register router options.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:routeProductKind=router-options",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly SourcePlan should use route decorator object-literal configs.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:originKind=route-decorator&valueKind=object-literal",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly SourcePlan should use child route object-literal configs.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:originKind=child-routes-property&valueKind=object-literal",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "child-routes-property"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly top-level route areas should target the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:routeProductKind=route-config&viewport=main",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly child detail routes should target nested detail viewports.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:routeProductKind=route-config&viewport=detail",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        },
+        {
+          "field": "viewport",
+          "value": "detail"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly root shell should declare the main au-viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:name=main&routeProductKind=router-viewport",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        },
+        {
+          "field": "name",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly child route areas should declare nested detail au-viewports.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "semanticTargetKey": "route:name=detail&routeProductKind=router-viewport",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        },
+        {
+          "field": "name",
+          "value": "detail"
+        }
+      ]
+    },
+    {
+      "summary": "Application assembly SourcePlan should compile root and route templates.",
+      "effectKind": "template-compilation",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "template-compilation:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly SourcePlan should hydrate runtime controllers.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "runtime-controller:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly SourcePlan should read through generated route state/domain bindings.",
+      "effectKind": "service-interaction-binding",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "service-interaction-binding:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly service-backed route area SourcePlan should expose the generated service class.",
+      "effectKind": "service-class",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "service-class:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly service-backed route area SourcePlan should expose a generated call into the service boundary.",
+      "effectKind": "service-interaction",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "service-interaction:present",
+      "filters": []
+    },
+    {
+      "summary": "Application assembly SourcePlan should have no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "open-seam-closure:absent",
+      "filters": []
+    }
+  ],
+  "expectedEffectKinds": [
+    "project-tooling",
+    "project-shape",
+    "route",
+    "template-compilation",
+    "runtime-controller",
+    "service-interaction-binding",
+    "service-class",
+    "service-interaction",
+    "open-seam-closure"
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen",
+    "control-use-inventory",
+    "existing-app-fact-read",
+    "component-manifest-publication"
+  ],
+  "ontologyTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "application-assembly"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "router-backed-list-detail"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "route-navigation-action"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "native-submit-form"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-button"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "field-group"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-text-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-boolean-checkbox"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-single-select"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "action-feedback-status"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "service-backed-load-save"
+    }
+  ],
+  "controlUseInventoryRows": [
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "route-navigation-action"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-link-navigation",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "openProject",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": "router-load-navigation",
+      "routeInstruction": "route: project-detail; params.bind: { projectId: project.id }",
+      "linkText": "Open project",
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Open project",
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "text-input",
+      "innerControlPatternId": "native-text-input",
+      "fieldName": "name",
+      "actionName": null,
+      "bindingExpression": "name",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Name",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "name-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "text-input",
+      "innerControlPatternId": "native-text-input",
+      "fieldName": "phase",
+      "actionName": null,
+      "bindingExpression": "phase",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Phase",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "phase-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-button",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "createProject",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": "createProject()",
+      "handlerExpressionSource": "selected-action-name",
+      "eventName": "submit",
+      "actionChannelKind": "containing-form-submit",
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": "Create project",
+      "buttonType": "submit",
+      "labelText": "Create project",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "route-navigation-action"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-link-navigation",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "openMilestone",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": "router-load-navigation",
+      "routeInstruction": "route: milestone-detail; params.bind: { milestoneId: milestone.id }",
+      "linkText": "Open milestone",
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Open milestone",
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "route-navigation-action"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-link-navigation",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "openTask",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": "router-load-navigation",
+      "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+      "linkText": "Open assignment",
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Open assignment",
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "text-input",
+      "innerControlPatternId": "native-text-input",
+      "fieldName": "title",
+      "actionName": null,
+      "bindingExpression": "title",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Title",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "title-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "checkbox",
+      "innerControlPatternId": "native-boolean-checkbox",
+      "fieldName": "done",
+      "actionName": null,
+      "bindingExpression": "done",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Done",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "done-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "single-select",
+      "innerControlPatternId": "native-single-select",
+      "fieldName": "projectId",
+      "actionName": null,
+      "bindingExpression": "projectId",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Project",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "project-id-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": "state.projects",
+      "valueDomainExpressionSource": "relationship-collection"
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-button",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "create",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": "create()",
+      "handlerExpressionSource": "selected-action-name",
+      "eventName": "submit",
+      "actionChannelKind": "containing-form-submit",
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": "Create assignment",
+      "buttonType": "submit",
+      "labelText": "Create assignment",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "route-navigation-action"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-link-navigation",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "openReview",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": "router-load-navigation",
+      "routeInstruction": "route: review-item-detail; params.bind: { reviewId: reviewItem.id }",
+      "linkText": "Open review",
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Open review",
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "text-input",
+      "innerControlPatternId": "native-text-input",
+      "fieldName": "title",
+      "actionName": null,
+      "bindingExpression": "title",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Title",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "title-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "checkbox",
+      "innerControlPatternId": "native-boolean-checkbox",
+      "fieldName": "done",
+      "actionName": null,
+      "bindingExpression": "done",
+      "bindingExpressionSource": "selected-field-name",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Done",
+      "labelTextSource": "selected-field-title",
+      "fieldControlId": "done-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "single-select",
+      "innerControlPatternId": "native-single-select",
+      "fieldName": "reviewer",
+      "actionName": null,
+      "bindingExpression": "reviewer",
+      "bindingExpressionSource": "selected-relationship-local-value",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Reviewer",
+      "labelTextSource": "selected-relationship-title",
+      "fieldControlId": "reviewer-field",
+      "fieldControlIdSource": "selected-relationship-local-value",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": "state.reviewerProfiles",
+      "valueDomainExpressionSource": "relationship-collection"
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-source-plan",
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "native-button",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": null,
+      "actionName": "createReview",
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": "createReview()",
+      "handlerExpressionSource": "selected-action-name",
+      "eventName": "submit",
+      "actionChannelKind": "containing-form-submit",
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": "Create review",
+      "buttonType": "submit",
+      "labelText": "Create review",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    }
+  ],
+  "sourcePlanWitnessRows": [
+    {
+      "rowKind": "policy",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "conflictPolicy": "must-not-exist",
+      "formattingPolicy": "app-builder-baseline",
+      "packageToolingPolicy": "app-builder-baseline",
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline"
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/main.ts",
+      "fileRole": "entrypoint",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-entrypoint",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/main.ts",
+      "fileRole": "entrypoint",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/main.ts",
+      "fileRole": "entrypoint",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "aurelia-configuration-admission",
+      "contributionOrigin": {
+        "kind": "aurelia-configuration-admission",
+        "admissionKind": "router-configuration"
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/main.ts",
+      "fileRole": "entrypoint",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./my-app",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/main.ts",
+      "fileRole": "entrypoint",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "aurelia-configuration-admission",
+      "contributionOrigin": {
+        "kind": "aurelia-configuration-admission",
+        "admissionKind": "router-configuration"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 19
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/project-list-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/project-detail-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/milestone-list-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/milestone-detail-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/task-item-list-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 5,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/task-item-detail-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 6,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/review-item-list-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 7,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./routes/review-item-detail-route",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-decorator",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-decorator",
+        "slotKinds": [
+          "route-configuration-expression"
+        ]
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 1585
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 9,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-decorator",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-decorator",
+        "slotKinds": [
+          "route-configuration-expression"
+        ]
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 15
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 18
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 14
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/my-app.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "viewport",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "viewport-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 39
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../project-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "text-input",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 36
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 95
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "text-input",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 43
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 38
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 99
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 45
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 307
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 37
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "repeat",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "iterable-expression",
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 38
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction",
+          "route-params-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 68
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 15
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 13,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "viewport",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "viewport-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 14,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 28
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 15,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 88
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../project-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../project",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 73
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 5,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 10
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 15
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 16
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 26
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-to-view-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 31
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 82
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 95
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 64
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 77
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 13,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "repeat",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "iterable-expression",
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 59
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 14,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 64
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 15,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 285
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 16,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 465
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 17,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 549
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-domain-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-domain-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./project",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./task-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../milestone-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 39
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "repeat",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "iterable-expression",
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 42
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction",
+          "route-params-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 74
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 18
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "viewport",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "viewport-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 31
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 96
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../milestone-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../milestone",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 75
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 5,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 19
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 10
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 18
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/milestone-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 28
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/milestone.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-domain-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/milestone-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/milestone-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./milestone",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../task-item-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "text-input",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 43
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 38
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 99
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "checkbox",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 59
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 36
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 113
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "single-select",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression",
+          "local-name",
+          "option-binding-kind",
+          "option-label-expression",
+          "option-value-expression",
+          "value-domain-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 161
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 45
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 228
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 48
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 562
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 29
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 22
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 13,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-composition",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-composition",
+        "targetKind": "application-pattern",
+        "targetId": "action-feedback-status"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 103
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 14,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 38
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 15,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 16,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "repeat",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "iterable-expression",
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 40
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 17,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 18,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 26
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 19,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 42
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 20,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 45
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 21,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 95
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 22,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 108
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 23,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-to-view-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 31
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 24,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 82
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 25,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 95
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 26,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction",
+          "route-params-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 68
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 27,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 91
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 28,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 104
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 29,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "viewport",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "viewport-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../task-item-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../task-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 70
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 5,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 18
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 10
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-to-view-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 31
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 82
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 101
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 42
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/task-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 58
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./task-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./project",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../review-item-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../reviewer-profile",
+      "importTypeOnly": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 33
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-pending",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 7
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-fulfilled",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": [
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 24
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-rejected",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 5
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "text-input",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 43
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 38
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 99
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "checkbox",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 59
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 36
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 113
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "control",
+        "partId": "single-select",
+        "operationKind": "create-control",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "binding-expression",
+          "local-name",
+          "matcher-expression",
+          "option-binding-kind",
+          "option-label-expression",
+          "option-value-expression",
+          "value-domain-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 236
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 44
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 302
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 13,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 44
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 14,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 638
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 15,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 35
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 16,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 28
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 17,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-composition",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-composition",
+        "targetKind": "application-pattern",
+        "targetId": "action-feedback-status"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 111
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 18,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 40
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 19,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 20,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "repeat",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "iterable-expression",
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 44
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 21,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 19
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 22,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 28
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 23,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 47
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 24,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 56
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 25,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-to-view-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 33
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 26,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 84
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 27,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 97
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 28,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction",
+          "route-params-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 74
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 29,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "application-pattern",
+        "targetId": "route-navigation-action",
+        "controlPatternId": null,
+        "controlId": null,
+        "innerControlPatternId": null
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 93
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 30,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 106
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-list-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 31,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "viewport",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-element",
+        "slotKinds": [
+          "viewport-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 41
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-view-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../review-item-browse-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 72
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.ts",
+      "fileRole": "component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-api",
+        "partId": "route-context-parameter-read",
+        "operationKind": "apply-framework-api",
+        "applicationSite": "typescript-expression",
+        "slotKinds": [
+          "route-parameter-type"
+        ]
+      },
+      "importModuleSpecifier": "@aurelia/router",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-component-template",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 0,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 32
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 1,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-pending",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 7
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 2,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-fulfilled",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": [
+          "local-name"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 17
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "promise-rejected",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 5
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional",
+        "operationKind": "apply-template-controller",
+        "applicationSite": "template-controller",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 20
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "structural-part",
+        "partId": "conditional-else",
+        "operationKind": "apply-template-controller-branch",
+        "applicationSite": "template-controller-branch",
+        "slotKinds": []
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 4
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "framework-component",
+        "partId": "load",
+        "operationKind": "apply-framework-resource",
+        "applicationSite": "template-attribute",
+        "slotKinds": [
+          "route-instruction"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 10
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 19
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "attribute-to-view-binding",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "binding-command-target",
+        "slotKinds": [
+          "attribute-name",
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 33
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 84
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 103
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 47
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/review-item-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 64
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-domain-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./reviewer-profile",
+      "importTypeOnly": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/services/review-assignment-service.ts",
+      "fileRole": "service",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-service-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/services/review-assignment-service.ts",
+      "fileRole": "service",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../review-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/services/review-assignment-service.ts",
+      "fileRole": "service",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "../reviewer-profile",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/reviewer-profile.ts",
+      "fileRole": "domain-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-domain-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./review-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./services/review-assignment-service",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./reviewer-profile",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/router",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "aurelia",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "typescript",
+      "dependencyVersionRange": "^6.0.3",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "check",
+      "scriptCommand": "tsc -p tsconfig.json --noEmit"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "package.json",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "package-manifest",
+      "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "tsconfig.json",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "typescript-config",
+      "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "src/aurelia-assets.d.ts",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "module-declaration",
+      "projectToolingFileLanguage": "typescript"
+    }
+  ]
+}

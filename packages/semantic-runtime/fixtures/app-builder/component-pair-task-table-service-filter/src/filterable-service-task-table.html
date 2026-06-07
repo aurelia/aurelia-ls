@@ -1,0 +1,29 @@
+<section class="filterable-service-task-table">
+  <p if.bind="filterStatusMessage" role="status" id="task-filter-status">${filterStatusMessage}</p>
+  <section promise.bind="taskItemsPromise" class="filterable-service-task-table__status">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No completed tasks yet.</p>
+      <template else>
+        <table class="filterable-service-task-table__table" data-au-role="filterable-service-backed-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Done</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="filterable-service-task-table__row">
+              <td>${taskItem.title}</td>
+              <td>
+                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error">Could not load tasks.</p>
+  </section>
+</section>
+<button type="button" click.trigger="showCompletedTaskItems()">Show completed tasks</button>

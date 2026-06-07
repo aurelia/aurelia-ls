@@ -1,5 +1,35 @@
 import { auLink } from '../kernel/au-link.js';
 
+/** Authored names of built-in template-controller resources modeled by semantic-runtime. */
+export enum BuiltInTemplateControllerName {
+  /** `if` conditional template controller. */
+  If = 'if',
+  /** `else` conditional companion template controller. */
+  Else = 'else',
+  /** `repeat` iterator template controller. */
+  Repeat = 'repeat',
+  /** `virtual-repeat` virtualized iterator template controller. */
+  VirtualRepeat = 'virtual-repeat',
+  /** `with` value-scope template controller. */
+  With = 'with',
+  /** `portal` DOM relocation template controller. */
+  Portal = 'portal',
+  /** `switch` discriminant template controller. */
+  Switch = 'switch',
+  /** `case` switch branch template controller. */
+  Case = 'case',
+  /** `default-case` fallback switch branch template controller. */
+  DefaultCase = 'default-case',
+  /** `promise` async-state owner template controller. */
+  Promise = 'promise',
+  /** `pending` promise-pending branch template controller. */
+  Pending = 'pending',
+  /** `then` promise-fulfilled branch template controller. */
+  Then = 'then',
+  /** `catch` promise-rejected branch template controller. */
+  Catch = 'catch',
+}
+
 export const enum BuiltInTemplateControllerChildScopeKind {
   PassThrough = 'pass-through',
   IteratorBindingContext = 'iterator-binding-context',
@@ -42,7 +72,7 @@ export const enum BuiltInTemplateControllerValueDomainKind {
 }
 
 export interface BuiltInTemplateControllerSemantics {
-  readonly controllerName: string;
+  readonly controllerName: BuiltInTemplateControllerName;
   readonly childScopeKind: BuiltInTemplateControllerChildScopeKind;
   readonly valueProperty: BuiltInTemplateControllerValueProperty;
   readonly valueDomainKind: BuiltInTemplateControllerValueDomainKind;
@@ -52,7 +82,7 @@ export interface BuiltInTemplateControllerSemantics {
 
 @auLink('runtime-html:If', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlIfTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'if';
+  readonly controllerName = BuiltInTemplateControllerName.If;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -62,7 +92,7 @@ export class RuntimeHtmlIfTemplateControllerSemantics implements BuiltInTemplate
 
 @auLink('runtime-html:Else', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlElseTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'else';
+  readonly controllerName = BuiltInTemplateControllerName.Else;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = null;
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.None;
@@ -72,7 +102,7 @@ export class RuntimeHtmlElseTemplateControllerSemantics implements BuiltInTempla
 
 @auLink('runtime-html:Repeat', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlRepeatTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'repeat';
+  readonly controllerName = BuiltInTemplateControllerName.Repeat;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.IteratorBindingContext;
   readonly valueProperty = 'items';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.Iterator;
@@ -82,7 +112,7 @@ export class RuntimeHtmlRepeatTemplateControllerSemantics implements BuiltInTemp
 
 @auLink('ui-virtualization:VirtualRepeat', { facet: 'template-controller-semantics' })
 export class UiVirtualizationVirtualRepeatTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'virtual-repeat';
+  readonly controllerName = BuiltInTemplateControllerName.VirtualRepeat;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.IteratorBindingContext;
   readonly valueProperty = 'items';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.Iterator;
@@ -92,7 +122,7 @@ export class UiVirtualizationVirtualRepeatTemplateControllerSemantics implements
 
 @auLink('runtime-html:With', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlWithTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'with';
+  readonly controllerName = BuiltInTemplateControllerName.With;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.ValueBindingContext;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -102,7 +132,7 @@ export class RuntimeHtmlWithTemplateControllerSemantics implements BuiltInTempla
 
 @auLink('runtime-html:Portal', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlPortalTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'portal';
+  readonly controllerName = BuiltInTemplateControllerName.Portal;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'target';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -112,7 +142,7 @@ export class RuntimeHtmlPortalTemplateControllerSemantics implements BuiltInTemp
 
 @auLink('runtime-html:Switch', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlSwitchTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'switch';
+  readonly controllerName = BuiltInTemplateControllerName.Switch;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -122,7 +152,7 @@ export class RuntimeHtmlSwitchTemplateControllerSemantics implements BuiltInTemp
 
 @auLink('runtime-html:Case', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlCaseTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'case';
+  readonly controllerName = BuiltInTemplateControllerName.Case;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -132,7 +162,7 @@ export class RuntimeHtmlCaseTemplateControllerSemantics implements BuiltInTempla
 
 @auLink('runtime-html:DefaultCase', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlDefaultCaseTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'default-case';
+  readonly controllerName = BuiltInTemplateControllerName.DefaultCase;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -142,7 +172,7 @@ export class RuntimeHtmlDefaultCaseTemplateControllerSemantics implements BuiltI
 
 @auLink('runtime-html:PromiseTemplateController', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlPromiseTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'promise';
+  readonly controllerName = BuiltInTemplateControllerName.Promise;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.EmptyObjectBindingContext;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -152,7 +182,7 @@ export class RuntimeHtmlPromiseTemplateControllerSemantics implements BuiltInTem
 
 @auLink('runtime-html:PendingTemplateController', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlPendingTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'pending';
+  readonly controllerName = BuiltInTemplateControllerName.Pending;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -162,7 +192,7 @@ export class RuntimeHtmlPendingTemplateControllerSemantics implements BuiltInTem
 
 @auLink('runtime-html:FulfilledTemplateController', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlFulfilledTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'then';
+  readonly controllerName = BuiltInTemplateControllerName.Then;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
@@ -172,7 +202,7 @@ export class RuntimeHtmlFulfilledTemplateControllerSemantics implements BuiltInT
 
 @auLink('runtime-html:RejectedTemplateController', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlRejectedTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
-  readonly controllerName = 'catch';
+  readonly controllerName = BuiltInTemplateControllerName.Catch;
   readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
   readonly valueProperty = 'value';
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;

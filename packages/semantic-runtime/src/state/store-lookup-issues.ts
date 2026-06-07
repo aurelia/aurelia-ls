@@ -19,6 +19,7 @@ import {
 import { bindingBehaviorExpressions, staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import { StateRawErrorAuthority } from './framework-raw-error-authority.js';
 import {
   FromStateStoreReferenceSite,
@@ -36,11 +37,17 @@ import {
   type StateIssuePublication,
 } from './state-issue-publication.js';
 
-export type StateStoreLookupSiteKind =
-  | 'from-state-decorator'
-  | 'state-binding-command'
-  | 'dispatch-binding-command'
-  | 'state-binding-behavior';
+/** Source surface that can name a configured @aurelia/state store. */
+export enum StateStoreLookupSiteKind {
+  /** `@fromState(...)` decorator argument store lookup. */
+  FromStateDecorator = 'from-state-decorator',
+  /** `.state` binding command store lookup. */
+  StateBindingCommand = 'state-binding-command',
+  /** `.dispatch` binding command store lookup. */
+  DispatchBindingCommand = 'dispatch-binding-command',
+  /** `& state` binding behavior argument store lookup. */
+  StateBindingBehavior = 'state-binding-behavior',
+}
 
 class StateStoreLookupSite {
   constructor(
@@ -81,11 +88,12 @@ export class StateStoreLookupIssueMaterializer {
     stores: readonly StateStoreConfiguration[],
     templates: TemplateCompilationProjectEmission,
   ): StateStoreLookupIssueProjectResult {
-    const configuredStoreNames = new Set(stores.map((store) => store.name).filter((name): name is string => name != null));
-    if (configuredStoreNames.size === 0) {
-      return new StateStoreLookupIssueProjectResult([], []);
-    }
-
+    const configuredStoreNames = new Set(
+      stores
+        .filter((store) => !store.isDefault)
+        .map((store) => store.name)
+        .filter((name): name is string => name != null),
+    );
     const publications = [
       ...fromStateStoreLookupSites(this.store, project, typeSystem),
       ...templateStoreLookupSites(this.store, templates),
@@ -141,7 +149,7 @@ function fromStateStoreLookupSites(
     ].join(':');
     const source = sourceSpanAddressForSite(store, local, site);
     return new StateStoreLookupSite(
-      'from-state-decorator',
+      StateStoreLookupSiteKind.FromStateDecorator,
       site.storeName,
       source.handle,
       source.records,
@@ -182,7 +190,7 @@ function stateCommandStoreLookupSites(
   if (binding instanceof StateBinding && binding.storeName != null && binding.sourceAddressHandle != null) {
     return [
       new StateStoreLookupSite(
-        'state-binding-command',
+        StateStoreLookupSiteKind.StateBindingCommand,
         binding.storeName,
         binding.sourceAddressHandle,
         [],
@@ -195,7 +203,7 @@ function stateCommandStoreLookupSites(
   if (binding instanceof StateDispatchBinding && binding.storeName != null && binding.sourceAddressHandle != null) {
     return [
       new StateStoreLookupSite(
-        'dispatch-binding-command',
+        StateStoreLookupSiteKind.DispatchBindingCommand,
         binding.storeName,
         binding.sourceAddressHandle,
         [],
@@ -220,7 +228,7 @@ function stateBindingBehaviorStoreLookupSites(
     }
     const sourceAddressHandle = parse.sourceAddressHandle;
     return bindingBehaviorExpressions(ast).flatMap((behavior) => {
-      if (behavior.name.name !== 'state') {
+      if (behavior.name.name !== BuiltInBindingBehaviorName.State) {
         return [];
       }
       const storeName = staticStringLiteralExpression(behavior.args[0] ?? null);
@@ -228,7 +236,7 @@ function stateBindingBehaviorStoreLookupSites(
         ? []
         : [
           new StateStoreLookupSite(
-            'state-binding-behavior',
+            StateStoreLookupSiteKind.StateBindingBehavior,
             storeName,
             sourceAddressHandle,
             [],
@@ -243,13 +251,13 @@ function stateBindingBehaviorStoreLookupSites(
 
 function stateStoreLookupIssueMessage(site: StateStoreLookupSite): string {
   switch (site.kind) {
-    case 'from-state-decorator':
+    case StateStoreLookupSiteKind.FromStateDecorator:
       return `@fromState references store "${site.storeName}", but no @aurelia/state store with that name is configured.`;
-    case 'state-binding-command':
+    case StateStoreLookupSiteKind.StateBindingCommand:
       return `The state binding command references store "${site.storeName}", but no @aurelia/state store with that name is configured.`;
-    case 'dispatch-binding-command':
+    case StateStoreLookupSiteKind.DispatchBindingCommand:
       return `The dispatch binding command references store "${site.storeName}", but no @aurelia/state store with that name is configured.`;
-    case 'state-binding-behavior':
+    case StateStoreLookupSiteKind.StateBindingBehavior:
       return `The state binding behavior references store "${site.storeName}", but no @aurelia/state store with that name is configured.`;
   }
 }

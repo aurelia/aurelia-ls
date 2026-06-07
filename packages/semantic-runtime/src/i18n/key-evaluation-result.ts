@@ -1,4 +1,6 @@
 import { auLink } from '../kernel/au-link.js';
+import { ExpressionParser } from '../expression/expression-parser.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 
 export type I18nTranslationTargetKind =
   | 'attribute-or-property'
@@ -13,6 +15,8 @@ export class I18nTranslationTarget {
     readonly targetKind: I18nTranslationTargetKind,
   ) {}
 }
+
+const I18N_KEY_EXPRESSION_PARSER = new ExpressionParser();
 
 /** Static mirror of Aurelia i18n's `I18nKeyEvaluationResult` key/attribute parsing. */
 @auLink('i18n:I18nKeyEvaluationResult')
@@ -34,6 +38,34 @@ export class I18nKeyEvaluationResult {
 
 export function i18nKeyEvaluationResults(keyExpr: string): readonly I18nKeyEvaluationResult[] {
   return keyExpr.split(';').map((part) => new I18nKeyEvaluationResult(part));
+}
+
+/** Validate static i18n `t` command source before TranslationBinding reparses it as interpolation. */
+export function i18nTranslationKeyExpressionValidationSummary(keyExpr: string): string | null {
+  if (keyExpr.length === 0 || /[\r\n]/.test(keyExpr)) {
+    return `value '${keyExpr}' is not a non-empty single-line i18n translation key expression.`;
+  }
+  const interpolation = I18N_KEY_EXPRESSION_PARSER.parse(keyExpr, 'Interpolation');
+  switch (interpolation.kind) {
+    case ExpressionParseResultKind.InterpolationSuccess:
+      return null;
+    case ExpressionParseResultKind.InterpolationAbsent:
+      return i18nStaticKeySegmentsValidationSummary(keyExpr);
+    default:
+      return `value '${keyExpr}' did not parse as i18n translation interpolation syntax: ${interpolation.kind}.`;
+  }
+}
+
+function i18nStaticKeySegmentsValidationSummary(keyExpr: string): string | null {
+  const segments = i18nKeyEvaluationResults(keyExpr);
+  const emptyIndex = segments.findIndex((segment) => segment.key.length === 0);
+  if (emptyIndex >= 0) {
+    return `value '${keyExpr}' contains an empty translation key segment at index ${emptyIndex}.`;
+  }
+  const emptyAttribute = segments.find((segment) => segment.attributes.some((attribute) => attribute.trim().length === 0));
+  return emptyAttribute == null
+    ? null
+    : `value '${keyExpr}' contains an empty i18n target attribute segment.`;
 }
 
 export function i18nTranslationTargetsForKeyEvaluation(

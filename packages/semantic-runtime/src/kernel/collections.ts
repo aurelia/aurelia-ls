@@ -6,6 +6,6 @@ export function uniqueStrings<T extends string>(
 ): readonly T[] {
   const unique = [...new Set(values)];
   return order === 'sorted'
-    ? unique.sort()
+    ? unique.sort((left, right) => left.localeCompare(right))
     : unique;
 }

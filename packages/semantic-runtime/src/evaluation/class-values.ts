@@ -207,6 +207,7 @@ function isObjectReturningConstructorValue(value: EvaluationValue): boolean {
     case EvaluationValueKind.Set:
     case EvaluationValueKind.Map:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.ModuleNamespace:
     case EvaluationValueKind.Promise:
       return true;

@@ -1,0 +1,14 @@
+{
+  "name": "task-review-workbench-section",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "aurelia": "^2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

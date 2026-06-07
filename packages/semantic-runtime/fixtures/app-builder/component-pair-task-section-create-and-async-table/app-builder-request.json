@@ -1,0 +1,276 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/async-task-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "async-task-section-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "async task section component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Async Task Section",
+                    "baseName": "Async Task Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/async-task-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state",
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "task-section"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "app-section"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "task-section__form"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "task-section__status"
+                      ]
+                    },
+                    {
+                      "target": "status-pending",
+                      "classTokens": [
+                        "task-section__pending"
+                      ]
+                    },
+                    {
+                      "target": "status-empty",
+                      "classTokens": [
+                        "task-section__empty"
+                      ]
+                    },
+                    {
+                      "target": "status-error",
+                      "classTokens": [
+                        "task-section__error"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "task-section__table"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Prepare sprint report",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Send release update",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "native-submit-form"
+            },
+            "compositionKind": "native-submit-form",
+            "fieldNames": [
+              "title",
+              "done"
+            ],
+            "actionName": "create",
+            "submitButtonText": "Create"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "loading-empty-error-state"
+            },
+            "compositionKind": "loading-empty-error-state",
+            "promiseExpression": "taskItemsPromise",
+            "pendingText": "Loading tasks...",
+            "fulfilledLocalName": "loadedTaskItems",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+            "rejectedLocalName": "error",
+            "rejectedText": "Could not load tasks.",
+            "fulfilledContentComposition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "collection-table"
+              },
+              "compositionKind": "collection-table",
+              "collectionExpression": "loadedTaskItems",
+              "itemLocalName": "taskItem"
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "Promise<TaskItem[]>",
+          "asyncDataInitializerExpression": "Promise.resolve(this.taskItems)"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "create"
+        }
+      ]
+    }
+  }
+}

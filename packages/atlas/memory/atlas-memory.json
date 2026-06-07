@@ -78,6 +78,10 @@
       "summary": "router memory records."
     },
     {
+      "path": "packages/atlas/memory/records/source-plan.json",
+      "summary": "source-plan memory records."
+    },
+    {
       "path": "packages/atlas/memory/records/state.json",
       "summary": "state memory records."
     },

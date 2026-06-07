@@ -1,6 +1,6 @@
 import { SourcePatternModule, SourcePatternModuleKey, SourcePatternModuleKind } from './source-plan.js';
 
-/** Shared source-pattern modules used to describe reusable recipe architecture without copying scenario nouns. */
+/** Shared source-pattern modules used to describe reusable app-building architecture without copying scenario nouns. */
 export const SourcePatternModules = {
   AppShell: new SourcePatternModule(
     SourcePatternModuleKey.AureliaAppShell,
@@ -13,6 +13,12 @@ export const SourcePatternModules = {
     SourcePatternModuleKind.ResourceConvention,
     'Convention resource admission',
     'Class/file/template naming is intentionally compatible with Aurelia convention resource discovery.',
+  ),
+  ExplicitResourceDefinition: new SourcePatternModule(
+    SourcePatternModuleKey.ExplicitResourceDefinition,
+    SourcePatternModuleKind.ResourceDefinition,
+    'Explicit resource definition',
+    'Resource metadata is declared at the source site instead of relying on convention discovery.',
   ),
   RouterShell: new SourcePatternModule(
     SourcePatternModuleKey.RouterShell,
@@ -37,6 +43,12 @@ export const SourcePatternModules = {
     SourcePatternModuleKind.RouterAdmission,
     'Route link navigation',
     'Templates create static or data-driven route instructions instead of string-only DOM href plumbing.',
+  ),
+  NestedViewportLayout: new SourcePatternModule(
+    SourcePatternModuleKey.NestedViewportLayout,
+    SourcePatternModuleKind.RouterAdmission,
+    'Nested viewport layout',
+    'A child route area owns its own au-viewport so nested route components render inside the active parent route component.',
   ),
   DiStateBoundary: new SourcePatternModule(
     SourcePatternModuleKey.DiStateBoundary,
@@ -186,19 +198,19 @@ export const SourcePatternModules = {
     SourcePatternModuleKey.I18nPlugin,
     SourcePatternModuleKind.PluginIntegration,
     'i18n plugin integration',
-    '@aurelia/i18n configuration and translation bindings are part of the recipe shape.',
+    '@aurelia/i18n configuration and translation bindings are part of the app-building source shape.',
   ),
   PluginIntegration: new SourcePatternModule(
     SourcePatternModuleKey.PluginIntegration,
     SourcePatternModuleKind.PluginIntegration,
     'Plugin integration',
-    'A framework or community plugin configuration is an intentional recipe capability rather than incidental source.',
+    'A framework or community plugin configuration is an intentional source capability rather than incidental source.',
   ),
   ValidationPlugin: new SourcePatternModule(
     SourcePatternModuleKey.ValidationPlugin,
     SourcePatternModuleKind.PluginIntegration,
     'Validation plugin integration',
-    '@aurelia/validation-html configuration, rules, validate bindings, and validation errors are part of the recipe shape.',
+    '@aurelia/validation-html configuration, rules, validate bindings, and validation errors are part of the app-building source shape.',
   ),
   DynamicComposition: new SourcePatternModule(
     SourcePatternModuleKey.DynamicComponentComposition,

@@ -1,0 +1,161 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/contact-cards.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "contact-card-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "contact card component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Contact",
+                    "entityTypeName": "ContactEntry",
+                    "collectionMemberName": "contacts",
+                    "identityMemberName": "contactId",
+                    "identityValueKind": "string"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "active",
+                      "title": "Active",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Contact Cards",
+                    "baseName": "Contact Cards"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/contact-cards.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-display-fields",
+                  "value": [
+                    {
+                      "fieldName": "fullName",
+                      "role": "title",
+                      "label": "Contact"
+                    },
+                    {
+                      "fieldName": "email",
+                      "role": "summary",
+                      "label": "Email"
+                    },
+                    {
+                      "fieldName": "active",
+                      "role": "boolean",
+                      "label": "Active"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "contactId": "contact-alex",
+                      "fullName": "Alex Morgan",
+                      "email": "alex@example.com",
+                      "active": true
+                    },
+                    {
+                      "contactId": "contact-riley",
+                      "fullName": "Riley Chen",
+                      "email": "riley@example.com",
+                      "active": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "collection-card"
+        },
+        "compositionKind": "collection-card",
+        "collectionExpression": "contacts",
+        "itemLocalName": "contact",
+        "emptyStateText": "No contacts yet.",
+        "emptyStateConditionExpression": "contacts.length === 0"
+      }
+    }
+  }
+}

@@ -27,7 +27,8 @@ import {
   stateStoreConfigurationProductEmission,
   type StateStoreConfigurationProductSeed,
 } from './store-configuration-product-records.js';
-import { StateStoreConfiguration } from './model.js';
+import { StateGetterBinding, StateStoreConfiguration } from './model.js';
+import { DEFAULT_STATE_STORE_NAME } from './state-store-identity.js';
 import {
   StateIssueKind,
   StateIssuePhase,
@@ -43,11 +44,16 @@ export class StateProjectResult {
   constructor(
     readonly configuration: ConfigurationRecognitionProjectResult,
     readonly stores: readonly StateStoreConfiguration[],
+    readonly getterBindings: readonly StateGetterBinding[],
     readonly issues: readonly StateIssue[],
   ) {}
 
   readStores(): readonly StateStoreConfiguration[] {
     return this.stores;
+  }
+
+  readGetterBindings(): readonly StateGetterBinding[] {
+    return this.getterBindings;
   }
 
   readIssues(): readonly StateIssue[] {
@@ -84,6 +90,7 @@ export class StateStoreConfigurationMaterializationProjectPass {
     return new StateProjectResult(
       configuration,
       emissions.map((emission) => emission.store),
+      [],
       issuePublications.map((publication) => publication.issue),
     );
   }
@@ -154,7 +161,7 @@ function duplicateStoreNameIssuePublications(
 function stateStoreSeedIsReservedDefaultWithStore(
   seed: StateStoreConfigurationProductSeed,
 ): boolean {
-  return !seed.isDefault && seed.name === 'default';
+  return !seed.isDefault && seed.name === DEFAULT_STATE_STORE_NAME;
 }
 
 function readStateStoreConfigurationSeeds(
@@ -235,7 +242,7 @@ function stateStoreConfigurationSeedForInit(
   return {
     projectKey,
     ownerIdentityHandle: step.identityHandle,
-    name: 'default',
+    name: DEFAULT_STATE_STORE_NAME,
     isDefault: true,
     initialStateKind: initialState?.value.valueKind ?? null,
     optionsOrHandlerKind: optionsOrHandler.kind,
@@ -247,7 +254,7 @@ function stateStoreConfigurationSeedForInit(
       store,
       typeSystem,
       initialState,
-      `state-store-configuration:${projectKey}:${storeIndex}:default`,
+      `state-store-configuration:${projectKey}:${storeIndex}:${DEFAULT_STATE_STORE_NAME}`,
     ),
     optionsOrHandlerSourceAddressHandle: optionsOrHandler.sourceAddressHandle,
     actionHandlerSourceAddressHandles: actionHandlerSourceAddressHandles(argument, optionsOrHandler),

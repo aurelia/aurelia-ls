@@ -27,7 +27,7 @@ const seedUse = scriptArgumentValue("--seedUse=");
 const effectKind = scriptArgumentValue("--effectKind=");
 const effectRole = scriptArgumentValue("--effectRole=");
 const effectSeedPolicy = scriptArgumentValue("--effectSeedPolicy=");
-const recipeKey = scriptArgumentValue("--recipeKey=");
+const appPatternKey = scriptArgumentValue("--appPatternKey=");
 const classificationKind = scriptArgumentValue("--classificationKind=");
 const classificationKey = scriptArgumentValue("--classificationKey=");
 const expectedEffectFilterField = scriptArgumentValue("--expectedEffectFilterField=");
@@ -50,7 +50,7 @@ const filters = {
   ...(effectKind === undefined ? {} : { effectKind }),
   ...(effectRole === undefined ? {} : { effectRole }),
   ...(effectSeedPolicy === undefined ? {} : { effectSeedPolicy }),
-  ...(recipeKey === undefined ? {} : { recipeKey }),
+  ...(appPatternKey === undefined ? {} : { appPatternKey }),
   ...(classificationKind === undefined ? {} : { classificationKind }),
   ...(classificationKey === undefined ? {} : { classificationKey }),
   ...(expectedEffectFilterField === undefined ? {} : { expectedEffectFilterField }),
@@ -94,7 +94,6 @@ if (value?.rollup !== undefined) {
   console.log(`- framework test snippets: ${value.rollup.testSnippetCount}`);
   console.log(`- fixture seeds: ${value.rollup.fixtureSeedCount}`);
   console.log(`- expected effect descriptors: ${value.rollup.expectedEffectDescriptorCount}`);
-  console.log(`- legacy packages: ${value.rollup.legacyPackageCount}`);
   if (detail) {
     printCounts("doc files by group", value.rollup.docFilesByGroup, 20);
     printCounts("test files by group", value.rollup.testFilesByGroup, 20);
@@ -102,7 +101,7 @@ if (value?.rollup !== undefined) {
     printCounts("doc rows by concept", value.rollup.docRowsByConcept, 20);
     printCounts("test rows by concept", value.rollup.testRowsByConcept, 20);
     printCounts("fixture seeds by effect", value.rollup.fixtureSeedsByEffect, 20);
-    printCounts("fixture seeds by recipe", value.rollup.fixtureSeedsByRecipe, 20);
+    printCounts("fixture seeds by app pattern", value.rollup.fixtureSeedsByAppPattern, 20);
     if (value.rollup.fixtureSeedEffectHintsWithoutDescriptor.length > 0) {
       console.log(`- fixture effect hints without descriptor: ${value.rollup.fixtureSeedEffectHintsWithoutDescriptor.join(", ")}`);
     }
@@ -127,7 +126,6 @@ printFixtureSeeds(value, displayRowLimit, detail, {
   classificationKind,
   classificationKey,
 });
-printLegacyPackages(value, displayRowLimit);
 
 function printDocs(value: FrameworkCorpusValue | undefined, limit: number): void {
   const rows = value?.docs ?? [];
@@ -203,24 +201,6 @@ function printTestSnippets(
   }
 }
 
-function printLegacyPackages(
-  value: FrameworkCorpusValue | undefined,
-  limit: number,
-): void {
-  const rows = value?.legacyPackages ?? [];
-  if (rows.length === 0) {
-    return;
-  }
-  console.log("");
-  console.log("legacy packages");
-  printEmptyRows(rows, "no legacy package rows returned");
-  for (const row of rows.slice(0, limit)) {
-    console.log(
-      `- ${row.packagePath}; source=${row.sourceFiles}; tests=${row.testFiles}; lines=${row.sourceLines}; deps=${row.aureliaDependencies.join(", ") || "<none>"}`,
-    );
-  }
-}
-
 function printExpectedEffectDescriptors(
   value: FrameworkCorpusValue | undefined,
   limit: number,
@@ -256,7 +236,7 @@ function printFixtureSeeds(
     const filters = fixtureSeedFilterSummary(row);
     const reasons = fixtureSeedMatchingReasonSummary(row, reasonFilter);
     console.log(
-      `- ${row.filePath}:${row.source.start.line + 1}; ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}${reasons === undefined ? "" : `; reasons=${reasons}`}; filters=${filters}; recipes=${row.recipeHints.join(", ") || "<none>"}`,
+      `- ${row.filePath}:${row.source.start.line + 1}; ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}${reasons === undefined ? "" : `; reasons=${reasons}`}; filters=${filters}; appPatterns=${row.appPatternHints.join(", ") || "<none>"}`,
     );
     if (detail) {
       console.log(`  ${row.preview}`);

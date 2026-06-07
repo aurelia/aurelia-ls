@@ -115,6 +115,9 @@ import {
   StateStoreConfigurationMaterializationProjectPass,
 } from '../state/state-store-materialization.js';
 import {
+  StateGetterBindingMaterializationProjectPass,
+} from '../state/state-getter-binding-materialization.js';
+import {
   FromStateDecoratorIssueMaterializer,
 } from '../state/from-state-decorator-issues.js';
 import {
@@ -209,6 +212,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'route-context-parameter-reads'
   | 'i18n-translation-catalog'
   | 'state-store-materialization'
+  | 'state-getter-binding-materialization'
   | 'state-source-issues'
   | 'validation-source-issues'
   | 'fetch-client-source-issues'
@@ -671,9 +675,11 @@ class AureliaAppWorldProjectConstructionFrame {
   ): StateProjectResult {
     const stores = this.materializeStateStoreConfigurations(configuration, typeSystem);
     const sourceIssues = this.materializeStateSourceIssues(typeSystem);
+    const getterBindings = this.materializeStateGetterBindings(stores, typeSystem);
     return new StateProjectResult(
       stores.configuration,
       stores.stores,
+      getterBindings.bindings,
       [
         ...stores.issues,
         ...sourceIssues.issues,
@@ -697,6 +703,7 @@ class AureliaAppWorldProjectConstructionFrame {
     return new StateProjectResult(
       state.configuration,
       state.stores,
+      state.getterBindings,
       [
         ...state.issues,
         ...lookupIssues.issues,
@@ -721,6 +728,20 @@ class AureliaAppWorldProjectConstructionFrame {
         new FromStateDecoratorIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
         new WithStoreAfterRegistrationIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
       ])
+    );
+  }
+
+  private materializeStateGetterBindings(
+    state: StateProjectResult,
+    typeSystem: TypeSystemProject,
+  ) {
+    return this.measure('state-getter-binding-materialization', () =>
+      new StateGetterBindingMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        typeSystem,
+        state.readStores(),
+      )
     );
   }
 

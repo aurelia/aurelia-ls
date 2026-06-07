@@ -150,6 +150,7 @@ export function readStaticStringValue(
     case EvaluationValueKind.Number:
     case EvaluationValueKind.BigInt:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
     case EvaluationValueKind.Instance:

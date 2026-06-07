@@ -218,6 +218,8 @@ function evaluateStaticInstanceOfOperation(
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Set, node);
     case 'RegExp':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.RegularExpression, node);
+    case 'Date':
+      return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Date, node);
     case 'Promise':
       return new EvaluationBooleanValue(left.kind === EvaluationValueKind.Promise, node);
     case 'String':
@@ -238,6 +240,7 @@ function isObjectInstanceValue(value: EvaluationValue): boolean {
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
     case EvaluationValueKind.Instance:
@@ -325,6 +328,7 @@ function evaluateStaticTypeOfValue(
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.Date:
     case EvaluationValueKind.Instance:
     case EvaluationValueKind.ModuleNamespace:
     case EvaluationValueKind.Promise:

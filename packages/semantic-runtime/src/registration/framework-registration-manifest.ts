@@ -57,6 +57,8 @@ export const enum FrameworkRegistrationCapability {
   DialogLifecycleTasks = 'dialog.lifecycle-tasks',
   /** UI virtualization plugin resource headers such as the `virtual-repeat` template controller. */
   UiVirtualizationDefaultResources = 'ui-virtualization.default-resources',
+  /** UI virtualization plugin service registrations such as `ICollectionStrategyLocator` and `IDomRenderer`. */
+  UiVirtualizationServiceResolvers = 'ui-virtualization.service-resolvers',
   /** AppTask admission that is selected by lifecycle-slot dispatch rather than DI world spending. */
   AppTask = 'app-task',
 }
@@ -242,6 +244,7 @@ const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor
     chainMethods: [],
     capabilities: [
       FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
+      FrameworkRegistrationCapability.UiVirtualizationServiceResolvers,
     ],
   },
   {

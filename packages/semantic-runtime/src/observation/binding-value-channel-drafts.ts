@@ -32,6 +32,10 @@ import { CheckedObserverChannelDrafts } from './checked-observer-channel-drafts.
 import { DirectBindingValueChannelDrafts } from './direct-binding-value-channel-drafts.js';
 import { RuntimeBindingValueChannelDraftSupport } from './binding-value-channel-draft-support.js';
 import { SelectValueObserverChannelDrafts } from './select-value-observer-channel-drafts.js';
+import {
+  RouterInstructionResourceName,
+  RouterLoadAttributeSegmentName,
+} from '../router/route-instruction-source.js';
 
 export type {
   BindingSourceTypeReader,
@@ -42,6 +46,18 @@ export type {
   RuntimeValueChannelBinding,
   SelectMultipleMode,
 } from './binding-value-channel-draft-types.js';
+
+enum RuntimeHtmlBooleanValueCustomAttributeName {
+  /** Runtime-html `focus` writes boolean focus state through its `value` bindable. */
+  Focus = 'focus',
+  /** Runtime-html `show` coerces its `value` bindable through `Boolean(...)` before toggling display. */
+  Show = 'show',
+}
+
+const RUNTIME_HTML_BOOLEAN_VALUE_CUSTOM_ATTRIBUTE_NAMES: ReadonlySet<string> = new Set([
+  RuntimeHtmlBooleanValueCustomAttributeName.Focus,
+  RuntimeHtmlBooleanValueCustomAttributeName.Show,
+]);
 
 class RuntimeBindingValueChannelDraftFrame {
   private readonly readSourceType: BindingSourceTypeReader;
@@ -120,9 +136,48 @@ class RuntimeBindingValueChannelDraftFrame {
       case RuntimeBindingTargetAccessStrategy.CheckedObserver:
         return this.checkedObserverDraft(targetAccess);
       default:
-        return this.templateControllerValueChannelDraft(targetAccess)
+        return this.frameworkCustomAttributeValueChannelDraft(targetAccess)
+          ?? this.routerResourceValueChannelDraft(targetAccess)
+          ?? this.templateControllerValueChannelDraft(targetAccess)
           ?? this.rawPropertyValueChannelDraft(targetAccess);
     }
+  }
+
+  private frameworkCustomAttributeValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
+    const controller = this.support.controllerForTargetAccess(targetAccess, this.context);
+    if (controller == null
+      || !RUNTIME_HTML_BOOLEAN_VALUE_CUSTOM_ATTRIBUTE_NAMES.has(controller.name ?? '')
+      || targetAccess.targetProperty !== 'value'
+      || !(this.binding instanceof PropertyBinding)) {
+      return null;
+    }
+    const sourceType = this.readSourceType();
+    return {
+      channelKind: RuntimeBindingValueChannelKind.RawProperty,
+      authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
+      runtimeValueType: this.support.types.booleanValueType(`${this.local}:${controller.name}-value`, this.binding, sourceType),
+      valueDomain: [],
+      isCollection: false,
+      openReason: null,
+    };
+  }
+
+  private routerResourceValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
+    const controller = this.support.controllerForTargetAccess(targetAccess, this.context);
+    if (controller == null
+      || controller.name !== RouterInstructionResourceName.Load
+      || targetAccess.targetProperty !== RouterLoadAttributeSegmentName.Params
+      || !(this.binding instanceof PropertyBinding)) {
+      return null;
+    }
+    return {
+      channelKind: RuntimeBindingValueChannelKind.RouterParameters,
+      authority: RuntimeBindingValueChannelAuthority.TargetAccess,
+      runtimeValueType: this.support.types.targetAccessRuntimeInputType(`${this.local}:router-load-params-input`, targetAccess),
+      valueDomain: [],
+      isCollection: false,
+      openReason: null,
+    };
   }
 
   private rawPropertyValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {

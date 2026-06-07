@@ -1,0 +1,125 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "note-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "note browser explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Note",
+                    "entityTypeName": "NoteItem",
+                    "collectionMemberName": "noteItems",
+                    "identityMemberName": "code",
+                    "identityValueKind": "string"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "archived",
+                      "title": "Archived",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Note Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "notes"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "noteId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "code": "note-alpha",
+                      "title": "Project kickoff notes",
+                      "archived": false
+                    },
+                    {
+                      "code": "note-beta",
+                      "title": "Archived deployment notes",
+                      "archived": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

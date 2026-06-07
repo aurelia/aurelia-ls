@@ -68,6 +68,7 @@
         "String routeable component resolution consumes ResourceDefinitionIndex custom-element names, aliases, and dependency-scoped custom-element lookup. `router-contextual-string-routeable` keeps the parent component dependencies disambiguation canary alive, while `router-route-config-validation-errors` keeps the no-known-component AUR3552 canary alive.",
         "The remaining string routeable frontier is full RouteConfigContext resource visibility: root-container registrations, imported view resources, inline templates, and no-context string/lazy-import guards such as AUR3551/AUR3553. If an imported routeable component source is present but invisible to the resource index, inspect shared static-evaluation side-effect import execution before adding router-local scanning.",
         "RouteConfig rows now carry separate origin and value-shape dimensions. Use originKind to distinguish @route, Route.configure, class static defaults, and child-route sources; use valueKind to distinguish object/path/routeable/static-default/open shapes. Authoring navigation taste should expose origin-shaped values separately from static/dynamic value-shape readings instead of inferring policy from route existence.",
+        "Generated route-config/decorator source should route through router-owned source serializers such as `route-configuration-source.ts`; app-builder can select route-shell compositions, but the source syntax for `@route(...)` and route object literals belongs with router semantics.",
         "Preserve framework property paths such as `routes[0].path` and source ranges on validation issues; these are diagnostics and future repair anchors, not only pressure counts.",
         "Keep route-config convergence separate from route-tree transition and route-recognizer state graph semantics.",
         "Use framework.router route-config, routeable-component, route-context, and viewport-agent projections before changing product router behavior."
@@ -79,6 +80,12 @@
           "symbolName": "RouteConfigKernelEmitter",
           "line": 270,
           "summary": "Route config kernel emitter."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-configuration-source.ts",
+          "symbolName": "routerRouteDecoratorSourceText",
+          "summary": "Product-free router source serializer for generated route decorator object-literal configs."
         },
         {
           "kind": "lens",
@@ -332,7 +339,10 @@
         "Keep route instruction materialization separate from recognizer path matching and route-tree transition compilation.",
         "Closed primitive router-resource values that cannot be route strings, routeable components, or viewport instructions are TypedNavigationInstruction creation issues with instrInvalid / AUR3400 authority. Do not spend this code on classes/functions/promises that are valid framework routeable lanes but currently under-modeled.",
         "Object-form router resource values belong to RouteConfigContext eager path generation before they re-enter the RouteExpression instruction-tree lane. Missing required params for RouteConfig/class components are RouterIssue rows with exact AUR3166 authority; string route ids are framework non-throwing and should not spend that code. Closed instruction children recurse through the generated component RouteConfigContext and preserve child viewport suffixes before lowering back into the static instruction-tree lane.",
+        "Inline load multi-bindings with `route` plus object-shaped `params` follow LoadCustomAttribute's component+params branch, not plain RouteExpression parsing. Route-only strings remain RouteExpression input; route+params becomes an eager instruction before static path recognition. Binding-scope param values may use dynamic placeholders when the parameter key is static, but never reuse the route id as the parameter value. Treat `context.bind` as a route-context replacement boundary and keep it open until semantic-runtime models that owning context.",
         "Object-form router resource values may arrive as syntactic object literals or equivalent binding-source values such as state/getter-owned instruction arrays. Keep those reads in RuntimeBindingSourceValueEvaluator and consume the closed object here instead of adding router-local expression shortcuts.",
+        "`routerSourceExpressionEvaluationFrame(...)` is the route-instruction bridge from a rendered router-resource site into RuntimeBindingSourceValueEvaluationContext or an explicit open source-value row. It now spends `projectRuntimeBindingSourceValueContextInScope(...)` with the rendered binding table and binding-expression scope projector; if this starts growing, improve source-value projection/context primitives rather than reintroducing router-local expression evaluation or a router-owned source-expression projector.",
+        "`route-instruction-source.ts` is the source companion for router resource attributes. Source producers should use it for `load` and `href` so generated simple and inline multi-binding forms stay aligned with LoadCustomAttribute and HrefCustomAttribute instead of becoming app-builder-local string templates.",
         "Equivalent object-form router resource values may also arrive as evaluator-local class instances or tagged-template/function results. Route instruction materialization should consume the closed EvaluationObject/Instance shape and leave New/TaggedTemplate AST semantics with RuntimeBindingSourceValueEvaluator.",
         "Router-resource binding-source reads can consume DI activation facts when the render site has controller/container ancestry. Registered interface state such as resolve(IFoo) belongs to RuntimeBindingSourceActivationContext plus the modeled container, not to route-instruction materialization.",
         "Router-resource binding scope lookup should use the render-context-aware RuntimeInstructionScopeLookup. Custom-attribute controllers are created from a hydration instruction, but the binding expression scope belongs to the controller that rendered the instruction sequence, including synthetic template-controller child views.",
@@ -352,9 +362,21 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "routerSourceExpressionEvaluationFrame",
+          "summary": "Router-resource bridge from rendered instruction/source scope through shared binding-source value context projection into a source-value context or explicit open row."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-eager-path-generation.ts",
           "symbolName": "RouteEagerPathGenerationIndex",
           "summary": "Framework-shaped RouteConfigContext eager path-generation substrate for object navigation instructions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-source.ts",
+          "symbolName": "routerLoadAttributeSourceText",
+          "summary": "Product-free source serializer for router load/href custom-attribute forms."
         },
         {
           "kind": "lens",

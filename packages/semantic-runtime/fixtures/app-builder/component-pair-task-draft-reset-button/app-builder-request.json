@@ -1,0 +1,170 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-draft-reset.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-draft-reset-button-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task draft reset button explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "saveDraft",
+                      "kind": "save",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ]
+                    },
+                    {
+                      "name": "resetDraft",
+                      "kind": "custom",
+                      "scope": "form",
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ],
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Reset Button",
+                    "baseName": "Task Draft Reset"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-draft-reset.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": "native-submit-form",
+        "fieldNames": [
+          "title",
+          "done"
+        ],
+        "actionName": "saveDraft",
+        "submitButtonText": "Save draft"
+      },
+      "sourceLoweringTemplateInvocations": [
+        {
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          "actionName": "resetDraft",
+          "handlerExpression": "resetDraft()",
+          "eventName": "click",
+          "buttonText": "Reset draft",
+          "buttonType": "button"
+        }
+      ],
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "saveDraft",
+          "methodBodyStatements": "this.title = this.title.trim();"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "resetDraft",
+          "methodBodyStatements": "this.title = '';\nthis.done = false;"
+        }
+      ]
+    }
+  }
+}

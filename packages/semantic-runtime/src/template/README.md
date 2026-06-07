@@ -64,7 +64,63 @@ classification, expression parsing, and instruction lowering converge on the sam
   pattern handler execution returns hydrated `AttrSyntax`-shaped results first; products and provenance are allocated
   by the attribute-syntax materializer that owns the HTML attribute site. Secondary multi-binding segments also become
   explicit `AttrSyntax` products when their authored value is split by lowering; they are not ordinary HTML attributes,
-  but they still use the same parser machine.
+  but they still use the same parser machine. `parseBuiltInAttributeSyntax(...)`
+  is the product-free helper for checking generated/source-lowering attributes
+  against the built-in pattern inventory; configured compiler-world visibility
+  still belongs to compiler-world materialization and the attribute-syntax
+  materializer.
+- `builtInBindingCommandExpressionType(...)` is the product-free companion for
+  generated or previewed command values. It mirrors the built-in command build
+  bodies: property commands parse with `IsProperty`, listener and state-binding
+  command values parse with `IsFunction`, `for` parses with `IsIterator`, and
+  static translation text has no expression parse. Use it for source-lowering
+  integrity checks instead of rebuilding command-specific parser policy in
+  app-builder or MCP code.
+  `@aurelia/state` follows the framework renderer split: `.state` uses the
+  function/listener entry family because the renderer later parses the source as
+  `IsFunction`, while `.dispatch` is a state command whose renderer parses the
+  action source as `IsProperty`.
+- `builtInBindingCommandAttributeText(...)` is the product-free source
+  companion for generated binding-command attributes. Use it when a source
+  producer needs `target.command="value"` text so authored-name serialization
+  stays next to the built-in attribute-pattern parser it must round-trip
+  through.
+- `special-attribute-source.ts` owns compiler-special template attribute names,
+  lookup helpers, and source serialization for attributes consumed before
+  ordinary binding/resource lowering. `as-element` changes custom-element
+  definition lookup, while usage-site `containerless` changes hydrate
+  instruction assembly.
+- `component-lifecycle-source.ts` owns product-free TypeScript source
+  serialization for component view-model lifecycle hook methods discovered by
+  runtime-html `Controller` and `LifecycleHooks`. App-builder can spend this
+  helper for class-member fragments, but runtime lifecycle effects still belong
+  to controller/hydration products rather than source generation alone.
+- `authored-template-source.ts` owns product-free authored-template text
+  primitives: double-quoted attribute escaping, plain text-content escaping,
+  static attribute serialization, structured attribute source, structured
+  element source, mixed text/element child nodes, child indentation, and
+  structured element attribute append.
+  Source producers should use this before inventing local `name="value"`,
+  start/end tag, child-node, or visible-text serializers.
+- `binding-expression-source.ts` owns product-free authored binding-expression
+  syntax fragments used by source producers: text interpolation holes, iterator
+  headers, binding-behavior modifiers, and value-converter modifiers. Keep those
+  source forms here so app-builder and future edit/generation surfaces do not
+  grow parallel expression-string formatters.
+- `template-controller-source.ts` owns product-free source serialization for
+  built-in template-controller attributes such as `if.bind`, `repeat.for`,
+  promise branch aliases, `with.bind`, and `portal` multi-binding values. Keep
+  those forms next to `template-controller-semantics.ts` so source generation,
+  overlay pressure, and controller-scope materialization spend one controller
+  vocabulary.
+- `au-compose-source.ts` and `au-slot-source.ts` own product-free source
+  serialization for runtime-html composition/projection resources. They share
+  framework resource names and bindable names with runtime composition,
+  controller creation, and built-in resource definition materialization.
+- `portal-source.ts` owns the portal template-controller source form and static
+  insert-position vocabulary. Runtime controller validation and app-builder
+  lowering should spend that vocabulary instead of maintaining separate accepted
+  literal lists.
 - `attribute-syntax-materializer.ts` spends HTML attribute products through the compiler world's `IAttributeParser`
   service. It preserves the runtime split between the `SyntaxInterpreter` match and the handler method execution, then
   emits `AttrSyntax` products plus resource-reference claims to the winning attribute-pattern executable.
@@ -107,9 +163,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   seams, ordinary command build/lowering products, multi-binding segment/syntax/lowering products, instruction identity
   publication, and the claims that connect command lowerings to produced instructions and expression parses. Keep
   lowering decisions in the materializer and product/claim ceremony in this publication module.
-- `multi-binding-segments.ts` owns the source-offset-preserving parser for inline custom-attribute multi-binding
-  segments. Keep raw segment splitting there so command lowering can focus on product publication and executable
-  handoff.
+- `multi-binding-segments.ts` owns the source-offset-preserving parser and source
+  value serializer for inline custom-attribute multi-binding segments. Keep raw
+  segment splitting and authored segment formatting there so command lowering
+  and source producers share one grammar boundary.
 - `compiled-template.ts` and `compiled-template-materializer.ts` model the compiler/runtime handoff that the runtime
   stores as transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
   instructions. This is the point where authored HTML plus lowered instructions become render targets and instruction
@@ -566,8 +623,10 @@ projection ownership checks, `<slot>` shadow-DOM requirements, and local-templat
 publish framework-coded compiler issues rather than open seams.
 
 `processContent`, content projection, and containerless child handling are compiler DOM transforms, not ordinary
-instruction gaps. Keep their seam vocabulary in the compiler namespace and do not let these cases fall back to a generic
-open instruction unless the instruction shape itself is the thing that failed.
+instruction gaps. Custom-element child content is extracted into `HydrateElementInstruction` projection instruction
+sequences before direct child compilation, matching the framework compiler's slot extraction path. Keep remaining seam
+vocabulary in the compiler namespace and do not let these cases fall back to a generic open instruction unless the
+instruction shape itself is the thing that failed.
 
 HTML parsing, attribute classification, expression parsing, instruction lowering, and template completion are active
 inquiry pressure points. These materializers cannot be designed as pure batch compilation only: parser recovery,

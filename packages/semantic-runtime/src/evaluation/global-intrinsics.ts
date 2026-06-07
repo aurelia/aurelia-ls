@@ -11,6 +11,7 @@ import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
+  EvaluationDateValue,
   EvaluationMapEntry,
   EvaluationMapValue,
   EvaluationNullValue,
@@ -157,7 +158,7 @@ export function evaluateAureliaExpressionGlobalConstructor(
     case AureliaExpressionGlobalName.Object:
       return objectConstructorValue(argumentValues, node);
     case AureliaExpressionGlobalName.Date:
-      return runtimeOpen('new Date(...) depends on host clock and Date parsing semantics.');
+      return dateConstructorValue(argumentValues, node);
     case AureliaExpressionGlobalName.String:
     case AureliaExpressionGlobalName.Number:
     case AureliaExpressionGlobalName.Boolean:
@@ -274,6 +275,51 @@ function regexpGlobalCall(
     return runtimeOpen('RegExp(...) pattern or flags throw for the statically known values.');
   }
   return value(new EvaluationRegularExpressionValue(pattern, flags, node));
+}
+
+function dateConstructorValue(
+  argumentValues: readonly EvaluationValue[],
+  node: ts.Node | null,
+): AureliaGlobalIntrinsicEvaluation {
+  if (argumentValues.length === 0) {
+    return runtimeOpen('new Date() depends on host clock state.');
+  }
+  if (argumentValues.length !== 1) {
+    return runtimeOpen('new Date(year, month, ...) depends on host local time-zone semantics.');
+  }
+  const epoch = dateEpochMilliseconds(argumentValues[0]!);
+  return epoch == null
+    ? runtimeOpen('new Date(...) argument does not reduce to a deterministic date value.')
+    : value(new EvaluationDateValue(epoch, node));
+}
+
+function dateEpochMilliseconds(
+  argumentValue: EvaluationValue,
+): number | null {
+  if (argumentValue.kind === EvaluationValueKind.Number) {
+    return Number.isFinite(argumentValue.value) ? argumentValue.value : null;
+  }
+  if (argumentValue.kind !== EvaluationValueKind.String) {
+    return null;
+  }
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(argumentValue.value);
+  if (dateOnly != null) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    const epoch = Date.UTC(year, month - 1, day);
+    const parsed = new Date(epoch);
+    return parsed.getUTCFullYear() === year
+      && parsed.getUTCMonth() === month - 1
+      && parsed.getUTCDate() === day
+      ? epoch
+      : null;
+  }
+  if (!/\dT.*(?:Z|[+-]\d{2}:\d{2})$/.test(argumentValue.value)) {
+    return null;
+  }
+  const epoch = Date.parse(argumentValue.value);
+  return Number.isFinite(epoch) ? epoch : null;
 }
 
 function numberPredicateGlobalCall(
@@ -506,6 +552,8 @@ function objectPrototypeToStringTag(value: EvaluationValue): string | null {
       return 'String';
     case EvaluationValueKind.RegularExpression:
       return 'RegExp';
+    case EvaluationValueKind.Date:
+      return 'Date';
     case EvaluationValueKind.Array:
       return 'Array';
     case EvaluationValueKind.Set:
@@ -735,6 +783,8 @@ function hostValueFromEvaluationValue(
       return value.value;
     case EvaluationValueKind.BigInt:
       return BigInt(value.text.endsWith('n') ? value.text.slice(0, -1) : value.text);
+    case EvaluationValueKind.Date:
+      return new Date(value.epochMilliseconds);
     case EvaluationValueKind.Array: {
       if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
         return unknownHostValue;
@@ -799,6 +849,9 @@ function evaluationValueFromHostValue(
             null,
           )
         ), false, node);
+      }
+      if (hostValue instanceof Date) {
+        return new EvaluationDateValue(hostValue.getTime(), node);
       }
       return new EvaluationObjectValue(new Map(Object.entries(hostValue as Record<string, unknown>).map(([key, entry]) => [
         key,

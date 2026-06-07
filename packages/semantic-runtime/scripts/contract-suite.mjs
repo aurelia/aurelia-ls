@@ -12,6 +12,11 @@ const contractSuites = [
     'module-graph',
     'type-only-imports',
   ], 'contract-evaluation-module-graph.mjs', 'Runtime-shaped module graph erases type-only imports/re-exports while preserving value import/export edges.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'class',
+    'module-order',
+  ], 'contract-evaluation-class-declaration-order.mjs', 'Static class property evaluation runs when the class declaration executes, after prior module const bindings are initialized.'),
   contract('observation', 'fast', [
     'observation',
     'observer-locator',
@@ -68,6 +73,12 @@ const contractSuites = [
     'value-channel',
     'type-system',
   ], 'contract-keyed-form-source-bindings.mjs', 'Keyed checkbox/select source writeback through array and record expressions.'),
+  contract('app-builder', 'fast', [
+    'app-builder',
+    'controls',
+    'binding',
+    'mcp',
+  ], 'contract-control-use-inventory.mjs', 'Authored native control inventory rows are classified from runtime binding value-channel and data-flow products.'),
   contract('observation', 'fast', [
     'observation',
     'binding',
@@ -186,10 +197,13 @@ const contractSuites = [
     'api',
     'mcp',
     'continuations',
+    'app-builder',
     'diagnostics',
     'template',
     'router',
-  ], 'contract-app-query-continuations.mjs', 'Public app-query answers expose typed, followable continuations while authoring remains intentionally deferred.'),
+  ], 'contract-app-query-continuations.mjs', 'Public app-query answers expose typed, followable continuations while authoring remains intentionally deferred.', {
+    routeAliases: ['app-builder'],
+  }),
   contract('inquiry', 'fast', [
     'inquiry',
     'continuations',
@@ -201,12 +215,25 @@ const contractSuites = [
     'api',
     'performance',
   ], 'contract-query-claim-graph.mjs', 'Query-claim graph laziness, retained-answer reuse, failure handling, budgets, and indexed disposal policy.'),
+  contract('app-builder', 'fast', [
+    'app-builder',
+    'api',
+    'mcp',
+    'source-plan',
+  ], 'contract-app-builder-query-surface.mjs', 'Public app-builder queries expose catalog discovery, part-source invocation, preview source text, origin payloads, and integrity checks.'),
   contract('kernel', 'fast', [
     'kernel',
     'source-address',
     'provenance',
     'continuations',
   ], 'contract-source-anchor-identity.mjs', 'Generated addresses anchored to identities resolve back to authored source anchors.'),
+  contract('source-plan', 'fast', [
+    'source-plan',
+    'app-builder',
+    'configuration',
+  ], 'contract-source-plan-admission-origins.mjs', 'Framework configuration admissions preserve origin-bearing import and registration contributions through entrypoint source plans.', {
+    routeAliases: ['app-builder'],
+  }),
   contract('inquiry', 'fast', [
     'inquiry',
     'api',
@@ -233,6 +260,11 @@ const contractSuites = [
   ], 'contract-contextual-call-argument-completion.mjs', 'Template completions spend contextual callback scopes for checker-backed calls and synthetic array methods.'),
   contract('template', 'fast', [
     'template',
+    'compiler',
+    'projection',
+  ], 'contract-template-content-projection.mjs', 'Custom-element child content is lowered into HydrateElement projection instruction sequences instead of parent render rows.'),
+  contract('template', 'fast', [
+    'template',
     'controller',
     'type-system',
     'overlay',
@@ -247,23 +279,23 @@ const contractSuites = [
     'evaluation',
     'template',
   ], 'contract-expression-global-intrinsics.mjs', 'Aurelia parser-admitted globals and shared host intrinsic value reduction.'),
-  contract('router', 'route', [
+  contract('router', 'fast', [
     'router',
     'binding',
     'runtime-boundary',
   ], 'contract-router-dynamic-pattern.mjs', 'Dynamic router href closure/open-boundary semantics.'),
-  contract('router', 'route', [
+  contract('router', 'fast', [
     'router',
     'binding',
     'observation',
   ], 'contract-router-active-link-state.mjs', 'Router activeClass and load.active from-view state semantics.'),
-  contract('app-pattern.policy', 'route', [
+  contract('app-pattern.policy', 'fast', [
     'app-pattern',
     'observation',
     'state',
     'fixtures',
   ], 'contract-one-hop-forwarding-accessor.mjs', 'Contrastive one-hop state forwarding accessor authoring pressure.'),
-  contract('app-pattern.policy', 'route', [
+  contract('app-pattern.policy', 'fast', [
     'app-pattern',
     'observation',
     'state',
@@ -332,9 +364,10 @@ if (failures.length > 0) {
   process.exitCode = 1;
 }
 
-function contract(routeId, tier, domains, script, summary) {
+function contract(routeId, tier, domains, script, summary, options = {}) {
   return {
     routeId,
+    routeAliases: options.routeAliases ?? [],
     tier,
     domains,
     script,
@@ -401,7 +434,7 @@ function addFilter(parsed, kind, rawValue) {
 
 function selectedContracts(filters) {
   return contractSuites.filter((entry) => {
-    if (filters.routes.size > 0 && !routeMatches(entry.routeId, filters.routes)) {
+    if (filters.routes.size > 0 && !contractRouteMatches(entry, filters.routes)) {
       return false;
     }
     if (filters.domains.size > 0 && !entry.domains.some((domain) => filters.domains.has(domain))) {
@@ -423,10 +456,20 @@ function routeMatches(routeId, routeFilters) {
   return false;
 }
 
+function contractRouteMatches(entry, routeFilters) {
+  if (routeMatches(entry.routeId, routeFilters)) {
+    return true;
+  }
+  return entry.routeAliases.some((routeAlias) => routeMatches(routeAlias, routeFilters));
+}
+
 function printList() {
   console.log('semantic-runtime semantic contract suite');
   for (const entry of contractSuites) {
-    console.log(`${entry.routeId}\t${entry.tier}\t${entry.domains.join(',')}\t${entry.script}\t${entry.summary}`);
+    const routeLabel = entry.routeAliases.length === 0
+      ? entry.routeId
+      : `${entry.routeId} aliases=${entry.routeAliases.join(',')}`;
+    console.log(`${routeLabel}\t${entry.tier}\t${entry.domains.join(',')}\t${entry.script}\t${entry.summary}`);
   }
 }
 

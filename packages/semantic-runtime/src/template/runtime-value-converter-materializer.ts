@@ -27,6 +27,7 @@ import {
   ValueConverterExpression,
 } from '../expression/ast.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { BuiltInValueConverterName } from '../resources/built-in-resources.js';
 import type { Container } from '../di/container.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
@@ -219,7 +220,7 @@ export class RuntimeValueConverterMaterializer {
     converter: ValueConverterExpression,
   ): BuiltInValueConverterInvocationIssue | null {
     switch (converter.name.name) {
-      case 'sanitize':
+      case BuiltInValueConverterName.Sanitize:
         return this.sanitize.toView({
           hasCustomSanitizer: hasResolverForInterface(this.store, input.container, 'ISanitizer'),
         });

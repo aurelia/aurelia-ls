@@ -1,4 +1,5 @@
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { uniqueStrings } from '../kernel/collections.js';
 
 /**
  * Diagnostics-to-action ontology.
@@ -316,13 +317,13 @@ export function diagnosticActionPlanReadinessForCluster(
 export function diagnosticActionRuntimeBoundaryKindsForOpenSeamReasons(
   reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
 ): readonly DiagnosticActionRuntimeBoundaryKind[] {
-  return uniqueSorted(reasonKinds.flatMap((reasonKind) => runtimeBoundaryKindsForOpenSeamReason(reasonKind)));
+  return uniqueStrings(reasonKinds.flatMap((reasonKind) => runtimeBoundaryKindsForOpenSeamReason(reasonKind)), 'sorted');
 }
 
 export function diagnosticActionRuntimeIntentKindsForOpenSeamReasons(
   reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
 ): readonly DiagnosticActionRuntimeIntentKind[] {
-  return uniqueSorted(reasonKinds.flatMap((reasonKind) => runtimeIntentKindsForOpenSeamReason(reasonKind)));
+  return uniqueStrings(reasonKinds.flatMap((reasonKind) => runtimeIntentKindsForOpenSeamReason(reasonKind)), 'sorted');
 }
 
 function runtimeBoundaryKindsForOpenSeamReason(
@@ -423,8 +424,4 @@ function runtimeIntentKindsForOpenSeamReason(
     default:
       return [];
   }
-}
-
-function uniqueSorted<T extends string>(values: readonly T[]): readonly T[] {
-  return [...new Set(values)].sort();
 }

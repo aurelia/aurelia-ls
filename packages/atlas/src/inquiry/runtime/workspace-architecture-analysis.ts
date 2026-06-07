@@ -13,6 +13,7 @@ import {
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   AURELIA_PLUGIN_PACKAGE_ID_PREFIX,
+  AURELIA_TOOLING_PACKAGE_ID_PREFIX,
   EXTERNAL_SOURCE_PACKAGE_ID_PREFIX,
   assignmentTargetReceiverName,
   declarationInitializer,
@@ -96,6 +97,7 @@ const WORKSPACE_FILE_INVENTORY_EXCLUDED_DIRECTORIES = new Set([
 /** Package admission role: where the package entered the Atlas source world. */
 export type WorkspaceAdmissionRole =
   | "atlas"
+  | "aurelia-tooling"
   | "semantic-runtime"
   | "mcp"
   | "aurelia-framework"
@@ -1061,6 +1063,7 @@ function workspaceSurfacesForNode(
   const rows: WorkspaceSurfaceRow[] = [];
   rows.push(...aureliaImportRowsForNode(sourceProject, sourceFile, packageId, packageName, node));
   rows.push(...resourceRowsForNode(sourceProject, sourceFile, packageId, packageName, node, bindings));
+  rows.push(...styleToolingRowsForNode(sourceProject, sourceFile, packageId, packageName, node));
   if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
     return rows;
   }
@@ -1071,6 +1074,142 @@ function workspaceSurfacesForNode(
   rows.push(...routerRowsForNode(sourceProject, sourceFile, packageId, packageName, node, bindings));
   pushIfPresent(rows, templateReferenceRowForNode(sourceProject, sourceFile, packageId, packageName, node));
   return rows;
+}
+
+function styleToolingRowsForNode(
+  sourceProject: SourceProject | null,
+  sourceFile: ts.SourceFile,
+  packageId: string,
+  packageName: string,
+  node: ts.Node,
+): readonly WorkspaceSurfaceRow[] {
+  const surface = styleToolingSurfaceForNode(sourceProject, sourceFile, packageId, packageName, node);
+  return surface === null ? [] : [surface];
+}
+
+function styleToolingSurfaceForNode(
+  sourceProject: SourceProject | null,
+  sourceFile: ts.SourceFile,
+  packageId: string,
+  packageName: string,
+  node: ts.Node,
+): WorkspaceSurfaceRow | null {
+  const property = styleToolingPropertyForNode(node);
+  if (property === null) {
+    return null;
+  }
+  return workspaceSourceRowForNode(
+    sourceProject,
+    sourceFile,
+    packageId,
+    packageName,
+    property.sourceNode,
+    "configuration",
+    `style-tooling.${property.name}`,
+    property.name,
+    property.facets,
+  );
+}
+
+interface StyleToolingPropertySurface {
+  readonly name: StyleToolingPropertyName;
+  readonly sourceNode: ts.Node;
+  readonly facets: readonly string[];
+}
+
+type StyleToolingPropertyName =
+  | "cssExtensions"
+  | "defaultShadowOptions"
+  | "stringModuleWrap"
+  | "useCSSModule";
+
+function styleToolingPropertyForNode(
+  node: ts.Node,
+): StyleToolingPropertySurface | null {
+  if (ts.isPropertyAssignment(node)) {
+    return styleToolingPropertySurface(propertyNameText(node.name), node.name, [
+      "style-tooling.carrier:object-literal",
+      `style-tooling.value-kind:${styleToolingValueKind(node.initializer)}`,
+      ...styleToolingInitializerFacets(node.name, node.initializer),
+    ]);
+  }
+  if (ts.isPropertySignature(node)) {
+    return styleToolingPropertySurface(propertyNameText(node.name), node.name, [
+      "style-tooling.carrier:type-surface",
+    ]);
+  }
+  if (ts.isPropertyDeclaration(node)) {
+    return styleToolingPropertySurface(propertyNameText(node.name), node.name, [
+      "style-tooling.carrier:class-property",
+      ...(node.initializer === undefined
+        ? []
+        : [`style-tooling.value-kind:${styleToolingValueKind(node.initializer)}`]),
+    ]);
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return styleToolingPropertySurface(node.name.text, node.name, [
+      "style-tooling.carrier:property-access",
+    ]);
+  }
+  return null;
+}
+
+function styleToolingPropertySurface(
+  name: string | null,
+  sourceNode: ts.Node,
+  facets: readonly string[],
+): StyleToolingPropertySurface | null {
+  if (!isStyleToolingPropertyName(name)) {
+    return null;
+  }
+  return {
+    name,
+    sourceNode,
+    facets: uniqueSortedStrings([
+      `style-tooling.property:${name}`,
+      ...facets,
+    ]),
+  };
+}
+
+function styleToolingInitializerFacets(
+  name: ts.PropertyName,
+  initializer: ts.Expression,
+): readonly string[] {
+  if (propertyNameText(name) !== "defaultShadowOptions" || !ts.isObjectLiteralExpression(initializer)) {
+    return [];
+  }
+  return objectLiteralPropertyValue(initializer, "mode") !== null
+    ? ["style-tooling.defaultShadowOptions.has:mode"]
+    : [];
+}
+
+function isStyleToolingPropertyName(name: string | null): name is StyleToolingPropertyName {
+  switch (name) {
+    case "cssExtensions":
+    case "defaultShadowOptions":
+    case "stringModuleWrap":
+    case "useCSSModule":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function styleToolingValueKind(expression: ts.Expression): string {
+  if (ts.isArrayLiteralExpression(expression)) {
+    return "array-literal";
+  }
+  if (ts.isObjectLiteralExpression(expression)) {
+    return "object-literal";
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return "property-access";
+  }
+  if (ts.isIdentifier(expression)) {
+    return "identifier";
+  }
+  return "expression";
 }
 
 function aureliaImportRowsForNode(
@@ -1551,6 +1690,9 @@ function admissionRoleForPackage(
 ): WorkspaceAdmissionRole {
   if (sourcePackage.id === SourcePackageId.Atlas) {
     return "atlas";
+  }
+  if (sourcePackage.id.startsWith(AURELIA_TOOLING_PACKAGE_ID_PREFIX)) {
+    return "aurelia-tooling";
   }
   if (sourcePackage.id === SourcePackageId.SemanticRuntime) {
     return "semantic-runtime";

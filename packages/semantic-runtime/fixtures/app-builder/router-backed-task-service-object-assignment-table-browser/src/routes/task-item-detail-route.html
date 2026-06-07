@@ -1,0 +1,20 @@
+<section>
+  <a load="../">Back</a>
+  <section promise.bind="taskItemPromise">
+    <p pending>Loading task...</p>
+    <template then="taskItem">
+      <article if.bind="taskItem">
+        <section>
+          <h2>${taskItem.title}</h2>
+          <p>
+            Done:
+            <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+          </p>
+          <p>Assignee: ${state.assigneeLabelForTaskItem(taskItem)}</p>
+        </section>
+      </article>
+      <p else>No task found for this route.</p>
+    </template>
+    <p catch>Could not load task.</p>
+  </section>
+</section>

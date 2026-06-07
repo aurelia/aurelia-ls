@@ -59,9 +59,9 @@ import {
 } from "./framework-corpus-analysis.js";
 import { frameworkCorpusFixtureSeedMatchesClassification } from "./framework-corpus-classification.js";
 import {
-  frameworkCorpusFixtureSeedMatchesRecipeFilter,
-  frameworkCorpusFixtureSeedRecipeFilterScore,
-} from "./framework-corpus-recipe-matching.js";
+  frameworkCorpusFixtureSeedAppPatternFilterScore,
+  frameworkCorpusFixtureSeedMatchesAppPatternFilter,
+} from "./framework-corpus-app-pattern-matching.js";
 import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 import { optionalNextPageContinuation } from "./lens-continuation-utils.js";
 import {
@@ -775,7 +775,7 @@ function workRouterFiltersAreEmpty(filters: AtlasWorkRouterFilters): boolean {
     filters.auLinkId === undefined &&
     filters.concept === undefined &&
     filters.effectKind === undefined &&
-    filters.recipeKey === undefined &&
+    filters.appPatternKey === undefined &&
     filters.seedUse === undefined &&
     filters.coverageDimension === undefined &&
     filters.coverageState === undefined &&
@@ -2252,7 +2252,7 @@ function corpusAnchorSpecificityScore(anchor: AtlasWorkRouteCorpusAnchor): numbe
     (anchor.classificationKind === undefined ? 0 : 20) +
     (anchor.expectedEffectFilterField === undefined ? 0 : 18) +
     (anchor.effectKind === undefined ? 0 : 12) +
-    (anchor.recipeKey === undefined ? 0 : 10) +
+    (anchor.appPatternKey === undefined ? 0 : 10) +
     (anchor.query === undefined ? 0 : 8) +
     (anchor.seedUse === undefined ? 0 : 4) +
     (anchor.concept === undefined ? 0 : 2);
@@ -2265,7 +2265,7 @@ function fixtureSeedMatchesRouteFilters(
   return (
     (filters.concept === undefined || row.concepts.includes(filters.concept as never)) &&
     (filters.effectKind === undefined || row.effectHints.includes(filters.effectKind as never)) &&
-    frameworkCorpusFixtureSeedMatchesRecipeFilter(row, filters.recipeKey) &&
+    frameworkCorpusFixtureSeedMatchesAppPatternFilter(row, filters.appPatternKey) &&
     (filters.seedUse === undefined || row.seedUse === filters.seedUse)
   );
 }
@@ -2294,8 +2294,8 @@ function fixtureSeedAnchorScore(
     return 0;
   }
   if (
-    anchor.recipeKey !== undefined &&
-    !frameworkCorpusFixtureSeedMatchesRecipeFilter(row, anchor.recipeKey)
+    anchor.appPatternKey !== undefined &&
+    !frameworkCorpusFixtureSeedMatchesAppPatternFilter(row, anchor.appPatternKey)
   ) {
     return 0;
   }
@@ -2317,7 +2317,7 @@ function fixtureSeedAnchorScore(
   }
   return (
     (anchor.effectKind === undefined ? 0 : 10) +
-    (anchor.recipeKey === undefined ? 0 : 4 + frameworkCorpusFixtureSeedRecipeFilterScore(row, anchor.recipeKey) * 4) +
+    (anchor.appPatternKey === undefined ? 0 : 4 + frameworkCorpusFixtureSeedAppPatternFilterScore(row, anchor.appPatternKey) * 4) +
     (anchor.classificationKey === undefined ? 0 : 9) +
     (anchor.classificationKind === undefined ? 0 : 5) +
     (anchor.expectedEffectFilterField === undefined ? 0 : 6) +
@@ -2722,8 +2722,8 @@ function corpusAnchorContinuation(anchor: AtlasWorkRouteCorpusAnchor): Continuat
   if (anchor.effectKind !== undefined) {
     filters["effectKind"] = anchor.effectKind;
   }
-  if (anchor.recipeKey !== undefined) {
-    filters["recipeKey"] = anchor.recipeKey;
+  if (anchor.appPatternKey !== undefined) {
+    filters["appPatternKey"] = anchor.appPatternKey;
   }
   if (anchor.classificationKind !== undefined) {
     filters["classificationKind"] = anchor.classificationKind;
@@ -2738,7 +2738,7 @@ function corpusAnchorContinuation(anchor: AtlasWorkRouteCorpusAnchor): Continuat
     filters["expectedEffectFilterValue"] = anchor.expectedEffectFilterValue;
   }
   return {
-    id: `atlas.work-router:corpus:${anchor.projection}:${anchor.concept ?? anchor.effectKind ?? anchor.recipeKey ?? "all"}:${anchor.classificationKind ?? "any"}:${anchor.classificationKey ?? "any"}:${anchor.query ?? "all"}`,
+    id: `atlas.work-router:corpus:${anchor.projection}:${anchor.concept ?? anchor.effectKind ?? anchor.appPatternKey ?? "all"}:${anchor.classificationKind ?? "any"}:${anchor.classificationKey ?? "any"}:${anchor.query ?? "all"}`,
     kind: ContinuationKind.SwitchLens,
     priority: anchor.role === "pressure"
       ? ContinuationPriority.Primary

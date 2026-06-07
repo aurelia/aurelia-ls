@@ -32,6 +32,8 @@ caches, epoch keys, or pre-open policy. Continuation builders may still inherit 
 caller, such as diagnostic projection, but the final `targetQuery` must be shaped against the target catalog row.
 `SemanticApp.ask(...)` therefore dispatches and records claims with the shaped query while passing the original caller
 query to continuation generation, so follow-up target policy survives without changing current-query materialization.
+Its non-router dispatch is grouped through `semanticAppQueryCatalogRow(...).group`; keep that as the public app-query
+family boundary before adding another branch table or moving a substrate-family answerer back into `runtime.ts`.
 `semanticAppQuerySourceFileLocus(...)` owns the cursor-to-source-file bridge used by catalog shaping and continuation
 source-locus evidence; do not recreate a local `sourceFile ?? cursor.filePath` helper in query answerers.
 Public source-locus DTOs, bounded row source-reference traversal, and source-precision classification live in
@@ -70,9 +72,10 @@ project-epoch sensitive until the shaped `targetQuery` carries a cursor or `sour
 The app-query catalog also exposes `runtimeBoundary`: `runtime-static`, `project-frame`, `static-evaluation`, or
 `app-world`. Keep that boundary honest whenever adding a query kind. It is the public signal that lets MCP/LSP-style
 adapters ask cheap static/project/evaluation questions without accidentally paying for full app construction.
-`continuationIntents` is a response-envelope filter over those typed rows. It is deliberately not part of app-query
-identity, locus, materialization policy, or query-claim invalidation because it does not change the semantic facts being
-answered; it only narrows which follow-up moves are returned and inherited by their `targetQuery` payloads.
+`continuationIntents` is a response-envelope filter over those typed rows. It is deliberately not part of app-query or
+app-builder query identity, locus, materialization policy, or query-claim invalidation because it does not change the
+semantic facts being answered; it only narrows which follow-up moves are returned and inherited by their target query
+payloads.
 Query cost still belongs to `runtimeBoundary`, `minimumAnalysisDepth`, `materializationPolicy`, `inquiryProfile`,
 paging, and query-claim retention. Intent should not become a shadow query policy.
 
@@ -114,15 +117,22 @@ attribution facts rather than ordinary app-building guidance.
 The batch value owns compact `displayText` too. It lists each child query kind, materialization policy, and child answer
 summary, and explicitly reminds callers that profiling fields are opt-in. Public transports should forward that text so
 one batch can be both the low-token human orientation and the structured query result.
-App-query answers may also carry typed `continuations`. A continuation is a followable next move, not a diagnostic or
-ranking score: `kind` is the canonical `InquiryContinuationKind` action, `targetQueryKind` is the compact app-query
-family label, `targetQuery` is the app-query payload a caller can pass back to `answerAppQuery(...)` or a child query
-batch, and the applicability metadata declares which next-move intents it serves and what evidence/cost boundary it
-crosses. Public app-query ownership lives in `targetQueryKind` and the shaped target query rather than target-specific
-continuation kind members.
+App-query and app-builder answers may also carry typed `continuations`. A continuation is a followable next move, not a
+diagnostic or ranking score: `kind` is the canonical `InquiryContinuationKind` action; app-world targets use
+`targetQueryKind` plus a shaped `targetQuery`, while app-builder targets use `targetAppBuilderQueryKind` plus a shaped
+`targetAppBuilderQuery`. The applicability metadata declares which next-move intents it serves and what evidence/cost
+boundary it crosses. Public target ownership lives in the target query kind and shaped target payload rather than
+target-specific continuation kind members.
 Pass `continuationIntents` when a caller only wants moves for a
-current task such as `diagnose` or `repair`; leave it unset for the full menu. App-builder generation answers are not
-part of this public API yet; do not keep legacy recipe surfaces alive just to expose continuation rows.
+current task such as `diagnose`, `inspect`, or `repair`; leave it unset for the full menu. App-builder continuations are
+API-level navigation over the catalog/readiness/detail/source-lowering surfaces; they should not become a recommendation
+engine or a replacement for the app-builder ontology.
+App-builder detail routes use a selected-detail posture for MCP token economy:
+unscoped detail calls return compact base rows, counts, and readiness/state
+summaries, while explicit row selectors or family filters activate rich joins by
+default. A caller should use catalog/readiness answers to select refs and then
+drill into detail; broad detail expansion is still possible, but only through
+explicit `include*` flags.
 Continuation evidence `coverage` is a proof posture, not a confidence score. Paged row tables, overviews, and summary
 tables report `partial-known-gaps`; exact cursor-locus follow-ups can report `complete-for-locus`; future or
 insufficiently modeled families should stay `unknown` instead of implying completeness.
@@ -831,9 +841,73 @@ The policy for turning weak owner and binding assignment pressure into cursor/fi
 context, while the policy module owns severity, suggestion kind, action target, and product-policy wording.
 The legacy recipe-authoring catalog, guidance, orientation, and recipe-plan answers have been removed from this API.
 Do not add compatibility wrappers for them in `runtime.ts`, MCP, or query catalog rows. The preserved source artifacts
-now live as neutral fixture pressure and source-plan/app-builder substrate. Future public app-generation answers should
-grow from `app-builder` once its pattern algebra is stable enough to expose, while diagnostics-to-action and future edit
-planning should grow from diagnostic/open-seam rows rather than from the old recipe/orientation shape.
+now live as neutral fixture pressure and source-plan/app-builder substrate. Public app-generation answers grow through
+`SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`, a static/generation
+workflow facade kept separate from app-world query kinds. The app-builder facade includes read-only
+`ontology-catalog` terrain, selectable `target-catalog` rows, recommendation-policy review, source-lowering preflight, input readiness, input contract detail, affordance
+detail, application pattern detail, collection concept detail, control pattern detail, effect contract detail, policy
+axis detail, style detail, menu discovery,
+app-builder source-lowering invocation, app-builder source-lowering composition, source-lowering preview, concrete `part-source-invocation`
+callbacks, catalog integrity, and SourcePlan generation;
+MCP should forward those runtime-facade answers rather than reconstructing app-builder policy locally. The lower-level
+`answerSemanticRuntimeAppBuilderQuery(...)` and `answerSemanticRuntimeAppBuilderQueryCatalog(...)` helpers are pure
+deterministic answerers for contracts, generated fixture materialization, and registry checks; they do not attach
+query-claim wrapping or typed continuations unless a caller explicitly uses the shared continuation projector.
+Diagnostics-to-action and
+future edit planning should grow from diagnostic/open-seam rows rather than from the old recipe/orientation shape.
+The app-builder query catalog and answerer registry are one checked API surface:
+adding a query kind must add enum value, catalog row, and answerer together so a
+transport cannot advertise an uncallable app-builder query.
+`ontology-catalog` is summary-first for public/MCP reads: it reports domain
+summaries, total row counts, source-lowering-implemented counts, relation counts,
+and display flags by default. Full ontology row families require
+`includeRows: true`, and relation graph rows require `includeRelations: true`
+or an explicit relation-kind filter, so broad orientation does not ship the
+entire app-builder graph unless the caller asks for detail.
+Input readiness accepts contract-wide markers, facet-scoped markers, and facet payloads; facet payloads validate
+against `input-contract-detail` schemas where modeled, so public callers can prove concrete supplied facts before
+source lowering without making the MCP invent missing app intent.
+Target catalog source-lowering availability is reverse canary coverage from current source-lowering surfaces to ontology
+rows; it is not a source-lowering support flag.
+No-argument target catalog answers return a 25-row first page in actionable-first order so the broad MCP/menu read stays
+compact while still exposing a cursor. Explicit filters, exact target selections, and caller-supplied page requests use
+the shared public paging behavior.
+Target catalog rows also carry compact policy handles: whether the row is a local defaulting candidate, the optional
+defaulting policy scope/rationale, and whether a contextual executable row requires policy satisfaction. Full
+applicability/evidence rows remain in `recommendation-policy`, and satisfaction state remains in preflight where a
+source-producing selection is being evaluated.
+Source-lowering preflight is the read-only bridge that reports whether selected ontology rows have executable source
+lowerers, only source-lowering availability, or no source path, and whether supplied input payloads pass the input gate.
+It also carries policy satisfaction for contextual executable targets: broad/default target sets may list those rows,
+but exact target selection is required before they report `canRequestSourceLowering=true`.
+Target catalog and preflight rows carry associated `effectContractIds` through the shared app-builder ontology graph,
+so callers can inspect SourcePlan/reopen/control-use witness contracts before generating fragments. Target catalog,
+preflight, and SourcePlan answers carry `sourceLoweringRequestFieldSummary` by default; target catalog and preflight
+compact summaries keep counts only, while full `sourceLoweringRequestFields` rows and surface-scoped request property
+names are explicit detail-mode opt-ins through `includeSourceLoweringRequestFields`.
+Source-lowering invocation is the generated-fragment bridge for one selected ontology target; current source-lowering-implemented
+support covers scalar native control patterns, native choice controls, native button event controls, form-message
+fragments, and inline field-group composition. It delegates reusable Aurelia syntax to part-source callbacks where
+applicable, spends accessibility help/error payloads for messages and field described-by relationships, and reports
+field/action/message/inner-control selection, button type, binding/handler/message/label provenance, value-domain, and
+part-lowering issues. Invocation-local accessibility fields are folded into explicit caller supplied
+input facets before preflight so request-shape shortcuts do not create a separate source gate. Direct delegated
+fragments keep part-source origins; composed app-builder fragments such as buttons, form messages, and field-group wrappers
+carry app-builder source-lowering origins for SourcePlan contribution inspection. Invocation answers also expose
+`sourceLoweringTargetRefs` and associated `effectContractIds` for typed continuation drilldowns.
+Source-lowering composition is the generated-fragment bridge for one selected ontology target that needs member
+invocations. The first supported composition is Native Submit Form: it spends explicit domain fields/actions, explicit
+field order, submit button text, field-group member invocations, and the event-listener part callback to produce one
+form fragment plus contribution fragments. It exposes top-level/member `sourceLoweringTargetRefs` and associated
+`effectContractIds`, and it is still not a host write or full SourcePlan generator.
+Source-lowering SourcePlan answers are compact by default: they include generated file text, project tooling, file-level
+contribution counts, witness counts, control-use counts, expected-effect counts/kinds, request-field summaries, and typed
+issues. Full `SourcePlan.files[].contributions`, `sourcePlanWitnessRows`, `controlUseInventoryRows`,
+`sourceLoweringRequestFields`, `expectedEffects`, and decision-bundle expansion rows are explicit provenance or
+verification detail opt-ins; compact witness rows remain the preferred row-level evidence channel when detail is needed.
+Effect contract detail is an inverse read model over promised effects: it tells a caller which app-building moves
+promise an effect and what input/pattern context surrounds those moves, but it does not execute verification or source
+lowering.
 Fixture manifests can still carry neutral expected effects. Verification belongs to
 `fixture-verification`, not to the public app-query API: callers reopen a fixture, read the row-backed projections needed
 by the manifest, and compare facts such as project tooling, topology, route products, binding flows, validation/i18n
@@ -1472,8 +1546,8 @@ wording policy.
 
 Pressure fixtures live under `../../fixtures/pressure`. They include hand-authored analyzer pressure and migrated
 app-pattern fixtures whose source remains useful for reopening and verification even though the legacy recipe APIs are
-gone. App-builder goldens live under `../../fixtures/app-builder/goldens` and should be generated by the app-builder
-algebra as that surface matures.
+gone. App-builder pressure fixtures live under `../../fixtures/pressure/app-builder-*` and should be generated from the
+current app-builder source-lowering path as that surface matures.
 
-Avoid brittle golden snapshots around either kind of fixture; the valuable signal is whether the API can expose precise,
+Avoid brittle snapshot fixtures around either kind of fixture; the valuable signal is whether the API can expose precise,
 navigable open seams and compact high-level answers after the app is reopened.

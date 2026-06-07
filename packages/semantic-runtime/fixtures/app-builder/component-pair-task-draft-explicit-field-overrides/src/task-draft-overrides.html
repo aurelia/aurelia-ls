@@ -1,0 +1,29 @@
+<form submit.trigger="saveDraft()">
+  <div>
+    <label for="task-summary-input">Task summary</label>
+    <input value.bind="title" id="task-summary-input" aria-describedby="task-summary-guidance">
+    <p id="task-summary-guidance">Use a short active-voice summary.</p>
+  </div>
+  <div>
+    <label for="task-priority-select">Review priority</label>
+    <select value.bind="priority" id="task-priority-select">
+      <option repeat.for="priorityChoice of priorityOptions" value.bind="priorityChoice.value">${priorityChoice.title}</option>
+    </select>
+  </div>
+  <fieldset aria-describedby="task-review-mode-status">
+    <legend>Review mode</legend>
+    <label repeat.for="reviewChoice of reviewTypeOptions">
+      <input type="radio" name="review-type" checked.bind="reviewType" value.bind="reviewChoice.value">
+      <span>${reviewChoice.title}</span>
+    </label>
+    <p id="task-review-mode-status" role="status">Choose how this task will be reviewed.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Completed checkpoints</legend>
+    <label repeat.for="checkpointChoice of checkpointOptions">
+      <input type="checkbox" checked.bind="checkpoints" value.bind="checkpointChoice.value">
+      <span>${checkpointChoice.title}</span>
+    </label>
+  </fieldset>
+  <button type="submit">Save draft</button>
+</form>

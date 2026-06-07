@@ -18,17 +18,20 @@ const defaultRoots = fixtureChildRoots(pressureFixtureRoot);
 const pressureRootSelectionConfig = {
   workspaceRoot,
   pressureFixtureRoot,
+  fixtureCollections: [],
   defaultRoots,
   envRootNames: ['SEMANTIC_RUNTIME_PRESSURE_ROOTS'],
   usageName: 'pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api',
   label: 'app-api pressure',
   fixtureHelp: 'Use --fixture pressure-name or pressure:<name> for focused fixture pressure.',
 };
-const cliOptions = parsePressureRootCliOptions(process.argv.slice(2), pressureRootSelectionConfig);
+const appApiCli = parseAppApiPressureCli(process.argv.slice(2));
+const cliOptions = parsePressureRootCliOptions(appApiCli.rootArgs, pressureRootSelectionConfig);
 const roots = pressureRootsForOptions(cliOptions, pressureRootSelectionConfig);
 const analysisDepth = process.env.SEMANTIC_RUNTIME_PRESSURE_ANALYSIS_DEPTH ?? 'binding-observation';
-const queryPageSize = integerEnv('SEMANTIC_RUNTIME_PRESSURE_QUERY_PAGE_SIZE', 40);
+const queryPageSize = appApiCli.queryPageSize ?? integerEnv('SEMANTIC_RUNTIME_PRESSURE_QUERY_PAGE_SIZE', 40);
 const projectShapeFilter = pressureProjectShapeFilter();
+const queryKindFilter = appApiCli.queryKinds.length === 0 ? null : new Set(appApiCli.queryKinds);
 
 console.log('semantic-runtime app API pressure');
 console.log('scope: transient current API pressure; project keys, paths, and source text are omitted');
@@ -36,6 +39,8 @@ console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`fixture-filter: ${cliOptions.fixtureNames.length === 0 ? 'all' : cliOptions.fixtureNames.join(',')}`);
 console.log(`root-filter: ${cliOptions.rootEntries.length === 0 ? 'all' : `${cliOptions.rootEntries.length} selected`}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
+console.log(`query-filter: ${queryKindFilter == null ? 'all' : [...queryKindFilter].join(',')}`);
+console.log(`query-page-size: ${queryPageSize}`);
 console.log(`inputs: ${roots.length}`);
 
 const started = performance.now();
@@ -98,7 +103,7 @@ async function readPressureForRoot(root) {
 }
 
 function pressureQueries() {
-  return [
+  const queries = [
     { kind: SemanticAppQueryKind.Summary },
     { kind: SemanticAppQueryKind.AppOverview },
     { kind: SemanticAppQueryKind.SourceFiles, page: { size: queryPageSize } },
@@ -120,6 +125,82 @@ function pressureQueries() {
     { kind: SemanticAppQueryKind.I18nTranslationKeys, page: { size: queryPageSize } },
     { kind: SemanticAppQueryKind.RouterOverview, rowPageSize: Math.min(queryPageSize, 20) },
   ];
+  return queryKindFilter == null
+    ? queries
+    : [...queryKindFilter].map((kind) => pressureQueryForKind(kind, queries));
+}
+
+function pressureQueryForKind(kind, defaults) {
+  const existing = defaults.find((query) => query.kind === kind);
+  if (existing != null) {
+    return existing;
+  }
+  return {
+    kind,
+    page: { size: queryPageSize },
+    rowPageSize: Math.min(queryPageSize, 20),
+  };
+}
+
+function parseAppApiPressureCli(args) {
+  const rootArgs = [];
+  const queryKinds = [];
+  let queryPageSize = null;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--query' || arg === '--queries') {
+      queryKinds.push(...splitCliList(requireCliValue(args, index, arg)).map(resolvePressureQueryKind));
+      index += 1;
+      continue;
+    }
+    if (arg === '--rows' || arg === '--page-size' || arg === '--pageSize') {
+      queryPageSize = parseNonNegativeInteger(requireCliValue(args, index, arg), arg);
+      index += 1;
+      continue;
+    }
+    rootArgs.push(arg);
+  }
+  return {
+    rootArgs,
+    queryKinds: [...new Set(queryKinds)],
+    queryPageSize,
+  };
+}
+
+function resolvePressureQueryKind(value) {
+  const normalized = value.trim();
+  const kinds = new Set(Object.values(SemanticAppQueryKind));
+  if (kinds.has(normalized)) {
+    return normalized;
+  }
+  const byEnumKey = Object.entries(SemanticAppQueryKind).find(([key]) => key.toLowerCase() === normalized.toLowerCase());
+  if (byEnumKey != null) {
+    return byEnumKey[1];
+  }
+  throw new Error(`Unknown app-api pressure query '${value}'. Known query kinds: ${[...kinds].sort().join(', ')}.`);
+}
+
+function requireCliValue(args, index, key) {
+  const value = args[index + 1];
+  if (value == null || value.startsWith('--')) {
+    throw new Error(`Missing value for ${key}.`);
+  }
+  return value;
+}
+
+function splitCliList(value) {
+  return value
+    .split(/[;,\s]+/u)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function parseNonNegativeInteger(value, key) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Expected ${key} to be a non-negative integer, got '${value}'.`);
+  }
+  return parsed;
 }
 
 function observeAnswer(result, queryKind, value) {

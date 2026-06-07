@@ -1,4 +1,6 @@
 export * from './answer.js';
+export * from './app-builder.js';
+export * from './app-builder-continuations.js';
 export * from './app-query-catalog.js';
 export * from './app-query-continuations.js';
 export {
@@ -26,6 +28,12 @@ export {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
+export {
+  BUILT_IN_RESOURCE_PACKAGES,
+} from '../resources/built-in-resources.js';
+export {
+  RESOURCE_DEFINITION_KINDS,
+} from '../resources/resource-kind.js';
 export {
   SemanticProjectAnalysisKind,
   SemanticProjectAureliaDependencyScope,

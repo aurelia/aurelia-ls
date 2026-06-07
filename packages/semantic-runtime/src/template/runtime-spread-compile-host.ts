@@ -28,6 +28,7 @@ import {
 } from './compiler-world.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import { HtmlElement, type HtmlNodeReference } from './html-ir.js';
+import { templateElementLookupNameFromAttributes } from './special-attribute-source.js';
 import {
   HydrateAttributeInstruction,
   InterpolationInstruction,
@@ -563,14 +564,12 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
   }
 
   private elementLookupName(targetNode: HtmlElement): string {
-    const asElement = targetNode.attributes
+    const attributes = targetNode.attributes
       .map((attribute) => attribute.productHandle == null
         ? null
         : this.store.productDetails.read(TemplateProductDetails.HtmlAttribute, attribute.productHandle))
-      .find((attribute) => attribute?.rawName.toLowerCase() === 'as-element') ?? null;
-    return asElement == null || asElement.rawValue === ''
-      ? targetNode.tagName.toLowerCase()
-      : asElement.rawValue.toLowerCase();
+      .filter((attribute): attribute is NonNullable<typeof attribute> => attribute != null);
+    return templateElementLookupNameFromAttributes(targetNode.tagName, attributes);
   }
 
 }

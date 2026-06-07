@@ -231,6 +231,8 @@ function packageJsonPathForFilterPackage(packageName: string): string | undefine
       return "packages/atlas/package.json";
     case "@aurelia-ls/semantic-runtime":
       return "packages/semantic-runtime/package.json";
+    case "@aurelia-ls/mcp":
+      return "packages/mcp/package.json";
     default:
       return undefined;
   }

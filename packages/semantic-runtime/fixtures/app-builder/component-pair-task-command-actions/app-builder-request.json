@@ -1,0 +1,321 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-command-actions.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-command-actions-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task command actions component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "updateTask",
+                      "kind": "update",
+                      "scope": "entity",
+                      "targetEntityName": "TaskItem",
+                      "inputFieldNames": [
+                        "title"
+                      ],
+                      "mutatesState": true
+                    },
+                    {
+                      "name": "deleteTask",
+                      "kind": "delete",
+                      "scope": "entity",
+                      "targetEntityName": "TaskItem",
+                      "mutatesState": true
+                    },
+                    {
+                      "name": "archiveTask",
+                      "kind": "archive",
+                      "scope": "entity",
+                      "targetEntityName": "TaskItem",
+                      "inputFieldNames": [
+                        "done"
+                      ],
+                      "mutatesState": true
+                    },
+                    {
+                      "name": "assignTask",
+                      "kind": "assign",
+                      "scope": "entity",
+                      "targetEntityName": "TaskItem",
+                      "inputFieldNames": [
+                        "title"
+                      ],
+                      "mutatesState": true
+                    },
+                    {
+                      "name": "submitTaskReport",
+                      "kind": "submit",
+                      "scope": "integration"
+                    },
+                    {
+                      "name": "refreshTaskItems",
+                      "kind": "refresh",
+                      "scope": "integration"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Command Actions",
+                    "baseName": "Task Command Actions"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-command-actions.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    },
+                    {
+                      "actionName": "updateTask",
+                      "header": "Update",
+                      "displayKind": "action"
+                    },
+                    {
+                      "actionName": "deleteTask",
+                      "header": "Delete",
+                      "displayKind": "action"
+                    },
+                    {
+                      "actionName": "archiveTask",
+                      "header": "Archive",
+                      "displayKind": "action"
+                    },
+                    {
+                      "actionName": "assignTask",
+                      "header": "Assign",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Review release notes",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Confirm migration checklist",
+                      "done": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "collection-table"
+        },
+        "compositionKind": "collection-table",
+        "collectionExpression": "taskItems",
+        "itemLocalName": "taskItem",
+        "emptyStateText": "No tasks yet.",
+        "emptyStateConditionExpression": "taskItems.length === 0"
+      },
+      "sourceLoweringTemplateInvocations": [
+        {
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          "actionName": "submitTaskReport",
+          "buttonText": "Submit report"
+        },
+        {
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          "actionName": "refreshTaskItems",
+          "buttonText": "Refresh tasks"
+        }
+      ],
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "updateTask",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItem"
+            }
+          ],
+          "methodBodyStatements": "taskItem.title = taskItem.title.trim();"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "deleteTask",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItem"
+            }
+          ],
+          "methodBodyStatements": "const index = this.taskItems.findIndex((candidate) => candidate.id === taskItem.id);\nif (index >= 0) {\n  this.taskItems.splice(index, 1);\n}"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "archiveTask",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItem"
+            }
+          ],
+          "methodBodyStatements": "taskItem.done = true;"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "assignTask",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItem"
+            }
+          ],
+          "methodBodyStatements": "taskItem.title = `${taskItem.title} (assigned)`;"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "submitTaskReport",
+          "methodBodyStatements": "console.info('submit task report', this.taskItems.length);"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "refreshTaskItems",
+          "methodBodyStatements": "this.taskItems.sort((left, right) => left.title.localeCompare(right.title));"
+        }
+      ]
+    }
+  }
+}

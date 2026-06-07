@@ -1,0 +1,213 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "component-pair-task-table-local-sort",
+  "ok": true,
+  "expectedEffects": 8,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Component-pair app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 7 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 2,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "sortByTitle()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Title",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "sortable-task-table",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "sortByTitle()",
+        "handlerExpression": "sortByTitle()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Title",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-table-local-sort/src/sortable-task-table.html",
+          "start": 127,
+          "end": 156
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-boolean-checkbox",
+        "innerControlPatternId": null,
+        "controlId": "checkbox",
+        "bindingExpression": "taskItem.done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "sortable-task-table",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "taskItem.done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-table-local-sort/src/sortable-task-table.html",
+          "start": 354,
+          "end": 385
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 4097,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 137,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/sortable-task-table.ts",
+      "textLength": 416,
+      "summary": "Generated SourcePlan file 'src/sortable-task-table.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/sortable-task-table.html",
+      "textLength": 455,
+      "summary": "Generated SourcePlan file 'src/sortable-task-table.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 249,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 8,
+      "jsonLength": 2426,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 6,
+      "jsonLength": 121,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 3,
+      "jsonLength": 73,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 3,
+      "jsonLength": 270,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 2,
+      "jsonLength": 1932,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 31,
+      "jsonLength": 12904,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

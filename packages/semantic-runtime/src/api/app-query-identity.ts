@@ -234,6 +234,7 @@ function normalizeQuerySourceFileKey(filePath: string): string {
   return filePath.trim().replace(/\\/g, '/');
 }
 
-function queryKeyPart(value: string): string {
+/** Normalize one semantic-runtime query-key segment for cache and claim identity strings. */
+export function queryKeyPart(value: string): string {
   return value.trim().replace(/\\/g, '/').replace(/[|,:\u0000]/g, '_');
 }

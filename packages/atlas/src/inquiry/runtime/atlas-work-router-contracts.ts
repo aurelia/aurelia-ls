@@ -166,8 +166,8 @@ export interface AtlasWorkRouteCorpusAnchor {
   readonly query?: string;
   /** Expected semantic effect kind when the route should join fixture-effect descriptors. */
   readonly effectKind?: string;
-  /** Authoring recipe key when the route should join recipe-seeded fixture examples. */
-  readonly recipeKey?: string;
+  /** App-pattern pressure key when the route should join pattern-seeded fixture examples. */
+  readonly appPatternKey?: string;
   /** Typed fixture-seed classification kind when route pressure needs an exact reason lane. */
   readonly classificationKind?: string;
   /** Typed fixture-seed classification key when route pressure needs an exact reason lane. */

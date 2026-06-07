@@ -108,9 +108,11 @@ function nestedSemanticAnswerContinuationText(value: unknown): string | null {
 function compactContinuationText(row: Record<string, unknown>): string {
   const target = typeof row.targetQueryKind === 'string'
     ? row.targetQueryKind
-    : typeof row.kind === 'string'
-      ? row.kind
-      : 'unknown';
+    : typeof row.targetAppBuilderQueryKind === 'string'
+      ? row.targetAppBuilderQueryKind
+      : typeof row.kind === 'string'
+        ? row.kind
+        : 'unknown';
   const intents = Array.isArray(row.intents)
     ? row.intents.filter((value): value is string => typeof value === 'string').join(',')
     : '';

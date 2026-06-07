@@ -49,9 +49,47 @@ export const enum RuntimeBindingValueChannelKind {
   CustomMatcherFunction = 'custom-matcher-function',
   EventHandlerInvocation = 'event-handler-invocation',
   StateDispatchAction = 'state-dispatch-action',
+  /** Router `load` params object accepted by `LoadCustomAttribute.valueChanged(...)`. */
+  RouterParameters = 'router-parameters',
   RejectedTargetAccess = 'rejected-target-access',
   Open = 'open',
 }
+
+/** Stable value list for runtime binding value-channel transport and catalog projections. */
+export const RUNTIME_BINDING_VALUE_CHANNEL_KINDS = [
+  RuntimeBindingValueChannelKind.RawProperty,
+  RuntimeBindingValueChannelKind.RefTarget,
+  RuntimeBindingValueChannelKind.ScopeSlot,
+  RuntimeBindingValueChannelKind.TextContent,
+  RuntimeBindingValueChannelKind.AttributeValue,
+  RuntimeBindingValueChannelKind.ClassAttributeTokens,
+  RuntimeBindingValueChannelKind.ClassToggle,
+  RuntimeBindingValueChannelKind.StyleAttributeRules,
+  RuntimeBindingValueChannelKind.StylePropertyValue,
+  RuntimeBindingValueChannelKind.TemplateControllerTruthiness,
+  RuntimeBindingValueChannelKind.TemplateControllerValueScope,
+  RuntimeBindingValueChannelKind.TemplateControllerSwitchValue,
+  RuntimeBindingValueChannelKind.TemplateControllerSwitchCaseValue,
+  RuntimeBindingValueChannelKind.TemplateControllerPromiseValue,
+  RuntimeBindingValueChannelKind.TemplateControllerPromiseBranchValue,
+  RuntimeBindingValueChannelKind.TemplateControllerIteration,
+  RuntimeBindingValueChannelKind.SelectSingleOptionValue,
+  RuntimeBindingValueChannelKind.SelectMultipleOptionValues,
+  RuntimeBindingValueChannelKind.SelectDynamicOptionValue,
+  RuntimeBindingValueChannelKind.CheckedBoolean,
+  RuntimeBindingValueChannelKind.CheckedRadioValue,
+  RuntimeBindingValueChannelKind.CheckedCollectionMembership,
+  RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean,
+  RuntimeBindingValueChannelKind.CheckedDynamicModelValue,
+  RuntimeBindingValueChannelKind.CheckedModel,
+  RuntimeBindingValueChannelKind.ElementModelValue,
+  RuntimeBindingValueChannelKind.CustomMatcherFunction,
+  RuntimeBindingValueChannelKind.EventHandlerInvocation,
+  RuntimeBindingValueChannelKind.StateDispatchAction,
+  RuntimeBindingValueChannelKind.RouterParameters,
+  RuntimeBindingValueChannelKind.RejectedTargetAccess,
+  RuntimeBindingValueChannelKind.Open,
+] as const;
 
 export const enum RuntimeBindingValueChannelAuthority {
   TargetAccess = 'target-access',
@@ -112,6 +150,8 @@ export type RuntimeBindingPrimitiveValue =
   };
 
 export const enum RuntimeBindingDataFlowDirection {
+  /** Source expression is evaluated for lifecycle/dependency purposes without writing a generic target. */
+  SourceRead = 'source-read',
   SourceToTarget = 'source-to-target',
   TargetToSource = 'target-to-source',
   TwoWay = 'two-way',

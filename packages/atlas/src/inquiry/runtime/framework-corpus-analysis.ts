@@ -5,7 +5,6 @@ import ts from "typescript";
 
 import {
   countBy,
-  countNamedEntriesBy,
   uniqueSortedStrings,
 } from "../../collections.js";
 import { propertyNameText, SourceProjectMemo, type SourceProject } from "../../source/index.js";
@@ -90,25 +89,25 @@ export type FrameworkCorpusExpectedEffectSeedPolicy =
   /** The effect verifies absence of open seams after reopen, so source snippets are indirect pressure only. */
   | "closure-contract";
 
-export type FrameworkCorpusFixtureRecipeHint =
-  | "minimal-app"
-  | "convention-minimal-app"
-  | "routed-app-shell"
-  | "state-backed-form"
-  | "localized-state-backed-form"
-  | "validated-state-backed-form"
-  | "localized-validated-state-backed-form"
-  | "multi-step-state-backed-form"
-  | "service-backed-form"
-  | "routed-state-backed-form"
-  | "routed-service-backed-form"
-  | "routed-localized-validated-state-backed-form"
-  | "catalog-storefront"
-  | "routed-catalog-storefront"
-  | "searchable-data-table"
-  | "routed-searchable-data-table"
-  | "composed-dashboard"
-  | "state-store-list"
+export type FrameworkCorpusAppPatternHint =
+  | "minimal-app-surface"
+  | "convention-resource-surface"
+  | "router-shell-surface"
+  | "form-state-surface"
+  | "form-i18n-surface"
+  | "form-validation-surface"
+  | "form-i18n-validation-surface"
+  | "form-multi-step-flow"
+  | "form-service-state-surface"
+  | "router-form-state-surface"
+  | "router-form-service-state-surface"
+  | "router-form-i18n-validation-surface"
+  | "commerce-solution-space"
+  | "router-commerce-solution-space"
+  | "table-collection-operations"
+  | "router-table-collection-operations"
+  | "dynamic-composition-surface"
+  | "state-plugin-collection-surface"
   | "pressure-fixture";
 
 export type FrameworkCorpusFixtureSeedClassificationKind =
@@ -116,11 +115,11 @@ export type FrameworkCorpusFixtureSeedClassificationKind =
   | "concept"
   /** Expected-effect hint assigned from concept, concept-combination, or source-surface evidence. */
   | "effect"
-  /** Recipe hint that can seed generated or hand-authored fixture work. */
-  | "recipe"
-  /** Concrete syntax/surface evidence that affects effect or recipe selection. */
+  /** App-pattern pressure hint that can seed generated or hand-authored fixture work. */
+  | "app-pattern"
+  /** Concrete syntax/surface evidence that affects effect or app-pattern selection. */
   | "surface"
-  /** Useful corpus pressure that is intentionally not the recommendable generated recipe shape. */
+  /** Useful corpus pressure that is intentionally not a recommendable generated app shape. */
   | "contrast";
 
 export interface FrameworkCorpusFixtureSeedClassificationReason {
@@ -154,10 +153,8 @@ export interface FrameworkCorpusRollup {
   readonly docSnippetCount: number;
   readonly testFileCount: number;
   readonly testSnippetCount: number;
-  readonly legacyPackageCount: number;
   readonly fixtureSeedCount: number;
   readonly expectedEffectDescriptorCount: number;
-  readonly legacySourceLineCount: number;
   readonly docFilesByGroup: Readonly<Record<string, number>>;
   readonly testFilesByGroup: Readonly<Record<string, number>>;
   readonly docSnippetsByLanguage: Readonly<Record<string, number>>;
@@ -166,7 +163,7 @@ export interface FrameworkCorpusRollup {
   readonly testRowsByConcept: Readonly<Record<string, number>>;
   readonly testSnippetsByConcept: Readonly<Record<string, number>>;
   readonly fixtureSeedsByEffect: Readonly<Record<string, number>>;
-  readonly fixtureSeedsByRecipe: Readonly<Record<string, number>>;
+  readonly fixtureSeedsByAppPattern: Readonly<Record<string, number>>;
   readonly fixtureSeedEffectHintsWithoutDescriptor: readonly string[];
   readonly expectedEffectDescriptorsWithoutFixtureSeeds: readonly string[];
   readonly seedableExpectedEffectDescriptorsWithoutFixtureSeeds: readonly string[];
@@ -229,21 +226,6 @@ export interface FrameworkCorpusTestSnippetRow {
   readonly summary: string;
 }
 
-export interface FrameworkCorpusLegacyPackageRow {
-  readonly id: string;
-  readonly packagePath: string;
-  readonly name: string | null;
-  readonly sourceFiles: number;
-  readonly testFiles: number;
-  readonly sourceLines: number;
-  readonly dependsOnSemanticRuntime: boolean;
-  readonly dependsOnCompiler: boolean;
-  readonly dependsOnSemanticWorkspace: boolean;
-  readonly aureliaDependencies: readonly string[];
-  readonly topSourceGroups: readonly FrameworkCorpusCountRow[];
-  readonly summary: string;
-}
-
 export interface FrameworkCorpusExpectedEffectDescriptorRow {
   readonly id: string;
   readonly contractKind: "effect-kind" | "effect-role";
@@ -282,7 +264,7 @@ export interface FrameworkCorpusFixtureSeedRow {
   readonly concepts: readonly FrameworkCorpusConcept[];
   readonly effectHints: readonly FrameworkCorpusExpectedEffectHint[];
   readonly expectedEffects: readonly FrameworkCorpusFixtureSeedExpectedEffectRow[];
-  readonly recipeHints: readonly FrameworkCorpusFixtureRecipeHint[];
+  readonly appPatternHints: readonly FrameworkCorpusAppPatternHint[];
   readonly classificationReasons: readonly FrameworkCorpusFixtureSeedClassificationReason[];
   readonly source: SourceRange;
   readonly preview: string;
@@ -297,7 +279,6 @@ export interface FrameworkCorpusAnalysis {
   readonly docSnippets: readonly FrameworkCorpusDocSnippetRow[];
   readonly tests: readonly FrameworkCorpusTestRow[];
   readonly testSnippets: readonly FrameworkCorpusTestSnippetRow[];
-  readonly legacyPackages: readonly FrameworkCorpusLegacyPackageRow[];
   readonly expectedEffectDescriptors: readonly FrameworkCorpusExpectedEffectDescriptorRow[];
   readonly fixtureSeeds: readonly FrameworkCorpusFixtureSeedRow[];
 }
@@ -333,17 +314,6 @@ const FRAMEWORK_DOCS_ROOT = "aurelia/docs/user-docs";
 const FRAMEWORK_TESTS_ROOT = "aurelia/packages/__tests__";
 const SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH =
   "packages/semantic-runtime/src/fixture-verification/expected-effect.ts";
-
-const legacyPackages = [
-  "packages/compiler",
-  "packages/semantic-workspace",
-  "packages/ssr",
-  "packages/ssg",
-  "packages/transform",
-  "packages/vite-plugin",
-  "packages/language-server",
-  "packages/vscode",
-] as const;
 
 const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   // Binding syntax and binding commands such as value.bind, model.bind, class.bind, and interpolation.
@@ -394,7 +364,6 @@ function buildFrameworkCorpusAnalysis(repoRoot: string): FrameworkCorpusAnalysis
   const docSnippets = frameworkDocSnippetRows(repoRoot);
   const tests = frameworkTestRows(repoRoot);
   const testSnippets = frameworkTestSnippetRows(repoRoot);
-  const legacy = legacyPackageRows(repoRoot);
   const expectedEffectDescriptors = expectedEffectDescriptorRows(repoRoot);
   const fixtureSeeds = fixtureSeedRows(
     repoRoot,
@@ -410,7 +379,6 @@ function buildFrameworkCorpusAnalysis(repoRoot: string): FrameworkCorpusAnalysis
       docSnippets,
       tests,
       testSnippets,
-      legacy,
       expectedEffectDescriptors,
       fixtureSeeds,
     ),
@@ -418,7 +386,6 @@ function buildFrameworkCorpusAnalysis(repoRoot: string): FrameworkCorpusAnalysis
     docSnippets,
     tests,
     testSnippets,
-    legacyPackages: legacy,
     expectedEffectDescriptors,
     fixtureSeeds,
   };
@@ -577,52 +544,11 @@ function frameworkTestSnippetRows(repoRoot: string): readonly FrameworkCorpusTes
     .sort(compareSourceRows);
 }
 
-function legacyPackageRows(repoRoot: string): readonly FrameworkCorpusLegacyPackageRow[] {
-  return legacyPackages.map((packagePath) => {
-    const manifestPath = `${packagePath}/package.json`;
-    const manifest = existsSync(path.join(repoRoot, manifestPath))
-      ? readJson(repoRoot, manifestPath)
-      : {};
-    const sourceFiles = walk(repoRoot, `${packagePath}/src`, (file) =>
-      file.endsWith(".ts") || file.endsWith(".tsx"),
-    );
-    const testFiles = walk(repoRoot, `${packagePath}/test`, (file) =>
-      file.endsWith(".ts") || file.endsWith(".tsx"),
-    );
-    const dependencies = {
-      ...manifest.dependencies,
-      ...manifest.devDependencies,
-      ...manifest.peerDependencies,
-    } as Readonly<Record<string, unknown>>;
-    const aureliaDependencies = Object.keys(dependencies)
-      .filter((name) => name === "aurelia" || name.startsWith("@aurelia/"))
-      .sort();
-    const sourceLines = sourceLineCount(repoRoot, sourceFiles);
-    return {
-      id: `legacy-package:${packagePath}`,
-      packagePath,
-      name: typeof manifest.name === "string" ? manifest.name : null,
-      sourceFiles: sourceFiles.length,
-      testFiles: testFiles.length,
-      sourceLines,
-      dependsOnSemanticRuntime: Object.hasOwn(dependencies, "@aurelia-ls/semantic-runtime"),
-      dependsOnCompiler: Object.hasOwn(dependencies, "@aurelia-ls/compiler"),
-      dependsOnSemanticWorkspace: Object.hasOwn(dependencies, "@aurelia-ls/semantic-workspace"),
-      aureliaDependencies,
-      topSourceGroups: countNamedEntriesBy(sourceFiles, (file) =>
-        sourceGroup(file, `${packagePath}/src/`),
-      ).slice(0, 8),
-      summary: `${packagePath} has ${sourceFiles.length} source file(s), ${testFiles.length} test file(s), and ${sourceLines} source line(s).`,
-    };
-  });
-}
-
 function frameworkCorpusRollup(
   docs: readonly FrameworkCorpusDocRow[],
   docSnippets: readonly FrameworkCorpusDocSnippetRow[],
   tests: readonly FrameworkCorpusTestRow[],
   testSnippets: readonly FrameworkCorpusTestSnippetRow[],
-  legacy: readonly FrameworkCorpusLegacyPackageRow[],
   expectedEffectDescriptors: readonly FrameworkCorpusExpectedEffectDescriptorRow[],
   fixtureSeeds: readonly FrameworkCorpusFixtureSeedRow[],
 ): FrameworkCorpusRollup {
@@ -641,10 +567,8 @@ function frameworkCorpusRollup(
     docSnippetCount: docSnippets.length,
     testFileCount: tests.length,
     testSnippetCount: testSnippets.length,
-    legacyPackageCount: legacy.length,
     fixtureSeedCount: fixtureSeeds.length,
     expectedEffectDescriptorCount: expectedEffectDescriptors.length,
-    legacySourceLineCount: legacy.reduce((total, row) => total + row.sourceLines, 0),
     docFilesByGroup: countBy(docs, (row) => row.group),
     testFilesByGroup: countBy(tests, (row) => row.group),
     docSnippetsByLanguage: countBy(docSnippets, (row) => row.language),
@@ -656,9 +580,9 @@ function frameworkCorpusRollup(
       fixtureSeeds.flatMap((row) => row.effectHints),
       (effect) => effect,
     ),
-    fixtureSeedsByRecipe: countBy(
-      fixtureSeeds.flatMap((row) => row.recipeHints),
-      (recipe) => recipe,
+    fixtureSeedsByAppPattern: countBy(
+      fixtureSeeds.flatMap((row) => row.appPatternHints),
+      (appPattern) => appPattern,
     ),
     fixtureSeedEffectHintsWithoutDescriptor: uniqueSortedStrings(
       [...fixtureSeedEffectKinds].filter((effect) => !descriptorKinds.has(effect)),
@@ -701,9 +625,9 @@ function fixtureSeedForDocSnippet(
   snippetText: string,
 ): readonly FrameworkCorpusFixtureSeedRow[] {
   const effectHints = expectedEffectHintsForSnippet(row.concepts, snippetText);
-  const recipeHints = recipeHintsForConcepts(row.concepts, snippetText);
-  const classificationReasons = fixtureSeedClassificationReasons(row.concepts, snippetText, effectHints, recipeHints, true);
-  if (effectHints.length === 0 && recipeHints.length === 0) {
+  const appPatternHints = appPatternHintsForConcepts(row.concepts, snippetText);
+  const classificationReasons = fixtureSeedClassificationReasons(row.concepts, snippetText, effectHints, appPatternHints, true);
+  if (effectHints.length === 0 && appPatternHints.length === 0) {
     return [];
   }
   const seedUse = docSnippetSeedUse(row.filePath);
@@ -720,11 +644,11 @@ function fixtureSeedForDocSnippet(
     concepts: row.concepts,
     effectHints,
     expectedEffects: fixtureSeedExpectedEffects(effectHints, descriptors, snippetText),
-    recipeHints,
+    appPatternHints,
     classificationReasons,
     source: row.source,
     preview: row.preview,
-    summary: `Documentation ${seedUse} fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
+    summary: `Documentation ${seedUse} fixture seed for ${effectHints.join(", ") || "app-pattern exploration"} from ${row.filePath}.`,
   }];
 }
 
@@ -743,15 +667,15 @@ function fixtureSeedForTestSnippet(
     return [];
   }
   const effectHints = expectedEffectHintsForSnippet(row.concepts, snippetText);
-  const recipeHints = recipeHintsForConcepts(row.concepts, snippetText);
+  const appPatternHints = appPatternHintsForConcepts(row.concepts, snippetText);
   const classificationReasons = fixtureSeedClassificationReasons(
     row.concepts,
     snippetText,
     effectHints,
-    recipeHints,
+    appPatternHints,
     row.kind === "create-fixture-call" || row.kind === "object-test-case",
   );
-  if (effectHints.length === 0 && recipeHints.length === 0) {
+  if (effectHints.length === 0 && appPatternHints.length === 0) {
     return [];
   }
   return [{
@@ -767,11 +691,11 @@ function fixtureSeedForTestSnippet(
     concepts: row.concepts,
     effectHints,
     expectedEffects: fixtureSeedExpectedEffects(effectHints, descriptors, snippetText),
-    recipeHints,
+    appPatternHints,
     classificationReasons,
     source: row.source,
     preview: row.preview,
-    summary: `Framework-test fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
+    summary: `Framework-test fixture seed for ${effectHints.join(", ") || "app-pattern exploration"} from ${row.filePath}.`,
   }];
 }
 
@@ -2026,11 +1950,11 @@ function expectedEffectSeedPolicy(
   }
 }
 
-function recipeHintsForConcepts(
+function appPatternHintsForConcepts(
   concepts: readonly FrameworkCorpusConcept[],
   snippetText: string,
-): readonly FrameworkCorpusFixtureRecipeHint[] {
-  const set = new Set<FrameworkCorpusFixtureRecipeHint>();
+): readonly FrameworkCorpusAppPatternHint[] {
+  const set = new Set<FrameworkCorpusAppPatternHint>();
   const hasI18nSurface = concepts.includes("i18n");
   const hasValidationSurface = hasValidationBindingBehaviorSurface(snippetText);
   const hasRouterSurface = hasRouterAuthoringSurface(snippetText);
@@ -2052,59 +1976,59 @@ function recipeHintsForConcepts(
     hasRouterSurface ||
     hasValidationSurface;
   if (!hasSpecificAppPressure && (concepts.includes("templates") || concepts.includes("resources") || concepts.includes("styles"))) {
-    set.add("minimal-app");
+    set.add("minimal-app-surface");
   }
   if (!hasSpecificAppPressure && hasConventionMinimalAppSurface(snippetText)) {
-    set.add("convention-minimal-app");
+    set.add("convention-resource-surface");
   }
   if (concepts.includes("forms") || concepts.includes("state")) {
-    set.add("state-backed-form");
+    set.add("form-state-surface");
   }
   if (hasI18nSurface && (concepts.includes("forms") || concepts.includes("state") || hasFormDataOrValidationSurface(snippetText))) {
-    set.add("localized-state-backed-form");
+    set.add("form-i18n-surface");
   }
   if (hasValidationSurface) {
-    set.add("validated-state-backed-form");
+    set.add("form-validation-surface");
   }
   if (hasI18nSurface && hasValidationSurface) {
-    set.add("localized-validated-state-backed-form");
+    set.add("form-i18n-validation-surface");
   }
   if (hasMultiStepSurface && (concepts.includes("forms") || hasFormDataOrValidationSurface(snippetText))) {
-    set.add("multi-step-state-backed-form");
+    set.add("form-multi-step-flow");
   }
   if (hasStateOwnedServiceSurface) {
-    set.add("service-backed-form");
+    set.add("form-service-state-surface");
   }
   if (hasFormServiceSurface && !hasStateOwnedServiceSurface) {
     set.add("pressure-fixture");
   }
   if (hasRouterSurface) {
-    set.add("routed-app-shell");
-    set.add("routed-state-backed-form");
+    set.add("router-shell-surface");
+    set.add("router-form-state-surface");
   }
   if (hasRouterSurface && hasStateOwnedServiceSurface) {
-    set.add("routed-service-backed-form");
+    set.add("router-form-service-state-surface");
   }
   if (hasRouterSurface && hasI18nSurface && hasValidationSurface) {
-    set.add("routed-localized-validated-state-backed-form");
+    set.add("router-form-i18n-validation-surface");
   }
   if (hasCatalogSurface) {
-    set.add("catalog-storefront");
+    set.add("commerce-solution-space");
   }
   if (hasRouterSurface && hasCatalogSurface) {
-    set.add("routed-catalog-storefront");
+    set.add("router-commerce-solution-space");
   }
   if (hasSearchableDataTable) {
-    set.add("searchable-data-table");
+    set.add("table-collection-operations");
   }
   if (hasRouterSurface && hasSearchableDataTable) {
-    set.add("routed-searchable-data-table");
+    set.add("router-table-collection-operations");
   }
   if (hasAuComposeSurface(snippetText)) {
-    set.add("composed-dashboard");
+    set.add("dynamic-composition-surface");
   }
   if (hasAureliaStateStore) {
-    set.add("state-store-list");
+    set.add("state-plugin-collection-surface");
   }
   if (concepts.includes("observation") || concepts.includes("bindables") || concepts.includes("styles")) {
     set.add("pressure-fixture");
@@ -2282,12 +2206,12 @@ const localFixtureSeedSurfaceClassificationRules: readonly FixtureSeedSurfaceCla
     applies: hasStateSurface,
   },
   {
-    key: "catalog-storefront",
+    key: "commerce-solution-space",
     summary: "Snippet contains product/catalog/cart/checkout vocabulary with list, state, or template surface evidence.",
     applies: hasCatalogStorefrontSurface,
   },
   {
-    key: "searchable-data-table",
+    key: "table-collection-operations",
     summary: "Snippet contains table/list management plus search, filter, sort, pagination, or selection surface evidence.",
     applies: hasSearchableDataTableSurface,
   },
@@ -2307,7 +2231,7 @@ function fixtureSeedClassificationReasons(
   concepts: readonly FrameworkCorpusConcept[],
   snippetText: string,
   effectHints: readonly FrameworkCorpusExpectedEffectHint[],
-  recipeHints: readonly FrameworkCorpusFixtureRecipeHint[],
+  appPatternHints: readonly FrameworkCorpusAppPatternHint[],
   localSurfaceSource: boolean,
 ): readonly FrameworkCorpusFixtureSeedClassificationReason[] {
   const reasons = new Map<string, FrameworkCorpusFixtureSeedClassificationReason>();
@@ -2337,18 +2261,18 @@ function fixtureSeedClassificationReasons(
   for (const effect of effectHints) {
     add("effect", effect, effectHintReason(effect, concepts, snippetText));
   }
-  for (const recipe of recipeHints) {
-    add("recipe", recipe, recipeHintReason(recipe, concepts, snippetText));
+  for (const appPattern of appPatternHints) {
+    add("app-pattern", appPattern, appPatternHintReason(appPattern, concepts, snippetText));
   }
   if (
-    recipeHints.includes("pressure-fixture") &&
+    appPatternHints.includes("pressure-fixture") &&
     concepts.includes("forms") &&
     concepts.includes("di") &&
     hasFormDataOrValidationSurface(snippetText) &&
     hasServiceSurface(snippetText) &&
     !hasStateSurface(snippetText)
   ) {
-    add("contrast", "direct-service-form", "Form + DI + service pressure lacks a concrete state/store surface, so it is contrastive rather than a service-backed state recipe seed.");
+    add("contrast", "direct-service-form", "Form + DI + service pressure lacks a concrete state/store surface, so it is contrastive rather than a service-backed state pattern seed.");
   }
 
   return [...reasons.values()].sort((left, right) =>
@@ -2374,47 +2298,47 @@ function effectHintReason(
     : `Expected-effect hint ${effect} was assigned from concept(s): ${conceptOwners.join(", ")}.`;
 }
 
-function recipeHintReason(
-  recipe: FrameworkCorpusFixtureRecipeHint,
+function appPatternHintReason(
+  appPattern: FrameworkCorpusAppPatternHint,
   concepts: readonly FrameworkCorpusConcept[],
   snippetText: string,
 ): string {
-  switch (recipe) {
-    case "minimal-app":
+  switch (appPattern) {
+    case "minimal-app-surface":
       return "Snippet has template/resource/style pressure without a more specific app, form, DI, state, validation, or router pressure.";
-    case "convention-minimal-app":
+    case "convention-resource-surface":
       return "Snippet has convention-shaped Aurelia custom element/template evidence that can seed convention minimal app fixture work.";
-    case "state-backed-form":
-      return "Snippet has form or state pressure that can seed state-backed form fixture work.";
-    case "localized-state-backed-form":
+    case "form-state-surface":
+      return "Snippet has form or state pressure that can seed form-state fixture work.";
+    case "form-i18n-surface":
       return "Snippet has i18n plus form/state pressure that can seed localized form fixture work.";
-    case "validated-state-backed-form":
+    case "form-validation-surface":
       return "Snippet has validation binding-behavior pressure that can seed validated form fixture work.";
-    case "localized-validated-state-backed-form":
+    case "form-i18n-validation-surface":
       return "Snippet has both i18n and validation binding-behavior pressure that can seed combined plugin form fixture work.";
-    case "multi-step-state-backed-form":
-      return "Snippet has wizard, step, or progress-shaped form flow pressure that can seed a multi-step state-backed form recipe.";
-    case "service-backed-form":
-      return "Snippet has form + DI + service surface plus concrete state/store surface, matching the service-backed state recipe.";
-    case "routed-app-shell":
+    case "form-multi-step-flow":
+      return "Snippet has wizard, step, or progress-shaped form flow pressure that can seed multi-step form fixture work.";
+    case "form-service-state-surface":
+      return "Snippet has form + DI + service surface plus concrete state/store surface, matching service-owned form pressure.";
+    case "router-shell-surface":
       return "Snippet has concrete router authoring/runtime syntax that can seed a routed app shell without importing a form, catalog, or data-table domain model.";
-    case "routed-state-backed-form":
-      return "Snippet has concrete router authoring/runtime syntax that can seed routed state-backed fixture work.";
-    case "routed-service-backed-form":
-      return "Snippet combines router pressure with state-owned service form pressure, matching the routed service-backed form recipe.";
-    case "routed-localized-validated-state-backed-form":
+    case "router-form-state-surface":
+      return "Snippet has concrete router authoring/runtime syntax that can seed routed form/state fixture work.";
+    case "router-form-service-state-surface":
+      return "Snippet combines router pressure with state-owned service form pressure.";
+    case "router-form-i18n-validation-surface":
       return "Snippet has router, i18n, and validation pressure that can seed route-owned plugin form fixture work.";
-    case "catalog-storefront":
-      return "Snippet has product/catalog/cart/checkout pressure that can seed catalog storefront fixture work.";
-    case "routed-catalog-storefront":
-      return "Snippet combines router pressure with product/catalog/cart/checkout surface evidence that can seed routed catalog fixture work.";
-    case "searchable-data-table":
+    case "commerce-solution-space":
+      return "Snippet has product/catalog/cart/checkout pressure that can seed commerce solution-space fixture work.";
+    case "router-commerce-solution-space":
+      return "Snippet combines router pressure with product/catalog/cart/checkout surface evidence that can seed routed commerce fixture work.";
+    case "table-collection-operations":
       return "Snippet has table/list management pressure with search, filter, sort, pagination, or selection evidence.";
-    case "routed-searchable-data-table":
+    case "router-table-collection-operations":
       return "Snippet combines router pressure with searchable table/list management evidence.";
-    case "composed-dashboard":
+    case "dynamic-composition-surface":
       return "Snippet has concrete AuCompose dynamic composition syntax that can seed composed dashboard fixture work.";
-    case "state-store-list":
+    case "state-plugin-collection-surface":
       return "Snippet has @aurelia/state store configuration, state binding behavior, or dispatch command pressure.";
     case "pressure-fixture":
       return pressureFixtureReason(concepts, snippetText);
@@ -2889,30 +2813,9 @@ function read(repoRoot: string, relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-function readJson(
-  repoRoot: string,
-  relativePath: string,
-): {
-  readonly name?: unknown;
-  readonly dependencies?: Readonly<Record<string, unknown>>;
-  readonly devDependencies?: Readonly<Record<string, unknown>>;
-  readonly peerDependencies?: Readonly<Record<string, unknown>>;
-} {
-  return JSON.parse(read(repoRoot, relativePath)) as {
-    readonly name?: unknown;
-    readonly dependencies?: Readonly<Record<string, unknown>>;
-    readonly devDependencies?: Readonly<Record<string, unknown>>;
-    readonly peerDependencies?: Readonly<Record<string, unknown>>;
-  };
-}
-
 function sourceGroup(file: string, prefix: string): string {
   const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file;
   return relative.includes("/") ? relative.split("/")[0]! : relative;
-}
-
-function sourceLineCount(repoRoot: string, files: readonly string[]): number {
-  return files.reduce((total, file) => total + read(repoRoot, file).split(/\r?\n/u).length, 0);
 }
 
 function docSummary(
@@ -2957,7 +2860,7 @@ export function compareFixtureSeedPressure(
   return Number(left.generated) - Number(right.generated) ||
     fixtureSeedSnippetWeight(right.snippetKind) - fixtureSeedSnippetWeight(left.snippetKind) ||
     right.effectHints.length - left.effectHints.length ||
-    right.recipeHints.length - left.recipeHints.length ||
+    right.appPatternHints.length - left.appPatternHints.length ||
     left.filePath.localeCompare(right.filePath) ||
     left.source.start.line - right.source.start.line;
 }

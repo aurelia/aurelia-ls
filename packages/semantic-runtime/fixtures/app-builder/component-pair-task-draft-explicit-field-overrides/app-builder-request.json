@@ -1,0 +1,295 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-draft-overrides.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-draft-explicit-field-overrides-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task draft explicit field override choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "saveDraft",
+                      "kind": "save",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "priority",
+                        "reviewType",
+                        "checkpoints"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "description",
+                      "title": "Description",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "estimateHours",
+                      "title": "Estimate Hours",
+                      "valueKind": "number",
+                      "numericConstraints": {
+                        "minimum": 0,
+                        "maximum": 40,
+                        "step": 1
+                      }
+                    },
+                    {
+                      "name": "progressPercent",
+                      "title": "Progress",
+                      "valueKind": "number",
+                      "numericConstraints": {
+                        "minimum": 0,
+                        "maximum": 100,
+                        "step": 5
+                      }
+                    },
+                    {
+                      "name": "dueDate",
+                      "title": "Due Date",
+                      "valueKind": "date"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "name": "priority",
+                      "title": "Priority",
+                      "valueKind": "choice",
+                      "defaultValue": "normal",
+                      "options": [
+                        {
+                          "value": "low",
+                          "title": "Low"
+                        },
+                        {
+                          "value": "normal",
+                          "title": "Normal"
+                        },
+                        {
+                          "value": "urgent",
+                          "title": "Urgent"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reviewType",
+                      "title": "Review Type",
+                      "valueKind": "choice",
+                      "defaultValue": "manual",
+                      "options": [
+                        {
+                          "value": "manual",
+                          "title": "Manual"
+                        },
+                        {
+                          "value": "automated",
+                          "title": "Automated"
+                        },
+                        {
+                          "value": "peer",
+                          "title": "Peer"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "labels",
+                      "title": "Labels",
+                      "valueKind": "choice-set",
+                      "options": [
+                        {
+                          "value": "frontend",
+                          "title": "Frontend"
+                        },
+                        {
+                          "value": "review",
+                          "title": "Review"
+                        },
+                        {
+                          "value": "docs",
+                          "title": "Docs"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "checkpoints",
+                      "title": "Checkpoints",
+                      "valueKind": "choice-set",
+                      "options": [
+                        {
+                          "value": "requirements",
+                          "title": "Requirements"
+                        },
+                        {
+                          "value": "implementation",
+                          "title": "Implementation"
+                        },
+                        {
+                          "value": "review",
+                          "title": "Review"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Draft Overrides",
+                    "baseName": "Task Draft Overrides"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-draft-overrides.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": "native-submit-form",
+        "fieldNames": [
+          "title",
+          "priority",
+          "reviewType",
+          "checkpoints"
+        ],
+        "fieldControlSelections": [
+          {
+            "fieldName": "title",
+            "innerControlPatternId": "native-text-input",
+            "fieldControlId": "task-summary-input",
+            "labelText": "Task summary",
+            "messageKind": "help",
+            "messageText": "Use a short active-voice summary.",
+            "messageId": "task-summary-guidance"
+          },
+          {
+            "fieldName": "priority",
+            "innerControlPatternId": "native-single-select",
+            "fieldControlId": "task-priority-select",
+            "labelText": "Review priority",
+            "valueDomainExpression": "priorityOptions",
+            "optionLocalName": "priorityChoice",
+            "optionBindingKind": "value",
+            "optionValueExpression": "priorityChoice.value",
+            "optionLabelExpression": "priorityChoice.title"
+          },
+          {
+            "fieldName": "reviewType",
+            "innerControlPatternId": "native-radio-group",
+            "labelText": "Review mode",
+            "messageKind": "status",
+            "messageText": "Choose how this task will be reviewed.",
+            "messageId": "task-review-mode-status",
+            "valueDomainExpression": "reviewTypeOptions",
+            "optionLocalName": "reviewChoice",
+            "optionBindingKind": "value",
+            "optionValueExpression": "reviewChoice.value",
+            "optionLabelExpression": "reviewChoice.title"
+          },
+          {
+            "fieldName": "checkpoints",
+            "innerControlPatternId": "native-checkbox-list",
+            "labelText": "Completed checkpoints",
+            "valueDomainExpression": "checkpointOptions",
+            "optionLocalName": "checkpointChoice",
+            "optionBindingKind": "value",
+            "optionValueExpression": "checkpointChoice.value",
+            "optionLabelExpression": "checkpointChoice.title"
+          }
+        ],
+        "actionName": "saveDraft",
+        "handlerExpression": "saveDraft()",
+        "submitButtonText": "Save draft"
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "saveDraft",
+          "methodBodyStatements": "this.title = this.title.trim();"
+        }
+      ]
+    }
+  }
+}

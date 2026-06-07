@@ -17,6 +17,7 @@ pnpm --filter @aurelia-ls/atlas framework:errors -- --projection=diagnostic-code
 pnpm --filter @aurelia-ls/atlas pressure:framework-corpus
 pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms
 pnpm --filter @aurelia-ls/atlas pressure:framework-resources
+pnpm --filter @aurelia-ls/atlas framework:capabilities -- --projection=catalog --detail
 pnpm --filter @aurelia-ls/atlas pressure:framework-observation
 pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=observer-locator-decisions --detail
 pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=collection-methods --detail
@@ -113,6 +114,17 @@ pnpm --filter @aurelia-ls/atlas self-check
   answers instead of throwing a stack trace on unsupported projections. Current route health is green and
   memory coverage is fully routed after adding explicit template HTML parsing,
   binding-scope, and i18n translation-binding routes.
+- `framework.capabilities` is the compact Atlas terrain for "what Aurelia can
+  do" before app-builder or public capability APIs derive consumer policy. Use
+  it before reshaping app-builder lowering axes or MCP guidance; rows separate framework
+  concepts, app-author source forms, locality, resource kinds, resource source support, framework effects, typed requirements, consequences,
+  framework-local constraints, and evidence. The first curated
+  catalog is intentionally reviewable rather than complete. Use `--projection=matrix`
+  for concrete resource-kind/source-form cells, `--projection=evidence` for
+  cheap evidence descriptors, `--projection=evidence-trace` when Atlas should
+  spend on backing lens rows/source anchors, and `--projection=grounding` with
+  `--groundingStrength=corpus-backed` before deriving app-builder or MCP policy
+  from the terrain. Grounding is factual; it is not a downstream policy decision.
 - The session daemon is compatibility-profiled. Normal repo sessions and
   clean-room external-root sessions write separate manifests under
   `.temp/atlas/session/profiles/<compatibility-key>/`, and the client caches the
@@ -198,12 +210,10 @@ pnpm --filter @aurelia-ls/atlas self-check
   `pressure:plugin-architecture` for the public aggregate before paging rows;
   it reads those rollups directly instead of spending context on every row.
 - `pressure:framework-corpus` is the compact corpus lane for public Aurelia
-  docs/tests plus old package replacement inventory. Use it before promoting a
-  docs pattern into authoring taste, before choosing a framework test cluster as
-  behavior-grounding pressure, or before mapping legacy compiler/workspace/LSP
-  surfaces onto semantic-runtime. Docs are promoted-pattern pressure, tests are
-  behavior-grounding pressure, and legacy package rows are replacement pressure;
-  none of those should be treated as direct semantic truth or MCP API shape.
+  docs/tests. Use it before promoting a docs pattern into authoring taste or
+  before choosing a framework test cluster as behavior-grounding pressure. Docs
+  are promoted-pattern pressure and tests are behavior-grounding pressure; none
+  of those should be treated as direct semantic truth or MCP API shape.
   Use `framework:corpus -- --projection=doc-snippets --concept=forms --language=html`
   or `framework:corpus -- --projection=test-snippets --concept=forms --generated=false`
   when the next authoring/fixture loop needs concrete docs/test seeds without
@@ -215,10 +225,10 @@ pnpm --filter @aurelia-ls/atlas self-check
   source-pattern effects can be separated from reopen baselines,
   retired app-pattern migration contracts, and closure contracts. Use
   `framework:corpus -- --projection=fixture-seeds --effectKind=binding-data-flow`
-  when you need the same corpus narrowed to expected-effect contract and recipe
+  when you need the same corpus narrowed to expected-effect contract and app-pattern
   pressure.
-  Combine `effectKind` and `recipeKey` for structural narrowing, then use
-  `query` for source/content concepts; recipe labels are deliberately not query
+  Combine `effectKind` and `appPatternKey` for structural narrowing, then use
+  `query` for source/content concepts; app-pattern labels are deliberately not query
   hits for fixture seeds. Use `seedUse=authoring-taste` or
   `seedUse=behavior-grounding` when choosing whether docs/tests are being used
   as taste pressure or behavior pressure; `authoring-taste` expected effects
@@ -226,7 +236,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   fixture rows. Use `expectedEffectFilterField` and
   `expectedEffectFilterValue` for concrete expected-effect facts such as
   `staticArgumentValues=blur` or `targetProperty=value`, especially when a
-  recipe needs a seed for one exact binding behavior argument or value channel.
+  fixture needs a seed for one exact binding behavior argument or value channel.
   Listener commands such as `click.trigger` and `submit.trigger` do not count
   as value-channel `targetProperty` filters.
   Use `classificationKind=surface` plus `classificationKey` for exact typed
@@ -248,7 +258,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   property as the value-side `targetProperty` and `style` as the target-access
   property.
   AuCompose snippets now seed `runtime-composition`, `surface:au-compose`, and
-  `recipeKey=composed-dashboard`; use those structured filters before broad
+  `appPatternKey=dynamic-composition-surface`; use those structured filters before broad
   `query=au-compose` searches. Narrow AuCompose surface keys also exist for
   component/model/template inputs, scope/flush/tag literals,
   composition/composing outputs, and object-shaped component values.

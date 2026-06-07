@@ -424,7 +424,7 @@ registry.
 
 The previous analyzer-shaped fixture was removed because it optimized for current recognizer closure rather than
 idiomatic app-building pressure. Future fixtures should split stress coverage from app-pattern examples: stress fixtures
-can be dense, while `../fixtures/pressure/app-pattern-*` and `../fixtures/app-builder/goldens` should carry
+can be dense, while `../fixtures/pressure/app-pattern-*` and `../fixtures/pressure/app-builder-*` should carry
 framework-normal app shapes once the substrate can analyze them. The legacy authoring spine has now been retired; future
 codegen should land through app-builder plus neutral source-plan and fixture-verification layers instead of ad hoc
 scaffold templates.
@@ -591,12 +591,12 @@ evidence.
 
 `pressure:app-api` defaults to checkpoint-friendly compact aggregate output: request shape, fixture lanes, timing
 buckets, expression-type cache buckets, and one-line pressure buckets for app-patterns, router, binding, observation,
-diagnostics, and open seams. Use compact first during fixture flywheel work, then open
+diagnostics, and open seams. Use compact first during fixture-contract work, then open
 summary/raw detail only for the pressure family being changed. Treat `inputs.fixture-lanes` as part of the reading:
-app-pattern fixtures, app-builder goldens, and stress pressure fixtures intentionally answer different questions. The
+app-pattern fixtures, app-builder pressure fixtures, and stress pressure fixtures intentionally answer different questions. The
 same compact output carries safe `inputs.fixture-keys` and fixture-owner cross-tabs for
 source-assignment reasons, framework error codes, template missing inputs, and open-seam reasons; internal fixtures use
-`pressure:<folder>` or `app-builder:<folder>`, while custom roots collapse to `custom-root`. Use those rows to choose
+`pressure:<folder>` or `pressure:<folder>`, while custom roots collapse to `custom-root`. Use those rows to choose
 the next public fixture to open before doing isolated per-fixture runs. The error-code fixture rows are the preferred
 first read when a broad diagnostic count such as `AUR0654`, `AUR0813`, or a router code needs a concrete owner.
 
@@ -1213,6 +1213,12 @@ The compiler front door now lives on `TemplateCompilerService` instead of only i
 `compile(...)` owns the runtime short-circuit branches and delegates product materialization to a host. Compiler
 collaborators should be used through their service models (`IAttributeParser.parse`, `IBindingCommandResolver.get`,
 `IExpressionParser.parse`, `AttrMapper.map/isTwoWay`) rather than through local aliases or duplicated helper logic.
+
+Custom-element child content projection is closed at the compiled-template boundary now. `HydrateElementInstruction`
+owns default/named projection instruction sequences, and direct parent row traversal skips the extracted children so
+non-shadow custom-element content is not analyzed as if it rendered in the parent. If projection pressure returns, start
+from `contract:template-content-projection` and the framework compiler `_extractProjections(...)` shape before touching
+runtime renderer or app-builder generation.
 
 `compileSpread(...)` is wired from runtime rendering back into `TemplateCompilerService`, but dynamic spread instruction
 materialization is intentionally still open. The runtime path now preserves the captured AttrSyntax handles and emits

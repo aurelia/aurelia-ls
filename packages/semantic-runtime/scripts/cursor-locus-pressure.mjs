@@ -45,6 +45,7 @@ const diagnosticReadLimitPerProject = integerEnv(
 const pressureRootSelectionConfig = {
   workspaceRoot,
   pressureFixtureRoot,
+  fixtureCollections: [],
   defaultRoots: [defaultRoot],
   envRootNames: ['SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS', 'SEMANTIC_RUNTIME_PRESSURE_ROOTS'],
   usageName: 'pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci',

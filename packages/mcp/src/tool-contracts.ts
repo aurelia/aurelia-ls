@@ -1,5 +1,7 @@
 import type {
   OpenSemanticAppOptions,
+  SemanticRuntimeAppBuilderQueryCatalogRequest,
+  SemanticRuntimeAppBuilderQueryRequest,
   SemanticAppQuery,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticRuntimeAppQueryRequest,
@@ -19,6 +21,8 @@ export const aureliaMcpToolNames = {
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
   appQueryCatalog: 'aurelia_app_query_catalog',
+  appBuilderCatalog: 'aurelia_app_builder_catalog',
+  appBuilderQuery: 'aurelia_app_builder_query',
   appOverview: 'aurelia_app_overview',
   routerOverview: 'aurelia_router_overview',
   appQuery: 'aurelia_app_query',
@@ -75,6 +79,19 @@ export interface AureliaMcpAppQueryCatalogInput {
   readonly group?: string | null;
   /** Optional exact query kind filter. */
   readonly queryKind?: SemanticAppQuery['kind'] | null;
+}
+
+export interface AureliaMcpAppBuilderCatalogInput extends SemanticRuntimeAppBuilderQueryCatalogRequest {
+  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
+  readonly workspaceRoot?: string | null;
+  readonly storeKey?: string | null;
+}
+
+export interface AureliaMcpAppBuilderQueryInput extends Omit<SemanticRuntimeAppBuilderQueryRequest, 'kind'> {
+  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
+  readonly workspaceRoot?: string | null;
+  readonly storeKey?: string | null;
+  readonly queryKind: SemanticRuntimeAppBuilderQueryRequest['kind'];
 }
 
 export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {

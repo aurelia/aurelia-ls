@@ -35,6 +35,7 @@ import {
 } from './declaration-instantiation.js';
 import {
   EvaluationBindingKind,
+  EvaluationBindingState,
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
@@ -225,7 +226,6 @@ export class StaticEvaluator {
       this.unknown(reason, node, moduleKey, seamKind),
   };
   private readonly declarationInstantiationHost: StaticDeclarationInstantiationHost = {
-    classHost: this.classHost,
     open: (seamKind, summary, node, moduleKey) =>
       this.open(seamKind, summary, node, moduleKey),
   };
@@ -923,8 +923,8 @@ export class StaticEvaluator {
     if (identifier.text === 'undefined') {
       return new EvaluationUndefinedValue(identifier);
     }
-    const value = environment.readValue(identifier.text);
-    if (value == null) {
+    const binding = environment.readBinding(identifier.text);
+    if (binding == null) {
       const commonJsCarrier = this.evaluateCommonJsCarrierIdentifier(identifier, environment);
       if (commonJsCarrier != null) {
         return commonJsCarrier;
@@ -939,6 +939,10 @@ export class StaticEvaluator {
       }
       return this.unknown(`Identifier '${identifier.text}' is not available in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
+    if (binding.state === EvaluationBindingState.Uninitialized) {
+      return this.unknown(`Identifier '${identifier.text}' is declared but not initialized in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    const value = binding.value;
     if (value.kind === EvaluationValueKind.Unknown && !value.hasOpenSeam) {
       return this.materializeUnknownUse(value, identifier, moduleKey, `Identifier '${identifier.text}' is open in the current environment.`, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }

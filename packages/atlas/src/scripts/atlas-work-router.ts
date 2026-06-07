@@ -46,7 +46,7 @@ assertKnownScriptArguments("atlas.work-router", [
   "--auLinkId=",
   "--concept=",
   "--effectKind=",
-  "--recipeKey=",
+  "--appPatternKey=",
   "--seedUse=",
   "--coverageDimension=",
   "--coverageState=",
@@ -77,7 +77,7 @@ const symbolName = scriptArgumentValue("--symbolName=");
 const auLinkId = scriptArgumentValue("--auLinkId=");
 const concept = scriptArgumentValue("--concept=");
 const effectKind = scriptArgumentValue("--effectKind=");
-const recipeKey = scriptArgumentValue("--recipeKey=");
+const appPatternKey = scriptArgumentValue("--appPatternKey=");
 const seedUse = scriptArgumentValue("--seedUse=");
 const coverageDimension = scriptArgumentValue("--coverageDimension=");
 const coverageState = scriptArgumentValue("--coverageState=");
@@ -109,7 +109,7 @@ const routeFilters = {
   ...(auLinkId === undefined ? {} : { auLinkId }),
   ...(concept === undefined ? {} : { concept }),
   ...(effectKind === undefined ? {} : { effectKind }),
-  ...(recipeKey === undefined ? {} : { recipeKey }),
+  ...(appPatternKey === undefined ? {} : { appPatternKey }),
   ...(seedUse === undefined ? {} : { seedUse }),
   ...(coverageDimension === undefined ? {} : { coverageDimension }),
   ...(coverageState === undefined ? {} : { coverageState }),
@@ -459,16 +459,16 @@ function fixtureSeedLabel(
     readonly filePath: string;
     readonly seedUse: string;
     readonly effectHints: readonly string[];
-    readonly recipeHints: readonly string[];
+    readonly appPatternHints: readonly string[];
     readonly classificationReasons?: readonly { readonly kind: string; readonly key: string }[];
   },
 ): string {
   const effects = row.effectHints.slice(0, 3).join("|") || "none";
-  const recipes = row.recipeHints.slice(0, 4).join("|") || "none";
+  const appPatterns = row.appPatternHints.slice(0, 4).join("|") || "none";
   const reasons = fixtureSeedReasonLabel(row.classificationReasons ?? []);
   const line = row.source?.start?.line;
   const label = line === undefined ? row.filePath : `${row.filePath}:${line + 1}`;
-  return `${label} [${row.seedUse}; effects=${effects}; recipes=${recipes}${reasons}]`;
+  return `${label} [${row.seedUse}; effects=${effects}; appPatterns=${appPatterns}${reasons}]`;
 }
 
 function fixtureSeedReasonLabel(

@@ -97,9 +97,12 @@ source, value, expression, or template-local slot.
 - Keep projected type-shape access reusable. Ordinary expression member reads, cursor member-owner projection, repeat
   binding-pattern destructuring, and observation source-write classification should share the same member/index/reference
   resolver instead of each growing a local TypeChecker access path.
-- Route checker index-signature reads through `checkerStringIndexValueType(...)` and `checkerNumberIndexValueType(...)`.
-  `checker-related-types.ts` owns the union-aware `getIndexTypeOfType(...)` call so router, observation, binding, and
-  template consumers do not reopen feature-local index-access helpers.
+- Route checker index-signature reads through `checkerStringIndexValueType(...)`, `checkerStringIndexInfo(...)`, and
+  `checkerNumberIndexValueType(...)`. `checker-related-types.ts` owns the union-aware index-info/type calls so router,
+  observation, binding, and template consumers do not reopen feature-local index-access helpers.
+- Use `readTypeScriptSourceSyntaxDiagnostics(...)` when a source generator or slot validator needs isolated TypeScript
+  syntax diagnostics without constructing a Program. App-builder source-lowering validation should route through that
+  helper instead of calling `ts.transpileModule(...)` locally.
 - Keep nullish presence and non-nullish projection reusable. `checker-related-types.ts` owns the three-state
   `CheckerTypeNullishPresence` classification, and `CheckerTypeShapeAccess.nonNullishTypeShape(...)` owns the
   non-nullish lane over a projected type shape. Member/keyed/call evaluation should spend those primitives so optional

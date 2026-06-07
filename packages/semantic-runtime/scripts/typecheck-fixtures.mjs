@@ -9,22 +9,23 @@ const workspaceRoot = path.resolve(packageRoot, '../..');
 const frameworkPackageRoot = path.join(workspaceRoot, 'aurelia/packages');
 const defaultFixtureRootSpecs = [
   {
-    root: path.join(packageRoot, 'fixtures/pressure'),
-    include: (root) => path.basename(root).startsWith('app-pattern-'),
+    root: path.join(packageRoot, 'fixtures/app-builder'),
+    include: (root) => isDefaultTypecheckAppBuilderFixtureName(path.basename(root)),
   },
   {
-    root: path.join(packageRoot, 'fixtures/app-builder/goldens'),
-    include: () => true,
+    root: path.join(packageRoot, 'fixtures/pressure'),
+    include: (root) => isDefaultTypecheckPressureFixtureName(path.basename(root)),
   },
 ];
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'aurelia-ls-fixture-typecheck-'));
 
 try {
-  const requestedRoots = process.argv.slice(2).map((arg) =>
-    path.isAbsolute(arg) ? path.resolve(arg) : path.resolve(workspaceRoot, arg)
-  );
+  const requestedRoots = await Promise.all(process.argv.slice(2).map(resolveRequestedRoot));
   const fixtureRoots = requestedRoots.length > 0
-    ? requestedRoots
+    ? await discoverTypecheckableFixtureRoots(requestedRoots.map((root) => ({
+        root,
+        include: () => true,
+      })))
     : await discoverTypecheckableFixtureRoots(defaultFixtureRootSpecs);
   const pathMappings = await aureliaPackagePathMappings();
   const results = [];
@@ -58,7 +59,11 @@ async function discoverTypecheckableFixtureRoots(rootSpecs) {
 }
 
 async function collectTypecheckableFixtureRoots(root, discovered, include) {
-  if (!await fileExists(path.join(root, 'package.json')) || !await fileExists(path.join(root, 'tsconfig.json'))) {
+  const hasPackageTypecheck = await fileExists(path.join(root, 'package.json'))
+    && await fileExists(path.join(root, 'tsconfig.json'));
+  const hasSourceOnlyTypecheck = await fileExists(path.join(root, 'semantic-fixture.json'))
+    && (await collectTypeScriptFixtureSourceFiles(root)).length > 0;
+  if (!hasPackageTypecheck && !hasSourceOnlyTypecheck) {
     for (const entry of await readdirIfExists(root)) {
       if (entry.isDirectory()) {
         await collectTypecheckableFixtureRoots(path.join(root, entry.name), discovered, include);
@@ -70,6 +75,23 @@ async function collectTypecheckableFixtureRoots(root, discovered, include) {
     return;
   }
   discovered.push(root);
+}
+
+async function resolveRequestedRoot(arg) {
+  if (path.isAbsolute(arg)) {
+    return path.resolve(arg);
+  }
+  const candidates = [
+    path.resolve(packageRoot, arg),
+    path.resolve(workspaceRoot, arg),
+    path.resolve(process.cwd(), arg),
+  ];
+  for (const candidate of candidates) {
+    if (await fileExists(path.join(candidate, 'package.json')) || await directoryExists(candidate)) {
+      return candidate;
+    }
+  }
+  return candidates[0];
 }
 
 async function aureliaPackagePathMappings() {
@@ -97,6 +119,10 @@ async function typecheckFixture(root, pathMappings) {
   const packageJson = await readJsonIfExists(path.join(root, 'package.json'));
   const tsconfigPath = path.join(root, 'tsconfig.json');
   if (packageJson == null || !await fileExists(tsconfigPath)) {
+    const sourceFiles = await collectTypeScriptFixtureSourceFiles(root);
+    if (sourceFiles.length > 0) {
+      return typecheckSourceOnlyFixture(root, sourceFiles, pathMappings);
+    }
     return {
       fixture: slash(path.relative(workspaceRoot, root)),
       ok: false,
@@ -121,6 +147,36 @@ async function typecheckFixture(root, pathMappings) {
     fixture: slash(path.relative(workspaceRoot, root)),
     ok: diagnostics.length === 0,
     dependencies: Object.keys(packageJson.dependencies ?? {}).sort(),
+    diagnostics,
+  };
+}
+
+async function typecheckSourceOnlyFixture(root, sourceFiles, pathMappings) {
+  const overlayPath = path.join(tempRoot, `${safeFileName(path.relative(packageRoot, root))}.tsconfig.json`);
+  await writeFile(overlayPath, JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      strict: true,
+      skipLibCheck: true,
+      allowArbitraryExtensions: true,
+      baseUrl: slash(workspaceRoot),
+      paths: pathMappings,
+      ignoreDeprecations: '6.0',
+      noEmit: true,
+    },
+    files: sourceFiles.map(slash),
+  }, null, 2));
+
+  const diagnostics = readTypecheckDiagnostics(overlayPath);
+
+  return {
+    fixture: slash(path.relative(workspaceRoot, root)),
+    ok: diagnostics.length === 0,
+    dependencies: [],
+    sourceOnly: true,
     diagnostics,
   };
 }
@@ -183,10 +239,51 @@ async function fileExists(filePath) {
   }
 }
 
+async function directoryExists(dirPath) {
+  try {
+    await readdir(dirPath);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function collectTypeScriptFixtureSourceFiles(root) {
+  const srcRoot = path.join(root, 'src');
+  const files = [];
+  await collectTypeScriptFiles(srcRoot, files);
+  return files.sort();
+}
+
+async function collectTypeScriptFiles(root, files) {
+  for (const entry of await readdirIfExists(root)) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await collectTypeScriptFiles(entryPath, files);
+      continue;
+    }
+    if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
+      files.push(entryPath);
+    }
+  }
+}
+
 function slash(value) {
   return value.replaceAll(path.sep, '/');
 }
 
 function safeFileName(value) {
   return slash(value).replace(/[^a-z0-9._-]/gi, '_');
+}
+
+function isDefaultTypecheckPressureFixtureName(fileName) {
+  return fileName.startsWith('app-pattern-')
+    || fileName.startsWith('app-builder-');
+}
+
+function isDefaultTypecheckAppBuilderFixtureName(fileName) {
+  return fileName.length > 0;
 }

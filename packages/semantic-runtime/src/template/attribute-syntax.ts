@@ -199,6 +199,53 @@ export function isBetterAttributePatternScore(
   return candidate.symbols > current.symbols;
 }
 
+/** Match a raw attribute name against precompiled attribute-pattern tokens. */
+export function matchAttributePatternTokens(
+  input: string,
+  tokens: readonly AttributePatternToken[],
+  symbols: readonly string[],
+): readonly string[] | null {
+  const parts: string[] = [];
+  const symbolSet = new Set(symbols);
+  let pos = 0;
+  let currentPart = '';
+
+  for (const token of tokens) {
+    if (token.tokenKind === AttributePatternTokenKind.Literal) {
+      const value = token.value ?? '';
+      if (!input.startsWith(value, pos)) {
+        return null;
+      }
+
+      for (const ch of value) {
+        if (symbolSet.has(ch)) {
+          if (currentPart.length > 0) {
+            parts.push(currentPart);
+            currentPart = '';
+          }
+        } else {
+          currentPart += ch;
+        }
+      }
+      pos += value.length;
+    } else {
+      const start = pos;
+      while (pos < input.length && !symbolSet.has(input[pos]!)) {
+        pos++;
+      }
+      if (pos === start) {
+        return null;
+      }
+      currentPart += input.slice(start, pos);
+    }
+  }
+
+  if (currentPart.length > 0) {
+    parts.push(currentPart);
+  }
+  return pos === input.length ? parts : null;
+}
+
 /** Runtime CompiledPattern model used by SyntaxInterpreter. */
 @auLink('template-compiler:CompiledPattern')
 export class CompiledAttributePattern {
@@ -222,45 +269,7 @@ export class CompiledAttributePattern {
   ) {}
 
   tryMatch(input: string): readonly string[] | null {
-    const parts: string[] = [];
-    const symbolSet = new Set(this.symbols);
-    let pos = 0;
-    let currentPart = '';
-
-    for (const token of this.tokens) {
-      if (token.tokenKind === AttributePatternTokenKind.Literal) {
-        const value = token.value ?? '';
-        if (!input.startsWith(value, pos)) {
-          return null;
-        }
-
-        for (const ch of value) {
-          if (symbolSet.has(ch)) {
-            if (currentPart.length > 0) {
-              parts.push(currentPart);
-              currentPart = '';
-            }
-          } else {
-            currentPart += ch;
-          }
-        }
-        pos += value.length;
-      } else {
-        const start = pos;
-        while (pos < input.length && !symbolSet.has(input[pos]!)) {
-          pos++;
-        }
-        if (pos === start) {
-          return null;
-        }
-        currentPart += input.slice(start, pos);
-      }
-    }
-
-    if (currentPart.length > 0) {
-      parts.push(currentPart);
-    }
-    return pos === input.length ? parts : null;
+    return matchAttributePatternTokens(input, this.tokens, this.symbols);
   }
 }
 

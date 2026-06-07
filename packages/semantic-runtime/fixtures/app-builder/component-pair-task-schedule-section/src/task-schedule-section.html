@@ -1,0 +1,21 @@
+<section class="task-schedule" data-au-role="app-section">
+  <p if.bind="taskItems.length === 0" class="task-schedule__empty">No tasks yet.</p>
+  <table else class="task-schedule__table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Schedule</th>
+        <th>Done</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of taskItems">
+        <td>${taskItem.title}</td>
+        <td>${scheduleLabelForTaskItem(taskItem)}</td>
+        <td>
+          <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>

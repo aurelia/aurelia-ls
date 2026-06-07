@@ -100,6 +100,16 @@ const syntheticFunctions = new Map<string, EvaluationFunctionValue>();
 const frameworkRegistrationKindsByObject = new WeakMap<EvaluationObjectValue, FrameworkRegistrationKind>();
 const registryBodiesByObject = new WeakMap<EvaluationObjectValue, RegistryBodyReference>();
 
+type AureliaResolveDirectKey =
+  | {
+      readonly kind: 'key';
+      readonly expression: ts.Expression;
+    }
+  | {
+      readonly kind: 'value';
+      readonly value: EvaluationValue;
+    };
+
 for (const statement of syntheticSource.statements) {
   if (!ts.isFunctionDeclaration(statement) || statement.name == null) {
     continue;
@@ -211,30 +221,62 @@ function evaluateAureliaResolveCall(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  if (!isAureliaResolveExpression(expression)) {
+  if (!isAureliaResolveActivationCall(expression, environment)) {
     return null;
   }
-  if (environment.readValue('this') == null) {
-    return null;
+  const directKey = aureliaResolveDirectKey(call, moduleKey, host);
+  if (directKey.kind === 'value') {
+    return directKey.value;
   }
+  return evaluateAureliaResolveDirectClassKey(directKey.expression, call, environment, moduleKey, depth, host);
+}
+
+function isAureliaResolveActivationCall(
+  expression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+): boolean {
+  return isAureliaResolveExpression(expression) && environment.readValue('this') != null;
+}
+
+function aureliaResolveDirectKey(
+  call: ts.CallExpression,
+  moduleKey: string,
+  host: StaticIntrinsicEvaluationHost,
+): AureliaResolveDirectKey {
   const keyExpression = call.arguments[0];
   if (keyExpression == null || ts.isSpreadElement(keyExpression)) {
-    return host.unknown(
-      'Aurelia resolve(...) did not receive a direct DI key expression.',
-      call,
-      moduleKey,
-      EvaluationOpenSeamKind.DynamicCall,
-    );
+    return {
+      kind: 'value',
+      value: host.unknown(
+        'Aurelia resolve(...) did not receive a direct DI key expression.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      ),
+    };
   }
-  if (isAureliaResolveWrapperExpression(unwrapExpression(keyExpression))) {
-    return host.unknown(
+  if (!isAureliaResolveWrapperExpression(unwrapExpression(keyExpression))) {
+    return { kind: 'key', expression: keyExpression };
+  }
+  return {
+    kind: 'value',
+    value: host.unknown(
       'Aurelia resolve(...) DI key wrapper resolution is not modeled by the evaluator-local activation slice yet.',
       keyExpression,
       moduleKey,
       EvaluationOpenSeamKind.DynamicCall,
-    );
-  }
+    ),
+  };
+}
 
+function evaluateAureliaResolveDirectClassKey(
+  keyExpression: ts.Expression,
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
   const key = host.evaluateExpression(keyExpression, environment, moduleKey, depth + 1);
   if (key.kind === EvaluationValueKind.Unknown) {
     return key;

@@ -9,6 +9,7 @@ import {
   type DiResolveKeyDeclarationKind,
   type DiResolveKeyImportKind,
   type DiResolveNullishKeyArgument,
+  type DiResolveCallSite,
 } from '../di/resolve-call-recognition.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -16,7 +17,11 @@ import {
   type ApplicationServiceClassTarget,
   type ApplicationServiceInteractionSite,
 } from './service-interaction.js';
-import { supportSourceRoleForPath, type ApplicationSupportSourceRole } from './support-source-role.js';
+import {
+  applicationSupportSourceRoleIndex,
+  type ApplicationSupportSourceRole,
+  type ApplicationSupportSourceRoleIndex,
+} from './support-source-role.js';
 
 export interface ApplicationServiceTopology {
   readonly services: readonly ApplicationServiceClassSite[];
@@ -61,8 +66,10 @@ export function readApplicationServiceTopology(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
 ): ApplicationServiceTopology {
-  const injections = readApplicationServiceInjectionSites(project, typeSystem);
-  const services = readApplicationServiceClassSites(project, typeSystem, injections);
+  const resolveSites = readDiResolveCallSites(project, typeSystem);
+  const supportRoles = applicationSupportSourceRoleIndex(project, resolveSites);
+  const injections = applicationServiceInjectionSitesFromResolveSites(resolveSites, supportRoles);
+  const services = readApplicationServiceClassSites(project, typeSystem, injections, supportRoles);
   const interactions = readApplicationServiceInteractionSites(project, typeSystem, services, injections);
   return {
     services,
@@ -75,23 +82,25 @@ export function readApplicationServiceClassSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
   injections: readonly ApplicationServiceInjectionSite[],
+  supportRoles: ApplicationSupportSourceRoleIndex = applicationSupportSourceRoleIndex(project, []),
 ): readonly ApplicationServiceClassSite[] {
   const resolveCallCountsByDeclarationPath = diResolveCallCountsByDeclarationSourcePath(injections);
   return project.sourceFiles.flatMap((source) => {
-    const role = supportSourceRoleForPath(source.path);
-    if (role == null) {
-      return [];
-    }
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     const classes = sourceFile == null ? [] : topLevelClasses(sourceFile);
-    return classes.map((entry) => ({
-      path: source.path,
-      sourcePath: source.path,
-      role,
-      className: entry.className,
-      isExported: entry.isExported,
-      resolveCallCount: resolveCallCountsByDeclarationPath.get(source.path)?.get(entry.className) ?? 0,
-    }));
+    return classes.flatMap((entry) => {
+      const role = supportRoles.roleForDeclaration(source.path, entry.className);
+      return role == null
+        ? []
+        : [{
+          path: source.path,
+          sourcePath: source.path,
+          role,
+          className: entry.className,
+          isExported: entry.isExported,
+          resolveCallCount: resolveCallCountsByDeclarationPath.get(source.path)?.get(entry.className) ?? 0,
+        }];
+    });
   }).sort((left, right) =>
     left.role.localeCompare(right.role)
     || left.path.localeCompare(right.path)
@@ -103,7 +112,18 @@ export function readApplicationServiceInjectionSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
 ): readonly ApplicationServiceInjectionSite[] {
-  return readDiResolveCallSites(project, typeSystem).map((site) => ({
+  const resolveSites = readDiResolveCallSites(project, typeSystem);
+  return applicationServiceInjectionSitesFromResolveSites(
+    resolveSites,
+    applicationSupportSourceRoleIndex(project, resolveSites),
+  );
+}
+
+function applicationServiceInjectionSitesFromResolveSites(
+  resolveSites: readonly DiResolveCallSite[],
+  supportRoles: ApplicationSupportSourceRoleIndex,
+): readonly ApplicationServiceInjectionSite[] {
+  return resolveSites.map((site) => ({
     sourcePath: site.sourcePath,
     start: site.start,
     end: site.end,
@@ -122,7 +142,7 @@ export function readApplicationServiceInjectionSites(
     keyDeclarationSourcePath: site.keyDeclarationSourcePath,
     keyDeclarationRole: site.keyDeclarationSourcePath == null
       ? null
-      : supportSourceRoleForPath(site.keyDeclarationSourcePath),
+      : supportRoles.roleForDeclaration(site.keyDeclarationSourcePath, site.keyDeclarationName ?? ''),
     keyImportModuleSpecifier: site.keyImportModuleSpecifier,
     keyImportName: site.keyImportName,
     keyImportKind: site.keyImportKind,

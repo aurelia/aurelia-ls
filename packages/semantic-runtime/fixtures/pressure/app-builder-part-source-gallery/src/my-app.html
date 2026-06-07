@@ -1,0 +1,138 @@
+<main>
+  <h1>${title}</h1>
+  <section>
+    <input value.bind="draft.title">
+    <input type="number" value-as-number.bind="draft.quantity">
+    <input type="number" value-as-number.bind="draft.quantity" min="0" max="100" step="5">
+    <input type="date" value-as-date.bind="draft.dueDate">
+    <input type="range" value-as-number.bind="draft.quantity">
+    <input type="range" value-as-number.bind="draft.quantity" min="0" max="100" step="5">
+    <textarea value.bind="draft.title"></textarea>
+    <input type="checkbox" checked.bind="draft.enabled">
+    <label repeat.for="option of options">
+      <input type="checkbox" checked.bind="selectedOptions" model.bind="option">
+      <span>${option}</span>
+    </label>
+    <label repeat.for="option of options">
+      <input type="checkbox" checked.bind="selectedOptionIds" value.bind="option.id" matcher.bind="matcher">
+      <span>${option.label}</span>
+    </label>
+    <label repeat.for="option of options">
+      <input type="radio" name="choice-group" checked.bind="selectedOption" model.bind="option">
+      <span>${option}</span>
+    </label>
+    <label repeat.for="option of options">
+      <input type="radio" name="choice-group" checked.bind="selectedOptionId" value.bind="option.id" matcher.bind="matcher">
+      <span>${option.label}</span>
+    </label>
+    <select value.bind="selectedOption">
+      <option repeat.for="option of options" model.bind="option">${option}</option>
+    </select>
+    <select value.bind="selectedOptionId" matcher.bind="matcher">
+      <option repeat.for="option of options" value.bind="option.id">${option.label}</option>
+    </select>
+    <select multiple value.bind="selectedOptions">
+      <option repeat.for="option of options" model.bind="option">${option}</option>
+    </select>
+    <select multiple value.bind="selectedOptionIds" matcher.bind="matcher">
+      <option repeat.for="option of options" value.bind="option.id">${option.label}</option>
+    </select>
+  </section>
+  <section>
+    <button click.trigger="handle($event)">Trigger</button>
+    <button click.capture="handle($event)">Capture</button>
+    <div ref="element" class.bind="classes" is-active.class="isActive" style.bind="styleRules" display.style="isVisible ? 'block' : 'none'">Styled</div>
+    <button disabled.bind="isDisabled" disabled.to-view="isDisabled">Attribute</button>
+    <let item.bind="selectedItem"></let>
+    <select>
+      <option repeat.for="option of options" model.bind="option">${option.label}</option>
+    </select>
+    <select matcher.bind="matcher">
+      <option>Matched option</option>
+    </select>
+    <input value.state="title">
+    <input value.state:users="title">
+    <button click.dispatch="{ type: 'activate' }">Dispatch</button>
+    <button click.dispatch:users="{ type: 'activate' }">Dispatch users</button>
+    <span t="app.title" t-params.bind="{ count: itemCount }"></span>
+    <span t.bind="titleKey"></span>
+  </section>
+  <section>
+    <input value.bind="value & oneTime">
+    <input value.bind="value & toView">
+    <input value.bind="value & fromView">
+    <input value.bind="value & twoWay">
+    <input value.bind="draft.title & debounce">
+    <input value.bind="draft.title & debounce:250">
+    <input value.bind="draft.title & throttle">
+    <input value.bind="draft.title & throttle:250">
+    <span textcontent.bind="'items-changed' & signal:'items-changed'"></span>
+    <input value.bind="draft.title & updateTrigger:'blur'">
+    <button click.trigger="handle($event) & self">Self</button>
+    <button aria-label.bind="value & attr">Attr</button>
+    <input value.bind="draft.title & validate">
+    <input value.bind="draft.title & validate:'blur'">
+    <span textcontent.bind="'itemWithCount' & t"></span>
+    <span textcontent.bind="'itemWithCount' & t:{ count: itemCount }"></span>
+    <span textcontent.bind="price & nf"></span>
+    <span textcontent.bind="price & nf:{ style: 'currency', currency: 'EUR' }"></span>
+    <span textcontent.bind="createdAt & df"></span>
+    <span textcontent.bind="createdAt & df:{ dateStyle: 'long' }"></span>
+    <span textcontent.bind="createdAt & rt"></span>
+    <span textcontent.bind="createdAt & rt:{ style: 'short' }"></span>
+    <span textcontent.bind="title & state"></span>
+    <span textcontent.bind="title & state:'users'"></span>
+    <span>${descriptionHtml | sanitize}</span>
+    <span>${'itemWithCount' | t}</span>
+    <span>${'itemWithCount' | t:{ count: itemCount }}</span>
+    <span>${price | nf}</span>
+    <span>${price | nf:{ style: 'currency', currency: 'EUR' }}</span>
+    <span>${createdAt | df}</span>
+    <span>${createdAt | df:{ dateStyle: 'long' }}</span>
+    <span>${createdAt | rt}</span>
+    <span>${createdAt | rt:{ style: 'short' }}</span>
+  </section>
+  <section>
+    <section if.bind="isReady">Ready</section>
+    <section else>Not ready</section>
+    <ul>
+      <li repeat.for="item of items">${item.label}</li>
+    </ul>
+    <ul>
+      <li virtual-repeat.for="item of items">${item.label}</li>
+    </ul>
+    <section switch.bind="status">
+      <p case.bind="'ready'">Ready status</p>
+      <p default-case>Other status</p>
+    </section>
+    <section promise.bind="loadItems()">
+      <p pending>Loading</p>
+      <p then>Resolved</p>
+      <p then="item">${item.label}</p>
+      <p catch>Rejected</p>
+      <p catch="item">${item}</p>
+    </section>
+    <section with.bind="selectedItem">${label}</section>
+    <section portal>Portal default</section>
+    <section portal="target: body; position: beforeend; render-context: main; strict: true">Portal target</section>
+  </section>
+  <section>
+    <au-compose></au-compose>
+    <au-compose component.bind="currentComponent" template.bind="currentTemplate" model.bind="selectedItem" scope-behavior="scoped" tag="section" flush-mode="async"></au-compose>
+    <au-slot></au-slot>
+    <au-slot name="secondary"></au-slot>
+    <input focus.bind="isFocused">
+    <section show.bind="isOpen">Show</section>
+    <au-viewport></au-viewport>
+    <au-viewport name="main" used-by="admin" default="home" fallback="not-found"></au-viewport>
+    <a load="items">Load</a>
+    <a load="route: items; params.bind: { id: selectedId }; context.bind: routeContext.parent; active.bind: isItemsActive; attribute: data-route-href">Load detailed</a>
+    <a href="items">Href</a>
+    <div validation-errors.from-view="errors"></div>
+    <div validation-errors="errors.from-view: errors; controller.bind: validationController"></div>
+    <validation-container></validation-container>
+    <validation-container errors.from-view="errors" controller.bind="validationController"></validation-container>
+    <sample-card as-element="sample-card">As element</sample-card>
+  </section>
+  <sample-card containerless>Projected card</sample-card>
+</main>

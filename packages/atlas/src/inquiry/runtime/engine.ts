@@ -38,6 +38,7 @@ import { answerFrameworkMaterialization } from "./framework-materialization-lens
 import { answerFrameworkAdmission } from "./framework-admission-lenses.js";
 import { answerFrameworkCompiler } from "./framework-compiler-lenses.js";
 import { answerFrameworkComposition } from "./framework-composition-lenses.js";
+import { answerFrameworkCapabilities } from "./framework-capability-lenses.js";
 import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkResources } from "./framework-resource-lenses.js";
 import { answerFrameworkErrors } from "./framework-error-lenses.js";
@@ -106,6 +107,7 @@ export class InquiryEngine {
     LensId.FrameworkErrors,
     LensId.FrameworkAdmission,
     LensId.FrameworkComposition,
+    LensId.FrameworkCapabilities,
     LensId.FrameworkCorpus,
   ]);
 
@@ -257,6 +259,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkComposition:
         return answerFrameworkComposition(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkCapabilities:
+        return answerFrameworkCapabilities(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

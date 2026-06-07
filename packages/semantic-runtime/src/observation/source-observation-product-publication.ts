@@ -13,7 +13,11 @@ import type {
 import { ObservationIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
-import { sourceSpanAddressForSite, type SourceSpanSite } from '../kernel/source-address.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+  type SourceSpanSite,
+} from '../kernel/source-address.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -42,45 +46,69 @@ export class SourceObservationProductRecordSet {
   ) {}
 }
 
+interface SourceObservationProductPublicationFrame {
+  readonly source: SourceSpanAddressPublication;
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+}
+
 /** Publish the shared source/evidence/provenance envelope for source-backed observation products. */
 export function sourceObservationProductRecords(
   input: SourceObservationProductRecordInput,
 ): SourceObservationProductRecordSet {
-  const source = sourceSpanAddressForSite(input.store, input.local, input.site);
-  const evidenceHandle = input.store.handles.evidence(`${input.local}:evidence`);
-  const provenanceHandle = input.store.handles.provenance(`${input.local}:provenance`);
-  const productHandle = input.store.handles.product(input.local);
-  const identityHandle = input.store.handles.identity(input.local);
+  const frame = sourceObservationProductPublicationFrame(input);
   return new SourceObservationProductRecordSet(
-    productHandle,
-    identityHandle,
-    source.handle,
-    evidenceHandle,
-    provenanceHandle,
-    [
-      ...source.records,
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SourceObservation,
-        input.evidenceRoles,
-        input.evidenceSummary,
-        source.handle,
-      ),
-      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-      new ObservationIdentity(
-        identityHandle,
-        input.productKindKey,
-        input.identityOwnerHandle,
-        source.handle,
-        input.identityLocalName,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        input.productKindKey,
-        identityHandle,
-        source.handle,
-        provenanceHandle,
-      ),
-    ],
+    frame.productHandle,
+    frame.identityHandle,
+    frame.source.handle,
+    frame.evidenceHandle,
+    frame.provenanceHandle,
+    sourceObservationProductKernelRecords(input, frame),
   );
+}
+
+function sourceObservationProductPublicationFrame(
+  input: SourceObservationProductRecordInput,
+): SourceObservationProductPublicationFrame {
+  const source = sourceSpanAddressForSite(input.store, input.local, input.site);
+  return {
+    source,
+    evidenceHandle: input.store.handles.evidence(`${input.local}:evidence`),
+    provenanceHandle: input.store.handles.provenance(`${input.local}:provenance`),
+    productHandle: input.store.handles.product(input.local),
+    identityHandle: input.store.handles.identity(input.local),
+  };
+}
+
+function sourceObservationProductKernelRecords(
+  input: SourceObservationProductRecordInput,
+  frame: SourceObservationProductPublicationFrame,
+): readonly KernelStoreRecord[] {
+  return [
+    ...frame.source.records,
+    new EvidenceRecord(
+      frame.evidenceHandle,
+      EvidenceKind.SourceObservation,
+      input.evidenceRoles,
+      input.evidenceSummary,
+      frame.source.handle,
+    ),
+    new ProvenanceRecord(frame.provenanceHandle, [frame.evidenceHandle]),
+    new ObservationIdentity(
+      frame.identityHandle,
+      input.productKindKey,
+      input.identityOwnerHandle,
+      frame.source.handle,
+      input.identityLocalName,
+    ),
+    new MaterializedProduct(
+      frame.productHandle,
+      input.productKindKey,
+      frame.identityHandle,
+      frame.source.handle,
+      frame.provenanceHandle,
+    ),
+  ];
 }

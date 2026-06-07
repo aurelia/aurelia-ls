@@ -435,6 +435,7 @@ class TemplateRuntimeAnalysisFrame {
       typeSystem: this.request.typeSystem,
       resourceScope: this.request.compilerWorld.resourceScope,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
+      stateStores: this.expressionWorld.stateStores,
     } satisfies RuntimeControllerBindMaterializationRequest);
   }
 

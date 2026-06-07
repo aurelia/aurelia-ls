@@ -11,10 +11,15 @@ import {
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import { staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
 import type { StateStoreConfiguration } from './model.js';
+import {
+  configuredStateStoreForName,
+  stateStoreDisplayName,
+} from './state-store-identity.js';
 
-export const STATE_BINDING_BEHAVIOR_NAME = 'state';
+export const STATE_BINDING_BEHAVIOR_NAME = BuiltInBindingBehaviorName.State;
 
 export class StateBindingScopeProjection {
   constructor(
@@ -81,25 +86,25 @@ export class StateBindingScopeProjector {
         'The state binding behavior uses a dynamic store argument; semantic-runtime cannot choose a store state type yet.',
       );
     }
-    const configuredStore = this.stateStores.find((candidate) => candidate.name === (storeName ?? 'default')) ?? null;
+    const configuredStore = configuredStateStoreForName(this.stateStores, storeName);
     if (configuredStore == null) {
       return new StateBindingScopeProjection(
         null,
         null,
-        `The state binding behavior references store "${storeName ?? 'default'}", but no configured store is visible to expression evaluation.`,
+        `The state binding behavior references store "${stateStoreDisplayName(storeName)}", but no configured store is visible to expression evaluation.`,
       );
     }
     if (configuredStore.initialStateType == null) {
       return new StateBindingScopeProjection(
         null,
         configuredStore,
-        `Configured store "${configuredStore.name ?? 'default'}" does not carry a projected initial-state type.`,
+        `Configured store "${stateStoreDisplayName(configuredStore.name)}" does not carry a projected initial-state type.`,
       );
     }
     const emission = this.scopeMaterializer.prepare(RuntimeBindingScope.fromStateBindingScope({
       localKey: [
         localKey,
-        localKeyPart(configuredStore.name ?? 'default'),
+        localKeyPart(stateStoreDisplayName(configuredStore.name)),
       ].join(':'),
       ownerProductHandle: ownerProductHandle ?? configuredStore.productHandle,
       ownerIdentityHandle: ownerIdentityHandle ?? configuredStore.identityHandle,

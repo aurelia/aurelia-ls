@@ -196,29 +196,32 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `framework.observation` owns observer-locator/reactivity rows, and `framework.composition:emulation` is the compact
   semantic-runtime obligation map. Use `pnpm --filter @aurelia-ls/atlas pressure:framework-resources` when resource
   provenance is the question, and use `pnpm --filter @aurelia-ls/atlas framework:resources -- --projection=convergence`
-  when a resource route needs exact convergence rows.
+  when a resource route needs exact convergence rows. Use
+  `pnpm --filter @aurelia-ls/atlas framework:capability-coverage -- --rows=100` when app-builder or framework
+  capability work needs to distinguish exact built-in/plugin identity coverage, broad capability-kind coverage, and
+  internal framework machinery that should not count as an app-author capability gap.
 - Use `framework.corpus` when official Aurelia docs or framework tests should seed fixture/authoring pressure. The
   shortcut `pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms` returns
-  classified, paged rows from docs/tests/legacy replacement inventory without turning those corpora into MCP or direct
-  semantic truth. Its `expected-effects` projection derives source-backed rows from semantic-runtime's
+  classified, paged rows from docs/tests without turning those corpora into MCP or direct semantic truth. Its
+  `expected-effects` projection derives source-backed rows from semantic-runtime's
   expected-effect kind and role contracts, including a seed policy that separates corpus-pattern effects from reopen
   baselines such as project shape, app root, and project tooling, orientation contracts, and closure contracts.
   `fixture-seeds` joins docs/test snippets to those
-  expected-effect descriptors plus recipe hints so fixture expansion can start from a semantic pressure target instead
+  expected-effect descriptors plus app-pattern hints so fixture expansion can start from a semantic pressure target instead
   of raw examples. Seed classifiers read the exact source range behind each snippet rather than the compact preview.
-  Fixture seed rows also carry typed classification reasons (`concept:*`, `effect:*`, `surface:*`, `recipe:*`,
+  Fixture seed rows also carry typed classification reasons (`concept:*`, `effect:*`, `surface:*`, `app-pattern:*`,
   `contrast:*`) so a row can explain why it was admitted or downgraded without reopening the source immediately. Use
   `classificationKind=surface` and `classificationKey` for exact reason filters such as `native-value-binding`,
   `native-checked-binding`, `option-model-binding`, or `validation-binding-behavior`; the CLI also accepts the printed
   reason spelling in `classificationKey`, such as `surface:option-model-binding`. Surface reasons are local to doc code
   fences and test `createFixture(...)` call snippets; broader `describe`/`it` carrier rows can still carry effect,
-  recipe, or contrast pressure, but they should not satisfy exact surface filters. Surface reason generation lives in a
+  app-pattern, or contrast pressure, but they should not satisfy exact surface filters. Surface reason generation lives in a
   named rule table inside the corpus analysis, while filtering/matching lives in `framework-corpus-classification.ts`;
   keep those sides separate so new fixture seed surfaces do not become another long ad hoc classifier.
   Interpolation and bare `else` classification is context-aware: markup snippets can count Aurelia template syntax,
   while ordinary TypeScript template strings and JavaScript branches should not.
-  Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `recipeKey` as structural filters and `query` for
-  source/content concepts; recipe names are not allowed to make every row match a content query such as `forms`.
+  Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `appPatternKey` as structural filters and `query` for
+  source/content concepts; app-pattern names are not allowed to make every row match a content query such as `forms`.
   Use `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether the corpus snippets are being
   used as taste pressure or framework behavior pressure; documentation under testing guides is behavior-grounding
   rather than app-authoring taste. `authoring-taste` expected effects are orientation contracts, so they are not
@@ -227,7 +230,7 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `expectedEffectFilterValue`, for example `staticArgumentValues=blur` or `targetProperty=value`.
   Router fixture seeds require concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route
   config objects, or `au-viewport`; broad route/router prose remains visible as corpus navigation pressure without
-  creating routed authoring recipe pressure by itself.
+  creating routed generated-app pressure by itself.
 - Use `framework.discovery:bundles` when composition roots are the question. It separates spendable framework
   `configuration`, `registration-catalog`, and `registry` rows, so `StandardConfiguration` is a canary rather than the
   only visible composition shape. Follow bundle rows into `framework.di:world` with `configurationPackageId` and

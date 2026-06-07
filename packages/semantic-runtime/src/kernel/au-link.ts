@@ -257,6 +257,7 @@ export function auLink(id: 'i18n:TranslationBindingCommand'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindBindingCommand'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationParametersBindingCommand'): ClassDecorator;
 export function auLink(id: 'state:StateBindingBehavior'): ClassDecorator;
+export function auLink(id: 'state:fromState'): ClassDecorator;
 export function auLink(id: 'state:StateAttributePattern'): ClassDecorator;
 export function auLink(id: 'state:StateBindingCommand'): ClassDecorator;
 export function auLink(id: 'state:DispatchBindingCommand'): ClassDecorator;
@@ -266,6 +267,7 @@ export function auLink(id: 'state:StateBindingInstructionRenderer'): ClassDecora
 export function auLink(id: 'state:DispatchBindingInstructionRenderer'): ClassDecorator;
 export function auLink(id: 'state:StateBinding'): ClassDecorator;
 export function auLink(id: 'state:StateDispatchBinding'): ClassDecorator;
+export function auLink(id: 'state:StateGetterBinding'): ClassDecorator;
 export function auLink(id: 'validation-html:ValidateBindingBehavior'): ClassDecorator;
 export function auLink(id: 'validation-html:ValidationController'): ClassDecorator;
 export function auLink(id: 'validation-html:ValidationErrorsCustomAttribute'): ClassDecorator;

@@ -32,12 +32,12 @@ const allowedKnownScopeContextCalls = new Set([
 
 const allowedSourceValueKnownScopeCalls = new Set([
   'packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts#projectRuntimeBindingSourceValueContextInScope',
-  'packages/semantic-runtime/src/router/route-instruction-materialization.ts#evaluateRouterSourceExpression',
+  'packages/semantic-runtime/src/router/route-instruction-materialization.ts#routerSourceExpressionEvaluationFrame',
 ]);
 
 const allowedSourceValueProjectionCalls = new Set([
   'packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts#projectRuntimeBindingSourceValueContextInScope',
-  'packages/semantic-runtime/src/router/route-instruction-materialization.ts#evaluateRouterSourceExpression',
+  'packages/semantic-runtime/src/router/route-instruction-materialization.ts#routerSourceExpressionEvaluationFrame',
   'packages/semantic-runtime/src/template/runtime-composition-materializer.ts#RuntimeCompositionMaterializer.evaluateBinding',
 ]);
 

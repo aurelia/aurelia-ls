@@ -1,28 +1,54 @@
-import type { AppBuilderDomainPresetId } from './domain-preset.js';
+/** Primitive seed value that can be emitted directly as a TypeScript literal. */
+export type AppBuilderSeedRecordPrimitive = string | number | boolean | null;
+
+/** Public nested seed-record object shape accepted by current app-builder source lowerers. */
+export interface AppBuilderSeedRecordObject extends Readonly<Record<string, AppBuilderSeedRecordValue>> {}
+
+/** Public seed-record value shape accepted by current app-builder source lowerers. */
+export type AppBuilderSeedRecordValue =
+  | AppBuilderSeedRecordPrimitive
+  | readonly AppBuilderSeedRecordPrimitive[]
+  | AppBuilderSeedRecordObject
+  | readonly AppBuilderSeedRecordObject[];
+
+/** Public seed record keyed by generated domain identity and field members. */
+export interface AppBuilderSeedRecord extends Readonly<Record<string, AppBuilderSeedRecordValue>> {}
+
+/** Entity-scoped seed records used when one generated app fixture supplies more than one domain collection. */
+export interface AppBuilderEntitySeedRecordGroup {
+  /** Entity type name these records initialize. */
+  readonly entityName: string;
+  /** Caller-supplied records for that entity. */
+  readonly records: readonly AppBuilderSeedRecord[];
+}
 
 /** Seed data set identity; records are selected separately from the domain shape. */
 export enum AppBuilderSeedDataSetId {
-  /** Generate no starter records while keeping the domain and UI mechanics intact. */
+  /** Generate no sample records while keeping the domain and UI mechanics intact. */
   None = 'none',
-  /** Public-friendly starter records for the task-list domain. */
-  TaskListPublicSmall = 'task-list.public-small',
-  /** Internal inspection records for exercising task-list value and display flow. */
-  TaskListInspectionFlow = 'task-list.inspection-flow',
+  /** Use records supplied directly by the app-builder caller for the selected domain. */
+  CallerSupplied = 'caller-supplied',
 }
+
+/** Stable value list for app-builder seed-data-set transport schemas. */
+export const APP_BUILDER_SEED_DATA_SET_IDS = [
+  AppBuilderSeedDataSetId.None,
+  AppBuilderSeedDataSetId.CallerSupplied,
+] as const;
 
 /** Intended audience for a seed data set. */
 export enum AppBuilderSeedDataAudience {
-  /** Suitable for public starter source. */
-  PublicStarter = 'public-starter',
+  /** Suitable for public generated app source. */
+  PublicGeneratedSource = 'public-generated-source',
   /** Suitable for demos where visible sample content is expected. */
   Demo = 'demo',
-  /** Suitable for fixture/golden inspection but not ideal as generated app output. */
+  /** Suitable for pressure-fixture inspection but not ideal as generated app output. */
   InspectionFixture = 'inspection-fixture',
   /** Caller owns the records and app-builder should not invent them. */
   CallerSupplied = 'caller-supplied',
 }
 
-/** Amount of visible starter data to emit. */
+/** Amount of visible generated seed data to emit. */
 export enum AppBuilderSeedDataDensity {
   /** No records. */
   None = 'none',
@@ -44,11 +70,11 @@ export enum AppBuilderSeedDataPurpose {
   ValueFlow = 'value-flow',
   /** Exercises visual length, labels, or display variation. */
   DisplayRichness = 'display-richness',
-  /** Exercises unusual values and should stay out of public starters unless requested. */
+  /** Exercises unusual values and should stay out of public generated source unless requested. */
   EdgeCase = 'edge-case',
 }
 
-/** Seed data set that can fill starter records for a compatible domain preset. */
+/** Seed data set that can fill generated app or pressure records for a compatible domain descriptor. */
 export interface AppBuilderSeedDataSetDescriptor {
   readonly id: AppBuilderSeedDataSetId;
   readonly title: string;
@@ -56,6 +82,5 @@ export interface AppBuilderSeedDataSetDescriptor {
   readonly audience: AppBuilderSeedDataAudience;
   readonly density: AppBuilderSeedDataDensity;
   readonly purposes: readonly AppBuilderSeedDataPurpose[];
-  readonly domainPresetId?: AppBuilderDomainPresetId;
-  readonly records: readonly Record<string, string | number | boolean>[];
+  readonly records: readonly AppBuilderSeedRecord[];
 }

@@ -68,6 +68,9 @@ import type {
   StateIssueSeverity,
 } from '../state/state-issue.js';
 import type {
+  StateGetterBindingStoreResolutionKind,
+} from '../state/model.js';
+import type {
   ValidationIssueKind,
   ValidationIssuePhase,
   ValidationIssueSeverity,
@@ -242,6 +245,22 @@ import type {
   RouterModelKind,
 } from '../router/model.js';
 import type { SemanticSourceReference } from './source-reference.js';
+import type {
+  SemanticRuntimeAppBuilderQueryKind,
+  SemanticRuntimeAppBuilderQueryRequest,
+} from './app-builder.js';
+import type {
+  AppBuilderControlId,
+  AppBuilderControlSemanticValueKind,
+  AppBuilderControlTransportKind,
+} from '../app-builder/control-catalog.js';
+import type {
+  AppBuilderControlPatternId,
+  AppBuilderControlRealizationPolicyId,
+} from '../app-builder/ontology/control.js';
+import type {
+  AppBuilderControlUseActionChannelKind,
+} from '../app-builder/ontology/control-use-inventory.js';
 
 export const SEMANTIC_RUNTIME_API_VERSION = '0.1' as const;
 
@@ -305,6 +324,7 @@ export const enum SemanticAppQueryKind {
   ProxyObservableEscapes = 'proxy-observable-escapes',
   AppTopology = 'app-topology',
   StateStores = 'state-stores',
+  StateGetterBindings = 'state-getter-bindings',
   StateIssues = 'state-issues',
   I18nTranslationKeys = 'i18n-translation-keys',
   I18nTranslationBindings = 'i18n-translation-bindings',
@@ -350,6 +370,7 @@ export const enum SemanticAppQueryKind {
   BindingValueChannelSummary = 'binding-value-channel-summary',
   BindingDataFlows = 'binding-data-flows',
   BindingDataFlowSummary = 'binding-data-flow-summary',
+  ControlUseInventory = 'control-use-inventory',
   BindingObservedDependencySummary = 'binding-observed-dependency-summary',
   BindingObservedDependencies = 'binding-observed-dependencies',
 }
@@ -377,6 +398,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.ProxyObservableEscapes,
   SemanticAppQueryKind.AppTopology,
   SemanticAppQueryKind.StateStores,
+  SemanticAppQueryKind.StateGetterBindings,
   SemanticAppQueryKind.StateIssues,
   SemanticAppQueryKind.I18nTranslationKeys,
   SemanticAppQueryKind.I18nTranslationBindings,
@@ -422,6 +444,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.BindingValueChannelSummary,
   SemanticAppQueryKind.BindingDataFlows,
   SemanticAppQueryKind.BindingDataFlowSummary,
+  SemanticAppQueryKind.ControlUseInventory,
   SemanticAppQueryKind.BindingObservedDependencySummary,
   SemanticAppQueryKind.BindingObservedDependencies,
 ] as const;
@@ -530,6 +553,10 @@ export interface SemanticRuntimeContinuationRow {
   readonly targetQueryKind?: SemanticAppQueryKind | `${SemanticAppQueryKind}` | null;
   /** Fully shaped app query the caller can follow without adapter-local guessing. */
   readonly targetQuery?: SemanticAppQuery | null;
+  /** Public app-builder query kind this continuation would ask, if it maps to the app-builder surface. */
+  readonly targetAppBuilderQueryKind?: SemanticRuntimeAppBuilderQueryKind | `${SemanticRuntimeAppBuilderQueryKind}` | null;
+  /** Fully shaped app-builder query the caller can follow without adapter-local guessing. */
+  readonly targetAppBuilderQuery?: SemanticRuntimeAppBuilderQueryRequest | null;
   /** Next-move intents this continuation is intended to serve; empty means intent-neutral. */
   readonly intents: readonly InquiryContinuationIntentValue[];
   /** Coarse cost boundary for following the continuation. */
@@ -1950,6 +1977,37 @@ export interface SemanticStateStoreRow {
 
 export interface SemanticStateStoresResult {
   readonly rows: readonly SemanticStateStoreRow[];
+}
+
+export interface SemanticStateGetterBindingRow {
+  readonly projectKey: string;
+  readonly targetKind: string;
+  readonly targetName: string | null;
+  readonly storeName: string | null;
+  readonly usesDynamicStoreName: boolean;
+  readonly storeResolutionKind: StateGetterBindingStoreResolutionKind | `${StateGetterBindingStoreResolutionKind}`;
+  readonly selectorText: string;
+  readonly selectorReturnType: string | null;
+  readonly targetMemberType: string | null;
+  readonly openReason: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly selectorSource: SemanticSourceReference | null;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle;
+    readonly selectorSourceAddressHandle: AddressHandle;
+    readonly targetSourceAddressHandle: AddressHandle | null;
+    readonly storeProductHandle: ProductHandle | null;
+    readonly storeIdentityHandle: IdentityHandle | null;
+    readonly selectorReturnTypeProductHandle: ProductHandle | null;
+    readonly targetMemberTypeProductHandle: ProductHandle | null;
+  };
+}
+
+export interface SemanticStateGetterBindingsResult {
+  readonly rows: readonly SemanticStateGetterBindingRow[];
 }
 
 export interface SemanticStateIssueRow {
@@ -3547,6 +3605,79 @@ export interface SemanticBindingValueChannelRow {
 
 export interface SemanticBindingValueChannelResult {
   readonly rows: readonly SemanticBindingValueChannelRow[];
+}
+
+/** Evidence family used to classify a concrete authored control occurrence. */
+export enum SemanticControlUseClassificationKind {
+  /** Native control value channel matched the app-builder native control catalog exactly. */
+  NativeValueChannel = 'native-value-channel',
+  /** Native button-like element exposes a listener/action value channel. */
+  NativeButtonAction = 'native-button-action',
+  /** Native anchor exposes Aurelia router load navigation without a binding value channel. */
+  NativeLinkNavigation = 'native-link-navigation',
+  /** Native message element exposes a status/error role as a form-message control occurrence. */
+  NativeFormMessage = 'native-form-message',
+}
+
+/** Public read-model source for a concrete control-use inventory row. */
+export enum SemanticControlUseInventorySourceKind {
+  /** Authored template source analyzed through runtime binding/value-channel products. */
+  AuthoredRuntimeBinding = 'authored-runtime-binding',
+  /** Authored static template source analyzed through HTML/template products. */
+  AuthoredStaticTemplate = 'authored-static-template',
+}
+
+export interface SemanticControlUseInventoryRow {
+  readonly definitionName: string;
+  readonly sourceKind: SemanticControlUseInventorySourceKind | `${SemanticControlUseInventorySourceKind}`;
+  readonly classificationKind: SemanticControlUseClassificationKind | `${SemanticControlUseClassificationKind}`;
+  readonly realizationPolicyIds: readonly (AppBuilderControlRealizationPolicyId | `${AppBuilderControlRealizationPolicyId}`)[];
+  readonly controlPatternId: AppBuilderControlPatternId | `${AppBuilderControlPatternId}`;
+  readonly controlId: AppBuilderControlId | `${AppBuilderControlId}` | null;
+  readonly semanticValueKind: AppBuilderControlSemanticValueKind | `${AppBuilderControlSemanticValueKind}` | null;
+  readonly transportKind: AppBuilderControlTransportKind | `${AppBuilderControlTransportKind}` | null;
+  readonly tagName: string;
+  readonly staticType: string | null;
+  readonly hasMultiple: boolean;
+  readonly actionChannelKind: AppBuilderControlUseActionChannelKind | `${AppBuilderControlUseActionChannelKind}` | null;
+  readonly routeInstruction: string | null;
+  readonly linkText: string | null;
+  readonly buttonText: string | null;
+  readonly buttonType: string | null;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
+  readonly targetProperty: string | null;
+  readonly targetAttribute: string | null;
+  readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
+  readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
+  readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
+  readonly eventName: string | null;
+  readonly bindingExpression: string | null;
+  readonly handlerExpression: string | null;
+  readonly handlerRootName: string | null;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly sourceType: string | null;
+  readonly targetValueType: string | null;
+  readonly sourceWritable: boolean | null;
+  readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}` | null;
+  readonly sourceToTargetAssignable: boolean | null;
+  readonly targetToSourceAssignable: boolean | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly valueChannelProductHandle: ProductHandle | null;
+    readonly targetAccessProductHandle: ProductHandle | null;
+    readonly targetOperationProductHandle: ProductHandle | null;
+    readonly sourceOperationProductHandle: ProductHandle | null;
+    readonly dataFlowProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly htmlNodeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticControlUseInventoryResult {
+  readonly rows: readonly SemanticControlUseInventoryRow[];
 }
 
 export interface SemanticBindingValueChannelSummaryRow {

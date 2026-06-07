@@ -30,7 +30,8 @@ projects static type and member surfaces from the checker for template/expressio
 - Keep common ECMAScript collection/string glue in the evaluator substrate, including `Object.keys/values/entries/fromEntries`,
   `Array.from`, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/slice/sort,
   non-mutating array copy methods such as toReversed/toSorted/toSpliced/with, array push/pop/shift/unshift/splice/reverse/fill
-  mutation, and string startsWith/endsWith/includes/indexOf/split/replace/replaceAll/slice/trim/case transforms.
+  mutation, string startsWith/endsWith/includes/indexOf/split/replace/replaceAll/slice/trim/case transforms, and deterministic
+  `new Date(...)` value construction for date-only ISO strings, timezone-qualified ISO strings, and numeric epochs.
 - Preserve host-environment and external-module carriers as explicit evaluator-local boundary object/value carriers, so
   boundary-dependent expressions propagate without being mislabeled as generic dynamic branches, missing identifiers, or
   object-property fallbacks.
@@ -93,6 +94,9 @@ needed by Aurelia semantics rather than rebuilding the whole library surface.
 If an intrinsic pressure item mostly asks about generics, overloads, readonly/mutable library variants, or ordinary
 inference, stop in the type-system path instead. Evaluator intrinsics should close deterministic runtime values for
 DI/configuration/resource/template/data-flow consumers, not act as a shadow checker.
+Date construction follows this boundary: `new Date('YYYY-MM-DD')`, timezone-qualified ISO strings, and numeric epochs
+can close as evaluator-local Date values because product consumers may need those source values for app state
+construction. `new Date()`, local-time constructor overloads, and arbitrary host parsing remain runtime-open.
 
 ## Design Pressure
 
@@ -187,8 +191,11 @@ edges and must stay out of the evaluator import/export graph. Otherwise ordinary
 runtime cycles and turn closed class values into open import bindings during DI/source-value activation.
 
 `declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
-import bindings, function hoists, and top-level class bindings. Keep this separate from statement execution so module
-linkage and hoisting do not drift between `StaticEvaluator` and `StaticModuleGraphEvaluator`.
+import bindings, function hoists, and top-level class lexical cells. Top-level class declarations are declared before
+the module body runs but their static properties are not evaluated until the class declaration statement executes; do
+not read static class fields during declaration instantiation just to make class names appear hoisted. Keep this
+separate from statement execution so module linkage and hoisting do not drift between `StaticEvaluator` and
+`StaticModuleGraphEvaluator`.
 
 `commonjs.ts` owns evaluator-local CommonJS carrier semantics. `StaticEvaluator` materializes authored `exports` and
 `module` through it, and `StaticModuleGraphEvaluator` reads local CommonJS exports through the same helpers. Do not add

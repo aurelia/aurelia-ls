@@ -92,6 +92,16 @@ import {
 import {
   directDependencyDefinitions,
 } from './resource-scope-builder.js';
+import {
+  AU_COMPOSE_RESOURCE_NAME,
+  AuComposeBindableName,
+  isAuComposeFlushMode,
+  isAuComposeScopeBehavior,
+} from './au-compose-source.js';
+import {
+  isPortalInsertPosition,
+  PortalBindableName,
+} from './portal-source.js';
 
 type ClosedRuntimeControllerCreationRequest =
   RuntimeControllerCreationRequest
@@ -741,7 +751,7 @@ export class RuntimeControllerCreationMaterializer {
     controllerIssues: RuntimeControllerIssue[],
   ): void {
     if (!(definition instanceof CustomElementDefinition)
-      || definition.name !== 'au-compose'
+      || definition.name !== AU_COMPOSE_RESOURCE_NAME
       || !(creation.instruction instanceof HydrateElementInstruction)) {
       return;
     }
@@ -1094,8 +1104,8 @@ function portalTemplateControllerActivationIssues(
     readonly frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode;
     readonly instruction: SetPropertyInstruction;
   }[] = [];
-  const position = instructions.find((instruction) => instruction.targetProperty === 'position') ?? null;
-  if (position != null && !isValidPortalInsertPosition(position.value)) {
+  const position = instructions.find((instruction) => instruction.targetProperty === PortalBindableName.Position) ?? null;
+  if (position != null && !isPortalInsertPosition(position.value)) {
     issues.push({
       kind: RuntimeControllerIssueKind.PortalInvalidInsertPosition,
       message: `Invalid portal insertion position "${position.value}".`,
@@ -1104,12 +1114,12 @@ function portalTemplateControllerActivationIssues(
     });
   }
 
-  const strict = instructions.find((instruction) => instruction.targetProperty === 'strict') ?? null;
+  const strict = instructions.find((instruction) => instruction.targetProperty === PortalBindableName.Strict) ?? null;
   if (strict == null || !staticPortalStrictValue(strict.value)) {
     return issues;
   }
 
-  const target = instructions.find((instruction) => instruction.targetProperty === 'target') ?? null;
+  const target = instructions.find((instruction) => instruction.targetProperty === PortalBindableName.Target) ?? null;
   if (target?.value === '') {
     issues.push({
       kind: RuntimeControllerIssueKind.PortalQueryEmpty,
@@ -1138,13 +1148,6 @@ function staticSetPropertyInstructions(
     .filter((instruction): instruction is SetPropertyInstruction => instruction instanceof SetPropertyInstruction);
 }
 
-function isValidPortalInsertPosition(value: string): boolean {
-  return value === 'beforeend'
-    || value === 'afterbegin'
-    || value === 'beforebegin'
-    || value === 'afterend';
-}
-
 function staticPortalStrictValue(value: string): boolean {
   return value.length > 0;
 }
@@ -1157,16 +1160,16 @@ function auComposeBindableSetIssue(
   readonly frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode;
 } | null {
   switch (instruction.targetProperty) {
-    case 'scopeBehavior':
-      return instruction.value === 'scoped' || instruction.value === 'auto'
+    case AuComposeBindableName.ScopeBehavior:
+      return isAuComposeScopeBehavior(instruction.value)
         ? null
         : {
             kind: RuntimeControllerIssueKind.AuComposeInvalidScopeBehavior,
             message: `Invalid au-compose scopeBehavior value "${instruction.value}". Expected "scoped" or "auto".`,
             frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode.AuComposeInvalidScopeBehavior,
           };
-    case 'flushMode':
-      return instruction.value === 'sync' || instruction.value === 'async'
+    case AuComposeBindableName.FlushMode:
+      return isAuComposeFlushMode(instruction.value)
         ? null
         : {
             kind: RuntimeControllerIssueKind.AuComposeInvalidFlushMode,
@@ -1186,7 +1189,7 @@ function auComposeComponentLookupIssue(
   readonly message: string;
   readonly frameworkErrorCode: RuntimeHtmlControllerFrameworkErrorCode;
 } | null {
-  if (instruction.targetProperty !== 'component') {
+  if (instruction.targetProperty !== AuComposeBindableName.Component) {
     return null;
   }
 

@@ -103,23 +103,43 @@ function fixtureRootsForName(name, config) {
   const candidates = fixtureRootCandidatesForName(name, config);
   const roots = candidates.filter((candidate) => existsSync(candidate) && fixtureRootHasFiles(candidate));
   if (roots.length === 0) {
-    throw new Error(`No pressure fixture matched '${name}'. Use pressure:<name> or --root <path>.`);
+    throw new Error(`No ${config.label} fixture matched '${name}'. Use ${fixtureNameHelp(config)} or --root <path>.`);
   }
   return roots;
 }
 
 function fixtureRootCandidatesForName(name, config) {
-  if (name.startsWith('pressure:')) {
-    return [path.join(config.pressureFixtureRoot, name.slice('pressure:'.length))];
+  const separatorIndex = name.indexOf(':');
+  if (separatorIndex > 0) {
+    const prefix = name.slice(0, separatorIndex);
+    const entryName = name.slice(separatorIndex + 1);
+    const collection = namedFixtureCollections(config).find((candidate) => candidate.prefix === prefix);
+    return collection == null
+      ? []
+      : [path.join(collection.rootDir, entryName)];
   }
   return [path.join(config.pressureFixtureRoot, name)];
 }
 
 function fixtureCollectionRootsFor(root, config) {
-  if (samePath(root, config.pressureFixtureRoot)) {
-    return fixtureChildRoots(config.pressureFixtureRoot);
+  const collection = namedFixtureCollections(config).find((candidate) => samePath(root, candidate.rootDir));
+  if (collection != null) {
+    return fixtureChildRoots(collection.rootDir);
   }
   return [root];
+}
+
+function namedFixtureCollections(config) {
+  return [
+    { prefix: 'pressure', rootDir: config.pressureFixtureRoot },
+    ...(config.fixtureCollections ?? []),
+  ];
+}
+
+function fixtureNameHelp(config) {
+  return namedFixtureCollections(config)
+    .map((collection) => `${collection.prefix}:<name>`)
+    .join(', ');
 }
 
 function uniqueSortedPaths(paths) {

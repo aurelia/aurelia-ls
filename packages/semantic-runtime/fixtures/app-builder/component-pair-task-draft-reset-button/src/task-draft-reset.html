@@ -1,0 +1,12 @@
+<form submit.trigger="saveDraft()">
+  <div>
+    <label for="title-field">Title</label>
+    <input value.bind="title" id="title-field">
+  </div>
+  <div>
+    <label for="done-field">Done</label>
+    <input type="checkbox" checked.bind="done" id="done-field">
+  </div>
+  <button type="submit">Save draft</button>
+</form>
+<button type="button" click.trigger="resetDraft()">Reset draft</button>

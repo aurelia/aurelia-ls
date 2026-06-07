@@ -1,0 +1,10 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<ul else>
+  <li repeat.for="taskItem of taskItems">
+    <strong>${taskItem.title}</strong>
+    <span>
+      Done:
+      <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+    </span>
+  </li>
+</ul>

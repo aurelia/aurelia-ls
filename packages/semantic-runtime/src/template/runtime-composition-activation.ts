@@ -88,9 +88,8 @@ export function activationModelHandoffForType(
     );
   }
 
-  const activationTarget = activationTargetForCarrier(targetCarrier);
-  const activate = activationTarget.activate;
-  if (activate == null) {
+  const activate = activateMethodProjection(targetCarrier);
+  if (activate.kind === 'absent') {
     return new CompositionActivationModelHandoff(
       CompositionActivateMethodKind.Absent,
       CompositionActivationModelHandoffKind.ActivateAbsent,
@@ -101,47 +100,32 @@ export function activationModelHandoffForType(
     );
   }
 
-  const location = activate.valueDeclaration
-    ?? activate.declarations?.[0]
-    ?? activationTarget.declarations[0]
-    ?? null;
-  if (location == null) {
+  if (activate.kind === 'open') {
     return openActivationHandoff(
       CompositionActivateMethodKind.Open,
-      CompositionActivationModelHandoffKind.Open,
+      activate.handoffKind,
       model.sourceType,
-      'Resolved component activate member had no declaration location for callable type analysis.',
-    );
-  }
-
-  const activateType = checkerSymbolValueType(targetCarrier.checker, activate, location);
-  if (activateType == null) {
-    return openActivationHandoff(
-      CompositionActivateMethodKind.Open,
-      CompositionActivationModelHandoffKind.ActivationParameterOpen,
-      model.sourceType,
-      'Resolved component activate member had no readable value type.',
-    );
-  }
-  const signatures = checkerCallableContextSignatures(targetCarrier.checker, activateType);
-  if (signatures.length === 0) {
-    return openActivationHandoff(
-      CompositionActivateMethodKind.Open,
-      CompositionActivationModelHandoffKind.ActivationParameterOpen,
-      model.sourceType,
-      'Resolved component activate member was not callable.',
+      activate.openReason,
     );
   }
 
   const parameterProjection = activationParameterTypeReference(
     store,
-    targetCarrier.checker,
-    signatures,
+    activate.checker,
+    activate.signatures,
     localKey,
     sourceAddressHandle,
     ownerIdentityHandle,
-    location,
+    activate.location,
   );
+  return activationModelHandoffForParameterProjection(store, model, parameterProjection);
+}
+
+function activationModelHandoffForParameterProjection(
+  store: KernelStore,
+  model: CompositionModelEvaluation,
+  parameterProjection: ActivationParameterProjection,
+): CompositionActivationModelHandoff {
   if (parameterProjection.kind === 'open') {
     return openActivationHandoff(
       CompositionActivateMethodKind.Present,
@@ -213,6 +197,74 @@ type ActivationParameterProjection =
     readonly openReason: string;
   };
 
+type ActivateMethodProjection =
+  | {
+    readonly kind: 'absent';
+  }
+  | {
+    readonly kind: 'open';
+    readonly handoffKind: CompositionActivationModelHandoffKind;
+    readonly openReason: string;
+  }
+  | {
+    readonly kind: 'present';
+    readonly checker: ts.TypeChecker;
+    readonly signatures: readonly ts.Signature[];
+    readonly location: ts.Node;
+  };
+
+interface ActivationParameterProjectionFrame {
+  readonly candidates: ReturnType<typeof checkerSignatureCandidateBasis>;
+  readonly parameterReferences: readonly CheckerTypeReference[];
+}
+
+function activateMethodProjection(
+  targetCarrier: NonNullable<CheckerTypeShape['carrier']>,
+): ActivateMethodProjection {
+  const activationTarget = activationTargetForCarrier(targetCarrier);
+  const activate = activationTarget.activate;
+  if (activate == null) {
+    return { kind: 'absent' };
+  }
+
+  const location = activate.valueDeclaration
+    ?? activate.declarations?.[0]
+    ?? activationTarget.declarations[0]
+    ?? null;
+  if (location == null) {
+    return {
+      kind: 'open',
+      handoffKind: CompositionActivationModelHandoffKind.Open,
+      openReason: 'Resolved component activate member had no declaration location for callable type analysis.',
+    };
+  }
+
+  const activateType = checkerSymbolValueType(targetCarrier.checker, activate, location);
+  if (activateType == null) {
+    return {
+      kind: 'open',
+      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      openReason: 'Resolved component activate member had no readable value type.',
+    };
+  }
+
+  const signatures = checkerCallableContextSignatures(targetCarrier.checker, activateType);
+  if (signatures.length === 0) {
+    return {
+      kind: 'open',
+      handoffKind: CompositionActivationModelHandoffKind.ActivationParameterOpen,
+      openReason: 'Resolved component activate member was not callable.',
+    };
+  }
+
+  return {
+    kind: 'present',
+    checker: targetCarrier.checker,
+    signatures,
+    location,
+  };
+}
+
 function activationParameterTypeReference(
   store: KernelStore,
   checker: ts.TypeChecker,
@@ -222,35 +274,21 @@ function activationParameterTypeReference(
   ownerIdentityHandle: IdentityHandle | null,
   fallbackLocation: ts.Node,
 ): ActivationParameterProjection {
-  const candidates = checkerSignatureCandidateBasis(signatures, 1);
-  const parameterReferences = candidates
-    .map((candidate) => activateParameterReference(
-      store,
-      checker,
-      candidate.signature,
-      candidate.signatureIndex,
-      localKey,
-      sourceAddressHandle,
-      ownerIdentityHandle,
-      fallbackLocation,
-    ))
-    .filter((reference): reference is CheckerTypeReference => reference != null);
-
-  if (parameterReferences.length === 0) {
-    return candidates.every((candidate) => candidate.signature.getParameters().length === 0)
-      ? { kind: 'parameterless' }
-      : {
-        kind: 'open',
-        openReason: 'Resolved component activate parameter had no readable value type.',
-      };
-  }
-  if (parameterReferences.length !== candidates.length) {
-    return {
-      kind: 'open',
-      openReason: 'Resolved component activate overloads were only partially readable.',
-    };
+  const frame = activationParameterProjectionFrame(
+    store,
+    checker,
+    signatures,
+    localKey,
+    sourceAddressHandle,
+    ownerIdentityHandle,
+    fallbackLocation,
+  );
+  const issue = activationParameterProjectionIssue(frame);
+  if (issue != null) {
+    return issue;
   }
 
+  const parameterReferences = frame.parameterReferences;
   const common = commonTypeReference(parameterReferences, parameterReferences.length);
   if (common != null) {
     return {
@@ -282,6 +320,54 @@ function activationParameterTypeReference(
     kind: 'parameter',
     parameterType: unionReference,
   };
+}
+
+function activationParameterProjectionFrame(
+  store: KernelStore,
+  checker: ts.TypeChecker,
+  signatures: readonly ts.Signature[],
+  localKey: string,
+  sourceAddressHandle: AddressHandle | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  fallbackLocation: ts.Node,
+): ActivationParameterProjectionFrame {
+  const candidates = checkerSignatureCandidateBasis(signatures, 1);
+  const parameterReferences = candidates
+    .map((candidate) => activateParameterReference(
+      store,
+      checker,
+      candidate.signature,
+      candidate.signatureIndex,
+      localKey,
+      sourceAddressHandle,
+      ownerIdentityHandle,
+      fallbackLocation,
+    ))
+    .filter((reference): reference is CheckerTypeReference => reference != null);
+  return {
+    candidates,
+    parameterReferences,
+  };
+}
+
+function activationParameterProjectionIssue(
+  frame: ActivationParameterProjectionFrame,
+): ActivationParameterProjection | null {
+  if (frame.parameterReferences.length === 0) {
+    return frame.candidates.every((candidate) => candidate.signature.getParameters().length === 0)
+      ? { kind: 'parameterless' }
+      : {
+        kind: 'open',
+        openReason: 'Resolved component activate parameter had no readable value type.',
+      };
+  }
+  if (frame.parameterReferences.length !== frame.candidates.length) {
+    return {
+      kind: 'open',
+      openReason: 'Resolved component activate overloads were only partially readable.',
+    };
+  }
+  return null;
 }
 
 function activateParameterReference(

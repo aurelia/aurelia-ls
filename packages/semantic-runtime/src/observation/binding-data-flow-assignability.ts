@@ -14,6 +14,7 @@ import {
 } from '../type-system/checker-collection-types.js';
 import {
   CheckerTypeNullishPresence,
+  checkerStringIndexInfo,
   checkerTypeNullishPresence,
 } from '../type-system/checker-related-types.js';
 import {
@@ -25,8 +26,14 @@ import {
   checkerStringLiteralAssignableToType,
 } from '../type-system/checker-primitive-types.js';
 import type {
+  CheckerTypeCarrier,
   CheckerTypeReference,
   CheckerTypeShape,
+} from '../type-system/type-shape.js';
+import {
+  checkerIndexedAccessSupportsString,
+  CheckerTypeProjectionOrigin,
+  CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import type {
   KernelStore,
@@ -60,6 +67,11 @@ export type BindingDataFlowAssignability = {
   readonly sourceToTargetTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
   readonly targetToSourceTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
 };
+
+interface StringIndexedTargetValue {
+  readonly reference: CheckerTypeReference | null;
+  readonly carrier: CheckerTypeCarrier | null;
+}
 
 /** Evaluates source/target assignability using observer value-channel and TypeChecker facts. */
 export class BindingDataFlowAssignabilityEvaluator {
@@ -124,7 +136,7 @@ export class BindingDataFlowAssignabilityEvaluator {
     targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
-    const observerSync = this.observerSourceToTargetRuntimeAcceptance(sourceType, valueChannel);
+    const observerSync = this.observerSourceToTargetRuntimeAcceptance(sourceType, targetType, valueChannel);
     if (observerSync != null) {
       return observerSync;
     }
@@ -153,6 +165,7 @@ export class BindingDataFlowAssignabilityEvaluator {
 
   private observerSourceToTargetRuntimeAcceptance(
     sourceType: CheckerTypeReference | null,
+    targetType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
     if (sourceType == null || valueChannel == null) {
@@ -167,9 +180,94 @@ export class BindingDataFlowAssignabilityEvaluator {
       case RuntimeBindingValueChannelKind.CheckedBoolean:
       case RuntimeBindingValueChannelKind.CheckedDynamicModelValue:
         return true;
+      case RuntimeBindingValueChannelKind.RouterParameters:
+        return this.isSyntheticObjectAssignableToStringIndexedTarget(sourceType, targetType);
       default:
         return null;
     }
+  }
+
+  private isSyntheticObjectAssignableToStringIndexedTarget(
+    sourceType: CheckerTypeReference | null,
+    targetType: CheckerTypeReference | null,
+  ): boolean | null {
+    const sourceShape = this.typeAccess.readTypeShape(sourceType);
+    const targetShape = this.typeAccess.readTypeShape(targetType);
+    if (sourceShape == null || targetShape == null) {
+      return null;
+    }
+    if (sourceShape.shapeKind === CheckerTypeShapeKind.Any) {
+      return true;
+    }
+    if (sourceShape.shapeKind !== CheckerTypeShapeKind.Object
+      || sourceShape.origin !== CheckerTypeProjectionOrigin.SyntheticExpressionType) {
+      return null;
+    }
+    const targetIndexedValue = this.stringIndexedTargetValue(targetShape);
+    if (targetIndexedValue.reference == null && targetIndexedValue.carrier == null) {
+      return null;
+    }
+    const indexedSourceAssignable = sourceShape.indexedValueType != null
+      && checkerIndexedAccessSupportsString(sourceShape.indexedAccessKeyKind)
+      ? this.isTypeAssignableToStringIndexedTarget(sourceShape.indexedValueType, targetIndexedValue)
+      : null;
+    if (indexedSourceAssignable === false) {
+      return false;
+    }
+    let sawOpenMember = indexedSourceAssignable == null && sourceShape.indexedValueType != null;
+    for (const member of sourceShape.members) {
+      if (member.valueType == null) {
+        sawOpenMember = true;
+        continue;
+      }
+      const memberAssignable = this.isTypeAssignableToStringIndexedTarget(member.valueType, targetIndexedValue);
+      if (memberAssignable === false) {
+        return false;
+      }
+      if (memberAssignable == null) {
+        sawOpenMember = true;
+      }
+    }
+    return sawOpenMember ? null : true;
+  }
+
+  private stringIndexedTargetValue(targetShape: CheckerTypeShape): StringIndexedTargetValue {
+    const carrier = targetShape.carrier;
+    const nonNullishType = carrier == null
+      ? null
+      : carrier.checker.getNonNullableType(carrier.type);
+    const indexInfo = carrier == null || nonNullishType == null
+      ? null
+      : checkerStringIndexInfo(carrier.checker, nonNullishType);
+    return {
+      reference: checkerIndexedAccessSupportsString(targetShape.indexedAccessKeyKind)
+        ? targetShape.indexedValueType
+        : null,
+      carrier: indexInfo == null || carrier == null
+        ? null
+        : {
+          checker: carrier.checker,
+          type: indexInfo.type,
+          symbol: null,
+          declarations: indexInfo.declaration == null ? [] : [indexInfo.declaration],
+        },
+    };
+  }
+
+  private isTypeAssignableToStringIndexedTarget(
+    from: CheckerTypeReference | null,
+    target: StringIndexedTargetValue,
+  ): boolean | null {
+    const referenceAssignable = target.reference == null
+      ? null
+      : this.isTypeAssignable(from, target.reference);
+    if (referenceAssignable != null) {
+      return referenceAssignable;
+    }
+    const fromCarrier = this.typeAccess.readTypeShape(from)?.carrier ?? null;
+    return fromCarrier == null || target.carrier == null || fromCarrier.checker !== target.carrier.checker
+      ? null
+      : checkerRawTypeAssignable(fromCarrier.checker, fromCarrier.type, target.carrier.type);
   }
 
   private isTargetAssignableToSource(

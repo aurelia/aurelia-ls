@@ -5,6 +5,8 @@ import { AureliaMcpSemanticRuntimeAdapter } from '../runtime-adapter.js';
 import { aureliaMcpResultText } from '../result-text.js';
 import {
   appDiagnosticsInputSchema,
+  appBuilderCatalogInputSchema,
+  appBuilderQueryInputSchema,
   appOverviewInputSchema,
   appQueryCatalogInputSchema,
   appQueryBatchInputSchema,
@@ -21,6 +23,8 @@ import {
 import { aureliaMcpToolNames } from '../tool-contracts.js';
 import type {
   AureliaMcpAppDiagnosticsInput,
+  AureliaMcpAppBuilderCatalogInput,
+  AureliaMcpAppBuilderQueryInput,
   AureliaMcpAppOverviewInput,
   AureliaMcpAppQueryBatchInput,
   AureliaMcpAppQueryInput,
@@ -40,6 +44,8 @@ const commandInputSchemas = {
   'analysis-cache-overview': z.object(analysisCacheOverviewInputSchema).strict(),
   'clear-analysis-cache': z.object(clearAnalysisCacheInputSchema).strict(),
   'app-query-catalog': z.object(appQueryCatalogInputSchema).strict(),
+  'app-builder-catalog': z.object(appBuilderCatalogInputSchema).strict(),
+  'app-builder-query': z.object(appBuilderQueryInputSchema).strict(),
   'app-overview': z.object(appOverviewInputSchema).strict(),
   'router-overview': z.object(routerOverviewInputSchema).strict(),
   'app-query': z.object(appQueryInputSchema).strict(),
@@ -57,6 +63,8 @@ const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas>
   [aureliaMcpToolNames.analysisCacheOverview]: 'analysis-cache-overview',
   [aureliaMcpToolNames.clearAnalysisCache]: 'clear-analysis-cache',
   [aureliaMcpToolNames.appQueryCatalog]: 'app-query-catalog',
+  [aureliaMcpToolNames.appBuilderCatalog]: 'app-builder-catalog',
+  [aureliaMcpToolNames.appBuilderQuery]: 'app-builder-query',
   [aureliaMcpToolNames.appOverview]: 'app-overview',
   [aureliaMcpToolNames.routerOverview]: 'router-overview',
   [aureliaMcpToolNames.appQuery]: 'app-query',
@@ -105,6 +113,10 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
       return adapter.clearAnalysisCache(input as unknown as AureliaMcpClearAnalysisCacheInput);
     case 'app-query-catalog':
       return adapter.appQueryCatalog(input as unknown as AureliaMcpAppQueryCatalogInput);
+    case 'app-builder-catalog':
+      return adapter.appBuilderCatalog(input as unknown as AureliaMcpAppBuilderCatalogInput);
+    case 'app-builder-query':
+      return adapter.appBuilderQuery(input as unknown as AureliaMcpAppBuilderQueryInput);
     case 'app-query':
       return adapter.appQuery(input as unknown as AureliaMcpAppQueryInput);
     case 'app-query-batch':
@@ -443,7 +455,7 @@ function readBooleanOption(
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:invoke -- <command> --workspaceRoot <path> [options]',
-    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
+    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, app-builder-catalog, app-builder-query, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
     'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',

@@ -1,0 +1,25 @@
+<section promise.bind="taskItemsPromise" class="service-task-table__status">
+  <p pending>Loading tasks...</p>
+  <template then="loadedTaskItems">
+    <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+    <template else>
+      <table class="service-task-table__table" data-au-role="service-backed-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Done</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="taskItem of loadedTaskItems" class="service-task-table__row">
+            <td>${taskItem.title}</td>
+            <td>
+              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+  </template>
+  <p catch="error">Could not load tasks.</p>
+</section>

@@ -23,9 +23,67 @@ export const enum BuiltInResourcePackage {
   ValidationHtml = 'validation-html',
 }
 
+/** Stable value list for public schemas and catalog filters that cannot reflect over const enums. */
+export const BUILT_IN_RESOURCE_PACKAGES = [
+  BuiltInResourcePackage.RuntimeHtml,
+  BuiltInResourcePackage.I18n,
+  BuiltInResourcePackage.Router,
+  BuiltInResourcePackage.UiVirtualization,
+  BuiltInResourcePackage.State,
+  BuiltInResourcePackage.ValidationHtml,
+] as const;
+
 export const enum BuiltInResourceGroup {
   /** Default resources admitted by the package's standard configuration. */
   DefaultResources = 'default-resources',
+}
+
+export enum BuiltInBindingBehaviorName {
+  /** Runtime-html `& attr` behavior that forces attribute binding. */
+  Attr = 'attr',
+  /** Runtime-html `& debounce` behavior that delays binding updates. */
+  Debounce = 'debounce',
+  /** I18n `& df` behavior that projects through the date-format value converter. */
+  DateFormat = 'df',
+  /** Runtime-html `& fromView` behavior that forces target-to-source flow. */
+  FromView = 'fromView',
+  /** I18n `& nf` behavior that projects through the number-format value converter. */
+  NumberFormat = 'nf',
+  /** Runtime-html `& oneTime` behavior that evaluates once. */
+  OneTime = 'oneTime',
+  /** I18n `& rt` behavior that projects through the relative-time value converter. */
+  RelativeTime = 'rt',
+  /** Runtime-html `& self` behavior that filters listener events to the element itself. */
+  Self = 'self',
+  /** Runtime-html `& signal` behavior that re-evaluates on named signals. */
+  Signal = 'signal',
+  /** State `& state` behavior that evaluates against a configured state store scope. */
+  State = 'state',
+  /** Runtime-html `& throttle` behavior that rate-limits binding updates. */
+  Throttle = 'throttle',
+  /** Runtime-html `& toView` behavior that forces source-to-target flow. */
+  ToView = 'toView',
+  /** I18n `& t` behavior that projects through the translation value converter. */
+  Translation = 't',
+  /** Runtime-html `& twoWay` behavior that forces two-way flow. */
+  TwoWay = 'twoWay',
+  /** Runtime-html `& updateTrigger` behavior that changes the target observer events. */
+  UpdateTrigger = 'updateTrigger',
+  /** Validation-html `& validate` behavior that attaches validation to a binding. */
+  Validate = 'validate',
+}
+
+export enum BuiltInValueConverterName {
+  /** I18n `| df` converter that formats date-like values. */
+  DateFormat = 'df',
+  /** I18n `| nf` converter that formats numbers. */
+  NumberFormat = 'nf',
+  /** I18n `| rt` converter that formats dates as relative time. */
+  RelativeTime = 'rt',
+  /** Runtime-html `| sanitize` converter that delegates to ISanitizer. */
+  Sanitize = 'sanitize',
+  /** I18n `| t` converter that translates keys. */
+  Translation = 't',
 }
 
 export type BuiltInResourceField =
@@ -53,7 +111,7 @@ export type ConfiguredBuiltInResourceCatalogSelectionField =
 export class RuntimeHtmlDebounceBindingBehaviorResource {
   readonly targetName = 'DebounceBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'debounce';
+  readonly name = BuiltInBindingBehaviorName.Debounce;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -70,7 +128,7 @@ export class RuntimeHtmlDebounceBindingBehaviorResource {
 export class RuntimeHtmlOneTimeBindingBehaviorResource {
   readonly targetName = 'OneTimeBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'oneTime';
+  readonly name = BuiltInBindingBehaviorName.OneTime;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -87,7 +145,7 @@ export class RuntimeHtmlOneTimeBindingBehaviorResource {
 export class RuntimeHtmlToViewBindingBehaviorResource {
   readonly targetName = 'ToViewBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'toView';
+  readonly name = BuiltInBindingBehaviorName.ToView;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -104,7 +162,7 @@ export class RuntimeHtmlToViewBindingBehaviorResource {
 export class RuntimeHtmlFromViewBindingBehaviorResource {
   readonly targetName = 'FromViewBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'fromView';
+  readonly name = BuiltInBindingBehaviorName.FromView;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -121,7 +179,7 @@ export class RuntimeHtmlFromViewBindingBehaviorResource {
 export class RuntimeHtmlSignalBindingBehaviorResource {
   readonly targetName = 'SignalBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'signal';
+  readonly name = BuiltInBindingBehaviorName.Signal;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -138,7 +196,7 @@ export class RuntimeHtmlSignalBindingBehaviorResource {
 export class RuntimeHtmlThrottleBindingBehaviorResource {
   readonly targetName = 'ThrottleBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'throttle';
+  readonly name = BuiltInBindingBehaviorName.Throttle;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -155,7 +213,7 @@ export class RuntimeHtmlThrottleBindingBehaviorResource {
 export class RuntimeHtmlTwoWayBindingBehaviorResource {
   readonly targetName = 'TwoWayBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'twoWay';
+  readonly name = BuiltInBindingBehaviorName.TwoWay;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -172,7 +230,7 @@ export class RuntimeHtmlTwoWayBindingBehaviorResource {
 export class RuntimeHtmlAttrBindingBehaviorResource {
   readonly targetName = 'AttrBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'attr';
+  readonly name = BuiltInBindingBehaviorName.Attr;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -189,7 +247,7 @@ export class RuntimeHtmlAttrBindingBehaviorResource {
 export class RuntimeHtmlSelfBindingBehaviorResource {
   readonly targetName = 'SelfBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'self';
+  readonly name = BuiltInBindingBehaviorName.Self;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -206,7 +264,7 @@ export class RuntimeHtmlSelfBindingBehaviorResource {
 export class RuntimeHtmlUpdateTriggerBindingBehaviorResource {
   readonly targetName = 'UpdateTriggerBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'updateTrigger';
+  readonly name = BuiltInBindingBehaviorName.UpdateTrigger;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -223,7 +281,7 @@ export class RuntimeHtmlUpdateTriggerBindingBehaviorResource {
 export class RuntimeHtmlSanitizeValueConverterResource {
   readonly targetName = 'SanitizeValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
-  readonly name = 'sanitize';
+  readonly name = BuiltInValueConverterName.Sanitize;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.RuntimeHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -512,7 +570,7 @@ export class RuntimeHtmlAuSlotResource {
 export class I18nTranslationValueConverterResource {
   readonly targetName = 'TranslationValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
-  readonly name = 't';
+  readonly name = BuiltInValueConverterName.Translation;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -529,7 +587,7 @@ export class I18nTranslationValueConverterResource {
 export class I18nTranslationBindingBehaviorResource {
   readonly targetName = 'TranslationBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 't';
+  readonly name = BuiltInBindingBehaviorName.Translation;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -546,7 +604,7 @@ export class I18nTranslationBindingBehaviorResource {
 export class I18nDateFormatValueConverterResource {
   readonly targetName = 'DateFormatValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
-  readonly name = 'df';
+  readonly name = BuiltInValueConverterName.DateFormat;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -563,7 +621,7 @@ export class I18nDateFormatValueConverterResource {
 export class I18nDateFormatBindingBehaviorResource {
   readonly targetName = 'DateFormatBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'df';
+  readonly name = BuiltInBindingBehaviorName.DateFormat;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -580,7 +638,7 @@ export class I18nDateFormatBindingBehaviorResource {
 export class I18nNumberFormatValueConverterResource {
   readonly targetName = 'NumberFormatValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
-  readonly name = 'nf';
+  readonly name = BuiltInValueConverterName.NumberFormat;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -597,7 +655,7 @@ export class I18nNumberFormatValueConverterResource {
 export class I18nNumberFormatBindingBehaviorResource {
   readonly targetName = 'NumberFormatBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'nf';
+  readonly name = BuiltInBindingBehaviorName.NumberFormat;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -614,7 +672,7 @@ export class I18nNumberFormatBindingBehaviorResource {
 export class I18nRelativeTimeValueConverterResource {
   readonly targetName = 'RelativeTimeValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
-  readonly name = 'rt';
+  readonly name = BuiltInValueConverterName.RelativeTime;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -631,7 +689,7 @@ export class I18nRelativeTimeValueConverterResource {
 export class I18nRelativeTimeBindingBehaviorResource {
   readonly targetName = 'RelativeTimeBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'rt';
+  readonly name = BuiltInBindingBehaviorName.RelativeTime;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.I18n;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -648,7 +706,7 @@ export class I18nRelativeTimeBindingBehaviorResource {
 export class StateBindingBehaviorResource {
   readonly targetName = 'StateBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'state';
+  readonly name = BuiltInBindingBehaviorName.State;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.State;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -665,7 +723,7 @@ export class StateBindingBehaviorResource {
 export class ValidationHtmlValidateBindingBehaviorResource {
   readonly targetName = 'ValidateBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
-  readonly name = 'validate';
+  readonly name = BuiltInBindingBehaviorName.Validate;
   readonly aliases: readonly string[] = [];
   readonly packageId = BuiltInResourcePackage.ValidationHtml;
   readonly group = BuiltInResourceGroup.DefaultResources;
@@ -761,6 +819,12 @@ export interface BuiltInResourceCatalogInput {
   readonly packageId: BuiltInResourcePackage;
   readonly group: BuiltInResourceGroup;
   readonly resources: readonly BuiltInResource[];
+}
+
+export interface BuiltInResourceLookupKey {
+  readonly packageId: BuiltInResourcePackage;
+  readonly resourceKind: ResourceDefinitionKind;
+  readonly name: string;
 }
 
 export class BuiltInResourceCatalog {
@@ -966,3 +1030,51 @@ export const StateBuiltInResourceCatalogs = {
     ],
   },
 } as const satisfies Record<string, BuiltInResourceCatalogInput>;
+
+/** Public package module that owns a built-in resource package. */
+export function builtInResourcePackageModuleSpecifier(
+  packageId: BuiltInResourcePackage,
+): string {
+  switch (packageId) {
+    case BuiltInResourcePackage.RuntimeHtml:
+      return '@aurelia/runtime-html';
+    case BuiltInResourcePackage.I18n:
+      return '@aurelia/i18n';
+    case BuiltInResourcePackage.Router:
+      return '@aurelia/router';
+    case BuiltInResourcePackage.UiVirtualization:
+      return '@aurelia/ui-virtualization';
+    case BuiltInResourcePackage.State:
+      return '@aurelia/state';
+    case BuiltInResourcePackage.ValidationHtml:
+      return '@aurelia/validation-html';
+  }
+}
+
+/** All built-in resource catalog inputs known to semantic-runtime. */
+export function allBuiltInResourceCatalogInputs(): readonly BuiltInResourceCatalogInput[] {
+  return [
+    RuntimeHtmlBuiltInResourceCatalogs.DefaultResources,
+    I18nBuiltInResourceCatalogs.DefaultResources,
+    ValidationHtmlBuiltInResourceCatalogs.DefaultResources,
+    RouterBuiltInResourceCatalogs.DefaultResources,
+    UiVirtualizationBuiltInResourceCatalogs.DefaultResources,
+    StateBuiltInResourceCatalogs.DefaultResources,
+  ];
+}
+
+/** All built-in resource headers known to semantic-runtime. */
+export function allBuiltInResources(): readonly BuiltInResource[] {
+  return allBuiltInResourceCatalogInputs().flatMap((catalog) => catalog.resources);
+}
+
+/** Find a built-in resource by its package/kind/name catalog identity. */
+export function findBuiltInResource(
+  key: BuiltInResourceLookupKey,
+): BuiltInResource | null {
+  return allBuiltInResources().find((resource) =>
+    resource.packageId === key.packageId
+    && resource.resourceKind === key.resourceKind
+    && resource.name === key.name
+  ) ?? null;
+}

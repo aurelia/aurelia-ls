@@ -18,7 +18,10 @@ import {
   type ClaimPredicateKey,
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
-import { sourceAddressRecordsForRuntimeExpressionBounds } from '../template/runtime-expression-source-address.js';
+import {
+  sourceAddressRecordsForRuntimeExpressionBounds,
+  type RuntimeExpressionSourceAddress,
+} from '../template/runtime-expression-source-address.js';
 import {
   runtimeObservedDependencyIdentityLocalName,
   type RuntimeObservedDependencyDraft,
@@ -51,10 +54,22 @@ export interface RuntimeObservedDependencyPublicationInput {
   readonly claims: readonly RuntimeObservedDependencyPublicationClaim[];
 }
 
+interface RuntimeObservedDependencyPublicationFrame {
+  readonly dependencySource: RuntimeExpressionSourceAddress;
+  readonly claims: readonly SemanticClaim[];
+}
+
 /** Publish a runtime observed-dependency product plus owner-specific usage claims. */
 export function runtimeObservedDependencyRecords(
   input: RuntimeObservedDependencyPublicationInput,
 ): readonly KernelStoreRecord[] {
+  const frame = runtimeObservedDependencyPublicationFrame(input);
+  return runtimeObservedDependencyKernelRecords(input, frame);
+}
+
+function runtimeObservedDependencyPublicationFrame(
+  input: RuntimeObservedDependencyPublicationInput,
+): RuntimeObservedDependencyPublicationFrame {
   const dependencySource = sourceAddressRecordsForRuntimeExpressionBounds(
     input.store,
     input.dependency.sourceAddressHandle,
@@ -69,28 +84,35 @@ export function runtimeObservedDependencyRecords(
     input.dependency.productHandle,
     input.provenanceHandle,
   ));
+  return { dependencySource, claims };
+}
+
+function runtimeObservedDependencyKernelRecords(
+  input: RuntimeObservedDependencyPublicationInput,
+  frame: RuntimeObservedDependencyPublicationFrame,
+): readonly KernelStoreRecord[] {
   return [
-    ...dependencySource.records,
+    ...frame.dependencySource.records,
     new CompilerIdentity(
       input.dependency.identityHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.owner.identityHandle,
-      dependencySource.handle,
+      frame.dependencySource.handle,
       runtimeObservedDependencyIdentityLocalName(input.dependency, input.index),
     ),
     new MaterializedProduct(
       input.dependency.productHandle,
       KernelVocabulary.Binding.ObservedDependency.key,
       input.dependency.identityHandle,
-      dependencySource.handle,
+      frame.dependencySource.handle,
       input.provenanceHandle,
     ),
-    ...claims,
+    ...frame.claims,
     new MaterializationRecord(
       input.store.handles.materialization(input.local),
       input.dependency.identityHandle,
       [input.dependency.productHandle],
-      claims.map((claim) => claim.handle),
+      frame.claims.map((claim) => claim.handle),
       [],
     ),
   ];

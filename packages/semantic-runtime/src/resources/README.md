@@ -33,6 +33,10 @@ resource-recognition context, leave the source span absent or surface an open se
 from the store and risking a span attached to the wrong project/source admission.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
+`resource-definition-source.ts` is the product-free companion for source
+generation of Aurelia definition metadata. Source-producing surfaces such as
+app-builder should spend it for properties such as `dependencies: [...]`
+instead of formatting resource metadata beside template or app-builder code.
 
 Some resource carriers are produced by evaluated factory calls rather than direct module-level class syntax. For
 example, a package can export several constants whose initializers call a factory that declares and returns a decorated
@@ -80,6 +84,11 @@ products, declaration/alias/convergence claims, and resource materialization rec
 `built-in-resource-definition-materializer.ts` owns framework full-definition construction, including built-in bindable
 metadata and resource-definition constructors. Keep those boundaries intact so catalog admission does not absorb
 per-resource claim publication or the whole framework metadata model again.
+`built-in-resource-bindables.ts` owns the shared framework-owned bindable facts
+for built-in resources such as `au-compose`, `au-slot`, router resources, and
+validation-html resources. Use that table from framework full-definition
+materialization and source-generation support instead of re-declaring bindable
+names beside each consumer.
 When a current TypeScript program is available, built-in full definitions also project their framework target class
 through the app's checker by resolving the owning Aurelia package export. This keeps controller, observer, and
 data-flow rows tied to the same type universe as user source. Explicit internal source fallbacks should stay rare and

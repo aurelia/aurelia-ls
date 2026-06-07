@@ -1,0 +1,71 @@
+<section class="task-review-workbench" data-au-role="app-section">
+  <form submit.trigger="create()" class="task-review-workbench__form">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <div>
+      <label for="task-assignee-select">Assignee</label>
+      <select value.bind="assigneeId" id="task-assignee-select">
+        <option repeat.for="contact of contacts" value.bind="contact.contactId">${contact.fullName}</option>
+      </select>
+    </div>
+    <div>
+      <label for="task-reviewers-select">Reviewers</label>
+      <select multiple value.bind="reviewerIds" id="task-reviewers-select">
+        <option repeat.for="contact of contacts" value.bind="contact.contactId">${contact.fullName}</option>
+      </select>
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="task-create-status" class="task-review-workbench__status">${createStatusMessage}</p>
+  <p if.bind="batchStatusMessage" role="status" id="task-batch-status" class="task-review-workbench__status">${batchStatusMessage}</p>
+  <p if.bind="filteredTaskItems.length === 0" class="task-review-workbench__empty">No matching tasks.</p>
+  <template else>
+    <div role="toolbar" aria-label="Batch actions">
+      <button type="button" click.trigger="deleteSelectedTaskItems()">Delete selected</button>
+    </div>
+    <table class="task-review-workbench__table">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>
+            <button type="button" click.trigger="sortByTitle()">Task</button>
+            <input type="search" aria-label="Filter Task" value.bind="titleFilter">
+          </th>
+          <th>Assignee</th>
+          <th>Reviewers</th>
+          <th>Done</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr repeat.for="taskItem of pagedTaskItems" class="task-review-workbench__row">
+          <td>
+            <input type="checkbox" checked.to-view="selectedTaskItemIds.includes(taskItem.id)" change.trigger="toggleTaskItemSelection(taskItem)" aria-label.bind="'Select ' + taskItem.title">
+          </td>
+          <td>${taskItem.title}</td>
+          <td>${assigneeLabelForTaskItem(taskItem)}</td>
+          <td>${reviewersLabelForTaskItem(taskItem)}</td>
+          <td>
+            <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
+          </td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5">
+            <nav aria-label="Pagination">
+              <button type="button" click.trigger="previousTaskItemsPage()">Previous</button>
+              <span>Page ${Math.min(taskItemsPage, taskItemsPageCount)} of ${taskItemsPageCount}</span>
+              <button type="button" click.trigger="nextTaskItemsPage()">Next</button>
+            </nav>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </template>
+</section>

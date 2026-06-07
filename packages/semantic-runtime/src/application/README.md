@@ -30,6 +30,10 @@ projects service/state/model classes, Aurelia `resolve(...)` injection sites, an
 and calls into those classes before the API serializes rows. Keep this layer roleful and source-backed: folder roles may
 admit a support file, but class rows, injection rows, and interaction rows should come from declarations, imports, and
 checker identity rather than name-only assumptions.
+`ApplicationSupportSourceRoleIndex` is the role evidence boundary for that recognition. It keeps folder conventions and
+DI-member evidence in one place, so compact app-builder output like `readonly state = resolve(TaskListState)` can reopen
+as state topology without forcing the generated files into `src/state/` or smuggling app-builder manifests into the
+analysis path.
 
 Injection rows carry the member that owns a `resolve(...)` call. Interaction recognition uses that source/member fact
 for `this.<field>.<member>` receivers before falling back to TypeChecker receiver identity. This is deliberate: Aurelia's
@@ -52,6 +56,10 @@ the template expression. Getter/setter rows still matter when the member perform
 projection, or service calls. The direct lane must still spend modeled `BindingScope.locate(...)` results: the root
 name only proves a DI support handoff when the resolved scope slot points back to the injected component member. Do not
 fall back to string-root matching for this join, because template locals can legally shadow names such as `state`.
+For complex direct state expressions, report the support member from observed-dependency rows rather than from the whole
+binding display. A binding such as `disabled.bind="state.completedCount === 0"` has a full `bindingSourceName` for UI
+explanation, but its topology interaction member is `completedCount`; this keeps AppTopology useful for architecture
+queries, repair planning, and app-builder verification.
 Listener bindings participate in this direct lane too. A template submit handler such as
 `submit.trigger="state.submitRequest(requestId)"` should close through the runtime listener binding, an
 `event-handler-invocation` value channel, and a topology `call` interaction against the injected state layer. A component

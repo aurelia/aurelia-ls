@@ -1,0 +1,330 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/refreshable-service-task-table.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "refreshable-service-task-table-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "refreshable service task table component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "refreshTaskItems",
+                      "kind": "refresh",
+                      "scope": "integration"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Refreshable Service Task Table",
+                    "baseName": "Refreshable Service Task Table"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/refreshable-service-task-table.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "domain-command-action"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "local-view-model-state"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "refreshTaskItems",
+                      "statusMemberName": "refreshStatusMessage",
+                      "statusText": "Tasks refreshed.",
+                      "statusId": "task-refresh-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "app-section"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "loading-empty-error-state"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "refreshable-service-task-table"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "refreshable-service-task-table__status"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "refreshable-service-task-table__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "refreshable-service-backed-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "refreshable-service-task-table__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Refresh generated fixtures",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Review service boundary inputs",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "serviceCollections": [
+        {
+          "sourceTargetPath": "src/services/task-item-service.ts",
+          "serviceClassName": "TaskItemService",
+          "componentMemberName": "taskItemService",
+          "recordTypeName": "TaskItemRecord",
+          "loadMethodName": "listTaskItems"
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "action-feedback-status"
+            },
+            "compositionKind": "action-feedback-status",
+            "actionName": "refreshTaskItems"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "loading-empty-error-state"
+            },
+            "compositionKind": "loading-empty-error-state",
+            "promiseExpression": "taskItemsPromise",
+            "pendingText": "Loading tasks...",
+            "fulfilledLocalName": "loadedTaskItems",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+            "rejectedLocalName": "error",
+            "rejectedText": "Could not load tasks.",
+            "fulfilledContentComposition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "collection-table"
+              },
+              "compositionKind": "collection-table",
+              "collectionExpression": "loadedTaskItems",
+              "itemLocalName": "taskItem"
+            }
+          }
+        ]
+      },
+      "sourceLoweringTemplateInvocations": [
+        {
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          "actionName": "refreshTaskItems",
+          "buttonText": "Refresh tasks"
+        }
+      ],
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "ReturnType<TaskItemService['listTaskItems']>",
+          "asyncDataInitializerExpression": "this.taskItemService.listTaskItems()",
+          "asyncDataMemberMutability": "mutable"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "refreshTaskItems",
+          "serviceMemberName": "taskItemService",
+          "serviceMethodName": "listTaskItems",
+          "serviceCallResultMemberName": "taskItemsPromise"
+        }
+      ]
+    }
+  }
+}

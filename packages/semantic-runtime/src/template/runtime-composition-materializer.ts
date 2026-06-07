@@ -7,6 +7,7 @@ import {
   ContainerContextResolverSlotRequest,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
+import type { Container } from '../di/container.js';
 import {
   EvaluationStringValue,
   EvaluationValueKind,
@@ -30,6 +31,7 @@ import {
   ConfigurationIdentity,
 } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import { builtInResourceBindableAttribute } from '../resources/built-in-resource-bindables.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
@@ -122,6 +124,11 @@ import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
 import type { TemplateResourceScope } from './compiler-world.js';
+import {
+  AU_COMPOSE_RESOURCE_NAME,
+  AU_COMPOSE_TARGET_NAME,
+  AuComposeBindableName,
+} from './au-compose-source.js';
 
 export class RuntimeCompositionMaterializationRequest {
   constructor(
@@ -198,6 +205,19 @@ class ComposedChildControllerHandoff {
     readonly resolution: ComponentResolution,
     readonly controllers: readonly RuntimeControllerFrame[],
   ) {}
+}
+
+interface ComposedChildControllerMaterializationFrame {
+  readonly local: string;
+  readonly input: RuntimeCompositionMaterializationRequest;
+  readonly hostController: RuntimeControllerFrame;
+  readonly context: CompositionContext;
+  readonly component: CompositionResolvedComponent;
+  readonly source: CompositionSourceSet;
+  readonly records: KernelStoreRecord[];
+  readonly childContainers: ContainerChildMaterializationEmission[];
+  readonly parentContainer: Container;
+  readonly definition: CustomElementDefinition;
 }
 
 export class RuntimeCompositionMaterializer {
@@ -419,6 +439,32 @@ export class RuntimeCompositionMaterializer {
     records: KernelStoreRecord[],
     childContainers: ContainerChildMaterializationEmission[],
   ): RuntimeControllerFrame | null {
+    const frame = this.createComposedChildControllerFrame(
+      local,
+      input,
+      hostController,
+      context,
+      component,
+      source,
+      records,
+      childContainers,
+    );
+    if (frame == null) {
+      return null;
+    }
+    return this.materializeComposedChildControllerFrame(frame);
+  }
+
+  private createComposedChildControllerFrame(
+    local: string,
+    input: RuntimeCompositionMaterializationRequest,
+    hostController: RuntimeControllerFrame,
+    context: CompositionContext,
+    component: CompositionResolvedComponent,
+    source: CompositionSourceSet,
+    records: KernelStoreRecord[],
+    childContainers: ContainerChildMaterializationEmission[],
+  ): ComposedChildControllerMaterializationFrame | null {
     const parentContainer = hostController.containerFrame;
     if (parentContainer == null || input.resourceDefinitions == null) {
       return null;
@@ -427,37 +473,75 @@ export class RuntimeCompositionMaterializer {
     if (!(definition instanceof CustomElementDefinition)) {
       return null;
     }
-
-    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-      `${local}:container`,
+    return {
+      local,
+      input,
+      hostController,
+      context,
+      component,
+      source,
+      records,
+      childContainers,
       parentContainer,
-      context.sourceAddressHandle,
-      `au-compose:${definition.name}:container`,
-      composedCustomElementContextResolverSlots(context.sourceAddressHandle),
+      definition,
+    };
+  }
+
+  private materializeComposedChildControllerFrame(
+    frame: ComposedChildControllerMaterializationFrame,
+  ): RuntimeControllerFrame {
+    const childContainer = this.materializeComposedChildContainer(frame);
+    frame.records.push(...childContainer.records);
+    frame.childContainers.push(childContainer);
+    const controller = this.createComposedRuntimeController(frame, childContainer);
+    this.recordComposedChildControllerProducts(frame, childContainer, controller);
+    return controller;
+  }
+
+  private materializeComposedChildContainer(
+    frame: ComposedChildControllerMaterializationFrame,
+  ): ContainerChildMaterializationEmission {
+    const childContainer = this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
+      `${frame.local}:container`,
+      frame.parentContainer,
+      frame.context.sourceAddressHandle,
+      `au-compose:${frame.definition.name}:container`,
+      composedCustomElementContextResolverSlots(frame.context.sourceAddressHandle),
       null,
       ContainerContextResolverRecordPolicy.PublishAll,
     ));
-    records.push(...childContainer.records);
-    childContainers.push(childContainer);
+    return childContainer;
+  }
 
-    const allocation = this.allocate(`${local}:controller`);
-    const controller = new RuntimeControllerFrame(
+  private createComposedRuntimeController(
+    frame: ComposedChildControllerMaterializationFrame,
+    childContainer: ContainerChildMaterializationEmission,
+  ): RuntimeControllerFrame {
+    const allocation = this.allocate(`${frame.local}:controller`);
+    return new RuntimeControllerFrame(
       RuntimeControllerCreationKind.CustomElement,
       allocation.productHandle,
       allocation.identityHandle,
-      definition.name,
+      frame.definition.name,
       childContainer.container.toReference(),
       childContainer.container,
-      definition.productHandle,
-      definition.target,
-      context.sourceAddressHandle,
-      hostController,
+      frame.definition.productHandle,
+      frame.definition.target,
+      frame.context.sourceAddressHandle,
+      frame.hostController,
       null,
       null,
-      definition.strict,
-      context.sourceAddressHandle ?? definition.sourceAddressHandle,
-      source.provenanceHandle,
+      frame.definition.strict,
+      frame.context.sourceAddressHandle ?? frame.definition.sourceAddressHandle,
+      frame.source.provenanceHandle,
     );
+  }
+
+  private recordComposedChildControllerProducts(
+    frame: ComposedChildControllerMaterializationFrame,
+    childContainer: ContainerChildMaterializationEmission,
+    controller: RuntimeControllerFrame,
+  ): void {
     controller.recordLifecycleStep(
       RuntimeControllerLifecycleStage.Hydration,
       RuntimeControllerLifecycleStepKind.CreateChildContainer,
@@ -465,24 +549,23 @@ export class RuntimeCompositionMaterializer {
       childContainer.container.sourceAddressHandle,
       'AuCompose.compose created a child container for a closed custom-element composition branch.',
     );
-    hostController.addChild(controller);
-    records.push(new SemanticClaim(
-      this.store.handles.claim(`${local}:host-has-composed-child`),
-      hostController.productHandle,
+    frame.hostController.addChild(controller);
+    frame.records.push(new SemanticClaim(
+      this.store.handles.claim(`${frame.local}:host-has-composed-child`),
+      frame.hostController.productHandle,
       KernelVocabulary.Configuration.ControllerHasChild.key,
       controller.productHandle,
-      source.provenanceHandle,
+      frame.source.provenanceHandle,
     ));
     this.controllerPublication.recordController(
-      `${local}:runtime-controller`,
+      `${frame.local}:runtime-controller`,
       controller,
-      input.projectContext,
-      new RuntimeRenderingSourceSet([], source.evidenceHandle, source.provenanceHandle),
-      records,
+      frame.input.projectContext,
+      new RuntimeRenderingSourceSet([], frame.source.evidenceHandle, frame.source.provenanceHandle),
+      frame.records,
       [],
       new Map(),
     );
-    return controller;
   }
 
   private evaluateBinding(
@@ -751,7 +834,7 @@ export class RuntimeCompositionMaterializer {
 }
 
 function isAuComposeController(controller: RuntimeControllerFrame): boolean {
-  return controller.name === 'au-compose';
+  return controller.name === AU_COMPOSE_RESOURCE_NAME;
 }
 
 function auComposeBindings(
@@ -764,14 +847,14 @@ function auComposeBindings(
     && access.targetControllerProductHandle === controller.productHandle
   );
   return {
-    template: bindingForTarget(accesses, bindingsByProduct, 'template'),
-    component: bindingForTarget(accesses, bindingsByProduct, 'component'),
-    model: bindingForTarget(accesses, bindingsByProduct, 'model'),
-    scopeBehavior: bindingForTarget(accesses, bindingsByProduct, 'scopeBehavior'),
-    tag: bindingForTarget(accesses, bindingsByProduct, 'tag'),
-    flushMode: bindingForTarget(accesses, bindingsByProduct, 'flushMode'),
-    composing: bindingForTarget(accesses, bindingsByProduct, 'composing'),
-    composition: bindingForTarget(accesses, bindingsByProduct, 'composition'),
+    template: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Template),
+    component: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Component),
+    model: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Model),
+    scopeBehavior: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.ScopeBehavior),
+    tag: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Tag),
+    flushMode: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.FlushMode),
+    composing: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Composing),
+    composition: bindingForTarget(accesses, bindingsByProduct, AuComposeBindableName.Composition),
   };
 }
 
@@ -804,12 +887,12 @@ function staticAuComposeInputs(
     }
   }
   return {
-    template: staticInputValue(valuesByTarget, 'template'),
-    component: staticInputValue(valuesByTarget, 'component'),
-    model: staticInputValue(valuesByTarget, 'model'),
-    scopeBehavior: staticInputValue(valuesByTarget, 'scopeBehavior', 'scope-behavior'),
-    tag: staticInputValue(valuesByTarget, 'tag'),
-    flushMode: staticInputValue(valuesByTarget, 'flushMode', 'flush-mode'),
+    template: staticInputValue(valuesByTarget, AuComposeBindableName.Template),
+    component: staticInputValue(valuesByTarget, AuComposeBindableName.Component),
+    model: staticInputValue(valuesByTarget, AuComposeBindableName.Model),
+    scopeBehavior: staticInputValue(valuesByTarget, AuComposeBindableName.ScopeBehavior),
+    tag: staticInputValue(valuesByTarget, AuComposeBindableName.Tag),
+    flushMode: staticInputValue(valuesByTarget, AuComposeBindableName.FlushMode),
   };
 }
 
@@ -826,11 +909,11 @@ function emptyStaticAuComposeInputs(): StaticAuComposeInputs {
 
 function staticInputValue(
   valuesByTarget: ReadonlyMap<string, string>,
-  targetProperty: string,
-  alternateTargetProperty: string | null = null,
+  targetProperty: AuComposeBindableName,
 ): string | null {
+  const attribute = builtInResourceBindableAttribute(AU_COMPOSE_TARGET_NAME, targetProperty);
   return valuesByTarget.get(targetProperty)
-    ?? (alternateTargetProperty == null ? null : valuesByTarget.get(alternateTargetProperty) ?? null);
+    ?? (attribute === targetProperty ? null : valuesByTarget.get(attribute) ?? null);
 }
 
 function expressionProductHandle(binding: RuntimeBinding | null): ProductHandle | null {
@@ -1051,29 +1134,7 @@ function recordsForCompositionController(
   provenanceHandle: ProvenanceHandle,
   store: KernelStore,
 ): readonly KernelStoreRecord[] {
-  const claims = [
-    new SemanticClaim(
-      store.handles.claim(`${local}:controller-owns-composition`),
-      hostController.productHandle,
-      KernelVocabulary.Configuration.ControllerOwnsComposition.key,
-      composition.productHandle,
-      provenanceHandle,
-    ),
-    new SemanticClaim(
-      store.handles.claim(`${local}:composition-uses-context`),
-      composition.productHandle,
-      KernelVocabulary.Configuration.CompositionControllerUsesContext.key,
-      context.productHandle,
-      provenanceHandle,
-    ),
-    ...composition.resolvedComponents.map((component, index) => new SemanticClaim(
-      store.handles.claim(`${local}:composition-uses-definition:${index}`),
-      composition.productHandle,
-      KernelVocabulary.Configuration.CompositionControllerUsesDefinition.key,
-      component.definitionProductHandle,
-      provenanceHandle,
-    )),
-  ];
+  const claims = compositionControllerSemanticClaims(local, composition, context, hostController, provenanceHandle, store);
   return [
     new ConfigurationIdentity(
       composition.identityHandle,
@@ -1096,5 +1157,38 @@ function recordsForCompositionController(
       claims.map((claim) => claim.handle),
     ),
     ...claims,
+  ];
+}
+
+function compositionControllerSemanticClaims(
+  local: string,
+  composition: CompositionController,
+  context: CompositionContext,
+  hostController: RuntimeControllerFrame,
+  provenanceHandle: ProvenanceHandle,
+  store: KernelStore,
+): readonly SemanticClaim[] {
+  return [
+    new SemanticClaim(
+      store.handles.claim(`${local}:controller-owns-composition`),
+      hostController.productHandle,
+      KernelVocabulary.Configuration.ControllerOwnsComposition.key,
+      composition.productHandle,
+      provenanceHandle,
+    ),
+    new SemanticClaim(
+      store.handles.claim(`${local}:composition-uses-context`),
+      composition.productHandle,
+      KernelVocabulary.Configuration.CompositionControllerUsesContext.key,
+      context.productHandle,
+      provenanceHandle,
+    ),
+    ...composition.resolvedComponents.map((component, index) => new SemanticClaim(
+      store.handles.claim(`${local}:composition-uses-definition:${index}`),
+      composition.productHandle,
+      KernelVocabulary.Configuration.CompositionControllerUsesDefinition.key,
+      component.definitionProductHandle,
+      provenanceHandle,
+    )),
   ];
 }

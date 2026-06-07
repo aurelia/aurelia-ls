@@ -4,6 +4,7 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { ExpressionType } from '../expression/ast.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
@@ -11,6 +12,11 @@ import { BindableBindingMode } from '../resources/bindable-definition.js';
 import {
   AttributePatternExecutionKind,
   AttributePatternExecutionResult,
+  AttributePatternScore,
+  AttributeSyntaxKind,
+  compileAttributePatternDefinition,
+  isBetterAttributePatternScore,
+  matchAttributePatternTokens,
 } from './attribute-syntax.js';
 import {
   BindingCommandBuildResult,
@@ -39,6 +45,7 @@ import {
   TranslationBindingInstruction,
   TranslationParametersBindingInstruction,
 } from './instruction-ir.js';
+import { authoredTemplateAttributeText } from './authored-template-source.js';
 
 const bindingCommandKey = (name: string): string => `au:resource:binding-command:${name}`;
 
@@ -222,6 +229,70 @@ export const enum BuiltInSyntaxGroup {
   StateSyntax = 'state-syntax',
 }
 
+/** Stable names of framework-owned binding commands known to semantic-runtime. */
+export enum BuiltInBindingCommandName {
+  /** Default property binding command (`target.bind`). */
+  Bind = 'bind',
+  /** One-time property binding command (`target.one-time`). */
+  OneTime = 'one-time',
+  /** From-view property binding command (`target.from-view`). */
+  FromView = 'from-view',
+  /** To-view property binding command (`target.to-view`). */
+  ToView = 'to-view',
+  /** Two-way property binding command (`target.two-way`). */
+  TwoWay = 'two-way',
+  /** Iterator binding command used by repeat-like template controllers (`target.for`). */
+  For = 'for',
+  /** Reference binding command (`ref` / `target.ref`). */
+  Ref = 'ref',
+  /** DOM event trigger command (`event.trigger`). */
+  Trigger = 'trigger',
+  /** DOM event capture command (`event.capture`). */
+  Capture = 'capture',
+  /** Class-token command (`token.class`). */
+  Class = 'class',
+  /** Style-property command (`property.style`). */
+  Style = 'style',
+  /** Attribute binding command (`attribute.attr`). */
+  Attr = 'attr',
+  /** Spread binding command (`...$bindables` / `...$element`). */
+  Spread = 'spread',
+  /** I18n translation command (`t`). */
+  Translation = 't',
+  /** I18n translation bind command (`t.bind`). */
+  TranslationBind = 't.bind',
+  /** I18n translation-parameters command (`t-params.bind`). */
+  TranslationParametersBind = 't-params.bind',
+  /** State plugin read command (`target.state`). */
+  State = 'state',
+  /** State plugin dispatch command (`event.dispatch`). */
+  Dispatch = 'dispatch',
+}
+
+/** Common authored target names used with framework-owned binding commands; arbitrary user targets remain strings. */
+export enum BuiltInBindingCommandTargetName {
+  /** Native value property used by value observers and select observers. */
+  Value = 'value',
+  /** Authored alias for the native `valueAsNumber` property. */
+  ValueAsNumber = 'value-as-number',
+  /** Authored alias for the native `valueAsDate` property. */
+  ValueAsDate = 'value-as-date',
+  /** Native checked property used by checkbox and radio observers. */
+  Checked = 'checked',
+  /** Special ref target whose authored form can collapse to bare `ref`. */
+  Element = 'element',
+  /** Full class attribute target for `class.bind`. */
+  Class = 'class',
+  /** Full style attribute target for `style.bind`. */
+  Style = 'style',
+  /** Option/input model target used for object-valued choice controls. */
+  Model = 'model',
+  /** Equality matcher target used by checked/select object comparison. */
+  Matcher = 'matcher',
+  /** Repeat template-controller target for `repeat.for` iterator bindings. */
+  Repeat = 'repeat',
+}
+
 export type BuiltInSyntaxCatalogField =
   | 'attributePatterns'
   | 'bindingCommands'
@@ -253,6 +324,96 @@ export type BuiltInBindingCommandField =
   | 'producedInstructionTypeNames'
   | 'package'
   | 'group';
+
+/** Expression-parser entry family used by a built-in binding command's primary authored value. */
+export const enum BuiltInBindingCommandExpressionEntryFamily {
+  /** The command does not parse its raw attribute value as an Aurelia expression. */
+  None = 'none',
+  /** The command parses its raw attribute value as a property-like binding expression. */
+  Property = 'property',
+  /** The command parses its raw attribute value as the framework's function/listener expression family. */
+  Function = 'function',
+  /** The command parses its raw attribute value as an iterator header. */
+  Iterator = 'iterator',
+}
+
+/** Lookup identity for a built-in binding command syntax handler. */
+export interface BuiltInBindingCommandLookupKey {
+  /** Package that owns the binding command handler. */
+  readonly packageId: BuiltInSyntaxPackage;
+  /** Runtime binding-command name such as `bind`, `trigger`, `state`, or `dispatch`. */
+  readonly name: BuiltInBindingCommandName;
+}
+
+/** Request to serialize one framework-owned binding-command attribute. */
+export interface BuiltInBindingCommandAttributeSourceRequest {
+  /** Runtime binding-command name such as `bind`, `trigger`, `state`, or `dispatch`. */
+  readonly commandName: BuiltInBindingCommandName;
+  /** Attribute target part before the command suffix, such as `value` in `value.bind`. */
+  readonly targetName: string;
+  /** Authored raw attribute value before HTML attribute escaping. */
+  readonly rawValue: string;
+  /** Optional secondary pattern part after `:`, such as a state store name. */
+  readonly commandArgument?: string;
+}
+
+/** Serialized raw attribute parts for one framework-owned binding-command attribute. */
+export interface BuiltInBindingCommandAttributeSource {
+  /** Authored raw attribute name. */
+  readonly rawName: string;
+  /** Authored raw attribute value before HTML attribute escaping. */
+  readonly rawValue: string;
+}
+
+/** Serialize the raw attribute name for a framework-owned binding command. */
+export function builtInBindingCommandAttributeName(
+  commandName: BuiltInBindingCommandName,
+  targetName: string,
+  commandArgument = '',
+): string {
+  if (commandName === BuiltInBindingCommandName.Ref && (targetName.length === 0 || targetName === BuiltInBindingCommandTargetName.Element)) {
+    return BuiltInBindingCommandName.Ref;
+  }
+  if (
+    commandName === BuiltInBindingCommandName.Translation
+    || commandName === BuiltInBindingCommandName.TranslationBind
+    || commandName === BuiltInBindingCommandName.TranslationParametersBind
+  ) {
+    return commandName;
+  }
+  const argumentSuffix = commandArgument.length === 0 ? '' : `:${commandArgument}`;
+  return `${targetName}.${commandName}${argumentSuffix}`;
+}
+
+/** Serialize one framework-owned binding-command attribute as raw parts. */
+export function builtInBindingCommandAttributeSource(
+  request: BuiltInBindingCommandAttributeSourceRequest,
+): BuiltInBindingCommandAttributeSource {
+  return {
+    rawName: builtInBindingCommandAttributeName(request.commandName, request.targetName, request.commandArgument ?? ''),
+    rawValue: request.rawValue,
+  };
+}
+
+/** Serialize one framework-owned binding-command attribute to authored template source. */
+export function builtInBindingCommandAttributeText(
+  request: BuiltInBindingCommandAttributeSourceRequest,
+): string {
+  return authoredTemplateAttributeText(builtInBindingCommandAttributeSource(request));
+}
+
+/** Escape a raw value for use inside a double-quoted template attribute. */
+/** Pure parse result for a raw attribute name against the built-in attribute-pattern inventory. */
+export interface BuiltInAttributeSyntaxParseResult {
+  /** Runtime-shaped attribute parser execution result. */
+  readonly execution: AttributePatternExecutionResult;
+  /** Pattern definition selected by runtime pattern scoring, when any built-in pattern matched. */
+  readonly pattern: AttributePatternDefinitionEntry | null;
+  /** Built-in attribute-pattern handler that owns the selected definition. */
+  readonly handler: BuiltInAttributePattern | null;
+  /** Dynamic pattern parts extracted from the raw attribute name. */
+  readonly parts: readonly string[];
+}
 
 @auLink('template-compiler:RefAttributePattern')
 export class RefAttributePattern {
@@ -563,7 +724,7 @@ export class DefaultBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'DefaultBindingCommand';
-  readonly name = 'bind';
+  readonly name = BuiltInBindingCommandName.Bind;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -588,7 +749,7 @@ export class OneTimeBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'OneTimeBindingCommand';
-  readonly name = 'one-time';
+  readonly name = BuiltInBindingCommandName.OneTime;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -613,7 +774,7 @@ export class FromViewBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'FromViewBindingCommand';
-  readonly name = 'from-view';
+  readonly name = BuiltInBindingCommandName.FromView;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -638,7 +799,7 @@ export class ToViewBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'ToViewBindingCommand';
-  readonly name = 'to-view';
+  readonly name = BuiltInBindingCommandName.ToView;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -663,7 +824,7 @@ export class TwoWayBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'TwoWayBindingCommand';
-  readonly name = 'two-way';
+  readonly name = BuiltInBindingCommandName.TwoWay;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -688,7 +849,7 @@ export class ForBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'ForBindingCommand';
-  readonly name = 'for';
+  readonly name = BuiltInBindingCommandName.For;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -763,7 +924,7 @@ export class RefBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'RefBindingCommand';
-  readonly name = 'ref';
+  readonly name = BuiltInBindingCommandName.Ref;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -799,7 +960,7 @@ export class TriggerBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'TriggerBindingCommand';
-  readonly name = 'trigger';
+  readonly name = BuiltInBindingCommandName.Trigger;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -838,7 +999,7 @@ export class CaptureBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'CaptureBindingCommand';
-  readonly name = 'capture';
+  readonly name = BuiltInBindingCommandName.Capture;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -877,7 +1038,7 @@ export class ClassBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'ClassBindingCommand';
-  readonly name = 'class';
+  readonly name = BuiltInBindingCommandName.Class;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -911,7 +1072,7 @@ export class ClassBindingCommand {
       target = classes.join(' ');
     }
 
-    return buildAttributeBinding(this, info, context, 'class', target, info.syntax.rawValue);
+    return buildAttributeBinding(this, info, context, BuiltInBindingCommandTargetName.Class, target, info.syntax.rawValue);
   }
 }
 
@@ -920,7 +1081,7 @@ export class StyleBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'StyleBindingCommand';
-  readonly name = 'style';
+  readonly name = BuiltInBindingCommandName.Style;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -936,7 +1097,7 @@ export class StyleBindingCommand {
   ) {}
 
   build(info: BindingCommandBuildInfo, context: BindingCommandBuildContext): BindingCommandBuildResult {
-    return buildAttributeBinding(this, info, context, 'style', info.syntax.target, info.syntax.rawValue);
+    return buildAttributeBinding(this, info, context, BuiltInBindingCommandTargetName.Style, info.syntax.target, info.syntax.rawValue);
   }
 }
 
@@ -945,7 +1106,7 @@ export class AttrBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'AttrBindingCommand';
-  readonly name = 'attr';
+  readonly name = BuiltInBindingCommandName.Attr;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -971,7 +1132,7 @@ export class SpreadValueBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.TemplateCompiler;
   readonly group = BuiltInSyntaxGroup.DefaultBindingLanguage;
   readonly targetName = 'SpreadValueBindingCommand';
-  readonly name = 'spread';
+  readonly name = BuiltInBindingCommandName.Spread;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -1008,7 +1169,7 @@ export class TranslationBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.I18n;
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationBindingCommand';
-  readonly name = 't';
+  readonly name = BuiltInBindingCommandName.Translation;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
   readonly producedInstructionKinds = [TemplateInstructionKind.TranslationBinding] as const;
@@ -1044,7 +1205,7 @@ export class TranslationBindBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.I18n;
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationBindBindingCommand';
-  readonly name = 't.bind';
+  readonly name = BuiltInBindingCommandName.TranslationBind;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
   readonly producedInstructionKinds = [TemplateInstructionKind.TranslationBindBinding] as const;
@@ -1080,7 +1241,7 @@ export class TranslationParametersBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.I18n;
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationParametersBindingCommand';
-  readonly name = 't-params.bind';
+  readonly name = BuiltInBindingCommandName.TranslationParametersBind;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -1116,7 +1277,7 @@ export class StateBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.State;
   readonly group = BuiltInSyntaxGroup.StateSyntax;
   readonly targetName = 'StateBindingCommand';
-  readonly name = 'state';
+  readonly name = BuiltInBindingCommandName.State;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
@@ -1155,7 +1316,7 @@ export class DispatchBindingCommand {
   readonly packageId = BuiltInSyntaxPackage.State;
   readonly group = BuiltInSyntaxGroup.StateSyntax;
   readonly targetName = 'DispatchBindingCommand';
-  readonly name = 'dispatch';
+  readonly name = BuiltInBindingCommandName.Dispatch;
   readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = true;
@@ -1255,6 +1416,77 @@ export function executeBuiltInAttributePattern(
   }
 }
 
+/** All built-in attribute-pattern handlers known to semantic-runtime. */
+export function allBuiltInAttributePatterns(): readonly BuiltInAttributePattern[] {
+  return [
+    ...RuntimeHtmlDefaultAttributePatterns,
+    ...RuntimeHtmlShortHandAttributePatterns,
+    ...RuntimeHtmlPromiseAttributePatterns,
+    ...I18nDefaultAttributePatterns,
+    ...StateDefaultAttributePatterns,
+  ];
+}
+
+/** Parse a raw attribute through the same built-in pattern inventory used to build compiler worlds. */
+export function parseBuiltInAttributeSyntax(
+  rawName: string,
+  rawValue: string,
+): BuiltInAttributeSyntaxParseResult {
+  let best: {
+    readonly handler: BuiltInAttributePattern;
+    readonly pattern: AttributePatternDefinitionEntry;
+    readonly score: AttributePatternScore;
+    readonly parts: readonly string[];
+  } | null = null;
+
+  for (const handler of allBuiltInAttributePatterns()) {
+    for (const pattern of handler.patterns) {
+      const compiled = compileAttributePatternDefinition(pattern);
+      const parts = matchAttributePatternTokens(rawName, compiled.tokens, compiled.symbols);
+      if (parts == null) {
+        continue;
+      }
+      if (best == null || isBetterAttributePatternScore(compiled.score, best.score)) {
+        best = {
+          handler,
+          pattern,
+          score: compiled.score,
+          parts,
+        };
+      }
+    }
+  }
+
+  if (best == null) {
+    return {
+      execution: AttributePatternExecutionResult.plain(rawName, rawValue),
+      pattern: null,
+      handler: null,
+      parts: [],
+    };
+  }
+
+  return {
+    execution: executeBuiltInAttributePattern(
+      best.handler,
+      best.pattern.pattern,
+      rawName,
+      rawValue,
+      best.parts,
+    ) ?? new AttributePatternExecutionResult(
+      AttributeSyntaxKind.Open,
+      rawName,
+      rawValue,
+      rawName,
+      null,
+      best.parts,
+    ),
+    pattern: best.pattern,
+    handler: best.handler,
+    parts: best.parts,
+  };
+}
+
 export type BuiltInBindingCommand =
   | DefaultBindingCommand
   | OneTimeBindingCommand
@@ -1274,6 +1506,38 @@ export type BuiltInBindingCommand =
   | TranslationParametersBindingCommand
   | StateBindingCommand
   | DispatchBindingCommand;
+
+/** Read the expression-parser entry family a built-in command uses during framework-shaped lowering or renderer handoff. */
+export function builtInBindingCommandExpressionEntryFamily(
+  command: BuiltInBindingCommand,
+): BuiltInBindingCommandExpressionEntryFamily {
+  if (command instanceof TranslationBindingCommand) {
+    return BuiltInBindingCommandExpressionEntryFamily.None;
+  }
+  if (command instanceof TriggerBindingCommand || command instanceof CaptureBindingCommand || command instanceof StateBindingCommand) {
+    return BuiltInBindingCommandExpressionEntryFamily.Function;
+  }
+  if (command instanceof ForBindingCommand) {
+    return BuiltInBindingCommandExpressionEntryFamily.Iterator;
+  }
+  return BuiltInBindingCommandExpressionEntryFamily.Property;
+}
+
+/** Convert a built-in command expression family into the parser facade's entry-family value. */
+export function builtInBindingCommandExpressionType(
+  command: BuiltInBindingCommand,
+): ExpressionType | null {
+  switch (builtInBindingCommandExpressionEntryFamily(command)) {
+    case BuiltInBindingCommandExpressionEntryFamily.None:
+      return null;
+    case BuiltInBindingCommandExpressionEntryFamily.Property:
+      return 'IsProperty';
+    case BuiltInBindingCommandExpressionEntryFamily.Function:
+      return 'IsFunction';
+    case BuiltInBindingCommandExpressionEntryFamily.Iterator:
+      return 'IsIterator';
+  }
+}
 
 /** Product model for one package/configuration group's built-in syntax resources. */
 export class BuiltInSyntaxCatalog {
@@ -1414,3 +1678,46 @@ export const ExtensionBuiltInSyntaxCatalogs = {
     bindingCommands: StateDefaultBindingCommands,
   },
 } as const;
+
+/** Public package module that owns a built-in syntax package. */
+export function builtInSyntaxPackageModuleSpecifier(
+  packageId: BuiltInSyntaxPackage,
+): string {
+  switch (packageId) {
+    case BuiltInSyntaxPackage.TemplateCompiler:
+      return '@aurelia/template-compiler';
+    case BuiltInSyntaxPackage.RuntimeHtml:
+      return '@aurelia/runtime-html';
+    case BuiltInSyntaxPackage.I18n:
+      return '@aurelia/i18n';
+    case BuiltInSyntaxPackage.State:
+      return '@aurelia/state';
+  }
+}
+
+/** All built-in binding-command handlers known to semantic-runtime. */
+export function allBuiltInBindingCommands(): readonly BuiltInBindingCommand[] {
+  return [
+    ...RuntimeHtmlDefaultBindingCommands,
+    ...I18nDefaultBindingCommands,
+    ...StateDefaultBindingCommands,
+  ];
+}
+
+/** Find a built-in binding-command handler by package/name identity. */
+export function findBuiltInBindingCommand(
+  key: BuiltInBindingCommandLookupKey,
+): BuiltInBindingCommand | null {
+  return allBuiltInBindingCommands().find((command) =>
+    command.packageId === key.packageId
+    && command.name === key.name
+  ) ?? null;
+}
+
+/** Find a built-in binding command by command name when generated source has no package-bearing catalog row. */
+export function findUniqueBuiltInBindingCommandByName(
+  name: string,
+): BuiltInBindingCommand | null {
+  const matches = allBuiltInBindingCommands().filter((command) => command.name === name);
+  return matches.length === 1 ? matches[0]! : null;
+}

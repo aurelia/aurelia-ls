@@ -82,7 +82,8 @@
         "Before adding a new template product, inspect whether framework.compiler, framework.rendering, or framework.observation already names the runtime concept.",
         "Treat CompiledTemplateInstructionFactory and CompiledTemplateInstructionTraversal as companions of the compiled-template materializer unless framework grounding suggests a cleaner Aurelia-shaped split.",
         "If recursive rendering or controller semantics are involved, keep the controller and view-factory materializers in the loop.",
-        "Root `<template>` surrogate failures, projection ownership failures, `<slot>` shadow-DOM failures, and local-template shape failures that match Aurelia template-compiler throws publish compiler issues in this phase; do not reintroduce generic open seams for those framework-rejected cases.",
+        "Root `<template>` surrogate failures, `<slot>` shadow-DOM failures, and local-template shape failures that match Aurelia template-compiler throws publish compiler issues in this phase; do not reintroduce generic open seams for those framework-rejected cases.",
+        "Custom-element child content projection is a compiler DOM transform: HydrateElementInstruction carries default/named projection instruction sequences, direct parent rows skip extracted children, and `compiler.open-content-projection` should not appear for ordinary slot extraction.",
         "Avoid ad hoc template feature flags when the framework has a renderer, binding, or controller shape for the behavior.",
         "Use routed app-profile phase kernel summaries before optimizing template bulk. Disposed-app answers can now report which template/runtime phases created answer-local records and product details before QueryClaimGraph reclaims them."
       ],
@@ -114,6 +115,17 @@
           "symbolName": "CompiledTemplateAssemblyState",
           "line": 280,
           "summary": "Compiled-template assembly work frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/instruction-ir.ts",
+          "symbolName": "HydrateElementProjectionInstructionSequence",
+          "summary": "Slot-name plus instruction-sequence handle carried by HydrateElementInstruction projections."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-content-projection",
+          "summary": "Contract that proves custom-element child content lowers into projection sequences without compiler.open-content-projection seams."
         },
         {
           "kind": "lens",
@@ -156,10 +168,15 @@
           "filePath": "packages/semantic-runtime/src/template/compiled-template-materializer.ts",
           "minLineCount": 100,
           "minMethodCount": 1
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/instruction-ir.ts",
+          "symbolName": "HydrateElementProjectionInstructionSequence"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-31"
     },
     {
       "id": "frontier:template-compiler-world-materializer",
@@ -227,7 +244,15 @@
       "guidance": [
         "Inspect built-in syntax catalog materialization before adding framework-owned binding commands, attribute patterns, or package-specific syntax availability.",
         "Keep raw catalog product materialization distinct from configured catalog selection; the configured companion is where registration/configuration pressure belongs.",
-        "Use framework.compiler, framework.resources, and framework configuration pressure before deciding a built-in syntax entry is missing or in the wrong package."
+        "Use framework.compiler, framework.resources, and framework configuration pressure before deciding a built-in syntax entry is missing or in the wrong package.",
+        "`parseBuiltInAttributeSyntax(...)` is the product-free parser for validating generated/source-lowering attributes against the built-in pattern inventory. Do not confuse it with configured compiler-world parsing; app-specific visibility still flows through compiler-world and attribute-syntax materialization.",
+        "`builtInBindingCommandExpressionType(...)` exposes the product-free parser entry family for a built-in command value. Use it when source lowerers or previews need to validate generated `.bind`, `.trigger`, `repeat.for`, `.state`, or `.dispatch` values without duplicating command-build policy.",
+        "@aurelia/state command parsing is framework-shaped but asymmetrical: `.state` uses the function/listener entry family because the renderer parses the state binding source as `IsFunction`, while `.dispatch` is a state command whose renderer parses the action source as `IsProperty`.",
+        "`BuiltInBindingCommandName` is the enum-backed command-name authority for framework-owned binding commands. Use it when app-builder or other source-producing code needs to mention built-in command names outside a concrete command instance.",
+        "`builtInBindingCommandAttributeText(...)` is the product-free source serializer for generated binding-command attributes. Keep `target.command` formatting there so source producers and parser round-trip validation share the same built-in syntax substrate.",
+        "`inlineMultiBindingValueSourceText(...)` is the product-free source serializer for inline custom-attribute multi-binding values. Keep generated `route: ...; params.bind: ...` segment formatting next to `parseInlineMultiBindingSegments(...)` so source producers do not invent a second multi-binding grammar.",
+        "`authored-template-source.ts` owns product-free authored-template attribute, text-content, element, and child-node source serialization. Use it for generated `name=\"value\"` attributes, static attributes, plain visible text, structured template elements, mixed text/element children, and attribute append operations before adding app-builder-local source string helpers.",
+        "`binding-expression-source.ts` owns product-free authored binding-expression fragments for interpolation, iterator headers, binding behaviors, and value converters. Use it when generated source needs those forms instead of interpolating `${...}`, `item of items`, `expr & behavior`, or `expr | converter` locally."
       ],
       "anchors": [
         {
@@ -248,6 +273,78 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
           "summary": "Built-in syntax catalog data model and package/group entries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "parseBuiltInAttributeSyntax",
+          "summary": "Product-free built-in attribute parser used by source-lowering integrity checks."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "builtInBindingCommandExpressionType",
+          "summary": "Product-free command value parser-family helper for generated/source-lowering command values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "BuiltInBindingCommandName",
+          "summary": "Enum-backed command-name authority for framework-owned binding commands."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "builtInBindingCommandAttributeText",
+          "summary": "Product-free source serializer for generated framework-owned binding-command attributes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/multi-binding-segments.ts",
+          "symbolName": "inlineMultiBindingValueSourceText",
+          "summary": "Product-free source serializer for inline custom-attribute multi-binding values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/authored-template-source.ts",
+          "symbolName": "authoredTemplateAttributeText",
+          "summary": "Product-free source serializer for authored template attributes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/authored-template-source.ts",
+          "symbolName": "authoredTemplateTextContentText",
+          "summary": "Product-free source serializer for plain authored template text content."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/authored-template-source.ts",
+          "symbolName": "authoredTemplateElementSourceText",
+          "summary": "Product-free source serializer for structured authored template elements."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/authored-template-source.ts",
+          "symbolName": "AuthoredTemplateChildSource",
+          "summary": "Product-free source model for mixed text and element children under authored template elements."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/binding-expression-source.ts",
+          "symbolName": "iteratorBindingExpressionSourceText",
+          "summary": "Product-free source serializer for repeat-like iterator binding headers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/binding-expression-source.ts",
+          "symbolName": "bindingBehaviorExpressionSourceText",
+          "summary": "Product-free source serializer for binding-behavior modifier expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
+          "symbolName": "allBuiltInAttributePatterns",
+          "summary": "Inventory helper for built-in attribute-pattern definitions before configured compiler-world selection."
         }
       ],
       "liveChecks": [
@@ -981,7 +1078,9 @@
       "guidance": [
         "Read this before adding local if/repeat/switch scope handling.",
         "Use framework.rendering and framework.lifecycle to check whether a flow belongs to controller creation, bind, hydration, or lifecycle semantics.",
-        "Do not treat nested template controller scopes as plain lexical TypeScript scopes; they sit between runtime controller semantics and checker projection."
+        "Do not treat nested template controller scopes as plain lexical TypeScript scopes; they sit between runtime controller semantics and checker projection.",
+        "Repeat/iterator scope construction now has an explicit `IteratorScopeMaterializationFrame`: it owns the source-value evaluator, rendered-binding source projector, iterator type projection, local type map, and static local handoff before issues, local slots, override slots, and BindingScope publication are assembled.",
+        "Let binding static values now pass through `LetStaticValueEvaluationFrame`: it keeps parse recovery, runtime binding lookup, source-expression context projection, and source-value evaluator handoff together before the slot receives either a concrete value or an explicit binding-scope boundary."
       ],
       "anchors": [
         {
@@ -990,6 +1089,42 @@
           "symbolName": "TemplateControllerScopeMaterializer",
           "line": 239,
           "summary": "Template-controller scope materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "IteratorScopeMaterializationFrame",
+          "summary": "Repeat/iterator scope materialization frame for source-value, source-expression, type projection, and local-slot handoff facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "iteratorScopeMaterializationFrame",
+          "summary": "Repeat/iterator scope setup phase before issue publication, local-slot construction, and BindingScope preparation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "iteratorLocalSlots",
+          "summary": "Repeat local-slot construction phase that attaches TypeChecker-projected local types and representative static values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "LetStaticValueEvaluationFrame",
+          "summary": "Let binding static-value frame for parse recovery, runtime binding lookup, source-expression context projection, and evaluator handoff."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "letStaticValueEvaluationFrame",
+          "summary": "Let binding source-value setup phase before evaluating or publishing a binding-scope boundary value."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "evaluateLetStaticValue",
+          "summary": "Let binding source-value consumer that spends the projected context through RuntimeBindingSourceValueEvaluator."
         },
         {
           "kind": "source",
@@ -1833,9 +1968,11 @@
         "Resource-definition lookup can enter through module-local identity when evaluator values carry a module key, or through unique local declaration identity when a TypeChecker declaration is the carrier.",
         "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, and `activate(model)` compares the model binding source type with the activation parameter type through shared checker assignability. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
         "`activate(model)` parameter projection spends the shared `checker-signature-parameters.ts` overload candidate-basis. Do not regress runtime composition to `getCallSignatures()[0]`; overloaded lifecycle hooks should compare the model against all arity-compatible first-parameter candidates through checker-backed union projection.",
+        "AuCompose activation analysis now has explicit method and parameter frames: `activateMethodProjection(...)` owns member discovery, declaration location, value type, and callable signature admission; `activationParameterProjectionFrame(...)` owns candidate-basis and parameter-reference projection; `activationModelHandoffForParameterProjection(...)` owns absent/model-open/assignability handoff folding.",
         "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
         "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
         "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
+        "Closed static/value custom-element child-controller materialization now enters through `ComposedChildControllerMaterializationFrame`: admission owns parent container and resolved definition, then the materialization phase owns child-container emission, runtime controller construction, lifecycle step, host-child claim, and controller publication.",
         "Parent-to-child component/model closure depends on `RuntimeBoundControllerValueTable` being threaded into child resource analysis and extended with the current resource's rendered controller values during runtime composition. Treat `Array.find receiver did not reduce to a known array` on bound child controller state as binding-source/evaluator pressure before adding AuCompose-local shortcuts.",
         "Broad `Constructable` child composition can still close when the bound controller value table gives the child getter a concrete parent value and the evaluator binds receiver `this` for property method calls such as `entry.isApplicable(id)`. Exact evaluated object literals should read absent properties as `undefined`, not unknown shape.",
         "`RuntimeCompositions` exposes `renderingContextKind` so definition-local resource analysis can be separated from recursive parent-supplied child instances. A public component's own template may honestly remain open when a required bindable is consumer-supplied even if all observed app use-sites close.",
@@ -1853,6 +1990,30 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "compositionControllerSemanticClaims",
+          "summary": "Runtime composition relation-claim boundary linking host controller, composition context, and resolved component definitions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "ComposedChildControllerMaterializationFrame",
+          "summary": "Closed AuCompose custom-element child handoff frame for parent container admission, resolved definition, child-container emission, controller creation, and publication side effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "createComposedChildControllerFrame",
+          "summary": "Admission boundary for a closed static/value AuCompose candidate before materializing the aggregate child controller."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "materializeComposedChildControllerFrame",
+          "summary": "Finite aggregate materialization phase for composed child container, runtime controller, lifecycle step, relation claim, and controller publication."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/runtime-composition.ts",
           "symbolName": "CompositionController",
           "summary": "Runtime composition controller product model with auLink grounding."
@@ -1862,6 +2023,24 @@
           "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
           "symbolName": "activationModelHandoffForType",
           "summary": "Checker-backed AuCompose activate(model) lifecycle handoff analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activateMethodProjection",
+          "summary": "AuCompose activate member discovery and callable signature admission."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationParameterProjectionFrame",
+          "summary": "Overload candidate and parameter-reference projection frame for activate(model)."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationModelHandoffForParameterProjection",
+          "summary": "Activation model handoff fold over parameter projection and model assignability."
         },
         {
           "kind": "source",
@@ -1916,10 +2095,25 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
           "symbolName": "activationModelHandoffForType"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activateMethodProjection"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationParameterProjectionFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationModelHandoffForParameterProjection"
         }
       ],
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-06-05"
     },
     {
       "id": "reuse:repeat-scope-value-carriers",
@@ -1937,6 +2131,7 @@
       "rationale": "A repeat local can have a useful static representative value even when the recursive rendered view is not materialized per item. Future router, binding, and authoring work should reuse the scope materializer and binding-source evaluator handoff instead of patching feature-local static values.",
       "guidance": [
         "Start from TemplateControllerScopeMaterializer when repeat.for locals need value-side semantics; it owns the BindingContextSlot creation and can attach representative static values.",
+        "Use `iteratorScopeMaterializationFrame(...)` and `iteratorLocalSlots(...)` as the current materializer-side repeat scope boundary: the frame prepares source-value and source-expression context once, while local slots spend the iterator projection plus `repeatStaticLocalValue(...)`.",
         "Use repeatStaticLocalValue to project conservative representative values from statically known iterables, including common string-pattern property values.",
         "repeatStaticLocalValue should enter source-value reduction through projectRuntimeBindingSourceValueContextInScope(...), including its no-runtime-binding fallback, so repeat locals do not re-own binding-behavior lifecycle, strict-mode, or value-converter resource-scope policy.",
         "RuntimeBindingSourceValueEvaluator should consume BindingContextSlot.staticValue before falling back to TypeChecker member access; local object/property evaluation belongs there rather than in router or authoring code.",
@@ -1954,6 +2149,18 @@
           "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
           "symbolName": "TemplateControllerScopeMaterializer",
           "summary": "Constructs template-controller scopes and assigns repeat local static values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "iteratorScopeMaterializationFrame",
+          "summary": "Repeat scope setup boundary shared by local type projection, static values, and source-expression context handoff."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "iteratorLocalSlots",
+          "summary": "Repeat local slot construction that spends iterator local types and representative static values."
         },
         {
           "kind": "source",
@@ -2171,13 +2378,13 @@
         "framework-grounding",
         "ui-virtualization"
       ],
-      "summary": "UI virtualization now has template-controller resource/scope/overlay coverage, but its service, DOM renderer, scroller, collection strategy, and error-policy runtime semantics remain open.",
-      "rationale": "DefaultVirtualizationConfiguration registers CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat. Semantic-runtime now recognizes the configuration, admits the virtual-repeat resource catalog row, and models virtual-repeat as repeat-like iteration for template scope and TypeScript overlay flow. That closes the template-controller surface, but not the plugin's DI service spending, DOM renderer/scroller substrate, collection strategy policy, or framework error-code diagnostics.",
+      "summary": "UI virtualization now has template-controller resource/scope/overlay coverage plus configuration-owned service resolver effects, while DOM renderer, scroller, collection strategy, and error-policy runtime semantics remain open.",
+      "rationale": "DefaultVirtualizationConfiguration registers CollectionStrategyLocator, DefaultDomRenderer, and VirtualRepeat. Semantic-runtime recognizes the configuration, admits the virtual-repeat resource catalog row, models virtual-repeat as repeat-like iteration for template scope and TypeScript overlay flow, and spends the CollectionStrategyLocator/IDomRenderer service registrations as framework resolver effects. That closes the template-controller and DI service surface, but not the plugin's DOM renderer/scroller substrate, collection strategy policy, or framework error-code diagnostics.",
       "guidance": [
         "Start with this frontier when external app pressure or framework error-code pressure involves @aurelia/ui-virtualization beyond ordinary virtual-repeat item-scope typing.",
         "Do not add local virtual-repeat fixture hacks: resource admission belongs in FrameworkRegistrationKind/Capability plus UiVirtualizationBuiltInResourceCatalogs, and item-scope semantics belong in frameworkTemplateControllerSemantics.",
-        "Treat CollectionStrategyLocator, IDomRenderer, DefaultDomRenderer, scroller lookup, horizontal/table policy, item sizing, and near-top/near-bottom events as deeper runtime/plugin semantics, not as template-controller scope facts.",
-        "Before closing DefaultVirtualizationConfiguration as a fully spent DI registration, model or explicitly account for CollectionStrategyLocator and DefaultDomRenderer service registration effects.",
+        "Treat scroller lookup, horizontal/table policy, item sizing, near-top/near-bottom events, and collection-strategy runtime behavior as deeper runtime/plugin semantics, not as template-controller scope facts.",
+        "Do not reopen DefaultVirtualizationConfiguration merely because CollectionStrategyLocator and DefaultDomRenderer are services: semantic-runtime spends those as framework resolver effects; further work should target their runtime behavior and diagnostics.",
         "Use Atlas framework error and DI lenses against the ui-virtualization package before adding diagnostics for virtualization errors; the current template-controller contract does not prove renderer/scroller/strategy error authority."
       ],
       "nextActionPolicy": "when-touched",
@@ -2304,6 +2511,18 @@
           "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
           "symbolName": "TemplateTypeSystemOverlayBuilder",
           "summary": "Generated TypeScript overlay builder that replays materialized semantic scopes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+          "symbolName": "TemplateTypeSystemOverlayBuildFrame",
+          "summary": "One-overlay mutable build state for generated source, expression probes, skipped rows, base projection context, and runtime source-expression projectors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+          "symbolName": "appendTemplateExpressionProbes",
+          "summary": "Overlay build phase that replays every parsed template expression through materialized scopes before generated TypeScript is finalized."
         },
         {
           "kind": "source",

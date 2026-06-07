@@ -39,10 +39,11 @@ import type { RouteInstructionMaterializationProjectResult } from './route-instr
 import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
 import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
 import { migrateRedirectPath } from './route-redirect-migration.js';
+import { ROUTE_RECOGNIZER_RESIDUE_PARAMETER } from './route-configurable-path.js';
 import { routerIssueProductRecords } from './router-issue-publication.js';
 import { routeRecognizerProductRecords } from './router-product-records.js';
 
-const RESIDUE = '$$residue';
+const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
 const DEFAULT_VIEWPORT_NAME = 'default';
 
 interface RouteRecognitionEmission {

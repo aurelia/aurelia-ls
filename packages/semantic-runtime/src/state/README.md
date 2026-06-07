@@ -28,6 +28,14 @@ initial-state expression through the shared static evaluator frame before fallin
 This lets consumers such as dynamic composition or route-resource values reuse the same `& state` handoff while keeping
 dynamic store-name selection and later action-driven state changes explicit frontiers.
 
+`from-state-decorator-recognition.ts` owns the source-site readers for invalid decorator targets, literal named-store
+references, and valid field/setter decorator binding sites. `state-getter-binding-materialization.ts` spends those
+sites into positive `StateGetterBinding` products with store resolution, selector return type, and target member type
+projection. This keeps app-builder, diagnostics, and later data-flow from re-walking decorator syntax separately.
+`from-state-decorator-source.ts` owns product-free source serialization for the framework `@fromState(...)` decorator.
+App-builder framework-API parts may invoke it, but the state package remains the source authority because the same
+decorator is also recognized for target validation and named-store lookup diagnostics.
+
 Raw framework errors are linked through `StateRawErrorAuthority` because `@aurelia/state` currently throws plain
 `Error` instances instead of `ErrorNames`/AUR codes. Only add a raw authority constant when semantic-runtime has a
 modeled product that cites it; otherwise leave the row visible in Atlas' `framework.errors` raw gap projection.
@@ -54,6 +62,8 @@ Open state frontiers:
 
 - Dynamic store-name expressions such as `& state: storeName` remain runtime-dependent until semantic-runtime has a
   bind-time value strategy for selecting a configured store.
+- `StateGetterBinding` is source/store/type materialized, but it is not yet bridged into controller-owned runtime binding
+  publication, target update operations, or connectable observed-dependency rows.
 - Broader dispatch event policy remains open for non-form `$event.target` expressions where DOM retargeting and nested
   authored content make the target less exact than `currentTarget`.
 - DevTools errors belong to runtime host/extension and dispatch lifecycle state, not store configuration.

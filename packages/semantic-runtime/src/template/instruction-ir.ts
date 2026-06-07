@@ -119,11 +119,24 @@ export class HydrateElementInstruction {
     readonly elementName: string,
     readonly definitionProductHandle: ProductHandle | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
+    readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
     readonly captureSyntaxProductHandles: readonly ProductHandle[],
     readonly containerless: boolean,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
+  ) {}
+}
+
+/** Projection definition compiled from child content of one custom-element usage. */
+export class HydrateElementProjectionInstructionSequence {
+  constructor(
+    /** Slot name on the receiving custom element; empty/default content uses `default`. */
+    readonly slotName: string,
+    /** Instruction sequence for the compiled projection template. */
+    readonly instructionSequenceProductHandle: ProductHandle,
+    /** Source address for the projected child content that produced the sequence. */
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 

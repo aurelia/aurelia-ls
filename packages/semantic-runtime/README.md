@@ -19,15 +19,22 @@ Run the aggregate app API pressure lane with:
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture typescript-project-diagnostics
+pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture app-builder:task-form-validated-starter
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --root packages/semantic-runtime/fixtures/pressure
+pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture pressure:app-builder-part-source-gallery --query binding-value-channel-summary --rows 20
 ```
+
+Use `--query`/`--queries` to focus a probe on one or more `SemanticAppQueryKind` values, including query families that
+are not part of the default aggregate set. `--rows` overrides the bounded page size for query families that page rows.
+Fixture names without a prefix resolve under `fixtures/pressure`; use `pressure:<name>` for an explicit pressure fixture,
+including current app-builder pressure fixtures.
 
 Run route-scoped semantic contracts with:
 
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route observation
 pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route app-pattern.policy
-pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --domain forms --tier route
+pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --domain forms --tier fast
 ```
 
 The suite builds once, then runs the selected row-backed contracts directly. Use `--list` to see available routes,
@@ -44,7 +51,7 @@ pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests
 ```
 
 The fixture lanes are roleful. `fixtures/pressure` contains analyzer pressure, including migrated app-pattern fixtures
-that used to live under the deleted recipe-authoring folder. `fixtures/app-builder/goldens` contains current app-builder
+that used to live under the deleted recipe-authoring folder. `fixtures/pressure/app-builder-*` contains current app-builder
 output examples. App-builder is the future public generation path; fixture verification is a neutral test/pressure layer,
 not the generation API.
 
@@ -80,6 +87,5 @@ When a semantic-runtime note should guide future autonomous work, promote its du
 and link back to the owning README or workbench rather than relying on `.temp` notes.
 
 For the durable folder map, read [src/README.md](src/README.md). For recent context while the package is still settling,
-read [src/WORKBENCH.md](src/WORKBENCH.md). Pressure fixtures are documented in
-[fixtures/pressure/README.md](fixtures/pressure/README.md); app-builder goldens live under
-[fixtures/app-builder](fixtures/app-builder).
+read [src/WORKBENCH.md](src/WORKBENCH.md). Pressure fixtures, including current app-builder pressure fixtures, are
+documented in [fixtures/pressure/README.md](fixtures/pressure/README.md).

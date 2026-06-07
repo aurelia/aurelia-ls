@@ -9,6 +9,7 @@ import {
   KernelVocabulary,
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
+import { BuiltInBindingBehaviorName } from '../resources/built-in-resources.js';
 import {
   RuntimeHtmlBindingBehaviorFrameworkErrorCode,
   type RuntimeHtmlBindingBehaviorFrameworkErrorCode as RuntimeHtmlBindingBehaviorFrameworkErrorCodeValue,
@@ -185,7 +186,7 @@ export type ValidateBindingBehaviorBindContext = {
 
 @auLink('runtime-html:SelfBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class SelfBindingBehavior {
-  readonly name = 'self';
+  readonly name = BuiltInBindingBehaviorName.Self;
 
   bind(context: SelfBindingBehaviorBindContext): BuiltInBindingBehaviorBindIssue | null {
     if (!context.bindingIsListenerBinding) {
@@ -201,7 +202,7 @@ export class SelfBindingBehavior {
 
 @auLink('runtime-html:SignalBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class SignalBindingBehavior {
-  readonly name = 'signal';
+  readonly name = BuiltInBindingBehaviorName.Signal;
 
   bind(context: SignalBindingBehaviorBindContext): BuiltInBindingBehaviorBindIssue | null {
     if (!context.bindingCanHandleChange) {
@@ -224,7 +225,7 @@ export class SignalBindingBehavior {
 
 @auLink('runtime-html:AttrBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class AttrBindingBehavior {
-  readonly name = 'attr';
+  readonly name = BuiltInBindingBehaviorName.Attr;
 
   bind(context: AttrBindingBehaviorBindContext): BuiltInBindingBehaviorBindIssue | null {
     if (!context.bindingIsPropertyBinding) {
@@ -239,7 +240,7 @@ export class AttrBindingBehavior {
 }
 
 abstract class RateLimitBindingBehavior {
-  abstract readonly name: 'debounce' | 'throttle';
+  abstract readonly name: BuiltInBindingBehaviorName.Debounce | BuiltInBindingBehaviorName.Throttle;
 
   bind(context: RateLimitBindingBehaviorBindContext): BuiltInBindingBehaviorBindIssue | null {
     if (context.rateLimitAlreadyApplied) {
@@ -255,17 +256,17 @@ abstract class RateLimitBindingBehavior {
 
 @auLink('runtime-html:DebounceBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class DebounceBindingBehavior extends RateLimitBindingBehavior {
-  readonly name = 'debounce';
+  readonly name = BuiltInBindingBehaviorName.Debounce;
 }
 
 @auLink('runtime-html:ThrottleBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class ThrottleBindingBehavior extends RateLimitBindingBehavior {
-  readonly name = 'throttle';
+  readonly name = BuiltInBindingBehaviorName.Throttle;
 }
 
 @auLink('validation-html:ValidateBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class ValidateBindingBehavior {
-  readonly name = 'validate';
+  readonly name = BuiltInBindingBehaviorName.Validate;
 
   bind(context: ValidateBindingBehaviorBindContext): BuiltInBindingBehaviorBindIssue | null {
     if (!context.bindingIsPropertyBinding) {
@@ -351,7 +352,7 @@ export class ValidationController {
  */
 @auLink('runtime-html:UpdateTriggerBindingBehavior', { facet: 'binding-behavior-semantics' })
 export class UpdateTriggerBindingBehavior {
-  readonly name = 'updateTrigger';
+  readonly name = BuiltInBindingBehaviorName.UpdateTrigger;
 
   bind(context: UpdateTriggerBindingBehaviorBindContext): UpdateTriggerBindingBehaviorBindIssue | null {
     if (context.eventArgumentCount === 0) {

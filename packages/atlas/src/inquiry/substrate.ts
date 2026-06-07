@@ -21,7 +21,7 @@ export const enum SubstrateId {
   PluginArchitecture = "plugin.architecture",
   /** Aurelia router framework source architecture. */
   FrameworkRouter = "framework.router",
-  /** Aurelia documentation, framework tests, and legacy package corpus for fixture and authoring pressure. */
+  /** Aurelia documentation and framework tests for fixture and authoring pressure. */
   FrameworkCorpus = "framework.corpus",
   /** Product-to-framework auLink anchors. */
   ProductAuLink = "product.aulink",
@@ -232,7 +232,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     kind: SubstrateKind.Framework,
     trust: SubstrateTrust.Steering,
     summary:
-      "Aurelia documentation files, framework test files, documentation code fences, test call-site snippets, and legacy replacement package inventory scanned as fixture and authoring pressure seeds.",
+      "Aurelia documentation files, framework test files, documentation code fences, and test call-site snippets scanned as fixture and authoring pressure seeds.",
     basisKinds: [BasisKind.SourceText],
     produces: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
     dependsOn: [SubstrateId.SourceFiles],

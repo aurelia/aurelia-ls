@@ -903,6 +903,7 @@ function catalogInputsForFrameworkKind(
       case FrameworkRegistrationCapability.StateRuntimeRenderers:
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.UiVirtualizationServiceResolvers:
       case FrameworkRegistrationCapability.AppTask:
         break;
     }

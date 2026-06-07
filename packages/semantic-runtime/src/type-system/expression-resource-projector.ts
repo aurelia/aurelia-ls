@@ -4,6 +4,10 @@ import type {
   IsBindingBehavior,
   ValueConverterExpression,
 } from '../expression/ast.js';
+import {
+  bindingBehaviorProjectsThroughValueConverter,
+  bindingBehaviorValueConverterProjection,
+} from '../expression/binding-behavior-bind-effects.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { BindingBehaviorDefinition } from '../resources/binding-behavior-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -23,6 +27,9 @@ import {
 import {
   CheckerStrictTrueComparisonKind,
 } from './checker-type-member-surface.js';
+import {
+  checkerTypeReferenceAssignableToPrimitiveType,
+} from './checker-primitive-types.js';
 import {
   VALUE_CONVERTER_TO_VIEW_METHOD,
   type RuntimeValueConverterMethodName,
@@ -122,6 +129,17 @@ export class CheckerExpressionResourceProjector {
     );
     if (converterType.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return converterType;
+    }
+
+    const builtInProjection = this.evaluateKnownBuiltInValueConverterMethod(
+      expression,
+      methodName,
+      definition,
+      input,
+      context,
+    );
+    if (builtInProjection != null) {
+      return builtInProjection;
     }
 
     const method = this.access.evaluateMemberOnType(
@@ -252,7 +270,24 @@ export class CheckerExpressionResourceProjector {
         inner.typeReference,
       );
     }
+    if (bindingBehaviorProjectsThroughValueConverter(expression)) {
+      return this.evaluateBindingBehaviorValueConverterProjection(expression, inner, context);
+    }
     return inner;
+  }
+
+  private evaluateBindingBehaviorValueConverterProjection(
+    expression: BindingBehaviorExpression,
+    inner: CheckerExpressionTypeEvaluation,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation {
+    const projected = bindingBehaviorValueConverterProjection(expression);
+    return this.evaluateValueConverterMethod(
+      projected,
+      VALUE_CONVERTER_TO_VIEW_METHOD,
+      inner,
+      context.child(projected, `behavior:${expression.name.name}:projected-value-converter`),
+    );
   }
 
   private evaluateStateBindingBehavior(
@@ -381,6 +416,51 @@ export class CheckerExpressionResourceProjector {
     name: string,
   ) {
     return findVisibleTemplateResource(this.resourceScope, resourceKind, name);
+  }
+
+  private evaluateKnownBuiltInValueConverterMethod(
+    expression: ValueConverterExpression,
+    methodName: RuntimeValueConverterMethodName,
+    definition: ValueConverterDefinition,
+    input: CheckerExpressionTypeEvaluation,
+    context: CheckerExpressionTypeEvaluationContext,
+  ): CheckerExpressionTypeEvaluation | null {
+    if (methodName !== VALUE_CONVERTER_TO_VIEW_METHOD) {
+      return null;
+    }
+    switch (definition.target.localName) {
+      case 'TranslationValueConverter':
+        return this.inputAssignableToPrimitive(input, 'string')
+          ? this.support.projectPrimitive(expression, context.scope, `${context.projectionLocalKey()}:known-translation-result`, 'string', context.sourceAddressHandle)
+          : null;
+      case 'NumberFormatValueConverter':
+        return this.inputAssignableToPrimitive(input, 'number')
+          ? this.support.projectPrimitive(expression, context.scope, `${context.projectionLocalKey()}:known-number-format-result`, 'string', context.sourceAddressHandle)
+          : null;
+      case 'DateFormatValueConverter':
+      case 'RelativeTimeValueConverter':
+        return this.inputDisplayDefinitely(input, 'Date')
+          ? this.support.projectPrimitive(expression, context.scope, `${context.projectionLocalKey()}:known-date-format-result`, 'string', context.sourceAddressHandle)
+          : null;
+      default:
+        return null;
+    }
+  }
+
+  private inputAssignableToPrimitive(
+    input: CheckerExpressionTypeEvaluation,
+    primitive: 'string' | 'number',
+  ): boolean {
+    return input.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      && checkerTypeReferenceAssignableToPrimitiveType(this.support.store, input.typeReference, primitive) === true;
+  }
+
+  private inputDisplayDefinitely(
+    input: CheckerExpressionTypeEvaluation,
+    display: string,
+  ): boolean {
+    return input.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      && input.typeReference.display === display;
   }
 }
 

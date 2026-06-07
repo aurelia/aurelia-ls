@@ -1,0 +1,22 @@
+{
+  "name": "aurelia-part-source-gallery",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aurelia/i18n": "^2.0.0-rc.1",
+    "@aurelia/router": "^2.0.0-rc.1",
+    "@aurelia/runtime-html": "^2.0.0-rc.1",
+    "@aurelia/state": "^2.0.0-rc.1",
+    "@aurelia/template-compiler": "^2.0.0-rc.1",
+    "@aurelia/ui-virtualization": "^2.0.0-rc.1",
+    "@aurelia/validation": "^2.0.0-rc.1",
+    "@aurelia/validation-html": "^2.0.0-rc.1",
+    "aurelia": "^2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

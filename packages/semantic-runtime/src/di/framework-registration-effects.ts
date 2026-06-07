@@ -160,6 +160,20 @@ const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
     valueKind: RegistrationValueKind.Instance,
     valueName: 'Dialog child settings map',
   },
+  {
+    capability: FrameworkRegistrationCapability.UiVirtualizationServiceResolvers,
+    keyName: 'ICollectionStrategyLocator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'CollectionStrategyLocator',
+  },
+  {
+    capability: FrameworkRegistrationCapability.UiVirtualizationServiceResolvers,
+    keyName: 'IDomRenderer',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'DefaultDomRenderer',
+  },
 ];
 
 const frameworkFactoryEffects: readonly FrameworkFactoryEffect[] = [

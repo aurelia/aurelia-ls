@@ -25,6 +25,7 @@ import {
 } from '../observation/binding-source-value-evaluation.js';
 import {
   projectRuntimeBindingSourceValueContextInScope,
+  type RuntimeBindingSourceValueContextProjection,
 } from '../observation/binding-source-value-evaluation-context.js';
 import type { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
 import {
@@ -192,6 +193,28 @@ type TemplateScopeConstructionFinePhaseName =
 
 interface BoundControllerSourceExpressionSite {
   readonly projection: RuntimeBindingSourceExpressionContextProjection | null;
+}
+
+type IteratorScopeProjection = ReturnType<TemplateScopeTypeProjector['iteratorProjection']>;
+
+interface IteratorScopeMaterializationFrame {
+  readonly input: TemplateScopeConstructionRequest;
+  readonly parent: BindingScope;
+  readonly effect: IteratorBindingScopeEffect;
+  readonly localSuffix: string;
+  readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null;
+  readonly binding: RuntimeExpressionBinding | null;
+  readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly iteratorProjection: IteratorScopeProjection;
+  readonly localTypes: ReadonlyMap<string, CheckerTypeReference | null>;
+}
+
+interface LetStaticValueEvaluationFrame {
+  readonly input: TemplateScopeConstructionRequest;
+  readonly effect: LetBindingScopeEffect;
+  readonly targetType: CheckerTypeReference | null;
+  readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator;
+  readonly contextProjection: RuntimeBindingSourceValueContextProjection;
 }
 
 export interface TemplateScopeConstructionRequest {
@@ -1332,6 +1355,37 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
   ): BindingScopeConstructionEmission {
     const input = frame.input;
+    const iteratorFrame = this.iteratorScopeMaterializationFrame(frame, parent, effect, localSuffix);
+    this.publishIteratorScopeIssues(frame, iteratorFrame);
+    const localSlots = this.measure(input, 'iterator-local-slots', () =>
+      this.iteratorLocalSlots(iteratorFrame)
+    );
+    const overrideSlots = this.measure(input, 'iterator-override-slots', () =>
+      this.typeSupport.repeatOverrideSlots(input, effect.sourceAddressHandle, iteratorFrame.iteratorProjection.elementType)
+    );
+    return this.measure(input, 'iterator-scope-prepare', () => this.scopeMaterializer.prepare(BindingScope.fromRepeatedItem({
+      localKey: `${input.localKey}:scope:${localSuffix}`,
+      ownerProductHandle: effect.productHandle,
+      ownerIdentityHandle: effect.identityHandle,
+      parent,
+      localSlots,
+      overrideSlots,
+      sourceAddressHandle: effect.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.RuntimeBindingScopeEffect,
+        effect.productHandle,
+        effect.sourceAddressHandle,
+      )],
+    })));
+  }
+
+  private iteratorScopeMaterializationFrame(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    effect: IteratorBindingScopeEffect,
+    localSuffix: string,
+  ): IteratorScopeMaterializationFrame {
+    const input = frame.input;
     const sourceValueEvaluator = input.evaluation == null
       ? null
       : new RuntimeBindingSourceValueEvaluator(
@@ -1348,10 +1402,24 @@ export class TemplateControllerScopeMaterializer {
     const iteratorProjection = this.measure(input, 'iterator-type-projection', () =>
       this.typeSupport.iteratorProjection(input, parent, effect, localSuffix)
     );
-    const elementType = iteratorProjection.elementType;
-    const localProjection = iteratorProjection.localProjection;
-    const localTypes = new Map(localProjection.locals.map((local) => [local.name, local]));
-    const iteratorParse = iteratorProjection.parse;
+    return {
+      input,
+      parent,
+      effect,
+      localSuffix,
+      sourceValueEvaluator,
+      binding: binding != null && isRuntimeExpressionBinding(binding) ? binding : null,
+      bindingExpressionScopes,
+      iteratorProjection,
+      localTypes: new Map(iteratorProjection.localProjection.locals.map((local) => [local.name, local.typeReference])),
+    };
+  }
+
+  private publishIteratorScopeIssues(
+    frame: TemplateScopeConstructionFrame,
+    iteratorFrame: IteratorScopeMaterializationFrame,
+  ): void {
+    const { input, effect, localSuffix, iteratorProjection } = iteratorFrame;
     const repeatableIssue = iteratorProjection.repeatableIssue;
     this.measure(input, 'iterator-repeatable-issues', () => {
       if (repeatableIssue == null) {
@@ -1374,7 +1442,7 @@ export class TemplateControllerScopeMaterializer {
       ));
     });
     this.measure(input, 'iterator-local-issues', () => {
-      localProjection.runtimeIssues.forEach((issue, index) => {
+      iteratorProjection.localProjection.runtimeIssues.forEach((issue, index) => {
         frame.addScopeIssue(this.scopeIssuePublisher.publish(
           `${input.localKey}:scope:${localSuffix}:issue:${index}`,
           effect.productHandle,
@@ -1390,46 +1458,42 @@ export class TemplateControllerScopeMaterializer {
         ));
       });
     });
-    const localSlots = this.measure(input, 'iterator-local-slots', () =>
-      effect.localNames.map((name) => new BindingContextSlotDraft(
+  }
+
+  private iteratorLocalSlots(
+    frame: IteratorScopeMaterializationFrame,
+  ): readonly BindingContextSlotDraft[] {
+    const {
+      effect,
+      iteratorProjection,
+      localTypes,
+      parent,
+      sourceValueEvaluator,
+      binding,
+      input,
+      bindingExpressionScopes,
+    } = frame;
+    return effect.localNames.map((name) => new BindingContextSlotDraft(
         name,
         null,
         null,
         localTypes.has(name)
-          ? localTypes.get(name)?.typeReference ?? null
-          : elementTypeForFlattenedIteratorName(effect.localNames, elementType),
+          ? localTypes.get(name) ?? null
+          : elementTypeForFlattenedIteratorName(effect.localNames, iteratorProjection.elementType),
         effect.sourceAddressHandle,
         [],
         repeatStaticLocalValue(
-          iteratorParse,
+          iteratorProjection.parse,
           parent,
           effect,
           name,
           sourceValueEvaluator,
-          binding != null && isRuntimeExpressionBinding(binding) ? binding : null,
+          binding,
           input.runtimeBindings,
           bindingExpressionScopes,
           input.resourceScope,
         ),
       ))
-    );
-    const overrideSlots = this.measure(input, 'iterator-override-slots', () =>
-      this.typeSupport.repeatOverrideSlots(input, effect.sourceAddressHandle, elementType)
-    );
-    return this.measure(input, 'iterator-scope-prepare', () => this.scopeMaterializer.prepare(BindingScope.fromRepeatedItem({
-      localKey: `${input.localKey}:scope:${localSuffix}`,
-      ownerProductHandle: effect.productHandle,
-      ownerIdentityHandle: effect.identityHandle,
-      parent,
-      localSlots,
-      overrideSlots,
-      sourceAddressHandle: effect.sourceAddressHandle,
-      scopeCreators: [new BindingScopeCreator(
-        BindingScopeCreatorKind.RuntimeBindingScopeEffect,
-        effect.productHandle,
-        effect.sourceAddressHandle,
-      )],
-    })));
   }
 
   private constructLetElementScope(
@@ -1498,6 +1562,19 @@ export class TemplateControllerScopeMaterializer {
     effect: LetBindingScopeEffect,
     targetType: CheckerTypeReference | null,
   ): EvaluationValue | null {
+    const frame = this.letStaticValueEvaluationFrame(input, parent, effect, targetType);
+    if (frame == null) {
+      return null;
+    }
+    return this.evaluateLetStaticValue(frame);
+  }
+
+  private letStaticValueEvaluationFrame(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    effect: LetBindingScopeEffect,
+    targetType: CheckerTypeReference | null,
+  ): LetStaticValueEvaluationFrame | null {
     if (input.evaluation == null) {
       return null;
     }
@@ -1519,6 +1596,25 @@ export class TemplateControllerScopeMaterializer {
       sourceScope: parent,
       resourceScope: input.resourceScope,
     });
+    return {
+      input,
+      effect,
+      targetType,
+      sourceValueEvaluator: new RuntimeBindingSourceValueEvaluator(
+        this.store,
+        input.evaluation,
+        input.boundControllerValues,
+        input.sourceValueActivationContext ?? null,
+        input.sourceValueDefaultContainer ?? null,
+      ),
+      contextProjection,
+    };
+  }
+
+  private evaluateLetStaticValue(
+    frame: LetStaticValueEvaluationFrame,
+  ): EvaluationValue | null {
+    const { contextProjection, effect, sourceValueEvaluator, targetType } = frame;
     if (contextProjection.context == null) {
       return targetType == null
         ? null
@@ -1528,13 +1624,7 @@ export class TemplateControllerScopeMaterializer {
           null,
         );
     }
-    const evaluation = new RuntimeBindingSourceValueEvaluator(
-      this.store,
-      input.evaluation,
-      input.boundControllerValues,
-      input.sourceValueActivationContext ?? null,
-      input.sourceValueDefaultContainer ?? null,
-    ).evaluate(contextProjection.context);
+    const evaluation = sourceValueEvaluator.evaluate(contextProjection.context);
     if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
       return evaluation.value;
     }

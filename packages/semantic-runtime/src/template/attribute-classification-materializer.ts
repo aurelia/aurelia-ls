@@ -66,6 +66,7 @@ import {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
+import { isTemplateSpecialAttributeName } from './special-attribute-source.js';
 
 export interface AttributeClassificationRequest {
   /** Store-local key for this classification pass. */
@@ -369,7 +370,7 @@ function classifySyntax(
   const rawName = attribute.rawName.toLowerCase();
   const target = syntax.target.toLowerCase();
 
-  if (rawName === 'as-element' || rawName === 'containerless') {
+  if (isTemplateSpecialAttributeName(rawName)) {
     return new ClassificationDecision(AttributeClassificationKind.CompilerControl, null, null, null, null);
   }
 

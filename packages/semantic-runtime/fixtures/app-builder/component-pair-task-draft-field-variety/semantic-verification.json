@@ -1,0 +1,537 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "component-pair-task-draft-field-variety",
+  "ok": true,
+  "expectedEffects": 8,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Component-pair app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 9 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 11,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "saveDraft()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Save draft",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "saveDraft()",
+        "handlerExpression": "saveDraft()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Save draft",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 3709,
+          "end": 3801
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 200,
+          "end": 218
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-textarea",
+        "controlId": "textarea",
+        "bindingExpression": "description",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-textarea",
+        "controlId": "textarea",
+        "bindingExpression": "description",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 546,
+          "end": 570
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-number-input",
+        "controlId": "number-input",
+        "bindingExpression": "estimateHours",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-number-input",
+        "controlId": "number-input",
+        "bindingExpression": "estimateHours",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 949,
+          "end": 985
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-range-input",
+        "controlId": "range-input",
+        "bindingExpression": "progressPercent",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-range-input",
+        "controlId": "range-input",
+        "bindingExpression": "progressPercent",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 1214,
+          "end": 1252
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-date-input",
+        "controlId": "date-input",
+        "bindingExpression": "dueDate",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-date-input",
+        "controlId": "date-input",
+        "bindingExpression": "dueDate",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 1664,
+          "end": 1692
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 1876,
+          "end": 1895
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "priority",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "priority",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 2068,
+          "end": 2089
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-multi-select",
+        "controlId": "multi-select",
+        "bindingExpression": "labels",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-multi-select",
+        "controlId": "multi-select",
+        "bindingExpression": "labels",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 2540,
+          "end": 2559
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-radio-group",
+        "controlId": "radio-group",
+        "bindingExpression": "reviewType",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-radio-group",
+        "controlId": "radio-group",
+        "bindingExpression": "reviewType",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 2966,
+          "end": 2991
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-checkbox-list",
+        "controlId": "checkbox-list",
+        "bindingExpression": "checkpoints",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-draft-fields",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-checkbox-list",
+        "controlId": "checkbox-list",
+        "bindingExpression": "checkpoints",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety/src/task-draft-fields.html",
+          "start": 3439,
+          "end": 3465
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 4281,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 131,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-draft-fields.ts",
+      "textLength": 1786,
+      "summary": "Generated SourcePlan file 'src/task-draft-fields.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-draft-fields.html",
+      "textLength": 3809,
+      "summary": "Generated SourcePlan file 'src/task-draft-fields.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 248,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 8,
+      "jsonLength": 2426,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 6,
+      "jsonLength": 121,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 5,
+      "jsonLength": 403,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 11,
+      "jsonLength": 10803,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 44,
+      "jsonLength": 22320,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

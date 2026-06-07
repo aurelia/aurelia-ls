@@ -1,0 +1,183 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=app-shell, files=3, witnesses=13, controlUses=0, expectedEffects=8, decisionBundles=1, issues=0.",
+    "rootDir": ".",
+    "templatePath": null,
+    "sourceTargetPath": null,
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "app-shell",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "app-shell"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "semantic-runtime-reopen"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "resource-definition",
+      "template-compilation",
+      "runtime-controller",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 8,
+    "controlUseInventoryRowCount": 0,
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 2,
+      "requiredCount": 2,
+      "conditionalCount": 0,
+      "optionalCount": 0,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 2,
+          "requiredCount": 2,
+          "conditionalCount": 0,
+          "optionalCount": 0,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceLoweringAppShell"
+          ],
+          "conditionalRequestFieldNames": [],
+          "optionalRequestFieldNames": []
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 13,
+    "suppliedInputCount": 2,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 1,
+    "decisionBundleDecisionCount": 2,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 100,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/my-app.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 56,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/my-app.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 37,
+          "contributionCount": 1
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 241
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": {
+        "key": "minimal-app-shell.convention",
+        "title": "Minimal convention app shell",
+        "summary": "Aurelia entrypoint plus root component/template with the smallest runnable source shape.",
+        "role": "recommendable-source-start",
+        "domainModelPolicy": "domain-neutral",
+        "stylePolicy": "none",
+        "dataPolicy": "none",
+        "codeEconomyPolicy": "production-terse",
+        "adaptationNotes": [
+          "The source is intentionally domain-neutral and should be used as a runnable shell before feature/domain mechanics are added.",
+          "The resource carrier is the only semantic variant in this source pattern."
+        ],
+        "parameters": [],
+        "modules": [
+          {
+            "key": "aurelia-app-shell",
+            "kind": "app-shell",
+            "title": "Aurelia app shell",
+            "summary": "Public Aurelia entrypoint plus root component/template ownership."
+          },
+          {
+            "key": "convention-resource-admission",
+            "kind": "resource-convention",
+            "title": "Convention resource admission",
+            "summary": "Class/file/template naming is intentionally compatible with Aurelia convention resource discovery."
+          }
+        ],
+        "adaptationGroups": [],
+        "kind": "source-pattern"
+      }
+    }
+  }
+}

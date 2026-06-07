@@ -45,6 +45,14 @@ export function checkerStringIndexValueType(
   return checkerIndexValueType(checker, type, ts.IndexKind.String);
 }
 
+/** Read a string index signature through the shared checker relation helper surface. */
+export function checkerStringIndexInfo(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.IndexInfo | null {
+  return checkerIndexInfoOfType(checker, type, ts.IndexKind.String);
+}
+
 export function checkerNumberIndexValueType(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -327,6 +335,32 @@ function checkerIndexValueType(
     );
   }
   return checker.getIndexTypeOfType(type, indexKind) ?? null;
+}
+
+function checkerIndexInfoOfType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  indexKind: ts.IndexKind,
+): ts.IndexInfo | null {
+  if (type.isUnion()) {
+    const infos = type.types
+      .filter((constituent) => !checkerNullishType(checker, constituent))
+      .map((constituent) => checkerIndexInfoOfType(checker, constituent, indexKind))
+      .filter((info): info is ts.IndexInfo => info != null);
+    if (infos.length === 0) {
+      return null;
+    }
+    const [first, ...rest] = infos;
+    return first != null && rest.every((info) =>
+      info.isReadonly === first.isReadonly
+      && checker.typeToString(info.type) === checker.typeToString(first.type)
+    )
+      ? first
+      : null;
+  }
+  return checker.getIndexInfoOfType(type, indexKind)
+    ?? checker.getIndexInfoOfType(checker.getApparentType(type), indexKind)
+    ?? null;
 }
 
 function unionRepeatableElementTypeInfo(

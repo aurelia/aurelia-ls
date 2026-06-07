@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod/v4';
 
 import {
   AureliaMcpSemanticRuntimeAdapter,
   SemanticRuntimeSessionRegistry,
 } from '../out/index.js';
 import { aureliaMcpResultText } from '../out/result-text.js';
+import { appBuilderQueryInputSchema } from '../out/tool-schemas.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'semantic-runtime/fixtures/pressure/router-dynamic-pattern');
@@ -85,12 +87,101 @@ expect(
   'batch child continuation text should not let the first child monopolize the compact continuation budget.',
 );
 
+z.object(appBuilderQueryInputSchema).strict().parse({
+  queryKind: 'input-contract-detail',
+  inputContractDetail: {
+    inputContractIds: ['domain-model'],
+    inputFacetIds: ['domain-actions'],
+    includePayloadSchemas: true,
+    includeSourceLoweringConsumers: true,
+  },
+});
+
+z.object(appBuilderQueryInputSchema).strict().parse({
+  queryKind: 'control-manifest-detail',
+  controlManifestDetail: {
+    controlManifestIds: ['component-api-manifest'],
+    includeEffectContracts: true,
+  },
+});
+
+z.object(appBuilderQueryInputSchema).strict().parse({
+  queryKind: 'source-lowering-preflight',
+  sourceLoweringPreflight: {
+    targetSelectors: [{
+      kind: 'control-pattern',
+      id: 'native-text-input',
+    }],
+  },
+});
+
+const selectorPreflight = await adapter.appBuilderQuery({
+  queryKind: 'source-lowering-preflight',
+  sourceLoweringPreflight: {
+    targetSelectors: [{
+      kind: 'control-pattern',
+      id: 'native-text-input',
+    }],
+  },
+});
+expect(
+  selectorPreflight.value.value?.rows?.[0]?.targetRef?.domain === 'control',
+  'app-builder MCP query should accept compact target selectors and let semantic-runtime derive exact row domains.',
+);
+
+const controlManifestDetail = await adapter.appBuilderQuery({
+  queryKind: 'control-manifest-detail',
+  controlManifestDetail: {
+    controlManifestIds: ['component-api-manifest'],
+    includeEffectContracts: true,
+  },
+});
+const componentApiManifest = controlManifestDetail.value.value?.rows?.find((row) =>
+  row.controlManifest?.id === 'component-api-manifest'
+);
+expect(
+  componentApiManifest?.effectContracts?.some((row) => row.id === 'component-manifest-publication') === true,
+  'app-builder MCP query should forward controlManifestDetail and expose direct component-manifest publication effects.',
+);
+expect(
+  aureliaMcpResultText(controlManifestDetail).includes('Continuations:'),
+  'app-builder MCP query text should expose compact app-builder continuation targets.',
+);
+
+const domainActionDetail = await adapter.appBuilderQuery({
+  queryKind: 'input-contract-detail',
+  inputContractDetail: {
+    inputContractIds: ['domain-model'],
+    inputFacetIds: ['domain-actions'],
+    includePayloadSchemas: true,
+    includeSourceLoweringConsumers: true,
+    includeSourceLoweringValueSupport: true,
+  },
+});
+const domainActionFacet = domainActionDetail.value.value?.rows
+  ?.flatMap((row) => row.inputFacets ?? [])
+  .find((row) => row.facet?.id === 'domain-actions');
+expect(
+  domainActionFacet?.sourceLoweringConsumerRows?.some((row) =>
+    row.targetRef?.id === 'native-button'
+  ) === true,
+  'app-builder MCP query should accept includeSourceLoweringConsumers and return source-lowering consumers for DomainActions.',
+);
+expect(
+  domainActionFacet?.sourceLoweringValueSupportRows?.some((row) =>
+    row.axis === 'domain-action-kind'
+    && row.value === 'create'
+    && row.supportKind === 'derived-local-typescript-method'
+  ) === true,
+  'app-builder MCP query should accept includeSourceLoweringValueSupport and return value-level support rows for DomainActions.',
+);
+
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
 
-console.log('contract ok: MCP app-query surfaces pass through semantic-runtime continuation rows.');
+console.log('contract ok: MCP app-query and app-builder surfaces pass through semantic-runtime continuation rows.');
 
 function expectContinuation(answer, targetQueryKind, message) {
   const continuation = answer?.continuations?.find((row) => row.targetQueryKind === targetQueryKind);

@@ -114,7 +114,15 @@ export function registerAureliaSemanticRuntimePrompts(
                 ? 'Use the feature goal itself as the inspection posture.'
                 : `Treat ${focus} as the primary inspection posture while still checking adjacent facts that the app overview or diagnostics make relevant.`,
               workspaceRoot == null || workspaceRoot.length === 0
-                ? 'For a new app, the current MCP shell does not yet expose a public generator; use framework knowledge and keep source edits explicit until app-builder becomes a public semantic-runtime API.'
+                ? [
+                    'For a new app, start with aurelia_app_builder_catalog; call ontology-catalog when choosing app-builder inputs, patterns, controls, collections, style posture, or status before source lowering.',
+                    'Call recommendation-policy when you need recommendation/defaulting posture, applicability lanes, evidence lanes, or contextual executable rows that need explicit policy/defaulting review.',
+                    'Use target-catalog to list selectable ontology targets with honest status and compact readiness counts, then call input-readiness for selected target rows before asking the user or lowering source.',
+                    'Call affordance-detail, application-pattern-detail, collection-concept-detail, control-pattern-detail, control-manifest-detail, effect-contract-detail, policy-detail, or style-detail when the selected target needs richer ontology facts, input contracts, promised effects, or style/control context.',
+                    'Call input-contract-detail when you need modeled payload schemas; treat to-be-determined, deferred, and not-caller-payload states as facts to report rather than shapes to guess.',
+                    'Use source-lowering-preflight, source-lowering-invocation, source-lowering-composition, and source-lowering-source-plan only after explicit source placement and required payload inputs are available; contextual executable targets also need exact target selection before preflight reports canRequestSourceLowering=true.',
+                    'Part-menu and part-source-lowering-preview calls return preferred authoring-tier rows unless exact part ids, package/resource-package filters, or explicit authoring tiers are supplied; use part-source-invocation only when you need a concrete part fragment, and write files only after inspecting the returned plan.',
+                  ].join(' ')
                 : 'For an existing app, call aurelia_workspace_overview, select the app project when needed, then call aurelia_app_overview before editing.',
               'When following app-query or diagnostic answers, use returned continuations as typed next moves. Pass continuationIntents to keep those follow-ups aligned with the current task instead of using generic next-tool prose as a ranking signal.',
               'For forms/control bindings, call one aurelia_app_query_batch for binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary before raw rows; use page.size=0 for rollup-first reads and leave profiling fields off unless measuring cost.',

@@ -1,0 +1,10 @@
+<section>
+  <h2>Items</h2>
+  <p if.bind="state.items.length === 0">No items yet.</p>
+  <ul else>
+    <li repeat.for="galleryItem of state.items">
+      <a load="route: gallery-item-detail; params.bind: { itemId: galleryItem.id }">${galleryItem.title}</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>

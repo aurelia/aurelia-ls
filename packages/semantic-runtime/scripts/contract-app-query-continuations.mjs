@@ -5,7 +5,10 @@ import {
   INQUIRY_CONTINUATION_INTENTS,
   SEMANTIC_APP_QUERY_KINDS,
   SEMANTIC_RUNTIME_API_VERSION,
+  AppBuilderControlManifestRowId,
+  AppBuilderEffectContractId,
   SemanticAppQueryKind,
+  SemanticRuntimeAppBuilderQueryKind,
   SemanticRuntimeAnswerOutcome,
   filterSemanticAppQueryContinuations,
   semanticAppQueryCatalogShape,
@@ -93,6 +96,17 @@ function verifyCatalogWideContinuationCoverage() {
       if (continuation.targetQueryKind != null) {
         expect(continuation.targetQuery?.kind === continuation.targetQueryKind, `${kind} targetQueryKind should match targetQuery.kind.`);
       }
+      if (continuation.targetAppBuilderQueryKind != null) {
+        expect(continuation.targetAppBuilderQuery?.kind === continuation.targetAppBuilderQueryKind, `${kind} targetAppBuilderQueryKind should match targetAppBuilderQuery.kind.`);
+      }
+      expect(
+        continuation.targetQueryKind != null || continuation.targetAppBuilderQueryKind != null,
+        `${kind} continuation should carry either an app-query or app-builder target kind.`,
+      );
+      expect(
+        !(continuation.targetQueryKind != null && continuation.targetAppBuilderQueryKind != null),
+        `${kind} continuation should not mix app-query and app-builder targets in one row.`,
+      );
     }
   }
 
@@ -193,6 +207,29 @@ function verifyCatalogWideContinuationCoverage() {
   expect(
     availableProductDiagnosticSummary?.cost === 'app-world',
     'Continuation cost should honor query-specific materialization policy such as diagnosticProjection=available-products without hiding the app-world boundary.',
+  );
+
+  const resourceDefinitionFollowUps = withSemanticAppQueryContinuations(
+    { kind: SemanticAppQueryKind.ResourceDefinitions },
+    answer,
+  );
+  const componentManifestContinuation = resourceDefinitionFollowUps.continuations?.find((row) =>
+    row.targetAppBuilderQueryKind === SemanticRuntimeAppBuilderQueryKind.ControlManifestDetail
+  );
+  expect(
+    componentManifestContinuation?.targetAppBuilderQuery?.controlManifestDetail?.controlManifestIds?.includes(AppBuilderControlManifestRowId.ComponentApiManifest) === true,
+    'Resource-definition continuations should expose the component API manifest app-builder detail target.',
+  );
+  expect(
+    componentManifestContinuation?.cost === 'free',
+    'Resource-definition to app-builder manifest detail should be a free ontology-read-model continuation, not an app-world query.',
+  );
+  const componentManifestEffectContinuation = resourceDefinitionFollowUps.continuations?.find((row) =>
+    row.targetAppBuilderQueryKind === SemanticRuntimeAppBuilderQueryKind.EffectContractDetail
+  );
+  expect(
+    componentManifestEffectContinuation?.targetAppBuilderQuery?.effectContractDetail?.effectContractIds?.includes(AppBuilderEffectContractId.ComponentManifestPublication) === true,
+    'Resource-definition continuations should expose the component-manifest publication effect contract.',
   );
 
   const completionFollowUp = withSemanticAppQueryContinuations(
@@ -439,6 +476,27 @@ function verifyContinuationIntentFiltering() {
   expect(
     rows.every((row) => row.targetQuery == null || row.targetQuery.continuationIntents?.includes('diagnose')),
     'Filtered continuation target queries should inherit the same continuation intent filter for follow-up calls.',
+  );
+
+  const resourceFull = withSemanticAppQueryContinuations(
+    { kind: SemanticAppQueryKind.ResourceDefinitions },
+    {
+      schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
+      outcome: SemanticRuntimeAnswerOutcome.Hit,
+      summary: 'contract fake resource answer',
+      value: {},
+    },
+  );
+  const resourceFiltered = filterSemanticAppQueryContinuations(
+    { continuationIntents: ['inspect'] },
+    resourceFull,
+  );
+  expect(
+    (resourceFiltered.continuations ?? []).some((row) =>
+      row.targetAppBuilderQueryKind === SemanticRuntimeAppBuilderQueryKind.ControlManifestDetail
+      && row.targetAppBuilderQuery?.continuationIntents?.includes('inspect') === true
+    ),
+    'Filtered app-query continuations should thread intent filters into app-builder target queries too.',
   );
 }
 
@@ -999,6 +1057,36 @@ async function verifyFamilySpecificContinuationCanaries() {
           minRows: 1,
           targets: [SemanticAppQueryKind.BindingDataFlowSummary],
           evidence: [{ target: SemanticAppQueryKind.BindingDataFlowSummary, sourcePrecision: 'exact-authored-span' }],
+        },
+      ],
+    },
+    {
+      label: 'control-use inventory',
+      workspaceRoot: path.join(pressureRoot, 'app-builder-source-lowering-gallery'),
+      queries: [
+        { kind: SemanticAppQueryKind.ControlUseInventory, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.BindingValueChannels, page: { size: 5 } },
+        { kind: SemanticAppQueryKind.BindingDataFlows, page: { size: 5 } },
+      ],
+      expectations: [
+        {
+          queryKind: SemanticAppQueryKind.ControlUseInventory,
+          minRows: 1,
+          targets: [SemanticAppQueryKind.BindingValueChannels, SemanticAppQueryKind.BindingDataFlows],
+          evidence: [
+            { target: SemanticAppQueryKind.BindingValueChannels, state: 'type-projected', sourcePrecision: 'exact-authored-span' },
+            { target: SemanticAppQueryKind.BindingDataFlows, state: 'type-projected', sourcePrecision: 'exact-authored-span' },
+          ],
+        },
+        {
+          queryKind: SemanticAppQueryKind.BindingValueChannels,
+          minRows: 1,
+          targets: [SemanticAppQueryKind.BindingValueChannelSummary, SemanticAppQueryKind.ControlUseInventory],
+        },
+        {
+          queryKind: SemanticAppQueryKind.BindingDataFlows,
+          minRows: 1,
+          targets: [SemanticAppQueryKind.BindingDataFlowSummary, SemanticAppQueryKind.ControlUseInventory],
         },
       ],
     },

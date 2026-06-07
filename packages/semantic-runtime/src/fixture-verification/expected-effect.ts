@@ -76,6 +76,8 @@ export enum ExpectedSemanticEffectKind {
   RuntimeComposition = 'runtime-composition',
   /** The reopened app should expose observer/accessor target facts for template bindings. */
   BindingTargetAccess = 'binding-target-access',
+  /** The reopened app should expose source-side operation facts for ref and state-dispatch bindings. */
+  BindingSourceOperation = 'binding-source-operation',
   /** The reopened app should expose direct runtime target-operation facts for renderer or binding writes. */
   TargetOperation = 'target-operation',
   /** The reopened app should expose observer-backed value-channel facts for template bindings. */

@@ -1,0 +1,22 @@
+<section>
+  <h2>Tasks</h2>
+  <form submit.trigger="create()">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="state.taskItems.length === 0">No tasks yet.</p>
+  <ul else>
+    <li repeat.for="taskItem of state.taskItems">
+      <span>${taskItem.title}</span>
+      <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>

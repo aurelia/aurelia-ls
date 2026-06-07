@@ -4,6 +4,7 @@ import type { ResourceDefinitionHeader } from './resource-definition.js';
 import type { ResourceCarrierKind } from './resource-kind.js';
 export {
   AttributePatternObservation,
+  resourceTargetClassLikeNode,
   ResourceTargetObservation,
 } from './resource-observation-primitives.js';
 
