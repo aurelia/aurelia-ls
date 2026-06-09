@@ -1,0 +1,344 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "actionName": "openContact",
+      "linkText": "Open",
+      "createForm": {
+        "actionName": "createContact",
+        "fieldNames": [
+          "fullName",
+          "email",
+          "websiteUrl",
+          "supportPhone",
+          "active"
+        ],
+        "submitButtonText": "Create contact"
+      },
+      "serviceCollection": {
+        "sourceTargetPath": "src/services/contact-service.ts",
+        "serviceClassName": "ContactService",
+        "loadMethodName": "loadContacts",
+        "findMethodName": "loadContact",
+        "createMethodName": "createContact",
+        "filterMethods": [
+          {
+            "methodName": "searchContactsByName",
+            "fieldName": "fullName",
+            "parameterName": "query",
+            "predicateKind": "text-contains"
+          }
+        ],
+        "queryControls": [
+          {
+            "stateMemberName": "contactNameQuery",
+            "stateTypeText": "string",
+            "initialValueExpression": "''",
+            "inactiveValueExpression": "''",
+            "reloadMethodName": "reloadContactsByName",
+            "resultMemberName": "contactsPromise",
+            "filterMethodName": "searchContactsByName",
+            "fieldControlId": "contact-search-query",
+            "labelText": "Search contacts",
+            "applyActionName": "searchContacts",
+            "applyButtonText": "Search contacts",
+            "clearActionName": "clearContactSearch",
+            "clearButtonText": "Clear search"
+          }
+        ]
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "contact-service-search-create-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "contact service search create browser explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Contact",
+                    "entityTypeName": "ContactEntry",
+                    "collectionMemberName": "contacts",
+                    "identityMemberName": "contactId",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "openContact",
+                      "kind": "custom",
+                      "scope": "navigation",
+                      "targetEntityName": "ContactEntry"
+                    },
+                    {
+                      "name": "searchContacts",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "ContactEntry"
+                    },
+                    {
+                      "name": "clearContactSearch",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "ContactEntry"
+                    },
+                    {
+                      "name": "createContact",
+                      "kind": "create",
+                      "scope": "form",
+                      "targetEntityName": "ContactEntry",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "fullName",
+                        "email",
+                        "websiteUrl",
+                        "supportPhone",
+                        "active"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text",
+                      "required": true,
+                      "textConstraints": {
+                        "minLength": 2,
+                        "maxLength": 80
+                      }
+                    },
+                    {
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text",
+                      "fieldAffordance": "email-address",
+                      "required": true,
+                      "textConstraints": {
+                        "maxLength": 120
+                      }
+                    },
+                    {
+                      "name": "websiteUrl",
+                      "title": "Website",
+                      "valueKind": "text",
+                      "fieldAffordance": "url",
+                      "textConstraints": {
+                        "maxLength": 160
+                      }
+                    },
+                    {
+                      "name": "supportPhone",
+                      "title": "Support Phone",
+                      "valueKind": "text",
+                      "fieldAffordance": "telephone",
+                      "textConstraints": {
+                        "maxLength": 32,
+                        "pattern": "[0-9+() -]{7,}"
+                      }
+                    },
+                    {
+                      "name": "active",
+                      "title": "Active",
+                      "valueKind": "boolean",
+                      "defaultValue": true
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "fullName",
+                      "header": "Name",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "email",
+                      "header": "Email",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "websiteUrl",
+                      "header": "Website",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "supportPhone",
+                      "header": "Phone",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "active",
+                      "header": "Status",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Active",
+                      "booleanFalseText": "Inactive"
+                    },
+                    {
+                      "actionName": "openContact",
+                      "header": "Action",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-display-fields",
+                  "value": [
+                    {
+                      "fieldName": "active",
+                      "role": "boolean",
+                      "label": "Status",
+                      "booleanTrueText": "Active",
+                      "booleanFalseText": "Inactive"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Contact Service Search Create Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "contacts"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "contactId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "searchContacts",
+                      "statusMemberName": "searchStatusMessage",
+                      "statusText": "Search applied.",
+                      "statusId": "contact-search-status"
+                    },
+                    {
+                      "actionName": "clearContactSearch",
+                      "statusMemberName": "clearSearchStatusMessage",
+                      "statusText": "Search cleared.",
+                      "statusId": "contact-clear-search-status"
+                    },
+                    {
+                      "actionName": "createContact",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Contact saved.",
+                      "statusId": "contact-create-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "contactId": 1,
+                      "fullName": "Ada Lovelace",
+                      "email": "ada@example.test",
+                      "websiteUrl": "https://example.test/ada",
+                      "supportPhone": "+31 20 000 0001",
+                      "active": true
+                    },
+                    {
+                      "contactId": 2,
+                      "fullName": "Grace Hopper",
+                      "email": "grace@example.test",
+                      "websiteUrl": "https://example.test/grace",
+                      "supportPhone": "+31 20 000 0002",
+                      "active": true
+                    },
+                    {
+                      "contactId": 3,
+                      "fullName": "Katherine Johnson",
+                      "email": "katherine@example.test",
+                      "websiteUrl": "https://example.test/katherine",
+                      "supportPhone": "+31 20 000 0003",
+                      "active": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

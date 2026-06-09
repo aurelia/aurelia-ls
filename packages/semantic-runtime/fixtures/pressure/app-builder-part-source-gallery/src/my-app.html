@@ -2,13 +2,35 @@
   <h1>${title}</h1>
   <section>
     <input value.bind="draft.title">
+    <input value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="email" value.bind="draft.title">
+    <input type="email" value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="url" value.bind="draft.title">
+    <input type="url" value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="tel" value.bind="draft.title">
+    <input type="tel" value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="password" value.bind="draft.title">
+    <input type="password" value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="search" value.bind="draft.title">
+    <input type="search" value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+">
+    <input type="time" value.bind="draft.title">
+    <input type="time" value.bind="draft.title" required>
+    <input type="datetime-local" value.bind="draft.title">
+    <input type="datetime-local" value.bind="draft.title" required>
+    <input type="month" value.bind="draft.title">
+    <input type="month" value.bind="draft.title" required>
+    <input type="week" value.bind="draft.title">
+    <input type="week" value.bind="draft.title" required>
     <input type="number" value-as-number.bind="draft.quantity">
-    <input type="number" value-as-number.bind="draft.quantity" min="0" max="100" step="5">
-    <input type="date" value-as-date.bind="draft.dueDate">
+    <input type="number" value-as-number.bind="draft.quantity" required min="0" max="100" step="5">
+    <input type="date" value.bind="draft.dueDate">
+    <input type="date" value.bind="draft.dueDate" required>
     <input type="range" value-as-number.bind="draft.quantity">
     <input type="range" value-as-number.bind="draft.quantity" min="0" max="100" step="5">
     <textarea value.bind="draft.title"></textarea>
+    <textarea value.bind="draft.title" required minlength="2" maxlength="80" pattern="[A-Za-z0-9 -]+"></textarea>
     <input type="checkbox" checked.bind="draft.enabled">
+    <input type="checkbox" checked.bind="draft.enabled" required>
     <label repeat.for="option of options">
       <input type="checkbox" checked.bind="selectedOptions" model.bind="option">
       <span>${option}</span>
@@ -22,13 +44,13 @@
       <span>${option}</span>
     </label>
     <label repeat.for="option of options">
-      <input type="radio" name="choice-group" checked.bind="selectedOptionId" value.bind="option.id" matcher.bind="matcher">
+      <input type="radio" name="choice-group" required checked.bind="selectedOptionId" value.bind="option.id" matcher.bind="matcher">
       <span>${option.label}</span>
     </label>
     <select value.bind="selectedOption">
       <option repeat.for="option of options" model.bind="option">${option}</option>
     </select>
-    <select value.bind="selectedOptionId" matcher.bind="matcher">
+    <select value.bind="selectedOptionId" required matcher.bind="matcher">
       <option repeat.for="option of options" value.bind="option.id">${option.label}</option>
     </select>
     <select multiple value.bind="selectedOptions">

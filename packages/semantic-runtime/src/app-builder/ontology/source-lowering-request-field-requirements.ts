@@ -445,6 +445,12 @@ const SOURCE_PLAN_PREVIEW_ROUTER_BACKED_LIST_DETAIL_REQUEST_FIELDS = [
     AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
   ),
   requestFieldRequirement(
+    AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailPrimaryEntityName,
+    AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional,
+    'Router-backed list/detail needs primaryEntityName when more than one supplied domain entity could back the routed collection.',
+    AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
+  ),
+  requestFieldRequirement(
     AppBuilderSourceLoweringRequestFieldId.ActionName,
     AppBuilderSourceLoweringRequestFieldRequirementKind.Optional,
     'Router-backed list/detail can optionally render an explicit navigation-scoped domain action as the visible row-to-detail link.',
@@ -466,6 +472,12 @@ const SOURCE_PLAN_PREVIEW_ROUTER_BACKED_LIST_DETAIL_REQUEST_FIELDS = [
     AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailServiceCollection,
     AppBuilderSourceLoweringRequestFieldRequirementKind.Optional,
     'Router-backed list/detail may include a serviceCollection envelope when the caller wants generated DI state to delegate routed load/find/create operations through a service boundary.',
+    AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
+  ),
+  requestFieldRequirement(
+    AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailDetailRelatedCollections,
+    AppBuilderSourceLoweringRequestFieldRequirementKind.Optional,
+    'Router-backed list/detail may include explicit detailRelatedCollections for inverse related sections on detail routes.',
     AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview,
   ),
   requestFieldRequirement(
@@ -1037,6 +1049,11 @@ const NATIVE_SUBMIT_FORM_REQUEST_FIELDS = [
     'Native submit forms may select relationship control details such as option domain, model expression, and matcher expression.',
   ),
   requestFieldRequirement(
+    AppBuilderSourceLoweringRequestFieldId.RelationshipName,
+    AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional,
+    'Each native submit-form relationshipControlSelection needs relationshipName to select the object-valued relationship it configures.',
+  ),
+  requestFieldRequirement(
     AppBuilderSourceLoweringRequestFieldId.HandlerExpression,
     AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional,
     'Native submit forms need an explicit handler expression when the selected action name cannot derive a safe submit call.',
@@ -1086,6 +1103,11 @@ const DOMAIN_BACKED_SUBMIT_FORM_REQUEST_FIELDS = [
     'Domain-backed submit forms may select relationship control details such as option domain, model expression, and matcher expression.',
   ),
   requestFieldRequirement(
+    AppBuilderSourceLoweringRequestFieldId.RelationshipName,
+    AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional,
+    'Each domain-backed submit-form relationshipControlSelection needs relationshipName to select the object-valued relationship it configures.',
+  ),
+  requestFieldRequirement(
     AppBuilderSourceLoweringRequestFieldId.HandlerExpression,
     AppBuilderSourceLoweringRequestFieldRequirementKind.Conditional,
     'Domain-backed submit forms need an explicit handler expression when the selected action name cannot derive a safe submit call.',
@@ -1115,6 +1137,15 @@ export function appBuilderSourceLoweringRequestFieldsForTarget(
   if (targetRef.kind === AppBuilderOntologyRowKind.ControlPattern) {
     switch (targetRef.id) {
       case AppBuilderControlPatternId.NativeTextInput:
+      case AppBuilderControlPatternId.NativeEmailInput:
+      case AppBuilderControlPatternId.NativeUrlInput:
+      case AppBuilderControlPatternId.NativeTelInput:
+      case AppBuilderControlPatternId.NativePasswordInput:
+      case AppBuilderControlPatternId.NativeSearchInput:
+      case AppBuilderControlPatternId.NativeTimeInput:
+      case AppBuilderControlPatternId.NativeDateTimeLocalInput:
+      case AppBuilderControlPatternId.NativeMonthInput:
+      case AppBuilderControlPatternId.NativeWeekInput:
       case AppBuilderControlPatternId.NativeNumberInput:
       case AppBuilderControlPatternId.NativeDateInput:
       case AppBuilderControlPatternId.NativeRangeInput:

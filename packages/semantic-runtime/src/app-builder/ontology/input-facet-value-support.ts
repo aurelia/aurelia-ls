@@ -1,4 +1,7 @@
 import {
+  AppBuilderPackageCapability,
+} from '../aurelia-lowering-option.js';
+import {
   APP_BUILDER_DOMAIN_ACTION_KINDS,
   APP_BUILDER_DOMAIN_ACTION_SCOPES,
   APP_BUILDER_DOMAIN_RELATIONSHIP_KINDS,
@@ -17,6 +20,9 @@ import {
   type AppBuilderInputFacetRow,
 } from './input.js';
 import {
+  AppBuilderPolicyAxisId,
+} from './policy.js';
+import {
   appBuilderOntologyRowRef,
   AppBuilderOntologyRowKind,
   type AppBuilderOntologyRowRef,
@@ -30,6 +36,8 @@ export enum AppBuilderInputFacetValueAxis {
   DomainActionKind = 'domain-action-kind',
   /** Domain action-scope values such as form, entity, navigation, or integration. */
   DomainActionScope = 'domain-action-scope',
+  /** Optional Aurelia package/plugin capability ids such as state, validation-html, or fetch. */
+  PackageCapability = 'package-capability',
 }
 
 /** Stable value list for app-builder input facet value axes. */
@@ -37,6 +45,7 @@ export const APP_BUILDER_INPUT_FACET_VALUE_AXES = [
   AppBuilderInputFacetValueAxis.DomainRelationshipKind,
   AppBuilderInputFacetValueAxis.DomainActionKind,
   AppBuilderInputFacetValueAxis.DomainActionScope,
+  AppBuilderInputFacetValueAxis.PackageCapability,
 ] as const;
 
 /** How current app-builder source-lowering can spend one modeled input-facet enum value. */
@@ -55,6 +64,8 @@ export enum AppBuilderInputFacetValueSourceLoweringSupportKind {
   ReferenceLookup = 'reference-lookup',
   /** The value can be emitted as owned child/value source inside a generated local domain model. */
   OwnedValueSource = 'owned-value-source',
+  /** The value is recognized as explicit policy input and emitted as a handoff, not generated plugin source. */
+  DeferredCapabilityHandoff = 'deferred-capability-handoff',
 }
 
 /** Stable value list for input-facet value source-lowering support kinds. */
@@ -66,6 +77,7 @@ export const APP_BUILDER_INPUT_FACET_VALUE_SOURCE_LOWERING_SUPPORT_KINDS = [
   AppBuilderInputFacetValueSourceLoweringSupportKind.RouterLoadNavigation,
   AppBuilderInputFacetValueSourceLoweringSupportKind.ReferenceLookup,
   AppBuilderInputFacetValueSourceLoweringSupportKind.OwnedValueSource,
+  AppBuilderInputFacetValueSourceLoweringSupportKind.DeferredCapabilityHandoff,
 ] as const;
 
 /** Review row for source-lowering support of one enum value inside a modeled input facet. */
@@ -110,6 +122,18 @@ const NATIVE_SUBMIT_FORM_REF = appBuilderOntologyRowRef(
   AppBuilderOntologyRowKind.ApplicationPattern,
   AppBuilderApplicationPatternId.NativeSubmitForm,
 );
+const PLUGIN_ADMISSION_REF = appBuilderOntologyRowRef(
+  AppBuilderOntologyRowKind.PolicyAxis,
+  AppBuilderPolicyAxisId.PluginAdmission,
+);
+
+const APP_BUILDER_PACKAGE_CAPABILITY_VALUES = [
+  AppBuilderPackageCapability.ValidationHtml,
+  AppBuilderPackageCapability.I18n,
+  AppBuilderPackageCapability.State,
+  AppBuilderPackageCapability.VirtualRepeat,
+  AppBuilderPackageCapability.Fetch,
+] as const;
 
 /** Return source-lowering support rows for enum values inside a modeled input facet. */
 export function appBuilderInputFacetValueSourceLoweringSupportRows(
@@ -123,8 +147,42 @@ export function appBuilderInputFacetValueSourceLoweringSupportRows(
       ];
     case AppBuilderInputFacetId.DomainRelationships:
       return domainRelationshipKindSupportRows();
+    case AppBuilderInputFacetId.AureliaPluginPolicy:
+      return packageCapabilitySupportRows();
     default:
       return [];
+  }
+}
+
+function packageCapabilitySupportRows(): readonly AppBuilderInputFacetValueSourceLoweringSupportRow[] {
+  return APP_BUILDER_PACKAGE_CAPABILITY_VALUES.map((value) => ({
+    inputFacetId: AppBuilderInputFacetId.AureliaPluginPolicy,
+    axis: AppBuilderInputFacetValueAxis.PackageCapability,
+    value,
+    supportKind: AppBuilderInputFacetValueSourceLoweringSupportKind.DeferredCapabilityHandoff,
+    targetRefs: [PLUGIN_ADMISSION_REF],
+    requiredConditions: [
+      'The package capability is selected explicitly through AureliaPluginPolicy or derived from an equivalent explicit Aurelia policy input.',
+      'The caller or existing app owns plugin-specific architecture until a dedicated source lowerer is implemented for that capability.',
+    ],
+    summary: packageCapabilitySupportSummary(value),
+  }));
+}
+
+function packageCapabilitySupportSummary(
+  value: AppBuilderPackageCapability,
+): string {
+  switch (value) {
+    case AppBuilderPackageCapability.ValidationHtml:
+      return 'validation-html is recognized as optional plugin policy; current source plans can report the selection but validation-rule source remains caller/plugin owned.';
+    case AppBuilderPackageCapability.I18n:
+      return 'i18n is recognized as optional plugin policy; current source plans can report the selection but localization keys, resources, and translation copy remain caller/plugin owned.';
+    case AppBuilderPackageCapability.State:
+      return '@aurelia/state is recognized as optional shared-state policy; current source plans can report the selection but do not generate store architecture.';
+    case AppBuilderPackageCapability.VirtualRepeat:
+      return 'virtual-repeat is recognized as optional large-collection rendering policy; current app-builder part lowerers can emit the structural part, while full app-level virtualization architecture remains caller/plugin owned.';
+    case AppBuilderPackageCapability.Fetch:
+      return 'fetch-client is recognized as optional HTTP service-boundary policy; current source plans can report the selection but server/API contract and client configuration remain caller/plugin owned.';
   }
 }
 

@@ -12,6 +12,10 @@ import {
   appBuilderLowerCamelCase,
   appBuilderSeedRecordLiteral,
 } from './source-lowering-helpers.js';
+import {
+  AppBuilderGeneratedFallbackCopyId,
+  appBuilderGeneratedFallbackCopyText,
+} from './generated-copy.js';
 
 /** Source shape used when generated code constructs a domain entity. */
 export enum AppBuilderDomainEntityConstructionInputStyle {
@@ -22,6 +26,12 @@ export enum AppBuilderDomainEntityConstructionInputStyle {
 }
 
 const NAMED_OBJECT_CONSTRUCTION_FIELD_THRESHOLD = 5;
+const DATE_EMPTY_FALLBACK_COPY_LITERAL = appBuilderSeedRecordLiteral(
+  appBuilderGeneratedFallbackCopyText(AppBuilderGeneratedFallbackCopyId.DateEmpty),
+);
+const CHOICE_SET_EMPTY_FALLBACK_COPY_LITERAL = appBuilderSeedRecordLiteral(
+  appBuilderGeneratedFallbackCopyText(AppBuilderGeneratedFallbackCopyId.ChoiceSetEmpty),
+);
 
 /** Source model for an ordinary generated domain entity class. */
 export interface AppBuilderDomainEntityExtraPropertySourceModel {
@@ -185,7 +195,7 @@ export function appBuilderDomainEntityDisplayFunctionSource(
     switch (field.valueKind) {
       case AppBuilderDomainFieldValueKind.Date:
         return `export function ${functionName}(${parameterName}: ${model.entityTypeName}): string {
-  return ${parameterName}.${field.memberName} == null ? 'No date' : ${parameterName}.${field.memberName}.toLocaleDateString();
+  return ${parameterName}.${field.memberName}.trim().length === 0 ? ${DATE_EMPTY_FALLBACK_COPY_LITERAL} : ${parameterName}.${field.memberName};
 }`;
       case AppBuilderDomainFieldValueKind.Choice:
         return `export function ${functionName}(${parameterName}: ${model.entityTypeName}): string {
@@ -193,7 +203,7 @@ export function appBuilderDomainEntityDisplayFunctionSource(
 }`;
       case AppBuilderDomainFieldValueKind.ChoiceSet:
         return `export function ${functionName}(${parameterName}: ${model.entityTypeName}): string {
-  return ${parameterName}.${field.memberName}.length === 0 ? 'None' : ${parameterName}.${field.memberName}.map((value) => ${domainEntityChoiceLabelMapName(model.entityTypeName, field)}[value]).join(', ');
+  return ${parameterName}.${field.memberName}.length === 0 ? ${CHOICE_SET_EMPTY_FALLBACK_COPY_LITERAL} : ${parameterName}.${field.memberName}.map((value) => ${domainEntityChoiceLabelMapName(model.entityTypeName, field)}[value]).join(', ');
 }`;
       case AppBuilderDomainFieldValueKind.Text:
       case AppBuilderDomainFieldValueKind.Boolean:
@@ -306,7 +316,7 @@ function domainEntityDisplayGetterSource(
           return `
 
   get ${displayMemberName}(): string {
-    return this.${field.memberName} == null ? 'No date' : this.${field.memberName}.toLocaleDateString();
+    return this.${field.memberName}.trim().length === 0 ? ${DATE_EMPTY_FALLBACK_COPY_LITERAL} : this.${field.memberName};
   }`;
         case AppBuilderDomainFieldValueKind.Choice:
           return `
@@ -318,7 +328,7 @@ function domainEntityDisplayGetterSource(
           return `
 
   get ${displayMemberName}(): string {
-    return this.${field.memberName}.length === 0 ? 'None' : this.${field.memberName}.map((value) => ${domainEntityChoiceLabelMapName(model.entityTypeName, field)}[value]).join(', ');
+    return this.${field.memberName}.length === 0 ? ${CHOICE_SET_EMPTY_FALLBACK_COPY_LITERAL} : this.${field.memberName}.map((value) => ${domainEntityChoiceLabelMapName(model.entityTypeName, field)}[value]).join(', ');
   }`;
         case AppBuilderDomainFieldValueKind.Text:
         case AppBuilderDomainFieldValueKind.Boolean:

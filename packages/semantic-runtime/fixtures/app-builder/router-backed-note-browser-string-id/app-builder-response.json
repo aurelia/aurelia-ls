@@ -2,7 +2,7 @@
   "outcome": "hit",
   "summary": "Previewed app-builder ontology SourcePlan with 9 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=router-backed-list-detail, files=9, witnesses=50, controlUses=0, expectedEffects=21, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=router-backed-list-detail, files=9, witnesses=55, controlUses=0, expectedEffects=22, handoffNotes=5, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": null,
     "sourceTargetPath": null,
@@ -33,26 +33,27 @@
       "runtime-controller",
       "open-seam-closure"
     ],
-    "expectedEffectCount": 21,
+    "expectedEffectCount": 22,
     "controlUseInventoryRowCount": 0,
     "sourceLoweringRequestFieldSummary": {
-      "requestFieldCount": 16,
+      "requestFieldCount": 18,
       "requiredCount": 2,
-      "conditionalCount": 3,
-      "optionalCount": 11,
+      "conditionalCount": 4,
+      "optionalCount": 12,
       "hasRequiredRequestFields": true,
       "surfaces": [
         {
           "surfaceKind": "source-plan-preview",
-          "requestFieldCount": 16,
+          "requestFieldCount": 18,
           "requiredCount": 2,
-          "conditionalCount": 3,
-          "optionalCount": 11,
+          "conditionalCount": 4,
+          "optionalCount": 12,
           "requiredRequestFieldNames": [
             "rootDir",
             "sourceLoweringRouterBackedListDetail"
           ],
           "conditionalRequestFieldNames": [
+            "primaryEntityName",
             "linkText",
             "fieldNames",
             "submitButtonText"
@@ -61,6 +62,7 @@
             "actionName",
             "createForm",
             "serviceCollection",
+            "detailRelatedCollections",
             "sourceTargetPath",
             "serviceClassName",
             "loadMethodName",
@@ -73,11 +75,118 @@
         }
       ]
     },
-    "sourcePlanWitnessCount": 50,
-    "suppliedInputCount": 4,
+    "sourcePlanWitnessCount": 55,
+    "handoffNoteCount": 5,
+    "handoffNotes": [
+      {
+        "kind": "source-pattern-use",
+        "summary": "Concrete source is a recommendable starting scaffold unless an existing app already owns that structure.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          }
+        ],
+        "sourceFileRoles": [],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "seed-data-scaffold",
+        "summary": "Generated seed records came from explicit app-builder input and keep the app runnable; replace them or connect them to real persistence when moving beyond scaffold data.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model",
+          "component",
+          "service"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 9/9 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 22 expected semantic effect(s), 0 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "service-class",
+          "state-composition",
+          "route",
+          "binding-data-flow",
+          "service-interaction-binding",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
+    "suppliedInputCount": 5,
     "explicitSuppliedInputCount": 0,
     "decisionBundleCount": 1,
-    "decisionBundleDecisionCount": 4,
+    "decisionBundleDecisionCount": 5,
     "sourcePlan": {
       "rootDir": ".",
       "policy": {
@@ -155,8 +264,8 @@
           "editKind": "create",
           "operationKind": "create-component-template",
           "textAuthority": "app-builder-generated",
-          "textLength": 334,
-          "contributionCount": 7
+          "textLength": 265,
+          "contributionCount": 5
         },
         {
           "path": "src/note-item.ts",
@@ -190,9 +299,21 @@
             "kind": "source-plan-package-dependency"
           },
           {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
             "specifier": "aurelia",
             "versionRange": "^2.0.0-rc.1",
             "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },
           {
@@ -200,9 +321,25 @@
             "versionRange": "^6.0.3",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
           }
         ],
         "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
           {
             "name": "check",
             "command": "tsc -p tsconfig.json --noEmit",
@@ -215,7 +352,21 @@
             "fileKind": "package-manifest",
             "language": "json",
             "textAuthority": "app-builder-generated",
-            "textLength": 280
+            "textLength": 435
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 294
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
           },
           {
             "path": "tsconfig.json",

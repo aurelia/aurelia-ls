@@ -51,11 +51,21 @@ carry contribution facts when they came from a lower-level source callback such
 as an AppTask registration fragment or an `AureliaConfigurationAdmissionSource`.
 
 `SourcePlanProjectTooling` is the structured package/build side of a source plan.
-Use it for package dependencies, scripts, package manifests, tsconfig files, and
-local declaration files instead of hiding tooling requirements in app-builder
-source text. `SourcePlanPackageToolingPolicy.AppBuilderBaseline` means the
-app-builder source-plan baseline owns a runnable package/tooling shape; `HostOwned`
-and `NotModeled` remain available when a source plan is only a partial edit.
+Use it for package dependencies, scripts, package manifests, browser root
+documents, build configs, tsconfig files, and local declaration files instead of
+hiding tooling requirements in app-builder source text.
+`SourcePlanBuildToolPolicy.AppBuilderBaseline` means the app-builder
+source-plan baseline owns a runnable Vite package/tooling shape when the
+entrypoint and root element are known; `HostOwned` and `NotModeled` remain
+available when a source plan is only a partial edit.
+The app-builder Vite baseline declares `@aurelia/runtime-html` directly because
+the Aurelia Vite plugin can emit transformed module imports from that package
+even when authored app source only imports the public `aurelia` entrypoint.
+It also widens the plugin include pattern to cover Vite's absolute Windows
+module ids and disables HMR for generated goldens, keeping the baseline focused
+on first-load app correctness instead of dev-server hot replacement wiring.
+The generated Vite config pins build and esbuild targets to `es2022` so dev and
+production transforms lower Aurelia decorators consistently.
 
 `AureliaConfigurationAdmissionSource` is the neutral source-plan vocabulary for
 entrypoint framework/plugin admission. Router, state, i18n, validation-html, and

@@ -2,7 +2,7 @@
   <h2>Tasks</h2>
   <div>
     <label for="task-relationship-search-query">Search task relationships</label>
-    <input value.bind="taskRelationshipTitleQuery" id="task-relationship-search-query">
+    <input type="search" value.bind="taskRelationshipTitleQuery" id="task-relationship-search-query">
   </div>
   <button type="button" click.trigger="searchTaskRelationships()">Search task relationships</button>
   <p if.bind="searchStatusMessage" role="status" id="task-relationship-search-status">${searchStatusMessage}</p>
@@ -33,9 +33,7 @@
             <td>${state.scheduleLabelForTaskItem(taskItem)}</td>
             <td>${state.checkpointsLabelForTaskItem(taskItem)}</td>
             <td>${state.effortLabelForTaskItem(taskItem)}</td>
-            <td>
-              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-            </td>
+            <td>${taskItem.done ? 'Done' : 'Open'}</td>
             <td>
               <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
             </td>

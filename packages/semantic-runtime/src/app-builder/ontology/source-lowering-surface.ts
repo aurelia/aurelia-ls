@@ -101,6 +101,51 @@ export const APP_BUILDER_SOURCE_LOWERING_TARGET_ROWS: readonly AppBuilderSourceL
   ),
   sourceLoweringTarget(
     AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeEmailInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeUrlInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeTelInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativePasswordInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeSearchInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeTimeInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeDateTimeLocalInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeMonthInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
+    AppBuilderControlPatternId.NativeWeekInput,
+    TARGET_INVOCATION_TEMPLATE_SURFACES,
+  ),
+  sourceLoweringTarget(
+    AppBuilderOntologyRowKind.ControlPattern,
     AppBuilderControlPatternId.NativeNumberInput,
     TARGET_INVOCATION_TEMPLATE_SURFACES,
   ),

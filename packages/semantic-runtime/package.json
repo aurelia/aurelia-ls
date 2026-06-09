@@ -72,6 +72,7 @@
     "fixtures:app-builder-generated": "pnpm build && node scripts/materialize-app-builder-generated-fixtures.mjs && node scripts/verify-fixture-manifests.mjs --write fixtures/app-builder",
     "policy:app-builder-review": "pnpm build && node scripts/write-app-builder-policy-review.mjs",
     "check:fixture-typecheck": "node scripts/typecheck-fixtures.mjs",
+    "check:fixture-runtime": "node scripts/smoke-fixture-runtime.mjs",
     "check:fixture-manifests": "pnpm build && node scripts/verify-fixture-manifests.mjs",
     "pressure:app-api": "pnpm build && node scripts/app-api-pressure.mjs",
     "pressure:cursor-loci": "pnpm build && node scripts/cursor-locus-pressure.mjs",

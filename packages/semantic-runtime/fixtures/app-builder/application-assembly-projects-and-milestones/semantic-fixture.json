@@ -24,7 +24,23 @@
       ]
     },
     {
-      "summary": "App-builder application assembly SourcePlan has TypeScript project tooling.",
+      "summary": "App-builder application assembly SourcePlan has a browser root document.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=root-document",
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has TypeScript and build project tooling.",
       "effectKind": "project-tooling",
       "scope": "project",
       "topologyNodeKind": "build-tool",
@@ -376,7 +392,7 @@
       "buttonText": null,
       "buttonType": null,
       "labelText": "Open project",
-      "labelTextSource": null,
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -544,7 +560,7 @@
       "buttonText": null,
       "buttonType": null,
       "labelText": "Open milestone",
-      "labelTextSource": null,
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -586,7 +602,7 @@
       "buttonText": null,
       "buttonType": null,
       "labelText": "Open assignment",
-      "labelTextSource": null,
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -796,7 +812,7 @@
       "buttonText": null,
       "buttonType": null,
       "labelText": "Open review",
-      "labelTextSource": null,
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -1376,6 +1392,75 @@
       "effectContractId": "source-plan-preview",
       "rootDir": ".",
       "hasCompleteFileText": true,
+      "filePath": "src/app-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/app-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 0,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./project",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/app-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./milestone",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/app-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./task-item",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/app-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./reviewer-profile",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
       "filePath": "src/routes/project-list-route.ts",
       "fileRole": "component",
       "fileLanguage": "typescript",
@@ -1443,11 +1528,12 @@
         "operationKind": "create-control",
         "applicationSite": "template-element",
         "slotKinds": [
-          "binding-expression"
+          "binding-expression",
+          "native-required"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 41
+      "fragmentTextLength": 50
     },
     {
       "rowKind": "contribution",
@@ -1475,7 +1561,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 95
+      "fragmentTextLength": 104
     },
     {
       "rowKind": "contribution",
@@ -1555,7 +1641,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 307
+      "fragmentTextLength": 316
     },
     {
       "rowKind": "contribution",
@@ -2047,16 +2133,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -2070,7 +2155,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 82
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -2081,20 +2166,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 9,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 95
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/project-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 10,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -2119,7 +2190,7 @@
       "filePath": "src/routes/project-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 11,
+      "contributionIndex": 10,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -2141,7 +2212,7 @@
       "filePath": "src/routes/project-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 12,
+      "contributionIndex": 11,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -2155,7 +2226,7 @@
       "filePath": "src/routes/project-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 13,
+      "contributionIndex": 12,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -2180,7 +2251,7 @@
       "filePath": "src/routes/project-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 14,
+      "contributionIndex": 13,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -2194,11 +2265,25 @@
       "filePath": "src/routes/project-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
+      "contributionIndex": 14,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 229
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/routes/project-detail-route.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
       "contributionIndex": 15,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 285
+      "fragmentTextLength": 401
     },
     {
       "rowKind": "contribution",
@@ -2212,21 +2297,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 465
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/project-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 17,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 549
+      "fragmentTextLength": 481
     },
     {
       "rowKind": "file-artifact",
@@ -2290,6 +2361,34 @@
       "fileRole": "state-model",
       "fileLanguage": "typescript",
       "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./app-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/project-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
       "contributionKind": "typescript-import-requirement",
       "contributionOrigin": null,
       "importModuleSpecifier": "./task-item",
@@ -2828,6 +2927,34 @@
       "importTypeOnly": false
     },
     {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/milestone-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/milestone-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./app-state",
+      "importTypeOnly": false
+    },
+    {
       "rowKind": "file-artifact",
       "effectContractId": "source-plan-preview",
       "rootDir": ".",
@@ -2899,11 +3026,12 @@
         "operationKind": "create-control",
         "applicationSite": "template-element",
         "slotKinds": [
-          "binding-expression"
+          "binding-expression",
+          "native-required"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 43
+      "fragmentTextLength": 52
     },
     {
       "rowKind": "contribution",
@@ -2931,7 +3059,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 99
+      "fragmentTextLength": 108
     },
     {
       "rowKind": "contribution",
@@ -3068,7 +3196,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 562
+      "fragmentTextLength": 571
     },
     {
       "rowKind": "contribution",
@@ -3345,16 +3473,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -3368,7 +3495,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 82
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -3379,20 +3506,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 25,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 95
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-list-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 26,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -3417,7 +3530,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 27,
+      "contributionIndex": 26,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -3439,7 +3552,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 28,
+      "contributionIndex": 27,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -3453,7 +3566,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 29,
+      "contributionIndex": 28,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -3717,16 +3830,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -3737,34 +3849,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 5,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 82
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 6,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 101
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 7,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -3788,7 +3872,7 @@
       "filePath": "src/routes/task-item-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 8,
+      "contributionIndex": 6,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -3830,6 +3914,34 @@
       "fileRole": "state-model",
       "fileLanguage": "typescript",
       "contributionIndex": 1,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "aurelia",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 2,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./app-state",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 3,
       "contributionKind": "typescript-import-requirement",
       "contributionOrigin": null,
       "importModuleSpecifier": "./project",
@@ -4413,16 +4525,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 33
+      "fragmentTextLength": 36
     },
     {
       "rowKind": "contribution",
@@ -4436,7 +4547,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 84
+      "fragmentTextLength": 45
     },
     {
       "rowKind": "contribution",
@@ -4447,20 +4558,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 27,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 97
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/review-item-list-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 28,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -4485,7 +4582,7 @@
       "filePath": "src/routes/review-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 29,
+      "contributionIndex": 28,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -4507,7 +4604,7 @@
       "filePath": "src/routes/review-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 30,
+      "contributionIndex": 29,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -4521,7 +4618,7 @@
       "filePath": "src/routes/review-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 31,
+      "contributionIndex": 30,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -4863,16 +4960,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 33
+      "fragmentTextLength": 36
     },
     {
       "rowKind": "contribution",
@@ -4883,34 +4979,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 9,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 84
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/review-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 10,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 103
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/review-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 11,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -4934,7 +5002,7 @@
       "filePath": "src/routes/review-item-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 12,
+      "contributionIndex": 10,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -5073,7 +5141,7 @@
       "contributionIndex": 2,
       "contributionKind": "typescript-import-requirement",
       "contributionOrigin": null,
-      "importModuleSpecifier": "./services/review-assignment-service",
+      "importModuleSpecifier": "./app-state",
       "importTypeOnly": false
     },
     {
@@ -5085,6 +5153,20 @@
       "fileRole": "state-model",
       "fileLanguage": "typescript",
       "contributionIndex": 3,
+      "contributionKind": "typescript-import-requirement",
+      "contributionOrigin": null,
+      "importModuleSpecifier": "./services/review-assignment-service",
+      "importTypeOnly": false
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/review-item-browse-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "contributionIndex": 4,
       "contributionKind": "typescript-import-requirement",
       "contributionOrigin": null,
       "importModuleSpecifier": "./reviewer-profile",
@@ -5108,6 +5190,17 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/runtime-html",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "aurelia",
       "dependencyVersionRange": "^2.0.0-rc.1",
       "dependencyScope": "dependency"
@@ -5119,9 +5212,51 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/vite-plugin",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "typescript",
       "dependencyVersionRange": "^6.0.3",
       "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "vite",
+      "dependencyVersionRange": "^7.0.2",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "dev",
+      "scriptCommand": "vite"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "build",
+      "scriptCommand": "vite build"
     },
     {
       "rowKind": "project-tooling-script",
@@ -5145,6 +5280,32 @@
       "hasText": true,
       "projectToolingFileKind": "package-manifest",
       "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "index.html",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "root-document",
+      "projectToolingFileLanguage": "html"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "vite.config.ts",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "build-config",
+      "projectToolingFileLanguage": "typescript"
     },
     {
       "rowKind": "project-tooling-file",

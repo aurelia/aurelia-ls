@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -17,6 +19,8 @@
     "aurelia": "^2.0.0-rc.1"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@aurelia/vite-plugin": "^2.0.0-rc.1",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.2"
   }
 }

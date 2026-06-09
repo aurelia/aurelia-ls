@@ -370,7 +370,19 @@ export function appBuilderInputReadiness(
   const decisionBundleCount = request.decisionBundles?.length ?? 0;
   const decisionBundleDecisionCount = appBuilderDecisionBundleDecisionCount(request.decisionBundles);
   return {
-    displayText: `App-builder input readiness: ${targets.length} target(s), ${satisfiedCount} satisfied, ${missingRequiredCount} missing required, ${missingRecommendedCount} missing recommended, ${deferredCount} deferred, suppliedInputs=${suppliedInputs.length}, decisionBundles=${decisionBundleCount}, payloads=${suppliedInputPayloadCount}, invalidPayloads=${invalidPayloadCount}, ${issues.length} issue(s)${defaultTargetUsed ? '; defaultTarget=blank-slate-intake' : ''}.`,
+    displayText: appBuilderInputReadinessDisplayText({
+      targetCount: targets.length,
+      satisfiedCount,
+      missingRequiredCount,
+      missingRecommendedCount,
+      deferredCount,
+      suppliedInputCount: suppliedInputs.length,
+      decisionBundleCount,
+      suppliedInputPayloadCount,
+      invalidPayloadCount,
+      issueCount: issues.length,
+      defaultTargetUsed,
+    }),
     defaultTargetUsed,
     targets,
     issues,
@@ -390,6 +402,30 @@ export function appBuilderInputReadiness(
     missingRecommendedCount,
     deferredCount,
   };
+}
+
+interface AppBuilderInputReadinessDisplayTextInput {
+  readonly targetCount: number;
+  readonly satisfiedCount: number;
+  readonly missingRequiredCount: number;
+  readonly missingRecommendedCount: number;
+  readonly deferredCount: number;
+  readonly suppliedInputCount: number;
+  readonly decisionBundleCount: number;
+  readonly suppliedInputPayloadCount: number;
+  readonly invalidPayloadCount: number;
+  readonly issueCount: number;
+  readonly defaultTargetUsed: boolean;
+}
+
+function appBuilderInputReadinessDisplayText(
+  input: AppBuilderInputReadinessDisplayTextInput,
+): string {
+  const base = `App-builder input readiness: ${input.targetCount} target(s), ${input.satisfiedCount} satisfied, ${input.missingRequiredCount} missing required, ${input.missingRecommendedCount} missing recommended, ${input.deferredCount} deferred, suppliedInputs=${input.suppliedInputCount}, decisionBundles=${input.decisionBundleCount}, payloads=${input.suppliedInputPayloadCount}, invalidPayloads=${input.invalidPayloadCount}, ${input.issueCount} issue(s)${input.defaultTargetUsed ? '; defaultTarget=blank-slate-intake' : ''}.`;
+  if (input.missingRequiredCount === 0 && input.invalidPayloadCount === 0) {
+    return base;
+  }
+  return `${base} Supply values through suppliedInputs[].facetPayloads or decisionBundles[].decisions[].facetPayloads; call input-contract-detail with includePayloadSchemas=true for exact facet payload schemas.`;
 }
 
 /** Convert shared target-selection issues into input-readiness issue rows for public read-model answers. */
@@ -634,7 +670,7 @@ function validateSuppliedInputPayloads(
       issues: validationIssues,
       summary: state === AppBuilderSuppliedInputPayloadValidationState.Valid
         ? `Supplied payload for '${inputFacetId}' matches the modeled input schema.`
-        : `Supplied payload for '${inputFacetId}' has ${validationIssues.length} schema issue(s).`,
+        : invalidPayloadSummary(inputFacetId, validationIssues),
     };
     if (state === AppBuilderSuppliedInputPayloadValidationState.Invalid) {
       issues.push({
@@ -649,6 +685,15 @@ function validateSuppliedInputPayloads(
     }
     return [row];
   });
+}
+
+function invalidPayloadSummary(
+  inputFacetId: AppBuilderInputFacetId,
+  validationIssues: readonly string[],
+): string {
+  const issueSummary = validationIssues.slice(0, 3).join(' ');
+  const suffix = validationIssues.length > 3 ? ` (+${validationIssues.length - 3} more)` : '';
+  return `Supplied payload for '${inputFacetId}' has ${validationIssues.length} schema issue(s): ${issueSummary}${suffix}`;
 }
 
 function suppliedInputContributesToDependency(

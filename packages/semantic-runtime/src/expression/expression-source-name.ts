@@ -16,7 +16,7 @@ export function expressionSourceName(expression: ExpressionAstNode): string | nu
     }
     case 'AccessKeyed': {
       const object = expressionSourceName(expression.object);
-      const key = expressionSourceName(expression.key) ?? primitiveExpressionDisplay(expression.key) ?? '?';
+      const key = nestedExpressionSourceName(expression.key) ?? primitiveExpressionDisplay(expression.key) ?? '?';
       return object == null ? `[${key}]` : `${object}[${key}]`;
     }
     case 'CallScope':
@@ -42,18 +42,18 @@ export function expressionSourceName(expression: ExpressionAstNode): string | nu
       return expressionSourceName(expression.expression);
     case 'Binary':
       return infixExpressionSourceName(
-        expressionSourceName(expression.left),
+        nestedExpressionSourceName(expression.left),
         expression.operation,
-        expressionSourceName(expression.right),
+        nestedExpressionSourceName(expression.right),
       ) ?? compactExpressionSourceNames([
         expressionSourceName(expression.left),
         expressionSourceName(expression.right),
       ]);
     case 'Conditional':
       return conditionalExpressionSourceName(
-        expressionSourceName(expression.condition),
-        expressionSourceName(expression.yes),
-        expressionSourceName(expression.no),
+        nestedExpressionSourceName(expression.condition),
+        nestedExpressionSourceName(expression.yes),
+        nestedExpressionSourceName(expression.no),
       ) ?? compactExpressionSourceNames([
         expressionSourceName(expression.condition),
         expressionSourceName(expression.yes),
@@ -126,13 +126,26 @@ function expressionSourceArgumentList(
 ): string {
   const parts: string[] = [];
   for (const argument of expressions) {
-    const display = expressionSourceName(argument) ?? primitiveExpressionDisplay(argument);
+    const display = nestedExpressionSourceName(argument) ?? primitiveExpressionDisplay(argument);
     if (display == null) {
       return '';
     }
     parts.push(display);
   }
   return parts.join(', ');
+}
+
+function nestedExpressionSourceName(expression: ExpressionAstNode): string | null {
+  if (expression.$kind === 'Unary') {
+    const operand = nestedExpressionSourceName(expression.expression);
+    if (operand == null) {
+      return null;
+    }
+    return expression.operation === 'typeof' || expression.operation === 'void'
+      ? `${expression.operation} ${operand}`
+      : `${expression.operation}${operand}`;
+  }
+  return expressionSourceName(expression);
 }
 
 function infixExpressionSourceName(

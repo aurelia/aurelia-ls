@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   FixtureVerificationRequest,
@@ -236,12 +237,18 @@ const unresolvedVendorModuleDiagnostic = typeScriptDiagnostics.rows.find((row) =
 const targetOpenReasonSource = openSeams.rows
   .flatMap((row) => row.reasonSources)
   .find((source) => source.reasonKind === 'router-href-click-interception-target-open');
+const explicitExternalHrefOpenSeam = openSeams.rows.find((row) =>
+  openSeamSourceTexts(row).some((text) => text.includes('explicitExternalHref'))
+);
 
 if (unresolvedVendorModuleDiagnostic != null) {
   failures.push('Expected no-tsconfig fallback checker roots to include local ambient module declarations.');
 }
 if (targetOpenReasonSource == null || targetOpenReasonSource.source == null) {
   failures.push('Expected router href target-open reason to preserve a source-bearing reasonSource row.');
+}
+if (explicitExternalHrefOpenSeam != null) {
+  failures.push('Expected explicit external dynamic href values to bypass router instruction open seams.');
 }
 
 const summary = {
@@ -269,4 +276,22 @@ if (failures.length > 0) {
 
 function effectFilter(field, value) {
   return new ExpectedSemanticEffectFilter(field, value);
+}
+
+function openSeamSourceTexts(row) {
+  return [
+    sourceReferenceText(row.source),
+    ...row.reasonSources.map((source) => sourceReferenceText(source.source)),
+  ].filter((text) => text.length > 0);
+}
+
+function sourceReferenceText(source) {
+  if (source == null || source.path == null || source.start == null || source.end == null) {
+    return '';
+  }
+  const sourcePath = path.join(fixtureRoot, source.path);
+  if (!fs.existsSync(sourcePath)) {
+    return '';
+  }
+  return fs.readFileSync(sourcePath, 'utf8').slice(source.start, source.end);
 }

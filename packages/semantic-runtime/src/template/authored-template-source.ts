@@ -135,7 +135,7 @@ export function appendAuthoredTemplateElementAttributes(
 }
 
 function indentTemplateSource(text: string): string {
-  return text.split('\n').map((line) => `  ${line}`).join('\n');
+  return text.split('\n').map((line) => `  ${line.trimEnd()}`).join('\n');
 }
 
 function isAuthoredTemplateTextChildSource(

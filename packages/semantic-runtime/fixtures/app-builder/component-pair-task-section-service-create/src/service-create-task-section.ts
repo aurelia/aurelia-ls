@@ -9,8 +9,9 @@ export class ServiceCreateTaskSection {
   createStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  create() {
+  async create() {
     this.taskItemsPromise = this.taskItemService.createTaskItem(this.title, this.done);
+    await this.taskItemsPromise;
     this.createStatusMessage = 'Task saved.';
   }
 }

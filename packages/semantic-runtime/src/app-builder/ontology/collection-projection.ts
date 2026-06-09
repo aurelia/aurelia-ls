@@ -56,6 +56,14 @@ export const APP_BUILDER_COLLECTION_TABLE_COLUMN_DISPLAY_KINDS = [
   AppBuilderCollectionTableColumnDisplayKind.Action,
 ] as const;
 
+/** Normalized caller-owned text pair for boolean collection display. */
+export interface AppBuilderCollectionBooleanDisplayText {
+  /** Text rendered when the boolean expression evaluates to true. */
+  readonly trueText: string;
+  /** Text rendered when the boolean expression evaluates to false. */
+  readonly falseText: string;
+}
+
 /** Caller-supplied field projection row for list/card/table presentation. */
 export interface AppBuilderCollectionDisplayFieldPayload {
   /** Domain field name to project. */
@@ -64,6 +72,10 @@ export interface AppBuilderCollectionDisplayFieldPayload {
   readonly role: AppBuilderCollectionDisplayRole;
   /** Optional human-facing label/header override for roles that render labels. */
   readonly label?: string;
+  /** Text rendered when a boolean display field evaluates to true. */
+  readonly booleanTrueText?: string;
+  /** Text rendered when a boolean display field evaluates to false. */
+  readonly booleanFalseText?: string;
 }
 
 /** Caller-supplied table column row for table presentation. */
@@ -92,6 +104,10 @@ export interface AppBuilderCollectionTableColumnPayload {
   readonly routeTargetAttributeName?: string;
   /** Visible link text when an action column spends router navigation. */
   readonly linkText?: string;
+  /** Text rendered when a boolean field-backed column evaluates to true. */
+  readonly booleanTrueText?: string;
+  /** Text rendered when a boolean field-backed column evaluates to false. */
+  readonly booleanFalseText?: string;
   /** Whether local/server sorting should be offered for this field-backed column. */
   readonly sortable?: boolean;
   /** Whether local/server filtering should be offered for this field-backed column. */

@@ -21,7 +21,16 @@ export function projectToolingExpectedEffects(
       [new ExpectedSemanticEffectFilter('role', 'package-manifest')],
     ),
     ExpectedSemanticEffect.fact(
-      `${appDescription} has TypeScript project tooling.`,
+      `${appDescription} has a browser root document.`,
+      ExpectedSemanticEffectKind.ProjectTooling,
+      ExpectedSemanticEffectScope.Project,
+      ExpectedSemanticEffectTopologyNodeKind.BuildTool,
+      ExpectedSemanticEffectCardinality.Present,
+      null,
+      [new ExpectedSemanticEffectFilter('role', 'root-document')],
+    ),
+    ExpectedSemanticEffect.fact(
+      `${appDescription} has TypeScript and build project tooling.`,
       ExpectedSemanticEffectKind.ProjectTooling,
       ExpectedSemanticEffectScope.Project,
       ExpectedSemanticEffectTopologyNodeKind.BuildTool,

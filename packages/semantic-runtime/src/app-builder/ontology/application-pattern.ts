@@ -7,6 +7,7 @@ import {
   APP_BUILDER_AURELIA_ROUTING_INPUT_SELECTION,
   APP_BUILDER_AURELIA_STATE_INPUT_SELECTION,
   APP_BUILDER_COLLECTION_DISPLAY_INPUT_SELECTION,
+  APP_BUILDER_COLLECTION_QUERY_INPUT_SELECTION,
   APP_BUILDER_COLLECTION_TABLE_INPUT_SELECTION,
   APP_BUILDER_DOMAIN_ACTION_INPUT_SELECTION,
   APP_BUILDER_DOMAIN_CHOICE_FIELD_INPUT_SELECTION,
@@ -221,6 +222,8 @@ export enum AppBuilderApplicationPatternId {
   LoadingEmptyErrorState = 'loading-empty-error-state',
   /** User-visible action outcome/status feedback bound to local status state. */
   ActionFeedbackStatus = 'action-feedback-status',
+  /** Toast or notification feedback surfaced outside the local action/status region. */
+  ToastNotification = 'toast-notification',
   /** Promise-valued component member that backs async template-controller status regions. */
   AsyncDataSource = 'async-data-source',
   /** Domain action represented as an explicit user command before choosing event/service/state/route realization. */
@@ -233,8 +236,12 @@ export enum AppBuilderApplicationPatternId {
   DomainBackedSubmitForm = 'domain-backed-submit-form',
   /** Route-backed list/detail or browse/detail structure. */
   RouterBackedListDetail = 'router-backed-list-detail',
+  /** Route/query-string state for shareable or reload-stable query selections. */
+  QueryStringState = 'query-string-state',
   /** DI service-backed load/save boundary. */
   ServiceBackedLoadSave = 'service-backed-load-save',
+  /** Remote HTTP/API fetch integration beyond local service/adaptor scaffolding. */
+  RemoteFetchIntegration = 'remote-fetch-integration',
   /** Local view-model state for small UI-only concerns. */
   LocalViewModelState = 'local-view-model-state',
   /** DI state/domain class owned outside the template component. */
@@ -260,13 +267,16 @@ export const APP_BUILDER_APPLICATION_PATTERN_IDS = [
   AppBuilderApplicationPatternId.CollectionTable,
   AppBuilderApplicationPatternId.LoadingEmptyErrorState,
   AppBuilderApplicationPatternId.ActionFeedbackStatus,
+  AppBuilderApplicationPatternId.ToastNotification,
   AppBuilderApplicationPatternId.AsyncDataSource,
   AppBuilderApplicationPatternId.DomainCommandAction,
   AppBuilderApplicationPatternId.RouteNavigationAction,
   AppBuilderApplicationPatternId.NativeSubmitForm,
   AppBuilderApplicationPatternId.DomainBackedSubmitForm,
   AppBuilderApplicationPatternId.RouterBackedListDetail,
+  AppBuilderApplicationPatternId.QueryStringState,
   AppBuilderApplicationPatternId.ServiceBackedLoadSave,
+  AppBuilderApplicationPatternId.RemoteFetchIntegration,
   AppBuilderApplicationPatternId.LocalViewModelState,
   AppBuilderApplicationPatternId.DiStateClass,
   AppBuilderApplicationPatternId.EditBuffer,
@@ -899,6 +909,71 @@ export const APP_BUILDER_APPLICATION_PATTERN_ROWS: readonly AppBuilderApplicatio
     }),
   },
   {
+    id: AppBuilderApplicationPatternId.ToastNotification,
+    level: AppBuilderApplicationPatternLevel.CrossCutting,
+    title: 'Toast / Notification Feedback',
+    problemSolved: 'Surfaces transient command or system feedback outside the local action region when the caller explicitly wants notification UX.',
+    notFor: 'Ordinary inline action status, field help/error copy, loading/error regions, or v1 source generation without a notification service/control contract.',
+    stateShapeIds: [
+      AppBuilderApplicationStateShapeId.LocalViewModelState,
+      AppBuilderApplicationStateShapeId.ServiceBoundary,
+    ],
+    navigationShapeIds: [AppBuilderApplicationNavigationShapeId.None],
+    dataShapeIds: [
+      AppBuilderApplicationDataShapeId.CommandAction,
+      AppBuilderApplicationDataShapeId.StatusState,
+    ],
+    interactionShapeIds: [
+      AppBuilderApplicationInteractionShapeId.Command,
+      AppBuilderApplicationInteractionShapeId.Feedback,
+    ],
+    aureliaRealizationIds: [
+      AppBuilderApplicationAureliaRealizationId.CustomElement,
+      AppBuilderApplicationAureliaRealizationId.DependencyInjection,
+      AppBuilderApplicationAureliaRealizationId.ControlManifest,
+    ],
+    semanticEffectKinds: [
+      ExpectedSemanticEffectKind.TemplateCompilation,
+      ExpectedSemanticEffectKind.RuntimeController,
+      ExpectedSemanticEffectKind.DependencyInjection,
+      ExpectedSemanticEffectKind.BindingDataFlow,
+    ],
+    inputContractIds: [
+      AppBuilderInputContractId.InteractionFeedback,
+      AppBuilderInputContractId.ControlAccessibility,
+      AppBuilderInputContractId.VisualStyleInput,
+    ],
+    inputFacetSelections: [
+      APP_BUILDER_ACTION_FEEDBACK_INPUT_SELECTION,
+      APP_BUILDER_ACCESSIBILITY_LABEL_HELP_INPUT_SELECTION,
+      APP_BUILDER_VISUAL_CLASS_HOOK_INPUT_SELECTION,
+    ],
+    companionPatternIds: [
+      AppBuilderApplicationPatternId.ActionFeedbackStatus,
+      AppBuilderApplicationPatternId.DomainCommandAction,
+    ],
+    collectionConceptIds: [],
+    controlPatternIds: [],
+    controlManifestIds: [
+      AppBuilderControlManifestRowId.ComponentApiManifest,
+      AppBuilderControlManifestRowId.AccessibilityContract,
+      AppBuilderControlManifestRowId.StyleContract,
+    ],
+    stylingMechanismIds: [AppBuilderStylingMechanismId.ClassBinding],
+    visualPolicyIds: [
+      AppBuilderVisualPolicyId.VisualInputMissing,
+      AppBuilderVisualPolicyId.StructuralHooksOnly,
+    ],
+    status: appBuilderOntologyStatus({
+      modeled: true,
+      sourceLoweringImplemented: false,
+      recommendationStatus: AppBuilderRecommendationStatus.Deferred,
+      requiresExplicitInput: true,
+      reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+      note: 'Visible v1 deferral: use ActionFeedbackStatus for current inline source lowering until notification service/control and accessibility behavior are designed.',
+    }),
+  },
+  {
     id: AppBuilderApplicationPatternId.DomainCommandAction,
     level: AppBuilderApplicationPatternLevel.Primitive,
     title: 'Domain Command Action',
@@ -1293,6 +1368,154 @@ export const APP_BUILDER_APPLICATION_PATTERN_ROWS: readonly AppBuilderApplicatio
       recommendationStatus: AppBuilderRecommendationStatus.Contextual,
       requiresExplicitInput: true,
       reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+    }),
+  },
+  {
+    id: AppBuilderApplicationPatternId.QueryStringState,
+    level: AppBuilderApplicationPatternLevel.CrossCutting,
+    title: 'Query-String State',
+    problemSolved: 'Makes search, filter, paging, or other query selections shareable and reload-stable through route/query-string state.',
+    notFor: 'Local in-memory query controls, route parameters that identify an entity, or generated source before router query-state synchronization policy exists.',
+    stateShapeIds: [
+      AppBuilderApplicationStateShapeId.LocalViewModelState,
+      AppBuilderApplicationStateShapeId.ServiceBoundary,
+    ],
+    navigationShapeIds: [AppBuilderApplicationNavigationShapeId.RouteBacked],
+    dataShapeIds: [
+      AppBuilderApplicationDataShapeId.Query,
+      AppBuilderApplicationDataShapeId.StatusState,
+    ],
+    interactionShapeIds: [
+      AppBuilderApplicationInteractionShapeId.Query,
+      AppBuilderApplicationInteractionShapeId.Navigate,
+      AppBuilderApplicationInteractionShapeId.Feedback,
+    ],
+    aureliaRealizationIds: [
+      AppBuilderApplicationAureliaRealizationId.Router,
+      AppBuilderApplicationAureliaRealizationId.BindingCommand,
+      AppBuilderApplicationAureliaRealizationId.CustomElement,
+    ],
+    semanticEffectKinds: [
+      ExpectedSemanticEffectKind.Route,
+      ExpectedSemanticEffectKind.BindingDataFlow,
+      ExpectedSemanticEffectKind.RuntimeController,
+    ],
+    inputContractIds: [
+      AppBuilderInputContractId.DomainModel,
+      AppBuilderInputContractId.CollectionProjection,
+      AppBuilderInputContractId.AureliaPolicy,
+    ],
+    inputFacetSelections: [
+      APP_BUILDER_DOMAIN_ENTITY_FIELD_INPUT_SELECTION,
+      APP_BUILDER_COLLECTION_QUERY_INPUT_SELECTION,
+      APP_BUILDER_AURELIA_ROUTING_INPUT_SELECTION,
+    ],
+    companionPatternIds: [
+      AppBuilderApplicationPatternId.RouterBackedListDetail,
+      AppBuilderApplicationPatternId.ServiceBackedLoadSave,
+    ],
+    collectionConceptIds: [
+      AppBuilderCollectionConceptId.LocalCollectionQuery,
+      AppBuilderCollectionConceptId.ServiceBackedCollectionQuery,
+    ],
+    controlPatternIds: [AppBuilderControlPatternId.NativeSearchInput],
+    controlManifestIds: [
+      AppBuilderControlManifestRowId.ControlUseInventory,
+      AppBuilderControlManifestRowId.ValueContract,
+    ],
+    stylingMechanismIds: [AppBuilderStylingMechanismId.ClassBinding],
+    visualPolicyIds: [AppBuilderVisualPolicyId.StructuralHooksOnly],
+    status: appBuilderOntologyStatus({
+      modeled: true,
+      sourceLoweringImplemented: false,
+      recommendationStatus: AppBuilderRecommendationStatus.Deferred,
+      requiresExplicitInput: true,
+      reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+      note: 'Visible v1 deferral: local and narrow service query controls exist, but URL/query-string synchronization needs explicit router query-state policy before generation.',
+    }),
+  },
+  {
+    id: AppBuilderApplicationPatternId.RemoteFetchIntegration,
+    level: AppBuilderApplicationPatternLevel.CrossCutting,
+    title: 'Remote Fetch / Server Integration',
+    problemSolved: 'Connects Aurelia service/adaptor boundaries to external HTTP/API contracts when the caller supplies real server behavior.',
+    notFor: 'Local service scaffolds, seed-data demos, or generated fetch code without explicit API shape, error policy, caching, retry, and persistence behavior.',
+    stateShapeIds: [
+      AppBuilderApplicationStateShapeId.DiStateClass,
+      AppBuilderApplicationStateShapeId.ServiceBoundary,
+    ],
+    navigationShapeIds: [
+      AppBuilderApplicationNavigationShapeId.None,
+      AppBuilderApplicationNavigationShapeId.RouteBacked,
+    ],
+    dataShapeIds: [
+      AppBuilderApplicationDataShapeId.Entity,
+      AppBuilderApplicationDataShapeId.Collection,
+      AppBuilderApplicationDataShapeId.Query,
+      AppBuilderApplicationDataShapeId.CommandAction,
+      AppBuilderApplicationDataShapeId.StatusState,
+    ],
+    interactionShapeIds: [
+      AppBuilderApplicationInteractionShapeId.View,
+      AppBuilderApplicationInteractionShapeId.Create,
+      AppBuilderApplicationInteractionShapeId.Edit,
+      AppBuilderApplicationInteractionShapeId.Command,
+      AppBuilderApplicationInteractionShapeId.Query,
+      AppBuilderApplicationInteractionShapeId.Feedback,
+    ],
+    aureliaRealizationIds: [
+      AppBuilderApplicationAureliaRealizationId.DependencyInjection,
+      AppBuilderApplicationAureliaRealizationId.BindingCommand,
+      AppBuilderApplicationAureliaRealizationId.TemplateController,
+      AppBuilderApplicationAureliaRealizationId.Plugin,
+    ],
+    semanticEffectKinds: [
+      ExpectedSemanticEffectKind.ServiceClass,
+      ExpectedSemanticEffectKind.ServiceInteraction,
+      ExpectedSemanticEffectKind.ServiceInteractionBinding,
+      ExpectedSemanticEffectKind.BindingDataFlow,
+      ExpectedSemanticEffectKind.RuntimeController,
+    ],
+    inputContractIds: [
+      AppBuilderInputContractId.DomainModel,
+      AppBuilderInputContractId.CollectionProjection,
+      AppBuilderInputContractId.AureliaPolicy,
+      AppBuilderInputContractId.InteractionFeedback,
+    ],
+    inputFacetSelections: [
+      APP_BUILDER_DOMAIN_ENTITY_FIELD_INPUT_SELECTION,
+      APP_BUILDER_DOMAIN_ACTION_INPUT_SELECTION,
+      APP_BUILDER_COLLECTION_QUERY_INPUT_SELECTION,
+      APP_BUILDER_AURELIA_PLUGIN_INPUT_SELECTION,
+      APP_BUILDER_AURELIA_STATE_INPUT_SELECTION,
+      APP_BUILDER_ACTION_FEEDBACK_INPUT_SELECTION,
+    ],
+    companionPatternIds: [
+      AppBuilderApplicationPatternId.ServiceBackedLoadSave,
+      AppBuilderApplicationPatternId.AsyncDataSource,
+      AppBuilderApplicationPatternId.LoadingEmptyErrorState,
+    ],
+    collectionConceptIds: [
+      AppBuilderCollectionConceptId.CollectionSource,
+      AppBuilderCollectionConceptId.ServiceBackedCollectionQuery,
+    ],
+    controlPatternIds: [
+      AppBuilderControlPatternId.NativeButton,
+      AppBuilderControlPatternId.NativeSearchInput,
+    ],
+    controlManifestIds: [
+      AppBuilderControlManifestRowId.ControlUseInventory,
+      AppBuilderControlManifestRowId.ValueContract,
+    ],
+    stylingMechanismIds: [AppBuilderStylingMechanismId.ClassBinding],
+    visualPolicyIds: [AppBuilderVisualPolicyId.StructuralHooksOnly],
+    status: appBuilderOntologyStatus({
+      modeled: true,
+      sourceLoweringImplemented: false,
+      recommendationStatus: AppBuilderRecommendationStatus.Deferred,
+      requiresExplicitInput: true,
+      reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+      note: 'Visible v1 deferral: current service-backed source is local service/adaptor scaffolding; remote fetch/API contracts remain caller-owned until a dedicated HTTP policy and lowerer exist.',
     }),
   },
   {

@@ -14,6 +14,7 @@ import type {
 import { AppBuilderStructuralPartId } from '../structural-part-catalog.js';
 import { AppBuilderCollectionFeatureId } from './collection.js';
 import type {
+  AppBuilderCollectionBooleanDisplayText,
   AppBuilderCollectionDisplayFieldPayload,
   AppBuilderCollectionTableColumnPayload,
 } from './collection-projection.js';
@@ -162,6 +163,8 @@ export enum AppBuilderSourceLoweringCompositionIssueKind {
   DuplicateCollectionTableColumn = 'duplicate-collection-table-column',
   /** A table column payload was structurally valid but cannot lower through the current table surface. */
   InvalidCollectionTableColumn = 'invalid-collection-table-column',
+  /** Boolean display text was supplied partially or for a non-boolean collection projection. */
+  InvalidCollectionBooleanDisplayText = 'invalid-collection-boolean-display-text',
   /** The caller supplied more than one handler expression for the same action. */
   DuplicateActionHandlerExpression = 'duplicate-action-handler-expression',
   /** The caller supplied more than one sort handler expression for the same field. */
@@ -292,6 +295,7 @@ export const APP_BUILDER_SOURCE_LOWERING_COMPOSITION_ISSUE_KINDS = [
   AppBuilderSourceLoweringCompositionIssueKind.UnknownCollectionTableColumnRelationship,
   AppBuilderSourceLoweringCompositionIssueKind.DuplicateCollectionTableColumn,
   AppBuilderSourceLoweringCompositionIssueKind.InvalidCollectionTableColumn,
+  AppBuilderSourceLoweringCompositionIssueKind.InvalidCollectionBooleanDisplayText,
   AppBuilderSourceLoweringCompositionIssueKind.DuplicateActionHandlerExpression,
   AppBuilderSourceLoweringCompositionIssueKind.DuplicateSortHandlerExpression,
   AppBuilderSourceLoweringCompositionIssueKind.MissingSortHandlerExpression,
@@ -656,6 +660,8 @@ export interface AppBuilderSourceLoweringCollectionDisplayField {
   readonly bindingExpression: string;
   /** Human-facing label used when the markup includes one. */
   readonly label: string;
+  /** Explicit caller-owned text pair for boolean display, when supplied. */
+  readonly booleanDisplayText: AppBuilderCollectionBooleanDisplayText | null;
 }
 
 /** Selected collection table column inside a app-builder source-lowering composition. */
@@ -684,6 +690,8 @@ export interface AppBuilderSourceLoweringCollectionTableColumn {
   readonly sortEventAttributeFragment: AppBuilderTemplateAttributePartSourceFragment | null;
   /** Filter control binding expression spent by a filterable field-backed header. */
   readonly filterBindingExpression: string | null;
+  /** Explicit caller-owned text pair for boolean display, when supplied. */
+  readonly booleanDisplayText: AppBuilderCollectionBooleanDisplayText | null;
   /** Human-facing table column header. */
   readonly header: string;
 }

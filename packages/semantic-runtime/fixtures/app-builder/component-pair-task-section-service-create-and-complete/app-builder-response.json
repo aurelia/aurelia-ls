@@ -2,7 +2,7 @@
   "outcome": "hit",
   "summary": "Previewed app-builder ontology SourcePlan with 4 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=src/service-create-complete-task-section.html, target=src/service-create-complete-task-section.ts, source=component-pair, files=4, witnesses=62, controlUses=5, expectedEffects=11, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=src/service-create-complete-task-section.html, target=src/service-create-complete-task-section.ts, source=component-pair, files=4, witnesses=68, controlUses=4, expectedEffects=12, handoffNotes=4, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": "src/service-create-complete-task-section.html",
     "sourceTargetPath": "src/service-create-complete-task-section.ts",
@@ -85,8 +85,8 @@
       "service-interaction",
       "service-interaction-binding"
     ],
-    "expectedEffectCount": 11,
-    "controlUseInventoryRowCount": 5,
+    "expectedEffectCount": 12,
+    "controlUseInventoryRowCount": 4,
     "sourceLoweringRequestFieldSummary": {
       "requestFieldCount": 36,
       "requiredCount": 4,
@@ -145,7 +145,292 @@
         }
       ]
     },
-    "sourcePlanWitnessCount": 62,
+    "sourcePlanWitnessCount": 68,
+    "handoffNoteCount": 4,
+    "handoffNotes": [
+      {
+        "kind": "service-boundary-scaffold",
+        "summary": "Generated service source is a local service/adaptor scaffold for Aurelia wiring and semantic verification; server APIs, fetch policy, caching, retries, and persistence remain caller/AI-owned.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "action-feedback-status"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "loading-empty-error-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "service-backed-load-save"
+          }
+        ],
+        "sourceFileRoles": [
+          "service"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "action-feedback-status"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "loading-empty-error-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "service-backed-load-save"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "service",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 4/4 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "action-feedback-status"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "loading-empty-error-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "service-backed-load-save"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "service",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 12 expected semantic effect(s), 4 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "action-feedback-status"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "loading-empty-error-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "service-backed-load-save"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "service",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "resource-definition",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure",
+          "service-class",
+          "service-interaction",
+          "service-interaction-binding"
+        ]
+      }
+    ],
     "suppliedInputCount": 7,
     "explicitSuppliedInputCount": 0,
     "decisionBundleCount": 1,
@@ -177,7 +462,7 @@
           "editKind": "create",
           "operationKind": "create-component-view-model",
           "textAuthority": "app-builder-generated",
-          "textLength": 841,
+          "textLength": 919,
           "contributionCount": 12
         },
         {
@@ -187,8 +472,8 @@
           "editKind": "create",
           "operationKind": "create-component-template",
           "textAuthority": "app-builder-generated",
-          "textLength": 1775,
-          "contributionCount": 37
+          "textLength": 1695,
+          "contributionCount": 36
         },
         {
           "path": "src/services/task-item-service.ts",
@@ -206,9 +491,21 @@
         "buildToolPolicy": "app-builder-baseline",
         "dependencies": [
           {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
             "specifier": "aurelia",
             "versionRange": "^2.0.0-rc.1",
             "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },
           {
@@ -216,9 +513,25 @@
             "versionRange": "^6.0.3",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
           }
         ],
         "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
           {
             "name": "check",
             "command": "tsc -p tsconfig.json --noEmit",
@@ -231,7 +544,21 @@
             "fileKind": "package-manifest",
             "language": "json",
             "textAuthority": "app-builder-generated",
-            "textLength": 266
+            "textLength": 421
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 378
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
           },
           {
             "path": "tsconfig.json",

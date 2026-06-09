@@ -157,6 +157,10 @@ function addSurfaceContinuations(
     case SemanticRuntimeAppBuilderQueryKind.Catalog:
       seeds.push(
         orient(
+          'Open concrete app architecture options before choosing source generation.',
+          appBuilderQuery(SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions),
+        ),
+        orient(
           'Open the read-only app-builder ontology catalog before choosing source generation.',
           appBuilderQuery(SemanticRuntimeAppBuilderQueryKind.OntologyCatalog),
         ),
@@ -213,6 +217,22 @@ function addOntologyContinuations(
       break;
     case SemanticRuntimeAppBuilderQueryKind.InputContractDetail:
       addInputContractDetailContinuations(query, result, seeds);
+      break;
+    case SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions:
+      seeds.push(
+        inspect(
+          'Inspect selectable ontology targets for the architecture option rows.',
+          appBuilderQuery(SemanticRuntimeAppBuilderQueryKind.TargetCatalog, {
+            targetCatalog: { includeInputReadiness: true, includeSourceLoweringRequestFields: true },
+          }),
+        ),
+        inspect(
+          'Open payload schemas for app-builder input contracts before supplying source-driving values.',
+          appBuilderQuery(SemanticRuntimeAppBuilderQueryKind.InputContractDetail, {
+            inputContractDetail: { includePayloadSchemas: true, includeSourceLoweringConsumers: true },
+          }),
+        ),
+      );
       break;
     case SemanticRuntimeAppBuilderQueryKind.AffordanceDetail:
     case SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail:
@@ -1270,6 +1290,8 @@ function publicAppBuilderQueryBase(
       return appBuilderQuery(kind, { inquiryProfile: query.inquiryProfile, inputReadiness: query.inputReadiness });
     case SemanticRuntimeAppBuilderQueryKind.InputContractDetail:
       return appBuilderQuery(kind, { inquiryProfile: query.inquiryProfile, inputContractDetail: query.inputContractDetail });
+    case SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions:
+      return appBuilderQuery(kind, { inquiryProfile: query.inquiryProfile, architectureOptions: query.architectureOptions });
     case SemanticRuntimeAppBuilderQueryKind.AffordanceDetail:
       return appBuilderQuery(kind, { inquiryProfile: query.inquiryProfile, affordanceDetail: query.affordanceDetail });
     case SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail:

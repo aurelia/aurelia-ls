@@ -2,12 +2,14 @@ import {
   AppBuilderDomainActionKind,
   AppBuilderDomainActionScope,
   type AppBuilderDomainActionDescriptor,
+  AppBuilderDomainFieldAffordance,
   AppBuilderDomainFieldValueKind,
   AppBuilderDomainIdentityValueKind,
   type AppBuilderDomainFieldDescriptor,
   AppBuilderDomainRelationshipKind,
   AppBuilderDomainRelationshipLocalValueKind,
   type AppBuilderDomainRelationshipDescriptor,
+  type AppBuilderTextFieldConstraintDescriptor,
   type AppBuilderDomainValueSetDescriptor,
 } from '../domain-model.js';
 import {
@@ -17,6 +19,7 @@ import {
   AppBuilderCustomElementViewForm,
   AppBuilderDomainModelingMode,
   AppBuilderLocalStatePolicy,
+  AppBuilderPackageCapability,
   AppBuilderResourceCarrier,
   AppBuilderRouterAdmissionPolicy,
 } from '../aurelia-lowering-option.js';
@@ -190,6 +193,11 @@ export interface AppBuilderSourceLoweringStatePolicyPayload {
   readonly appStateOwnership?: AppBuilderAppStateOwnershipMode;
   readonly localStatePolicies?: readonly AppBuilderLocalStatePolicy[];
   readonly domainModeling?: AppBuilderDomainModelingMode;
+}
+
+/** Optional plugin/package capability payload accepted by app-builder source lowering. */
+export interface AppBuilderSourceLoweringPluginPolicyPayload {
+  readonly packageCapabilities?: readonly AppBuilderPackageCapability[];
 }
 
 /** Caller-supplied visual hooks that source lowerers can attach without inventing CSS. */
@@ -490,6 +498,17 @@ export function appBuilderSourceLoweringStatePolicyPayloads(
     .flatMap((payload) => isStatePolicyPayload(payload.value) ? [payload.value] : []);
 }
 
+/** Read optional plugin-policy facet payloads from supplied app-builder inputs. */
+export function appBuilderSourceLoweringPluginPolicyPayloads(
+  suppliedInputs: readonly AppBuilderSuppliedInput[],
+): readonly AppBuilderSourceLoweringPluginPolicyPayload[] {
+  return suppliedInputs
+    .filter((input) => input.inputContractId === AppBuilderInputContractId.AureliaPolicy)
+    .flatMap((input) => input.facetPayloads ?? [])
+    .filter((payload) => payload.inputFacetId === AppBuilderInputFacetId.AureliaPluginPolicy)
+    .flatMap((payload) => isPluginPolicyPayload(payload.value) ? [payload.value] : []);
+}
+
 /** Read caller-supplied seed records from supplied app-builder inputs. */
 export function appBuilderSourceLoweringSeedRecordSetPayloads(
   suppliedInputs: readonly AppBuilderSuppliedInput[],
@@ -606,8 +625,13 @@ function isDomainFieldDescriptor(
     && typeof record.title === 'string'
     && optionalString(record.entityName)
     && Object.values(AppBuilderDomainFieldValueKind).includes(record.valueKind as AppBuilderDomainFieldValueKind)
+    && (record.fieldAffordance == null
+      || Object.values(AppBuilderDomainFieldAffordance).includes(record.fieldAffordance as AppBuilderDomainFieldAffordance))
+    && (record.required == null || typeof record.required === 'boolean')
     && (record.defaultValue === undefined || isSeedRecordValue(record.defaultValue))
+    && (record.textConstraints == null || isTextFieldConstraintDescriptor(record.textConstraints))
     && (record.numericConstraints == null || isNumericFieldConstraintDescriptor(record.numericConstraints))
+    && optionalString(record.valueSetName)
     && optionalString(record.optionTypeName);
 }
 
@@ -642,6 +666,18 @@ function isNumericFieldConstraintDescriptor(
   return (record.minimum == null || typeof record.minimum === 'number')
     && (record.maximum == null || typeof record.maximum === 'number')
     && (record.step == null || typeof record.step === 'number');
+}
+
+function isTextFieldConstraintDescriptor(
+  value: unknown,
+): value is AppBuilderTextFieldConstraintDescriptor {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (record.minLength == null || typeof record.minLength === 'number')
+    && (record.maxLength == null || typeof record.maxLength === 'number')
+    && optionalString(record.pattern);
 }
 
 function isDomainActionDescriptorArray(
@@ -720,7 +756,9 @@ function isCollectionDisplayFieldPayload(
   const record = value as Record<string, unknown>;
   return typeof record.fieldName === 'string'
     && APP_BUILDER_COLLECTION_DISPLAY_ROLES.includes(record.role as AppBuilderCollectionDisplayRole)
-    && optionalString(record.label);
+    && optionalString(record.label)
+    && optionalString(record.booleanTrueText)
+    && optionalString(record.booleanFalseText);
 }
 
 function isCollectionTableColumnPayloadArray(
@@ -749,6 +787,8 @@ function isCollectionTableColumnPayload(
     && optionalString(record.routeActiveExpression)
     && optionalString(record.routeTargetAttributeName)
     && optionalString(record.linkText)
+    && optionalString(record.booleanTrueText)
+    && optionalString(record.booleanFalseText)
     && optionalBoolean(record.sortable)
     && optionalBoolean(record.filterable);
 }
@@ -888,6 +928,16 @@ function isStatePolicyPayload(
     && optionalEnumArray(record.localStatePolicies, AppBuilderLocalStatePolicy)
     && (record.domainModeling == null
       || Object.values(AppBuilderDomainModelingMode).includes(record.domainModeling as AppBuilderDomainModelingMode));
+}
+
+function isPluginPolicyPayload(
+  value: unknown,
+): value is AppBuilderSourceLoweringPluginPolicyPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return optionalEnumArray(record.packageCapabilities, AppBuilderPackageCapability);
 }
 
 function optionalSourcePatternParameterValueArray(

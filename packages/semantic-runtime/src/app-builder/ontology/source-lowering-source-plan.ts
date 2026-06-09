@@ -7,6 +7,7 @@ import {
   appBuilderSourceLoweringRequestFieldsForSourcePlanSelection,
 } from './source-lowering-request-field.js';
 import { appBuilderSourceLoweringEmissionContext } from './source-lowering-context.js';
+import { appBuilderSourcePlanHandoffNotes } from './source-lowering-handoff.js';
 import { appBuilderSourcePlanWitnessRows } from './source-plan-witness.js';
 import {
   appBuilderDecisionBundleExpansionRows,
@@ -77,9 +78,12 @@ export function appBuilderSourceLoweringSourcePlan(
   });
   const sourceLoweringRequestFieldSummary = appBuilderSourceLoweringRequestFieldSummary(sourceLoweringRequestFields);
   const sourcePlanWitnessRows = appBuilderSourcePlanWitnessRows(sourcePlan);
+  const explicitSuppliedInputs = sourcePlanAllExplicitSuppliedInputs(request);
+  const decisionBundles = sourcePlanAllDecisionBundles(request);
+  const handoffNotes = appBuilderSourcePlanHandoffNotes(sourcePlan, sourcePlanFrame, explicitSuppliedInputs);
   const inputCounts = appBuilderDecisionBundleInputCounts(
-    sourcePlanAllExplicitSuppliedInputs(request),
-    sourcePlanAllDecisionBundles(request),
+    explicitSuppliedInputs,
+    decisionBundles,
   );
   const includeDecisionBundleExpansionRows = request.includeDecisionBundleExpansionRows === true;
   const includeSourcePlanWitnessRows = request.includeSourcePlanWitnessRows === true;
@@ -89,7 +93,7 @@ export function appBuilderSourceLoweringSourcePlan(
   const includeSourceLoweringRequestFields = request.includeSourceLoweringRequestFields === true;
   const sourceLoweringSelectionKind = sourcePlanFrame.sourceLoweringSelectionKind;
   return {
-    displayText: `App-builder SourcePlan preview: root=${rootDir ?? 'none'}, template=${templatePath ?? 'none'}, target=${sourceTargetPath ?? 'none'}, source=${sourceLoweringSelectionKind ?? 'none'}, files=${sourcePlan?.files.length ?? 0}, witnesses=${sourcePlanWitnessRows.length}, controlUses=${controlUseInventoryRows.length}, expectedEffects=${expectedEffectRows.length}, decisionBundles=${inputCounts.decisionBundleCount}, issues=${issues.length}.`,
+    displayText: `App-builder SourcePlan preview: root=${rootDir ?? 'none'}, template=${templatePath ?? 'none'}, target=${sourceTargetPath ?? 'none'}, source=${sourceLoweringSelectionKind ?? 'none'}, files=${sourcePlan?.files.length ?? 0}, witnesses=${sourcePlanWitnessRows.length}, controlUses=${controlUseInventoryRows.length}, expectedEffects=${expectedEffectRows.length}, handoffNotes=${handoffNotes.length}, decisionBundles=${inputCounts.decisionBundleCount}, issues=${issues.length}.`,
     rootDir,
     templatePath,
     sourceTargetPath,
@@ -116,13 +120,15 @@ export function appBuilderSourceLoweringSourcePlan(
     ...(includeSourceLoweringRequestFields ? { sourceLoweringRequestFields } : {}),
     sourcePlanWitnessCount: sourcePlanWitnessRows.length,
     ...(includeSourcePlanWitnessRows ? { sourcePlanWitnessRows } : {}),
+    handoffNoteCount: handoffNotes.length,
+    handoffNotes,
     sourcePlan,
     suppliedInputCount: inputCounts.suppliedInputCount,
     explicitSuppliedInputCount: inputCounts.explicitSuppliedInputCount,
     decisionBundleCount: inputCounts.decisionBundleCount,
     decisionBundleDecisionCount: inputCounts.decisionBundleDecisionCount,
     ...(includeDecisionBundleExpansionRows ? {
-      decisionBundleExpansionRows: appBuilderDecisionBundleExpansionRows(sourcePlanAllDecisionBundles(request)),
+      decisionBundleExpansionRows: appBuilderDecisionBundleExpansionRows(decisionBundles),
     } : {}),
     issues,
   };

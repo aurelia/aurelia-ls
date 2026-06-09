@@ -79,6 +79,23 @@
               ]
             },
             {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-display-fields",
+                  "value": [
+                    {
+                      "fieldName": "done",
+                      "role": "boolean",
+                      "label": "Done",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
               "inputContractId": "source-placement",
               "facetPayloads": [
                 {

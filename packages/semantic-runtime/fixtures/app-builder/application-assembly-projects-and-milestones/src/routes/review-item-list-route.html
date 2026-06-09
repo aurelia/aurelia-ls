@@ -35,9 +35,7 @@
           <tr repeat.for="reviewItem of loadedReviewItems">
             <td>${reviewItem.title}</td>
             <td>${state.reviewerLabelForReviewItem(reviewItem)}</td>
-            <td>
-              <input type="checkbox" checked.to-view="reviewItem.done" disabled aria-label="Done">
-            </td>
+            <td>${reviewItem.done ? 'Done' : 'Open'}</td>
             <td>
               <a load="route: review-item-detail; params.bind: { reviewId: reviewItem.id }">Open review</a>
             </td>

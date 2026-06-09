@@ -43,17 +43,92 @@
                     {
                       "name": "title",
                       "title": "Title",
-                      "valueKind": "text"
+                      "valueKind": "text",
+                      "required": true,
+                      "textConstraints": {
+                        "minLength": 2,
+                        "maxLength": 80
+                      }
                     },
                     {
                       "name": "description",
                       "title": "Description",
-                      "valueKind": "text"
+                      "valueKind": "text",
+                      "fieldAffordance": "multiline-text",
+                      "textConstraints": {
+                        "maxLength": 240
+                      }
+                    },
+                    {
+                      "name": "contactEmail",
+                      "title": "Contact Email",
+                      "valueKind": "text",
+                      "fieldAffordance": "email-address",
+                      "required": true,
+                      "defaultValue": "owner@example.com"
+                    },
+                    {
+                      "name": "websiteUrl",
+                      "title": "Website URL",
+                      "valueKind": "text",
+                      "fieldAffordance": "url",
+                      "defaultValue": "https://example.com/task"
+                    },
+                    {
+                      "name": "supportPhone",
+                      "title": "Support Phone",
+                      "valueKind": "text",
+                      "fieldAffordance": "telephone",
+                      "defaultValue": "+31 20 000 0000"
+                    },
+                    {
+                      "name": "accessCode",
+                      "title": "Access Code",
+                      "valueKind": "text",
+                      "fieldAffordance": "password",
+                      "textConstraints": {
+                        "minLength": 8
+                      }
+                    },
+                    {
+                      "name": "filterText",
+                      "title": "Filter Text",
+                      "valueKind": "text",
+                      "fieldAffordance": "search-query"
+                    },
+                    {
+                      "name": "appointmentTime",
+                      "title": "Appointment Time",
+                      "valueKind": "text",
+                      "fieldAffordance": "time",
+                      "defaultValue": "09:30"
+                    },
+                    {
+                      "name": "scheduledAtLocal",
+                      "title": "Scheduled At",
+                      "valueKind": "text",
+                      "fieldAffordance": "datetime-local",
+                      "defaultValue": "2026-06-07T09:30"
+                    },
+                    {
+                      "name": "billingMonth",
+                      "title": "Billing Month",
+                      "valueKind": "text",
+                      "fieldAffordance": "month",
+                      "defaultValue": "2026-06"
+                    },
+                    {
+                      "name": "reviewWeek",
+                      "title": "Review Week",
+                      "valueKind": "text",
+                      "fieldAffordance": "week",
+                      "defaultValue": "2026-W24"
                     },
                     {
                       "name": "estimateHours",
                       "title": "Estimate Hours",
                       "valueKind": "number",
+                      "required": true,
                       "numericConstraints": {
                         "minimum": 0,
                         "maximum": 40,
@@ -339,6 +414,15 @@
         "fieldNames": [
           "title",
           "description",
+          "contactEmail",
+          "websiteUrl",
+          "supportPhone",
+          "accessCode",
+          "filterText",
+          "appointmentTime",
+          "scheduledAtLocal",
+          "billingMonth",
+          "reviewWeek",
           "estimateHours",
           "progressPercent",
           "dueDate",
@@ -377,7 +461,7 @@
             "id": "domain-command-action"
           },
           "actionName": "saveDraft",
-          "methodBodyStatements": "this.title = this.title.trim();\nthis.description = this.description.trim();"
+          "methodBodyStatements": "this.title = this.title.trim();\nthis.description = this.description.trim();\nthis.contactEmail = this.contactEmail.trim();\nthis.websiteUrl = this.websiteUrl.trim();\nthis.supportPhone = this.supportPhone.trim();\nthis.appointmentTime = this.appointmentTime.trim();\nthis.scheduledAtLocal = this.scheduledAtLocal.trim();\nthis.billingMonth = this.billingMonth.trim();\nthis.reviewWeek = this.reviewWeek.trim();\nthis.filterText = this.filterText.trim();"
         }
       ]
     }

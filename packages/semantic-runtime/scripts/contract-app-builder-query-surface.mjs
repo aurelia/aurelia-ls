@@ -31,9 +31,13 @@ import {
   AppBuilderDomainRelationshipKind,
   AppBuilderInputContractId,
   AppBuilderInputFacetId,
+  AppBuilderGeneratedFallbackCopyId,
+  APP_BUILDER_GENERATED_FALLBACK_COPY_ROWS,
   APP_BUILDER_INPUT_FACET_IDS,
   AppBuilderInputPayloadSchemaKind,
   AppBuilderInputPayloadSchemaState,
+  AppBuilderExistingAppFactQueryPurpose,
+  AppBuilderExistingAppFactUseKind,
   AppBuilderInputFacetValueAxis,
   AppBuilderInputFacetValueSourceLoweringSupportKind,
   AppBuilderCollectionDisplayRole,
@@ -75,6 +79,7 @@ import {
   AppBuilderSourceLoweringSourcePlanIssueKind,
   AppBuilderSourceLoweringSourcePlanSelectionKind,
   AppBuilderSourceLoweringSurfaceKind,
+  AppBuilderSourcePlanHandoffNoteKind,
   AppBuilderSourcePlanWitnessRowKind,
   APP_BUILDER_SOURCE_LOWERING_COMPOSITION_TARGET_ROWS,
   APP_BUILDER_SOURCE_LOWERING_TARGET_ROWS,
@@ -91,6 +96,7 @@ import {
   AppBuilderOntologyRelationKind,
   AppBuilderOntologyRowKind,
   APP_BUILDER_ONTOLOGY_ROW_DESCRIPTORS,
+  APP_BUILDER_POLICY_AXIS_IDS,
   appBuilderEffectContractIdsForTargetRef,
   appBuilderOntologyRowRef,
   appBuilderSourceLoweringRequestFieldRegistryCoverageRows,
@@ -109,6 +115,7 @@ import {
   AppBuilderAreaNavigationPolicy,
   AppBuilderDomainModelingMode,
   AppBuilderLocalStatePolicy,
+  AppBuilderPackageCapability,
   AppBuilderResourceCarrier,
   AppBuilderRouterAdmissionPolicy,
   appBuilderHtmlTemplateFileArtifact,
@@ -188,6 +195,15 @@ assert.deepEqual(
   new Set(Object.values(ExpectedSemanticEffectKind)),
   'Expected semantic effect descriptors to cover every ExpectedSemanticEffectKind.',
 );
+assert.deepEqual(
+  new Set(APP_BUILDER_GENERATED_FALLBACK_COPY_ROWS.map((row) => row.id)),
+  new Set(Object.values(AppBuilderGeneratedFallbackCopyId)),
+  'Expected generated fallback copy rows to cover every AppBuilderGeneratedFallbackCopyId.',
+);
+for (const row of APP_BUILDER_GENERATED_FALLBACK_COPY_ROWS) {
+  assert.ok(row.text.length > 0, `Expected generated fallback copy ${row.id} to name concrete text.`);
+  assert.ok(row.summary.length > 0, `Expected generated fallback copy ${row.id} to explain ownership.`);
+}
 for (const descriptor of EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS) {
   assert.ok(
     descriptor.observationSurfaces.length > 0,
@@ -1257,6 +1273,11 @@ assert.equal(
   false,
   'Expected unscoped input-contract-detail to report contract/facet terrain without every payload schema body.',
 );
+assert.equal(
+  unscopedInputContractDetailAnswer.value.existingAppFactQueriesIncluded,
+  false,
+  'Expected unscoped input-contract-detail to keep app-fact query rows behind explicit detail.',
+);
 assert.ok(
   unscopedInputContractDetailAnswer.value.rows.some((row) =>
     row.inputContract.id === AppBuilderInputContractId.DomainModel
@@ -1267,6 +1288,17 @@ assert.ok(
     )
   ),
   'Expected unscoped input-contract-detail to preserve modeled schema state while omitting schema bodies.',
+);
+assert.ok(
+  unscopedInputContractDetailAnswer.value.rows.some((row) =>
+    row.inputContract.id === AppBuilderInputContractId.ExistingAppFacts
+    && row.inputFacets.some((facet) =>
+      facet.facet.id === AppBuilderInputFacetId.ExistingResourceFacts
+      && facet.existingAppFactQueryCount > 0
+      && facet.existingAppFactQueryRows == null
+    )
+  ),
+  'Expected compact existing-app fact detail to report query counts without embedding query rows.',
 );
 assert.ok(
   serializedByteLength(unscopedInputContractDetailAnswer) < 30000,
@@ -1611,6 +1643,54 @@ assert.ok(
   ),
   'Expected existing-app facts to be semantic-runtime app facts rather than caller payload schemas.',
 );
+assert.equal(
+  existingAppFactDetailAnswer.value.existingAppFactQueryFacetCount,
+  3,
+  'Expected every existing-app fact facet to list app-world query suppliers.',
+);
+assert.equal(
+  existingAppFactDetailAnswer.value.existingAppFactQueryRowCount,
+  12,
+  'Expected existing-app facts to expose resource, route, and plugin query suppliers.',
+);
+const existingResourceFactDetail = existingAppFactDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
+  row.facet.id === AppBuilderInputFacetId.ExistingResourceFacts
+);
+assert.deepEqual(
+  existingResourceFactDetail?.existingAppFactQueryRows.map((row) => row.queryKind),
+  [
+    SemanticAppQueryKind.ResourceDefinitions,
+    SemanticAppQueryKind.ResourceVisibility,
+    SemanticAppQueryKind.ControlUseInventory,
+  ],
+  'Expected existing-resource facts to point at resource definitions, visibility, and control-use inventory.',
+);
+assert.deepEqual(
+  existingResourceFactDetail?.existingAppFactQueryRows.map((row) => row.purpose),
+  [
+    AppBuilderExistingAppFactQueryPurpose.ResourceDefinitionCatalog,
+    AppBuilderExistingAppFactQueryPurpose.ResourceScopeVisibility,
+    AppBuilderExistingAppFactQueryPurpose.ControlUseInventory,
+  ],
+  'Expected existing-resource fact query rows to explain their resource/control purpose.',
+);
+const existingPluginFactDetail = existingAppFactDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
+  row.facet.id === AppBuilderInputFacetId.ExistingPluginFacts
+);
+assert.ok(
+  existingPluginFactDetail?.existingAppFactQueryRows.some((row) =>
+    row.queryKind === SemanticAppQueryKind.StateStores
+    && row.useKind === AppBuilderExistingAppFactUseKind.HandoffBoundary
+  ) === true,
+  'Expected @aurelia/state existing facts to stay report/handoff oriented rather than source-lowering oriented.',
+);
+assert.ok(
+  existingPluginFactDetail?.existingAppFactQueryRows.some((row) =>
+    row.queryKind === SemanticAppQueryKind.ValidationIssues
+    && row.useKind === AppBuilderExistingAppFactUseKind.InformPolicySelection
+  ) === true,
+  'Expected validation plugin facts to inform policy without becoming generated validation-library source.',
+);
 const compactInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputContractDetail,
   inputContractDetail: {
@@ -1703,6 +1783,55 @@ assert.ok(
   seedRecordValueSchema?.variants?.some((variant) => variant.kind === AppBuilderInputPayloadSchemaKind.Array) === true,
   'Expected seed record values to include primitive arrays for choice-set-like fields.',
 );
+const aureliaPolicyInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
+  kind: SemanticRuntimeAppBuilderQueryKind.InputContractDetail,
+  inputContractDetail: {
+    inputContractIds: [AppBuilderInputContractId.AureliaPolicy],
+    includeSourceLoweringValueSupport: true,
+  },
+});
+assert.equal(aureliaPolicyInputDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+const aureliaPluginPolicyDetail = aureliaPolicyInputDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
+  row.facet.id === AppBuilderInputFacetId.AureliaPluginPolicy
+);
+assert.equal(
+  aureliaPluginPolicyDetail?.payloadSchemaState,
+  AppBuilderInputPayloadSchemaState.Modeled,
+  'Expected plugin policy to expose a modeled payload schema even while plugin generation remains contextual/deferred.',
+);
+const packageCapabilitiesProperty = aureliaPluginPolicyDetail?.payloadSchema?.properties?.find((property) =>
+  property.name === 'packageCapabilities'
+);
+assert.ok(
+  packageCapabilitiesProperty?.schema.items?.enumValues?.includes(AppBuilderPackageCapability.State) === true,
+  'Expected plugin policy payload schema to admit the @aurelia/state capability explicitly.',
+);
+const statePackageCapabilitySupport = aureliaPluginPolicyDetail?.sourceLoweringValueSupportRows?.find((row) =>
+  row.axis === AppBuilderInputFacetValueAxis.PackageCapability
+  && row.value === AppBuilderPackageCapability.State
+);
+assert.equal(
+  statePackageCapabilitySupport?.supportKind,
+  AppBuilderInputFacetValueSourceLoweringSupportKind.DeferredCapabilityHandoff,
+  'Expected @aurelia/state package policy to report handoff-only source-lowering support until store architecture generation is deliberate.',
+);
+assert.ok(
+  statePackageCapabilitySupport?.targetRefs.some((targetRef) =>
+    targetRef.kind === AppBuilderOntologyRowKind.PolicyAxis
+    && targetRef.id === AppBuilderPolicyAxisId.PluginAdmission
+  ) === true,
+  'Expected @aurelia/state package policy support to point at plugin-admission policy.',
+);
+for (const capability of [AppBuilderPackageCapability.VirtualRepeat, AppBuilderPackageCapability.Fetch]) {
+  assert.ok(
+    aureliaPluginPolicyDetail?.sourceLoweringValueSupportRows?.some((row) =>
+      row.axis === AppBuilderInputFacetValueAxis.PackageCapability
+      && row.value === capability
+      && row.supportKind === AppBuilderInputFacetValueSourceLoweringSupportKind.DeferredCapabilityHandoff
+    ) === true,
+    `Expected ${capability} package policy to be visible as a handoff-only source-lowering value support row.`,
+  );
+}
 const sourcePlacementDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputContractDetail,
   inputContractDetail: {
@@ -1797,7 +1926,9 @@ const toolingFileKindProperty = sourceProjectToolingDetail?.payloadSchema?.prope
   ?.find((property) => property.name === 'toolingFiles')
   ?.schema.items?.properties?.find((property) => property.name === 'fileKind');
 assert.ok(
-  toolingFileKindProperty?.schema.enumValues?.includes(SourcePlanProjectToolingFileKind.TypeScriptConfig) === true,
+  toolingFileKindProperty?.schema.enumValues?.includes(SourcePlanProjectToolingFileKind.TypeScriptConfig) === true
+  && toolingFileKindProperty?.schema.enumValues?.includes(SourcePlanProjectToolingFileKind.RootDocument) === true
+  && toolingFileKindProperty?.schema.enumValues?.includes(SourcePlanProjectToolingFileKind.BuildConfig) === true,
   'Expected tooling file payload rows to expose SourcePlanProjectToolingFileKind values.',
 );
 const collectionProjectionDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
@@ -2222,6 +2353,54 @@ assert.ok(
   'Expected native submit form to coordinate accessibility manifest contracts.',
 );
 
+const toastNotificationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
+  kind: SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
+  applicationPatternDetail: {
+    applicationPatternIds: [AppBuilderApplicationPatternId.ToastNotification],
+    includeInputContractDetail: true,
+    includeCompanionApplicationPatterns: true,
+    includeControlManifests: true,
+    includeStylingMechanisms: true,
+    includeVisualPolicies: true,
+    includeAffordances: true,
+  },
+});
+assert.equal(toastNotificationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(toastNotificationPatternDetailAnswer.value.rows.length, 1);
+assert.equal(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
+  AppBuilderRecommendationStatus.Deferred,
+  'Expected toast/notification feedback to stay visible as a deferred v1 application pattern.',
+);
+assert.equal(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.sourceLoweringImplemented,
+  false,
+  'Expected toast/notification feedback not to advertise source lowering until a notification contract is designed.',
+);
+assert.ok(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.companionApplicationPatterns?.some((row) =>
+    row.id === AppBuilderApplicationPatternId.ActionFeedbackStatus
+  ) === true,
+  'Expected toast/notification feedback detail to point back to the current inline action-feedback source-lowering pattern.',
+);
+assert.ok(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.inputContractDetails?.some((row) =>
+    row.inputContract.id === AppBuilderInputContractId.InteractionFeedback
+  ) === true,
+  'Expected toast/notification feedback detail to expose interaction-feedback input even while source lowering is deferred.',
+);
+assert.ok(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.controlManifests?.some((row) =>
+    row.id === AppBuilderControlManifestRowId.AccessibilityContract
+  ) === true,
+  'Expected toast/notification feedback detail to surface accessibility manifest pressure without generating a toast control.',
+);
+assert.equal(
+  toastNotificationPatternDetailAnswer.value.rows[0]?.affordances?.length,
+  0,
+  'Expected toast/notification feedback not to appear as an affordance until the source-lowering contract exists.',
+);
+
 const domainCommandActionPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
   applicationPatternDetail: {
@@ -2273,6 +2452,104 @@ assert.ok(
     ExpectedSemanticEffectKind.Route,
   ) === true,
   'Expected route navigation action to advertise route reopen effects.',
+);
+
+const queryStringStatePatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
+  kind: SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
+  applicationPatternDetail: {
+    applicationPatternIds: [AppBuilderApplicationPatternId.QueryStringState],
+    includeCollectionConcepts: true,
+    includeControlPatterns: true,
+    includeCompanionApplicationPatterns: true,
+    includeAffordances: true,
+  },
+});
+assert.equal(queryStringStatePatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(queryStringStatePatternDetailAnswer.value.rows.length, 1);
+assert.equal(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
+  AppBuilderRecommendationStatus.Deferred,
+  'Expected query-string state to stay visible as a deferred v1 application pattern.',
+);
+assert.equal(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.applicationPattern.status.sourceLoweringImplemented,
+  false,
+  'Expected query-string state not to advertise source lowering until router query-state policy exists.',
+);
+assert.ok(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.applicationPattern.aureliaRealizationIds.includes(
+    AppBuilderApplicationAureliaRealizationId.Router,
+  ) === true,
+  'Expected query-string state to remain tied to router semantics.',
+);
+assert.ok(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.collectionConcepts?.some((row) =>
+    row.id === AppBuilderCollectionConceptId.ServiceBackedCollectionQuery
+  ) === true,
+  'Expected query-string state detail to expose service-backed collection query pressure.',
+);
+assert.ok(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.controlPatterns?.some((row) =>
+    row.id === AppBuilderControlPatternId.NativeSearchInput
+  ) === true,
+  'Expected query-string state detail to expose native search control context without generating URL synchronization source.',
+);
+assert.ok(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.companionApplicationPatterns?.some((row) =>
+    row.id === AppBuilderApplicationPatternId.RouterBackedListDetail
+  ) === true,
+  'Expected query-string state detail to point callers back to router-backed area context.',
+);
+assert.equal(
+  queryStringStatePatternDetailAnswer.value.rows[0]?.affordances?.length,
+  0,
+  'Expected query-string state not to appear as an affordance until the source-lowering contract exists.',
+);
+
+const remoteFetchIntegrationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
+  kind: SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
+  applicationPatternDetail: {
+    applicationPatternIds: [AppBuilderApplicationPatternId.RemoteFetchIntegration],
+    includeCollectionConcepts: true,
+    includeControlPatterns: true,
+    includeCompanionApplicationPatterns: true,
+    includeAffordances: true,
+  },
+});
+assert.equal(remoteFetchIntegrationPatternDetailAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.equal(remoteFetchIntegrationPatternDetailAnswer.value.rows.length, 1);
+assert.equal(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.recommendationStatus,
+  AppBuilderRecommendationStatus.Deferred,
+  'Expected remote fetch/server integration to stay visible as a deferred v1 application pattern.',
+);
+assert.equal(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.applicationPattern.status.sourceLoweringImplemented,
+  false,
+  'Expected remote fetch/server integration not to advertise source lowering until HTTP/API policy exists.',
+);
+assert.ok(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.applicationPattern.aureliaRealizationIds.includes(
+    AppBuilderApplicationAureliaRealizationId.Plugin,
+  ) === true,
+  'Expected remote fetch/server integration to keep optional fetch-client/plugin admission visible.',
+);
+assert.ok(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.companionApplicationPatterns?.some((row) =>
+    row.id === AppBuilderApplicationPatternId.ServiceBackedLoadSave
+  ) === true,
+  'Expected remote fetch/server integration detail to distinguish itself from the current local service scaffold pattern.',
+);
+assert.ok(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.collectionConcepts?.some((row) =>
+    row.id === AppBuilderCollectionConceptId.ServiceBackedCollectionQuery
+  ) === true,
+  'Expected remote fetch/server integration detail to expose full service-backed query pressure.',
+);
+assert.equal(
+  remoteFetchIntegrationPatternDetailAnswer.value.rows[0]?.affordances?.length,
+  0,
+  'Expected remote fetch/server integration not to appear as an affordance until the source-lowering contract exists.',
 );
 
 const compactApplicationPatternDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
@@ -3303,7 +3580,8 @@ assert.equal(unscopedApplicationPatternDetailAnswer.value.affordancesIncluded, f
 assert.equal(unscopedApplicationPatternDetailAnswer.value.semanticEffectDescriptorsIncluded, false);
 assert.equal(unscopedApplicationPatternDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.ok(
-  serializedByteLength(unscopedApplicationPatternDetailAnswer) < 40000,
+  serializedByteLength(unscopedApplicationPatternDetailAnswer)
+    < 3000 + (unscopedApplicationPatternDetailAnswer.value.rows.length * 1800),
   'Expected unscoped application-pattern-detail to avoid expanding coordinated concept joins by default.',
 );
 
@@ -3341,7 +3619,7 @@ assert.equal(unscopedControlPatternDetailAnswer.value.visualPoliciesIncluded, fa
 assert.equal(unscopedControlPatternDetailAnswer.value.affordancesIncluded, false);
 assert.equal(unscopedControlPatternDetailAnswer.value.rows[0]?.inputReadiness, undefined);
 assert.ok(
-  serializedByteLength(unscopedControlPatternDetailAnswer) < 18000,
+  serializedByteLength(unscopedControlPatternDetailAnswer) < 22000,
   'Expected unscoped control-pattern-detail to avoid expanding descriptors/manifests/style joins by default.',
 );
 
@@ -3928,7 +4206,7 @@ assert.equal(policyTargetCatalogAnswer.value.inputReadinessIncluded, true);
 assert.equal(policyTargetCatalogAnswer.value.inputDependenciesIncluded, true);
 assert.equal(
   policyTargetCatalogAnswer.value.rows.length,
-  10,
+  APP_BUILDER_POLICY_AXIS_IDS.length,
   'Expected policy-domain target catalog to return every policy axis row.',
 );
 const conventionPolicyTarget = policyTargetCatalogAnswer.value.rows.find((row) =>
@@ -5251,6 +5529,24 @@ const appShellSuppliedInputs = [{
     value: AppBuilderConventionPolicy.ConventionsEnabled,
   }],
 }];
+const appShellWithStatePluginSuppliedInputs = [
+  ...appShellSuppliedInputs,
+  {
+    inputContractId: AppBuilderInputContractId.AureliaPolicy,
+    sourceId: AppBuilderSuppliedInputSource.ExplicitCallerInput,
+    facetPayloads: [{
+      inputFacetId: AppBuilderInputFacetId.AureliaStatePolicy,
+      value: {
+        appStateOwnership: AppBuilderAppStateOwnershipMode.StatePluginStore,
+      },
+    }, {
+      inputFacetId: AppBuilderInputFacetId.AureliaPluginPolicy,
+      value: {
+        packageCapabilities: [AppBuilderPackageCapability.State],
+      },
+    }],
+  },
+];
 const appShellPreflightAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringPreflight,
   sourceLoweringPreflight: {
@@ -5424,10 +5720,12 @@ assert.deepEqual(
   [
     AppBuilderSourceLoweringRequestFieldId.RootDir,
     AppBuilderSourceLoweringRequestFieldId.SourceLoweringRouterBackedListDetail,
+    AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailPrimaryEntityName,
     AppBuilderSourceLoweringRequestFieldId.ActionName,
     AppBuilderSourceLoweringRequestFieldId.LinkText,
     AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailCreateForm,
     AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailServiceCollection,
+    AppBuilderSourceLoweringRequestFieldId.RouterBackedListDetailDetailRelatedCollections,
     AppBuilderSourceLoweringRequestFieldId.FieldNames,
     AppBuilderSourceLoweringRequestFieldId.SubmitButtonText,
     AppBuilderSourceLoweringRequestFieldId.ServiceCollectionSourceTargetPath,
@@ -6582,10 +6880,10 @@ const filterableTableColumnWithBindingAnswer = answerSemanticRuntimeAppBuilderQu
 assert.equal(filterableTableColumnWithBindingAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
 assert.ok(
   filterableTableColumnWithBindingAnswer.value.controlUseInventoryRows.some((row) =>
-    row.controlPatternId === AppBuilderControlPatternId.NativeTextInput
+    row.controlPatternId === AppBuilderControlPatternId.NativeSearchInput
     && row.bindingExpression === 'titleFilter'
   ),
-  'Expected local filtering Collection Table lowering to emit a native text-input control-use row for the explicit filter binding.',
+  'Expected local filtering Collection Table lowering to emit a native search-input control-use row for the explicit filter binding.',
 );
 const missingPaginationPageSizeCompositionAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringComposition,
@@ -7818,6 +8116,43 @@ assert.equal(
   'Expected compact/default SourcePlan answers to report control-use counts without inventory rows.',
 );
 assert.equal(
+  compactAppShellSourcePlanAnswer.value.handoffNoteCount,
+  compactAppShellSourcePlanAnswer.value.handoffNotes.length,
+  'Expected compact/default SourcePlan answers to keep public handoff note counts aligned with visible note rows.',
+);
+assert.ok(
+  compactAppShellSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.BusinessBehaviorCallerOwned
+  )
+  && compactAppShellSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.SemanticVerificationContract
+  ),
+  'Expected compact/default SourcePlan answers to expose caller-owned behavior and verification-contract handoff notes.',
+);
+const statePluginAppShellSourcePlanAnswer = answerSemanticRuntimeAppBuilderQuery({
+  kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringSourcePlan,
+  sourceLoweringSourcePlan: {
+    sourceLoweringAppShell: {
+      targetRef: appShellTargetRef,
+      suppliedInputs: appShellWithStatePluginSuppliedInputs,
+      includePreflight: true,
+    },
+  },
+});
+assert.equal(statePluginAppShellSourcePlanAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
+assert.ok(
+  statePluginAppShellSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.DeferredCapabilityHandoff
+    && row.summary.includes(AppBuilderPackageCapability.State)
+  ),
+  'Expected selected @aurelia/state policy to surface as a SourcePlan handoff boundary when the source plan does not emit store architecture.',
+);
+assert.match(
+  compactAppShellSourcePlanAnswer.value.displayText,
+  /handoffNotes=\d+/,
+  'Expected SourcePlan display text to include compact handoff-note counts.',
+);
+assert.equal(
   compactAppShellSourcePlanAnswer.value.controlUseInventoryRowCount,
   0,
   'Expected compact/default SourcePlan answers to keep the generated control-use count.',
@@ -7887,6 +8222,36 @@ assert.equal(
   SourcePlanBuildToolPolicy.AppBuilderBaseline,
   'Expected direct AppShell SourcePlan lowering to carry app-builder baseline project tooling.',
 );
+assert.deepEqual(
+  appShellSourcePlanAnswer.value.sourcePlan?.projectTooling?.files.map((file) => [file.path, file.fileKind]),
+  [
+    ['package.json', SourcePlanProjectToolingFileKind.PackageManifest],
+    ['index.html', SourcePlanProjectToolingFileKind.RootDocument],
+    ['vite.config.ts', SourcePlanProjectToolingFileKind.BuildConfig],
+    ['tsconfig.json', SourcePlanProjectToolingFileKind.TypeScriptConfig],
+    ['src/aurelia-assets.d.ts', SourcePlanProjectToolingFileKind.ModuleDeclaration],
+  ],
+  'Expected direct AppShell SourcePlan lowering to emit package, root document, build config, TypeScript config, and asset declaration tooling files.',
+);
+assert.match(
+  appShellSourcePlanAnswer.value.sourcePlan?.projectTooling?.files.find((file) => file.path === 'index.html')?.text ?? '',
+  /<my-app><\/my-app>[\s\S]*src="\/src\/main\.ts"/,
+  'Expected direct AppShell SourcePlan root document to host the generated convention root element and entrypoint.',
+);
+assert.equal(
+  appShellSourcePlanAnswer.value.sourcePlan?.projectTooling?.dependencies.some((dependency) =>
+    dependency.specifier === '@aurelia/vite-plugin'
+    && dependency.scope === SourcePlanPackageDependencyScope.DevDependency
+  ),
+  true,
+  'Expected direct AppShell SourcePlan lowering to carry Aurelia Vite plugin dev tooling.',
+);
+assert.equal(
+  appShellSourcePlanAnswer.value.sourcePlan?.projectTooling?.scripts.some((script) => script.name === 'dev' && script.command === 'vite')
+  && appShellSourcePlanAnswer.value.sourcePlan?.projectTooling?.scripts.some((script) => script.name === 'build' && script.command === 'vite build'),
+  true,
+  'Expected direct AppShell SourcePlan lowering to carry runnable Vite dev/build scripts.',
+);
 assert.ok(
   appShellSourcePlanAnswer.value.sourcePlanWitnessRows.some((row) =>
     row.rowKind === AppBuilderSourcePlanWitnessRowKind.Policy
@@ -7904,8 +8269,17 @@ assert.ok(
     && row.dependencySpecifier === 'aurelia'
   )
   && appShellSourcePlanAnswer.value.sourcePlanWitnessRows.some((row) =>
+    row.rowKind === AppBuilderSourcePlanWitnessRowKind.ProjectToolingDependency
+    && row.dependencySpecifier === '@aurelia/vite-plugin'
+  )
+  && appShellSourcePlanAnswer.value.sourcePlanWitnessRows.some((row) =>
     row.rowKind === AppBuilderSourcePlanWitnessRowKind.ProjectToolingFile
     && row.filePath === 'package.json'
+  )
+  && appShellSourcePlanAnswer.value.sourcePlanWitnessRows.some((row) =>
+    row.rowKind === AppBuilderSourcePlanWitnessRowKind.ProjectToolingFile
+    && row.filePath === 'index.html'
+    && row.projectToolingFileKind === SourcePlanProjectToolingFileKind.RootDocument
   ),
   'Expected direct AppShell SourcePlan answer to expose compact policy, file, dependency, and tooling witnesses.',
 );
@@ -7931,6 +8305,10 @@ assert.ok(
   appShellSourcePlanAnswer.value.expectedEffects.some((row) =>
     row.effectKind === ExpectedSemanticEffectKind.ProjectTooling
     && row.filters.some((filter) => filter.field === 'role' && filter.value === 'package-manifest')
+  )
+  && appShellSourcePlanAnswer.value.expectedEffects.some((row) =>
+    row.effectKind === ExpectedSemanticEffectKind.ProjectTooling
+    && row.filters.some((filter) => filter.field === 'role' && filter.value === 'root-document')
   )
   && appShellSourcePlanAnswer.value.expectedEffects.some((row) =>
     row.effectKind === ExpectedSemanticEffectKind.OpenSeamClosure
@@ -8071,6 +8449,20 @@ assert.match(
   routerBackedListDetailSourcePlanAnswer.value.sourcePlan?.files.find((file) => file.path === 'src/routes/task-item-list-route.html')?.text?.text ?? '',
   /<p if\.bind="state\.taskItems\.length === 0">No tasks yet\.<\/p>[\s\S]*<ul else>[\s\S]*<li repeat\.for="taskItem of state\.taskItems">/,
   'Expected direct RouterBackedListDetail list route to hide its collection branch behind a sibling else when the empty state is active.',
+);
+assert.ok(
+  routerBackedListDetailSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.SeedDataScaffold
+    && row.sourceFileRoles.includes(SourcePlanFileRole.StateModel)
+  )
+  && routerBackedListDetailSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.SourcePatternUse
+  )
+  && routerBackedListDetailSourcePlanAnswer.value.handoffNotes.some((row) =>
+    row.kind === AppBuilderSourcePlanHandoffNoteKind.SemanticVerificationContract
+    && row.expectedEffectKinds.includes(ExpectedSemanticEffectKind.Route)
+  ),
+  'Expected direct RouterBackedListDetail SourcePlan lowering to expose source-pattern, seed-scaffold, and semantic-verification handoff rows.',
 );
 assert.match(
   routerBackedListDetailSourcePlanAnswer.value.sourcePlan?.files.find((file) => file.path === 'src/task-item-browse-state.ts')?.text?.text ?? '',
@@ -10473,23 +10865,54 @@ assert.equal(
 );
 assert.equal(
   fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows.length,
-  1,
-  'Expected field-group source lowering to emit one wrapper control-use inventory row.',
+  2,
+  'Expected field-group source lowering to emit wrapper and generated message control-use inventory rows.',
+);
+const fieldGroupWrapperInventoryRow = fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows.find((row) =>
+  row.controlPatternId === AppBuilderControlPatternId.FieldGroup
+);
+const fieldGroupMessageInventoryRow = fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows.find((row) =>
+  row.controlPatternId === AppBuilderControlPatternId.FormMessage
 );
 assert.equal(
-  fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows[0]?.controlPatternId,
+  fieldGroupWrapperInventoryRow?.controlPatternId,
   AppBuilderControlPatternId.FieldGroup,
   'Expected field-group inventory rows to preserve the wrapper control-pattern identity.',
 );
 assert.equal(
-  fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows[0]?.innerControlPatternId,
+  fieldGroupWrapperInventoryRow?.innerControlPatternId,
   AppBuilderControlPatternId.NativeTextInput,
   'Expected field-group inventory rows to preserve the inner native control-pattern identity.',
 );
 assert.deepEqual(
-  fieldGroupSourceInvocationAnswer.value.controlUseInventoryRows[0]?.describedByIds,
+  fieldGroupWrapperInventoryRow?.describedByIds,
   ['title-help'],
   'Expected field-group inventory rows to preserve help/error relationship ids.',
+);
+assert.equal(
+  fieldGroupMessageInventoryRow?.sourceReference.targetRef.id,
+  AppBuilderControlPatternId.FormMessage,
+  'Expected field-group message inventory rows to preserve the generated message target identity.',
+);
+assert.equal(
+  fieldGroupMessageInventoryRow?.messageKind,
+  AppBuilderSourceLoweringMessageKind.Help,
+  'Expected field-group message inventory rows to preserve generated help-message kind.',
+);
+assert.equal(
+  fieldGroupMessageInventoryRow?.messageText,
+  'Use a short, memorable title.',
+  'Expected field-group message inventory rows to preserve generated help-message text.',
+);
+assert.equal(
+  fieldGroupMessageInventoryRow?.messageTextSource,
+  AppBuilderSourceLoweringMessageTextSource.AccessibilityHelpErrorPayload,
+  'Expected field-group message inventory rows to preserve generated help-message text provenance.',
+);
+assert.equal(
+  fieldGroupMessageInventoryRow?.messageId,
+  'title-help',
+  'Expected field-group message inventory rows to preserve generated help-message DOM id.',
 );
 const unknownInnerControlPatternSourceInvocationAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.SourceLoweringInvocation,
@@ -10838,7 +11261,7 @@ const readinessFilteredTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuer
   },
 });
 assert.equal(readinessFilteredTargetCatalogAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
-assert.equal(readinessFilteredTargetCatalogAnswer.value.rows.length, 10);
+assert.equal(readinessFilteredTargetCatalogAnswer.value.rows.length, APP_BUILDER_POLICY_AXIS_IDS.length);
 assert.ok(
   readinessFilteredTargetCatalogAnswer.value.rows.every((row) => row.inputReadiness == null),
   'Expected readinessStates filters not to force readiness counts into compact target rows.',
@@ -11038,8 +11461,8 @@ assert.equal(integrityAnswer.outcome, SemanticRuntimeAnswerOutcome.Hit);
 assert.equal(integrityAnswer.value.issueCount, 0);
 assert.equal(integrityAnswer.value.sourceLoweringGalleryCoverageIssues.length, 0);
 assert.equal(integrityAnswer.value.statusAuditSummary.integrityIssueCount, 0);
-assert.equal(integrityAnswer.value.statusAuditSummary.sourceLoweringImplementedCount, 30);
-assert.equal(integrityAnswer.value.statusAuditSummary.sourceLoweringSurfaceTargetCount, 30);
+assert.equal(integrityAnswer.value.statusAuditSummary.sourceLoweringImplementedCount, 39);
+assert.equal(integrityAnswer.value.statusAuditSummary.sourceLoweringSurfaceTargetCount, 39);
 assert.ok(
   integrityAnswer.value.statusAuditSummary.reviewNeededCount > 0,
   'Expected catalog integrity to expose review-visible status audit rows for provisional app-builder terrain.',

@@ -24,9 +24,7 @@
               <td>${scheduleLabelForTaskItem(taskItem)}</td>
               <td>${checkpointsLabelForTaskItem(taskItem)}</td>
               <td>${effortLabelForTaskItem(taskItem)}</td>
-              <td>
-                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-              </td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
             </tr>
           </tbody>
         </table>

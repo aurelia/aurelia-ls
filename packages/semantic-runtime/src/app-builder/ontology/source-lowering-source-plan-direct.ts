@@ -124,10 +124,16 @@ import {
 } from '../../template/authored-template-source.js';
 import { AppBuilderPartSlotKind } from '../part-application.js';
 import { AppBuilderStructuralPartId } from '../structural-part-catalog.js';
-import type { AppBuilderPartSourceFragment, AppBuilderSourceFragmentOrigin } from '../part-source-invocation.js';
+import type { AppBuilderPartSlotAssignment, AppBuilderPartSourceFragment, AppBuilderSourceFragmentOrigin } from '../part-source-invocation.js';
 import {
   AppBuilderSourceFragmentOriginKind,
 } from '../part-source-invocation.js';
+import {
+  appBuilderSelectNativeFieldConstraints,
+} from './source-lowering-native-field-constraints.js';
+import {
+  appBuilderSelectNumericControlConstraints,
+} from './source-lowering-numeric-constraints.js';
 import type {
   AppBuilderEffectContractId as AppBuilderEffectContractIdValue,
 } from './effect.js';
@@ -188,6 +194,7 @@ import {
   appBuilderSourceLoweringDomainValueSetPayloads,
   appBuilderSourceLoweringCollectionQueryFeaturePayloads,
   appBuilderSourceLoweringCollectionIdentityPolicyPayloads,
+  appBuilderSourceLoweringCollectionDisplayFieldPayloads,
   appBuilderSourceLoweringCollectionTableColumnPayloads,
   appBuilderSourceLoweringActionFeedbackPayloads,
   appBuilderSourceLoweringSeedRecordsForEntity,
@@ -205,6 +212,8 @@ import {
   type AppBuilderSourceLoweringStatePolicyPayload,
 } from './source-lowering-inputs.js';
 import {
+  AppBuilderCollectionDisplayRole,
+  type AppBuilderCollectionDisplayFieldPayload,
   AppBuilderCollectionTableColumnDisplayKind,
   type AppBuilderCollectionTableColumnPayload,
 } from './collection-projection.js';
@@ -678,6 +687,12 @@ export function lowerRouterBackedListDetailSourcePlan(
     serviceCollection.value,
     suppliedInputs,
   );
+  const detailDisplayFields = selectRouterBackedListDetailDisplayFields(
+    targetRef,
+    domain.value,
+    tableColumns.value,
+    suppliedInputs,
+  );
   const detailRelatedCollections = selectRouterBackedListDetailRelatedCollections(
     request.detailRelatedCollections ?? [],
     targetRef,
@@ -704,6 +719,7 @@ export function lowerRouterBackedListDetailSourcePlan(
     ...createActionFeedback.issues,
     ...serviceCollection.issues,
     ...tableColumns.issues,
+    ...detailDisplayFields.issues,
     ...detailRelatedCollections.issues,
   ];
   const routeAreaSourceRequest = issues.length > 0
@@ -727,6 +743,7 @@ export function lowerRouterBackedListDetailSourcePlan(
         createForm: createForm.value,
         createActionFeedback: createActionFeedback.value,
         tableColumns: tableColumns.value,
+        detailDisplayFields: detailDisplayFields.value,
         serviceCollection: serviceCollection.value,
         detailRelatedCollections: detailRelatedCollections.value,
         sourcePatternParameterValues,
@@ -841,6 +858,7 @@ function routerBackedListDetailNavigationControlUseInventoryRows(
     routeInstruction: `route: ${detailRouteId}; params.bind: ${routeParamsExpression}`,
     linkText: navigationAction.linkText,
     labelText: navigationAction.linkText,
+    labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
   });
 }
 
@@ -940,12 +958,13 @@ function routerBackedListDetailCreateFormFieldGroupFragment(
   const control = appendAppBuilderTemplateElementAttributes(
     relationship == null
       ? (field.optionMemberName == null
-        ? appBuilderControlElementFragment(field.controlId, field.memberName)
+        ? appBuilderControlElementFragment(field.controlId, field.memberName, sourcePlanFieldControlConstraintSlots(field))
         : appBuilderChoiceControlElementFragment(field.controlId, field.memberName, {
           optionDomainExpression: `state.${field.optionMemberName}`,
           optionBindingKind: AppBuilderChoiceOptionBindingKind.Value,
           optionValueExpression: 'option.value',
           optionLabelExpression: 'option.title',
+          slotAssignments: sourcePlanFieldControlConstraintSlots(field),
         }))
       : appBuilderChoiceControlElementFragment(routerBackedListDetailCreateFormRelationshipControlId(relationship), field.memberName, {
           optionDomainExpression: `state.${relationship.relatedDomain.collectionMemberName}`,
@@ -965,6 +984,17 @@ function routerBackedListDetailCreateFormFieldGroupFragment(
     label.templateElement,
     control.templateElement,
   ]);
+}
+
+function sourcePlanFieldControlConstraintSlots(
+  field: AppBuilderDomainFieldSourceModel,
+): readonly AppBuilderPartSlotAssignment[] {
+  const nativeSelection = appBuilderSelectNativeFieldConstraints(field.controlId, field);
+  const numericSelection = appBuilderSelectNumericControlConstraints(field.controlId, field);
+  return [
+    ...(nativeSelection.issue == null ? nativeSelection.slotAssignments : []),
+    ...(numericSelection.issue == null ? numericSelection.slotAssignments : []),
+  ];
 }
 
 function routerBackedListDetailCreateFormObjectRelationshipFieldGroupFragment(
@@ -1160,8 +1190,8 @@ function routerBackedListDetailServiceQueryControlUseInventoryRows(
         targetRef: FIELD_GROUP_TARGET_REF,
         fragments: [routerBackedListDetailServiceQueryControlFieldGroupFragment(queryControl)],
         controlPatternId: AppBuilderControlPatternId.FieldGroup,
-        controlId: AppBuilderControlId.TextInput,
-        innerControlPatternId: appBuilderControlPatternIdForLeafControlId(AppBuilderControlId.TextInput),
+        controlId: AppBuilderControlId.SearchInput,
+        innerControlPatternId: appBuilderControlPatternIdForLeafControlId(AppBuilderControlId.SearchInput),
         fieldName: filterMethod?.fieldName ?? queryControl.stateMemberName,
         bindingExpression: queryControl.stateMemberName,
         bindingExpressionSource: AppBuilderSourceLoweringBindingExpressionSource.ExplicitRequest,
@@ -1188,7 +1218,7 @@ function routerBackedListDetailServiceQueryControlFieldGroupFragment(
   queryControl: AppBuilderSourceLoweringRouterBackedListDetailServiceQueryControl,
 ): AppBuilderPartSourceFragment {
   const control = appendAppBuilderTemplateElementAttributes(
-    appBuilderControlElementFragment(AppBuilderControlId.TextInput, queryControl.stateMemberName),
+    appBuilderControlElementFragment(AppBuilderControlId.SearchInput, queryControl.stateMemberName),
     [{ rawName: 'id', rawValue: queryControl.fieldControlId }],
   );
   const label = appBuilderTemplateElementFragment(
@@ -1353,7 +1383,7 @@ function routerBackedListDetailServiceCollectionTargetRefs(
           FIELD_GROUP_TARGET_REF,
           appBuilderOntologyRowRef(
             AppBuilderOntologyRowKind.ControlPattern,
-            appBuilderControlPatternIdForLeafControlId(AppBuilderControlId.TextInput),
+            appBuilderControlPatternIdForLeafControlId(AppBuilderControlId.SearchInput),
           ),
           NATIVE_BUTTON_TARGET_REF,
         ]
@@ -4434,6 +4464,90 @@ type AppBuilderRoutedCollectionDetailRelationshipSource =
   | AppBuilderRoutedCollectionDetailOwnedRelationshipSource
   | AppBuilderRoutedCollectionDetailNestedValueObjectRelationshipSource;
 
+function selectRouterBackedListDetailDisplayFields(
+  targetRef: AppBuilderOntologyRowRef | null,
+  domain: AppBuilderDomainDescriptor | null,
+  tableColumns: readonly AppBuilderRoutedCollectionDetailTableColumnSource[],
+  suppliedInputs: readonly AppBuilderSuppliedInput[],
+): {
+  readonly value: readonly AppBuilderCollectionDisplayFieldPayload[];
+  readonly issues: readonly AppBuilderSourceLoweringSourcePlanIssue[];
+} {
+  if (domain == null) {
+    return { value: [], issues: [] };
+  }
+  const fieldsByName = new Map(domain.fields.map((field) => [field.name, field]));
+  const selected: AppBuilderCollectionDisplayFieldPayload[] = [];
+  const issues: AppBuilderSourceLoweringSourcePlanIssue[] = [];
+  const seen = new Set<string>();
+  for (const payload of appBuilderSourceLoweringCollectionDisplayFieldPayloads(suppliedInputs)) {
+    const fieldName = normalizedSourceInputText(payload.fieldName);
+    if (fieldName == null || seen.has(fieldName)) {
+      issues.push({
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionDisplayField,
+        targetRef: targetRef ?? undefined,
+        inputFacetId: AppBuilderInputFacetId.CollectionDisplayFields,
+        fieldNames: fieldName == null ? [] : [fieldName],
+        summary: fieldName == null
+          ? 'Router-backed list/detail detail display received a CollectionDisplayFields row without a non-empty fieldName.'
+          : `Router-backed list/detail detail display received duplicate CollectionDisplayFields row for '${fieldName}'.`,
+      });
+      continue;
+    }
+    seen.add(fieldName);
+    const field = fieldsByName.get(fieldName) ?? null;
+    if (field == null) {
+      issues.push({
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionDisplayField,
+        targetRef: targetRef ?? undefined,
+        inputFacetId: AppBuilderInputFacetId.CollectionDisplayFields,
+        fieldNames: [fieldName, ...domain.fields.map((candidate) => candidate.name)],
+        summary: `Router-backed list/detail detail display field '${fieldName}' is not present on primary entity '${domain.entityTypeName}'. Available fields: ${domain.fields.map((candidate) => candidate.name).join(', ')}.`,
+      });
+      continue;
+    }
+    const booleanDisplayTextIssue = routerBackedListDetailBooleanDisplayTextIssue({
+      column: payload,
+      issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionDisplayField,
+      targetRef,
+      inputFacetId: AppBuilderInputFacetId.CollectionDisplayFields,
+      fieldName,
+      fieldValueKind: field.valueKind,
+      columnHeader: normalizedSourceInputText(payload.label) ?? field.title,
+      summaryPrefix: 'Router-backed list/detail detail display',
+    });
+    if (booleanDisplayTextIssue != null) {
+      issues.push(booleanDisplayTextIssue);
+      continue;
+    }
+    selected.push(payload);
+  }
+  for (const column of tableColumns) {
+    const fieldName = normalizedSourceInputText(column.fieldName);
+    if (
+      fieldName == null
+      || seen.has(fieldName)
+      || normalizedSourceInputText(column.column.booleanTrueText) == null
+      && normalizedSourceInputText(column.column.booleanFalseText) == null
+    ) {
+      continue;
+    }
+    const field = fieldsByName.get(fieldName) ?? null;
+    if (field == null || field.valueKind !== AppBuilderDomainFieldValueKind.Boolean) {
+      continue;
+    }
+    seen.add(fieldName);
+    selected.push({
+      fieldName,
+      role: AppBuilderCollectionDisplayRole.Boolean,
+      label: column.header,
+      booleanTrueText: column.column.booleanTrueText,
+      booleanFalseText: column.column.booleanFalseText,
+    });
+  }
+  return { value: selected, issues };
+}
+
 function selectRouterBackedListDetailTableColumns(
   targetRef: AppBuilderOntologyRowRef | null,
   domain: AppBuilderDomainDescriptor | null,
@@ -4495,6 +4609,23 @@ function selectRouterBackedListDetailTableColumns(
       });
       continue;
     }
+    if (fieldName == null) {
+      const booleanDisplayTextIssue = routerBackedListDetailBooleanDisplayTextIssue({
+        column,
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionTableColumn,
+        targetRef,
+        inputFacetId: AppBuilderInputFacetId.CollectionTableColumns,
+        fieldName: null,
+        relationshipName,
+        actionName,
+        columnHeader: header,
+        summaryPrefix: 'Router-backed list/detail table presentation',
+      });
+      if (booleanDisplayTextIssue != null) {
+        issues.push(booleanDisplayTextIssue);
+        continue;
+      }
+    }
 
     const duplicateKey = fieldName != null
       ? `field:${fieldName}`
@@ -4538,6 +4669,20 @@ function selectRouterBackedListDetailTableColumns(
           columnHeaders,
           summary: `Router-backed list/detail table field column '${fieldName}' cannot use displayKind '${AppBuilderCollectionTableColumnDisplayKind.Action}'.`,
         });
+        continue;
+      }
+      const booleanDisplayTextIssue = routerBackedListDetailBooleanDisplayTextIssue({
+        column,
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionTableColumn,
+        targetRef,
+        inputFacetId: AppBuilderInputFacetId.CollectionTableColumns,
+        fieldName,
+        fieldValueKind: field.valueKind,
+        columnHeader: header,
+        summaryPrefix: 'Router-backed list/detail table presentation',
+      });
+      if (booleanDisplayTextIssue != null) {
+        issues.push(booleanDisplayTextIssue);
         continue;
       }
       selected.push({
@@ -4896,6 +5041,25 @@ function routerBackedListDetailRelatedCollectionColumnIssues(
         fieldNames: [fieldName],
         summary: `Detail related collection '${relationship.name}' table column '${column.header}' references unknown child field '${fieldName}'.`,
       });
+      continue;
+    }
+    if (fieldName != null) {
+      const field = childDomain.fields.find((candidate) => candidate.name === fieldName)!;
+      const booleanDisplayTextIssue = routerBackedListDetailBooleanDisplayTextIssue({
+        column,
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidDetailRelatedCollection,
+        targetRef,
+        inputFacetId: AppBuilderInputFacetId.CollectionTableColumns,
+        relationshipName: relationship.name,
+        fieldName,
+        fieldValueKind: field.valueKind,
+        columnHeader: column.header,
+        summaryPrefix: `Detail related collection '${relationship.name}' table presentation`,
+      });
+      if (booleanDisplayTextIssue != null) {
+        issues.push(booleanDisplayTextIssue);
+        continue;
+      }
     }
     if (fieldName == null && routeBindingExpression == null) {
       issues.push({
@@ -4905,9 +5069,75 @@ function routerBackedListDetailRelatedCollectionColumnIssues(
         relationshipNames: [relationship.name],
         summary: `Detail related collection '${relationship.name}' table column '${column.header}' needs fieldName or routeBindingExpression.`,
       });
+      continue;
+    }
+    if (fieldName == null) {
+      const booleanDisplayTextIssue = routerBackedListDetailBooleanDisplayTextIssue({
+        column,
+        issueKind: AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidDetailRelatedCollection,
+        targetRef,
+        inputFacetId: AppBuilderInputFacetId.CollectionTableColumns,
+        relationshipName: relationship.name,
+        fieldName: null,
+        columnHeader: column.header,
+        summaryPrefix: `Detail related collection '${relationship.name}' table presentation`,
+      });
+      if (booleanDisplayTextIssue != null) {
+        issues.push(booleanDisplayTextIssue);
+      }
     }
   }
   return issues;
+}
+
+function routerBackedListDetailBooleanDisplayTextIssue(options: {
+  readonly column: {
+    readonly booleanTrueText?: string;
+    readonly booleanFalseText?: string;
+  };
+  readonly issueKind: AppBuilderSourceLoweringSourcePlanIssueKind;
+  readonly targetRef: AppBuilderOntologyRowRef | null;
+  readonly inputFacetId: AppBuilderInputFacetId;
+  readonly fieldName: string | null;
+  readonly fieldValueKind?: AppBuilderDomainFieldValueKind;
+  readonly relationshipName?: string | null;
+  readonly actionName?: string | null;
+  readonly columnHeader: string;
+  readonly summaryPrefix: string;
+}): AppBuilderSourceLoweringSourcePlanIssue | null {
+  const trueText = normalizedSourceInputText(options.column.booleanTrueText);
+  const falseText = normalizedSourceInputText(options.column.booleanFalseText);
+  if (trueText == null && falseText == null) {
+    return null;
+  }
+  const baseIssue = {
+    issueKind: options.issueKind,
+    targetRef: options.targetRef ?? undefined,
+    inputFacetId: options.inputFacetId,
+    fieldNames: [options.fieldName].filter((value): value is string => value != null),
+    relationshipNames: [options.relationshipName].filter((value): value is string => value != null),
+    actionNames: [options.actionName].filter((value): value is string => value != null),
+    columnHeaders: [options.columnHeader],
+  };
+  if (trueText == null || falseText == null) {
+    return {
+      ...baseIssue,
+      summary: `${options.summaryPrefix} column '${options.columnHeader}' must supply both booleanTrueText and booleanFalseText so source lowering does not invent visible status copy.`,
+    };
+  }
+  if (options.fieldName == null) {
+    return {
+      ...baseIssue,
+      summary: `${options.summaryPrefix} column '${options.columnHeader}' supplied boolean display text, but boolean display text is only valid for field-backed boolean columns.`,
+    };
+  }
+  if (options.fieldValueKind !== AppBuilderDomainFieldValueKind.Boolean) {
+    return {
+      ...baseIssue,
+      summary: `${options.summaryPrefix} column '${options.columnHeader}' supplied boolean display text for '${options.fieldName}', but that field is '${options.fieldValueKind}', not '${AppBuilderDomainFieldValueKind.Boolean}'.`,
+    };
+  }
+  return null;
 }
 
 function routerBackedListDetailServiceUpdateMethodForAction(

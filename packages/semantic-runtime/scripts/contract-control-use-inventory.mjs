@@ -35,10 +35,19 @@ const answer = await runtime.answerAppQuery({
 assert.equal(answer.outcome, SemanticRuntimeAnswerOutcome.Hit);
 
 const rows = answer.value.rows;
-assert.ok(rows.length >= 10, 'Expected source-lowering gallery fixture to expose generated value controls and button actions.');
+assert.ok(rows.length >= 20, 'Expected source-lowering gallery fixture to expose generated value controls and button actions.');
 
 for (const expected of [
   AppBuilderControlId.TextInput,
+  AppBuilderControlId.EmailInput,
+  AppBuilderControlId.UrlInput,
+  AppBuilderControlId.TelInput,
+  AppBuilderControlId.PasswordInput,
+  AppBuilderControlId.SearchInput,
+  AppBuilderControlId.TimeInput,
+  AppBuilderControlId.DateTimeLocalInput,
+  AppBuilderControlId.MonthInput,
+  AppBuilderControlId.WeekInput,
   AppBuilderControlId.DateInput,
   AppBuilderControlId.Checkbox,
   AppBuilderControlId.SingleSelect,
@@ -65,6 +74,17 @@ assert.ok(
     && row.bindingExpression === 'save()'
   ),
   'Expected authored control-use inventory to include native button listener actions.',
+);
+
+assert.ok(
+  rows.some((row) =>
+    row.controlPatternId === AppBuilderControlPatternId.NativeButton
+    && row.classificationKind === SemanticControlUseClassificationKind.NativeButtonAction
+    && row.eventName === 'click'
+    && row.bindingExpression === 'adjustStock(item, -1)'
+    && row.sourceName === 'adjustStock(item, -1)'
+  ),
+  'Expected action source-name projection to preserve unary negative arguments.',
 );
 
 assert.ok(

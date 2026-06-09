@@ -141,6 +141,14 @@ export enum AppBuilderPartSlotKind {
   MatcherExpression = 'matcher-expression',
   /** Static HTML name attribute used to group native radio options. */
   RadioGroupName = 'radio-group-name',
+  /** Static required attribute emitted from caller-supplied field-local constraint policy. */
+  NativeRequired = 'native-required',
+  /** Static minimum character count used by native text-like controls. */
+  TextMinLength = 'text-min-length',
+  /** Static maximum character count used by native text-like controls. */
+  TextMaxLength = 'text-max-length',
+  /** Static native pattern attribute used by native text-like controls. */
+  TextPattern = 'text-pattern',
   /** Static numeric minimum used by native number/range controls. */
   NumericMinimum = 'numeric-minimum',
   /** Static numeric maximum used by native number/range controls. */
@@ -253,6 +261,10 @@ export const APP_BUILDER_PART_SLOT_KINDS = [
   AppBuilderPartSlotKind.OptionLabelExpression,
   AppBuilderPartSlotKind.MatcherExpression,
   AppBuilderPartSlotKind.RadioGroupName,
+  AppBuilderPartSlotKind.NativeRequired,
+  AppBuilderPartSlotKind.TextMinLength,
+  AppBuilderPartSlotKind.TextMaxLength,
+  AppBuilderPartSlotKind.TextPattern,
   AppBuilderPartSlotKind.NumericMinimum,
   AppBuilderPartSlotKind.NumericMaximum,
   AppBuilderPartSlotKind.NumericStep,
@@ -518,6 +530,26 @@ export const APP_BUILDER_PART_SLOT_DESCRIPTORS: readonly AppBuilderPartSlotDescr
     slotKind: AppBuilderPartSlotKind.RadioGroupName,
     valueLanguage: AppBuilderPartSlotValueLanguage.HtmlAttributeValue,
     summary: 'Static name attribute shared by all generated radio inputs in one group.',
+  },
+  {
+    slotKind: AppBuilderPartSlotKind.NativeRequired,
+    valueLanguage: AppBuilderPartSlotValueLanguage.BooleanLiteral,
+    summary: 'Static required attribute for native browser constraint validation; not an Aurelia validation-library rule.',
+  },
+  {
+    slotKind: AppBuilderPartSlotKind.TextMinLength,
+    valueLanguage: AppBuilderPartSlotValueLanguage.NumericLiteral,
+    summary: 'Static minimum character count for native text-like controls.',
+  },
+  {
+    slotKind: AppBuilderPartSlotKind.TextMaxLength,
+    valueLanguage: AppBuilderPartSlotValueLanguage.NumericLiteral,
+    summary: 'Static maximum character count for native text-like controls.',
+  },
+  {
+    slotKind: AppBuilderPartSlotKind.TextPattern,
+    valueLanguage: AppBuilderPartSlotValueLanguage.HtmlAttributeValue,
+    summary: 'Static native pattern attribute for field-local format constraints.',
   },
   {
     slotKind: AppBuilderPartSlotKind.NumericMinimum,

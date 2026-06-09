@@ -61,6 +61,7 @@ import {
   appBuilderDomainValueObjectSeedRecordConstructionExpressionSource,
 } from './domain-value-object-source.js';
 import {
+  appBuilderDomainFieldDisplayHrefBindingExpression,
   appBuilderDomainFieldDisplayExpression,
   appBuilderDomainFieldOptionPropertySource,
   appBuilderDomainFieldSeedLiteral,
@@ -80,9 +81,14 @@ import {
   type AppBuilderDomainRelationshipDescriptor,
   type AppBuilderDomainValueSetDescriptor,
 } from './domain-model.js';
-import type { AppBuilderCollectionTableColumnPayload } from './ontology/collection-projection.js';
+import type {
+  AppBuilderCollectionBooleanDisplayText,
+  AppBuilderCollectionDisplayFieldPayload,
+  AppBuilderCollectionTableColumnPayload,
+} from './ontology/collection-projection.js';
 import { AppBuilderPartSlotKind } from './part-application.js';
 import type {
+  AppBuilderPartSlotAssignment,
   AppBuilderPartSourceFragment,
   AppBuilderTemplateAttributeSource,
   AppBuilderTemplateElementPartSourceFragment,
@@ -94,6 +100,12 @@ import {
 import {
   AppBuilderApplicationPatternId,
 } from './ontology/application-pattern.js';
+import {
+  appBuilderSelectNativeFieldConstraints,
+} from './ontology/source-lowering-native-field-constraints.js';
+import {
+  appBuilderSelectNumericControlConstraints,
+} from './ontology/source-lowering-numeric-constraints.js';
 import {
   AppBuilderOntologyRowKind,
 } from './ontology/relation.js';
@@ -156,8 +168,18 @@ export interface AppBuilderRoutedCollectionDetailSourceRequest {
   readonly createForm?: AppBuilderRoutedCollectionDetailCreateFormSource | null;
   readonly createActionFeedback?: AppBuilderSourceLoweringActionFeedbackPayload | null;
   readonly tableColumns?: readonly AppBuilderRoutedCollectionDetailTableColumnSource[];
+  readonly detailDisplayFields?: readonly AppBuilderCollectionDisplayFieldPayload[];
   readonly serviceCollection?: AppBuilderRoutedCollectionDetailServiceCollectionSource | null;
   readonly sourcePatternParameterValues?: readonly SourcePatternParameterValue[];
+  readonly sharedState?: AppBuilderRoutedCollectionDetailSharedStateSource | null;
+}
+
+/** Assembly-level DI state boundary that route-area state classes may delegate collection storage to. */
+export interface AppBuilderRoutedCollectionDetailSharedStateSource {
+  /** TypeScript file path relative to the generated app root. */
+  readonly sourceTargetPath: string;
+  /** Exported app-state class resolved by generated route-area state classes. */
+  readonly className: string;
 }
 
 /** Route component imported by a parent app shell that assembles route-area source. */
@@ -372,7 +394,9 @@ interface AppBuilderRoutedCollectionDetailSourceModel extends AppBuilderCustomEl
   readonly createForm: AppBuilderRoutedCollectionDetailCreateFormModel | null;
   readonly createActionFeedback: AppBuilderSourceLoweringActionFeedbackPayload | null;
   readonly tableColumns: readonly AppBuilderRoutedCollectionDetailTableColumnModel[];
+  readonly detailDisplayFields: readonly AppBuilderCollectionDisplayFieldPayload[];
   readonly serviceCollection: AppBuilderRoutedCollectionDetailServiceCollectionModel | null;
+  readonly sharedState: AppBuilderRoutedCollectionDetailSharedStateSource | null;
 }
 
 interface AppBuilderRoutedCollectionDetailServiceCollectionModel {
@@ -410,6 +434,7 @@ interface AppBuilderRoutedCollectionDetailTableColumnModel {
   readonly column: AppBuilderCollectionTableColumnPayload;
   readonly header: string;
   readonly field?: AppBuilderDomainFieldSourceModel;
+  readonly booleanDisplayText?: AppBuilderCollectionBooleanDisplayText | null;
   readonly relationship?: AppBuilderRoutedCollectionDetailDisplayRelationshipModel;
   readonly navigationAction?: AppBuilderRoutedCollectionDetailNavigationActionSource;
   readonly rowCommandAction?: AppBuilderDomainActionDescriptor;
@@ -518,6 +543,7 @@ export function appBuilderRoutedCollectionDetailSourcePlan(
       entrypointPath: model.entrypointPath,
       rootComponentPath: model.componentPath,
       rootComponentClassName: model.className,
+      rootElementName: model.resourceName,
       configurationAdmission: routerAdmission,
     })
     .addFile(routedCollectionDetailRootComponentFileArtifact(model))
@@ -608,6 +634,166 @@ function routedCollectionDetailRouteAreaFileArtifacts(
       contributions: stateSource.contributions,
     },
   ];
+}
+
+interface AppBuilderRoutedCollectionDetailSharedStateCollectionModel {
+  readonly collectionMemberName: string;
+  readonly entityTypeName: string;
+  readonly identityMemberName: string;
+  readonly domainModelPath: string;
+  readonly fields: readonly AppBuilderDomainFieldSourceModel[];
+  readonly records: readonly AppBuilderSeedRecord[];
+  readonly namedImports: readonly string[];
+  readonly extraProperties: readonly {
+    readonly memberName: string;
+    readonly typeScriptType: string;
+    readonly expressionForRecord: (record: AppBuilderSeedRecord, recordIndex: number) => string;
+    readonly defaultExpression: string;
+  }[];
+  readonly dependencyCollectionMemberNames: readonly string[];
+  readonly preferenceRank: number;
+}
+
+/** Build the assembly-level state file shared by generated routed browse/detail route areas. */
+export function appBuilderRoutedCollectionDetailSharedStateFileArtifact(
+  sharedState: AppBuilderRoutedCollectionDetailSharedStateSource,
+  routeAreas: readonly AppBuilderRoutedCollectionDetailSourceRequest[],
+): SourcePlanFileArtifact | null {
+  const models = routeAreas.map((request) => normalizeRoutedCollectionDetailSourceRequest(request));
+  const collections = routedCollectionDetailSharedStateCollections(models);
+  if (collections.length === 0) {
+    return null;
+  }
+  const source = routedCollectionDetailSharedStateSource(sharedState, collections);
+  return {
+    path: sharedState.sourceTargetPath,
+    role: SourcePlanFileRole.StateModel,
+    language: SourcePlanLanguage.TypeScript,
+    operationKind: SourcePlanOperationKind.CreateStateModel,
+    text: source.text,
+    contributions: source.contributions,
+  };
+}
+
+function routedCollectionDetailSharedStateCollections(
+  models: readonly AppBuilderRoutedCollectionDetailSourceModel[],
+): readonly AppBuilderRoutedCollectionDetailSharedStateCollectionModel[] {
+  const candidates = models.flatMap(routedCollectionDetailSharedStateCollectionCandidates)
+    .sort((left, right) => left.preferenceRank - right.preferenceRank);
+  const byCollectionMemberName = new Map<string, AppBuilderRoutedCollectionDetailSharedStateCollectionModel>();
+  for (const candidate of candidates) {
+    const existing = byCollectionMemberName.get(candidate.collectionMemberName);
+    if (existing == null) {
+      byCollectionMemberName.set(candidate.collectionMemberName, candidate);
+      continue;
+    }
+    if (existing.entityTypeName !== candidate.entityTypeName || existing.domainModelPath !== candidate.domainModelPath) {
+      throw new Error(`App-builder application assembly cannot share collection '${candidate.collectionMemberName}' across '${existing.entityTypeName}' and '${candidate.entityTypeName}'.`);
+    }
+  }
+  return routedCollectionDetailTopologicallyOrderedSharedStateCollections([...byCollectionMemberName.values()]);
+}
+
+function routedCollectionDetailSharedStateCollectionCandidates(
+  model: AppBuilderRoutedCollectionDetailSourceModel,
+): readonly AppBuilderRoutedCollectionDetailSharedStateCollectionModel[] {
+  return [
+    ...model.referenceRelationships.map((relationship) => ({
+      collectionMemberName: relationship.relatedCollectionMemberName,
+      entityTypeName: relationship.relatedDomain.entityTypeName,
+      identityMemberName: relationship.relatedDomain.identityMemberName,
+      domainModelPath: relationship.relatedDomainModelPath,
+      fields: relationship.relatedFields,
+      records: relationship.relatedRecords,
+      namedImports: [relationship.relatedDomain.entityTypeName],
+      extraProperties: [],
+      dependencyCollectionMemberNames: [],
+      preferenceRank: 1,
+    })),
+    ...model.detailRelatedCollections.map((collection) => ({
+      collectionMemberName: collection.collectionMemberName,
+      entityTypeName: collection.domain.entityTypeName,
+      identityMemberName: collection.domain.identityMemberName,
+      domainModelPath: collection.domainModelPath,
+      fields: collection.fields,
+      records: collection.records,
+      namedImports: [collection.domain.entityTypeName],
+      extraProperties: [],
+      dependencyCollectionMemberNames: [],
+      preferenceRank: 1,
+    })),
+    ...(model.serviceCollection == null
+      ? [{
+          collectionMemberName: model.collectionMemberName,
+          entityTypeName: model.entityTypeName,
+          identityMemberName: model.identityMemberName,
+          domainModelPath: model.domainModelPath,
+          fields: model.fields,
+          records: model.records,
+          namedImports: routedCollectionDetailDomainModelValueImports(model),
+          extraProperties: routedCollectionDetailRelationshipInitializerProperties(model),
+          dependencyCollectionMemberNames: routedCollectionDetailObjectReferenceRelationships(model)
+            .map((relationship) => relationship.relatedCollectionMemberName),
+          preferenceRank: 0,
+        }]
+      : []),
+  ];
+}
+
+function routedCollectionDetailTopologicallyOrderedSharedStateCollections(
+  collections: readonly AppBuilderRoutedCollectionDetailSharedStateCollectionModel[],
+): readonly AppBuilderRoutedCollectionDetailSharedStateCollectionModel[] {
+  const remaining = [...collections];
+  const emitted = new Set<string>();
+  const ordered: AppBuilderRoutedCollectionDetailSharedStateCollectionModel[] = [];
+  while (remaining.length > 0) {
+    const readyIndex = remaining.findIndex((collection) =>
+      collection.dependencyCollectionMemberNames.every((dependency) =>
+        dependency === collection.collectionMemberName
+        || emitted.has(dependency)
+        || !remaining.some((candidate) => candidate.collectionMemberName === dependency)
+      )
+    );
+    const index = readyIndex < 0 ? 0 : readyIndex;
+    const [collection] = remaining.splice(index, 1);
+    ordered.push(collection!);
+    emitted.add(collection!.collectionMemberName);
+  }
+  return ordered;
+}
+
+function routedCollectionDetailSharedStateSource(
+  sharedState: AppBuilderRoutedCollectionDetailSharedStateSource,
+  collections: readonly AppBuilderRoutedCollectionDetailSharedStateCollectionModel[],
+): TypeScriptSourceText {
+  const propertySources = collections.map((collection) =>
+    `  readonly ${collection.collectionMemberName}: ${collection.entityTypeName}[] = [];`);
+  const constructorSources = collections.map((collection) => {
+    const initializer = appBuilderDomainCollectionInitializerSource({
+      entityTypeName: collection.entityTypeName,
+      identityMemberName: collection.identityMemberName,
+    }, collection.fields, collection.records, {
+      rowIndent: '      ',
+      closingIndent: '    ',
+      extraProperties: collection.extraProperties,
+    });
+    return `    this.${collection.collectionMemberName}.push(...${initializer});`;
+  });
+  const source = typeScriptSourceText(`export class ${sharedState.className} {
+${propertySources.join('\n')}
+
+  public constructor() {
+${constructorSources.join('\n')}
+  }
+}
+`, uniqueByKey(
+    collections.flatMap((collection) => collection.namedImports.map((namedImport) => ({
+      moduleSpecifier: moduleSpecifier(sharedState.sourceTargetPath, collection.domainModelPath, false),
+      namedImports: [namedImport],
+    } satisfies TypeScriptImportRequirement))),
+    (requirement) => `${requirement.moduleSpecifier}:${requirement.namedImports?.join(',') ?? ''}`,
+  ));
+  return source;
 }
 
 function routedCollectionDetailDomainFileArtifact(
@@ -722,7 +908,9 @@ function normalizeRoutedCollectionDetailSourceRequest(
     createForm: routedCollectionDetailCreateFormModel(request, fields, referenceRelationships),
     createActionFeedback: request.createActionFeedback ?? null,
     tableColumns: routedCollectionDetailTableColumnModels(request, fields, displayRelationships),
+    detailDisplayFields: request.detailDisplayFields ?? [],
     serviceCollection: routedCollectionDetailServiceCollectionModel(request),
+    sharedState: request.sharedState ?? null,
   };
 }
 
@@ -824,9 +1012,18 @@ function routedCollectionDetailTableColumnModels(
         if (field == null) {
           throw new Error(`Table column '${column.header}' references unknown field '${fieldName}'.`);
         }
-        return { ...column, field };
+        return {
+          ...column,
+          field,
+          booleanDisplayText: routedCollectionDetailSelectBooleanDisplayText(
+            column.column,
+            field,
+            `table column '${column.header}'`,
+          ),
+        };
       }
       case AppBuilderRoutedCollectionDetailTableColumnKind.Relationship: {
+        routedCollectionDetailAssertNoBooleanDisplayText(column.column, column.header, 'relationship-backed');
         const relationshipName = requiredRelationshipValue(column.relationshipName, column.header, 'relationshipName');
         const relationship = relationships.find((candidate) => candidate.relationship.name === relationshipName);
         if (relationship == null) {
@@ -835,6 +1032,7 @@ function routedCollectionDetailTableColumnModels(
         return { ...column, relationship };
       }
       case AppBuilderRoutedCollectionDetailTableColumnKind.NavigationAction: {
+        routedCollectionDetailAssertNoBooleanDisplayText(column.column, column.header, 'navigation-action');
         const actionName = requiredRelationshipValue(column.actionName, column.header, 'actionName');
         const navigationAction = request.detailNavigationAction?.actionName === actionName
           ? request.detailNavigationAction
@@ -845,6 +1043,7 @@ function routedCollectionDetailTableColumnModels(
         return { ...column, navigationAction };
       }
       case AppBuilderRoutedCollectionDetailTableColumnKind.RowCommandAction: {
+        routedCollectionDetailAssertNoBooleanDisplayText(column.column, column.header, 'row-command-action');
         if (column.rowCommandAction == null) {
           throw new Error(`Table column '${column.header}' references a row command action without a selected action descriptor.`);
         }
@@ -852,6 +1051,43 @@ function routedCollectionDetailTableColumnModels(
       }
     }
   });
+}
+
+function routedCollectionDetailSelectBooleanDisplayText(
+  payload: {
+    readonly booleanTrueText?: string;
+    readonly booleanFalseText?: string;
+  },
+  field: AppBuilderDomainFieldSourceModel,
+  sourceLabel: string,
+): AppBuilderCollectionBooleanDisplayText | null {
+  const trueText = normalizedSourceInputText(payload.booleanTrueText);
+  const falseText = normalizedSourceInputText(payload.booleanFalseText);
+  if (trueText == null && falseText == null) {
+    return null;
+  }
+  if (trueText == null || falseText == null) {
+    throw new Error(`${sourceLabel} must supply both booleanTrueText and booleanFalseText.`);
+  }
+  if (field.valueKind !== AppBuilderDomainFieldValueKind.Boolean) {
+    throw new Error(`${sourceLabel} supplied boolean display text for non-boolean field '${field.memberName}'.`);
+  }
+  return {
+    trueText,
+    falseText,
+  };
+}
+
+function routedCollectionDetailAssertNoBooleanDisplayText(
+  column: AppBuilderCollectionTableColumnPayload,
+  header: string,
+  columnKind: string,
+): void {
+  if (normalizedSourceInputText(column.booleanTrueText) == null
+    && normalizedSourceInputText(column.booleanFalseText) == null) {
+    return;
+  }
+  throw new Error(`Table column '${header}' supplied boolean display text, but ${columnKind} columns cannot spend boolean display text.`);
 }
 
 function routedCollectionDetailReferenceRelationshipModels(
@@ -1319,7 +1555,7 @@ function routedCollectionDetailRowCommandClassMemberFragments(
       ? `this.${serviceCollection.collectionPromiseMemberName} = this.state.${updateMethod.methodName}(${updateArguments});
   await this.${serviceCollection.collectionPromiseMemberName};`
       : `await this.state.${updateMethod.methodName}(${updateArguments});
-  this.${queryRefresh}();`;
+  await this.${queryRefresh}();`;
     return {
       text: `async ${action.name}(${itemName}: { readonly ${model.identityMemberName}: ${identityType} }): Promise<void> {
   ${body}
@@ -1377,20 +1613,21 @@ function routedCollectionDetailQueryControlClassMemberFragments(
   this.${queryControl.resultMemberName} = queryValue === ${queryControl.inactiveValueExpression}
     ? this.state.${serviceCollection.loadMethodName}()
     : this.state.${queryControl.filterMethodName}(queryValue);
+  return this.${queryControl.resultMemberName};
 }`,
     },
     {
-      text: `${queryControl.applyActionName}() {
+      text: `${queryControl.applyActionFeedback == null ? '' : 'async '}${queryControl.applyActionName}() {
 ${routedCollectionDetailQueryControlActionBody([
-  `this.${queryControl.reloadMethodName}();`,
+  routedCollectionDetailQueryControlReloadStatement(queryControl.reloadMethodName, queryControl.applyActionFeedback),
 ], queryControl.applyActionFeedback)}
 }`,
     },
     {
-      text: `${queryControl.clearActionName}() {
+      text: `${queryControl.clearActionFeedback == null ? '' : 'async '}${queryControl.clearActionName}() {
 ${routedCollectionDetailQueryControlActionBody([
   `this.${queryControl.stateMemberName} = ${queryControl.inactiveValueExpression};`,
-  `this.${queryControl.reloadMethodName}();`,
+  routedCollectionDetailQueryControlReloadStatement(queryControl.reloadMethodName, queryControl.clearActionFeedback),
 ], queryControl.clearActionFeedback)}
 }`,
     },
@@ -1419,6 +1656,15 @@ function routedCollectionDetailQueryControlActionBody(
       `this.${feedback.statusMemberName} = ${appBuilderSeedRecordLiteral(feedback.statusText)};`,
     ]),
   ].map((statement) => `  ${statement}`).join('\n');
+}
+
+function routedCollectionDetailQueryControlReloadStatement(
+  reloadMethodName: string,
+  feedback: AppBuilderSourceLoweringActionFeedbackPayload | null | undefined,
+): string {
+  return feedback == null
+    ? `this.${reloadMethodName}();`
+    : `await this.${reloadMethodName}();`;
 }
 
 function routedCollectionDetailCreateFormClassMemberFragments(
@@ -1551,7 +1797,7 @@ function routedCollectionDetailServiceQueryControlTemplateFrames(
 }[] {
   return serviceCollection.queryControls.map((queryControl) => {
     const control = appendAppBuilderTemplateElementAttributes(
-      appBuilderControlElementFragment(AppBuilderControlId.TextInput, queryControl.stateMemberName),
+      appBuilderControlElementFragment(AppBuilderControlId.SearchInput, queryControl.stateMemberName),
       [{ rawName: 'id', rawValue: queryControl.fieldControlId }],
     );
     const label = appBuilderTemplateElementFragment(
@@ -1847,9 +2093,25 @@ function routedCollectionDetailCreateFormControlFragment(
       optionBindingKind: AppBuilderChoiceOptionBindingKind.Value,
       optionValueExpression: 'option.value',
       optionLabelExpression: 'option.title',
+      slotAssignments: routedCollectionDetailFieldControlConstraintSlots(field),
     });
   }
-  return appBuilderControlElementFragment(field.controlId, fieldModel.memberName);
+  return appBuilderControlElementFragment(
+    field.controlId,
+    fieldModel.memberName,
+    routedCollectionDetailFieldControlConstraintSlots(field),
+  );
+}
+
+function routedCollectionDetailFieldControlConstraintSlots(
+  field: AppBuilderDomainFieldSourceModel,
+): readonly AppBuilderPartSlotAssignment[] {
+  const nativeSelection = appBuilderSelectNativeFieldConstraints(field.controlId, field);
+  const numericSelection = appBuilderSelectNumericControlConstraints(field.controlId, field);
+  return [
+    ...(nativeSelection.issue == null ? nativeSelection.slotAssignments : []),
+    ...(numericSelection.issue == null ? numericSelection.slotAssignments : []),
+  ];
 }
 
 function routedCollectionDetailCreateFormRelationshipControlId(
@@ -1923,6 +2185,12 @@ function routedCollectionDetailFieldTableCell(
     throw new Error('Internal app-builder invariant failed: field table columns require a field source model.');
   }
   if (field.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+    if (column.booleanDisplayText != null) {
+      return routedCollectionDetailBooleanTextTableCell(
+        `${itemName}.${field.memberName}`,
+        column.booleanDisplayText,
+      );
+    }
     const checkedAttribute = appBuilderAttributeToViewBindingAttributeFragment('checked', `${itemName}.${field.memberName}`);
     const checkboxFragment = appBuilderTemplateElementFragment('input', [
       { rawName: 'type', rawValue: 'checkbox' },
@@ -1939,6 +2207,23 @@ function routedCollectionDetailFieldTableCell(
     };
   }
   const interpolation = appBuilderTextInterpolationFragment(`${itemName}.${field.memberName}`);
+  const cellFragment = appBuilderTemplateElementFragment('td', [], interpolation.text);
+  return {
+    element: cellFragment.templateElement,
+    fragments: [interpolation, cellFragment],
+  };
+}
+
+function routedCollectionDetailBooleanTextTableCell(
+  bindingExpression: string,
+  booleanDisplayText: AppBuilderCollectionBooleanDisplayText,
+): {
+  readonly element: AppBuilderTemplateElementSource;
+  readonly fragments: readonly AppBuilderPartSourceFragment[];
+} {
+  const interpolation = appBuilderTextInterpolationFragment(
+    `${bindingExpression} ? ${appBuilderSeedRecordLiteral(booleanDisplayText.trueText)} : ${appBuilderSeedRecordLiteral(booleanDisplayText.falseText)}`,
+  );
   const cellFragment = appBuilderTemplateElementFragment('td', [], interpolation.text);
   return {
     element: cellFragment.templateElement,
@@ -2339,7 +2624,18 @@ function routedCollectionDetailRelatedCollectionTableCellElement(
     if (field == null) {
       throw new Error(`Detail related collection '${collection.relationship.name}' table column '${column.header}' references unknown field '${fieldName}'.`);
     }
+      const booleanDisplayText = routedCollectionDetailSelectBooleanDisplayText(
+        column,
+        field,
+        `detail related collection table column '${column.header}'`,
+      );
     if (field.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+      if (booleanDisplayText != null) {
+        return routedCollectionDetailBooleanTextTableCell(
+          `${collection.itemLocalName}.${field.memberName}`,
+          booleanDisplayText,
+        );
+      }
       const checkedAttribute = appBuilderAttributeToViewBindingAttributeFragment('checked', `${collection.itemLocalName}.${field.memberName}`);
       const checkboxFragment = appBuilderTemplateElementFragment('input', [
         { rawName: 'type', rawValue: 'checkbox' },
@@ -2350,10 +2646,16 @@ function routedCollectionDetailRelatedCollectionTableCellElement(
       const cellFragment = appBuilderTemplateElementFragment('td', [], null, [checkboxFragment.templateElement]);
       return { element: cellFragment.templateElement, fragments: [checkedAttribute, checkboxFragment, cellFragment] };
     }
-    const interpolation = appBuilderTextInterpolationFragment(appBuilderDomainFieldDisplayExpression(field, collection.itemLocalName));
+    const displayExpression = appBuilderDomainFieldDisplayExpression(field, collection.itemLocalName);
+    const linkDisplay = routedCollectionDetailLinkDisplayElement(field, displayExpression, 'td', '');
+    if (linkDisplay != null) {
+      return { element: linkDisplay.element, fragments: linkDisplay.fragments };
+    }
+    const interpolation = appBuilderTextInterpolationFragment(displayExpression);
     const cellFragment = appBuilderTemplateElementFragment('td', [], interpolation.text);
     return { element: cellFragment.templateElement, fragments: [interpolation, cellFragment] };
   }
+  routedCollectionDetailAssertNoBooleanDisplayText(column, column.header, 'route-binding-backed');
   const routeBindingExpression = normalizedSourceInputText(column.routeBindingExpression);
   if (routeBindingExpression != null) {
     const loadAttribute = appBuilderAttributeBindingAttributeFragment('load', routeBindingExpression);
@@ -2366,6 +2668,40 @@ function routedCollectionDetailRelatedCollectionTableCellElement(
     return { element: cellFragment.templateElement, fragments: [loadAttribute, linkFragment, cellFragment] };
   }
   throw new Error(`Detail related collection '${collection.relationship.name}' table column '${column.header}' needs fieldName or routeBindingExpression.`);
+}
+
+function routedCollectionDetailLinkDisplayElement(
+  field: AppBuilderDomainFieldSourceModel,
+  displayExpression: string,
+  tagName: string,
+  prefix: string,
+): {
+  readonly element: AppBuilderTemplateElementSource;
+  readonly fragments: readonly AppBuilderPartSourceFragment[];
+} | null {
+  const hrefBindingExpression = appBuilderDomainFieldDisplayHrefBindingExpression(field, displayExpression);
+  if (hrefBindingExpression == null) {
+    return null;
+  }
+  const hrefAttribute = appBuilderAttributeBindingAttributeFragment('href', hrefBindingExpression);
+  const interpolation = appBuilderTextInterpolationFragment(displayExpression);
+  const linkFragment = appBuilderTemplateElementFragment('a', [
+    hrefAttribute.templateAttribute,
+    { rawName: 'external' },
+  ], interpolation.text);
+  const containerFragment = appBuilderTemplateElementFragment(
+    tagName,
+    [],
+    null,
+    [
+      ...(prefix.length === 0 ? [] : [authoredTemplatePlainTextChildSource(prefix)]),
+      linkFragment.templateElement,
+    ],
+  );
+  return {
+    element: containerFragment.templateElement,
+    fragments: [hrefAttribute, interpolation, linkFragment, containerFragment],
+  };
 }
 
 function pluralDisplayTitle(
@@ -2405,7 +2741,12 @@ function routedCollectionDetailStateModelSource(
       entityTypeName: relationship.relatedDomain.entityTypeName,
       identityMemberName: relationship.relatedDomain.identityMemberName,
     }, relationship.relatedFields, relationship.relatedRecords);
-    return `  readonly ${relationship.relatedCollectionMemberName}: ${relationship.relatedDomain.entityTypeName}[] = ${initializer};`;
+    return routedCollectionDetailCollectionMemberSource(
+      model,
+      relationship.relatedCollectionMemberName,
+      relationship.relatedDomain.entityTypeName,
+      initializer,
+    );
   });
   const detailRelatedCollectionSources = uniqueByKey(
     model.detailRelatedCollections,
@@ -2415,7 +2756,12 @@ function routedCollectionDetailStateModelSource(
       entityTypeName: collection.domain.entityTypeName,
       identityMemberName: collection.domain.identityMemberName,
     }, collection.fields, collection.records);
-    return `  readonly ${collection.collectionMemberName}: ${collection.domain.entityTypeName}[] = ${initializer};`;
+    return routedCollectionDetailCollectionMemberSource(
+      model,
+      collection.collectionMemberName,
+      collection.domain.entityTypeName,
+      initializer,
+    );
   });
   const relationshipMethodSources = [
     ...model.referenceRelationships.map((relationship) =>
@@ -2431,9 +2777,18 @@ function routedCollectionDetailStateModelSource(
     .map(appBuilderDomainFieldOptionPropertySource);
   const createMethodSource = routedCollectionDetailCreateMethodSource(model);
   const primaryCollectionMemberSource = model.serviceCollection == null
-    ? `  readonly ${model.collectionMemberName}: ${model.entityTypeName}[] = ${collectionInitializer};`
+    ? routedCollectionDetailCollectionMemberSource(
+        model,
+        model.collectionMemberName,
+        model.entityTypeName,
+        collectionInitializer,
+      )
     : `  private readonly ${model.serviceCollection.serviceMemberName} = resolve(${model.serviceCollection.serviceClassName});`;
+  const sharedStateMemberSource = model.sharedState == null
+    ? []
+    : [`  private readonly ${routedCollectionDetailSharedStateMemberName(model.sharedState)} = resolve(${model.sharedState.className});`];
   const stateMemberSources = [
+    ...sharedStateMemberSource,
     ...(model.serviceCollection == null ? relatedCollectionSources : []),
     ...detailRelatedCollectionSources,
     primaryCollectionMemberSource,
@@ -2471,10 +2826,13 @@ ${methodSources.join('\n\n')}
     moduleSpecifier: moduleSpecifier(model.stateModelPath, model.domainModelPath, false),
     namedImports: routedCollectionDetailStateDomainModelValueImports(model),
     namedTypeImports: routedCollectionDetailFiniteOptionTypeImports(model.fields),
-  }, ...(model.serviceCollection == null ? [] : [{
+  }, ...((model.serviceCollection == null && model.sharedState == null) ? [] : [{
     moduleSpecifier: 'aurelia',
     namedImports: ['resolve'],
-  }, {
+  }]), ...(model.sharedState == null ? [] : [{
+    moduleSpecifier: moduleSpecifier(model.stateModelPath, model.sharedState.sourceTargetPath, false),
+    namedImports: [model.sharedState.className],
+  }]), ...(model.serviceCollection == null ? [] : [{
     moduleSpecifier: moduleSpecifier(model.stateModelPath, model.serviceCollection.sourceTargetPath, false),
     namedImports: [model.serviceCollection.serviceClassName],
   }]), ...uniqueByKey(
@@ -2490,6 +2848,24 @@ ${methodSources.join('\n\n')}
     moduleSpecifier: moduleSpecifier(model.stateModelPath, collection.domainModelPath, false),
     namedImports: [collection.domain.entityTypeName],
   }))]);
+}
+
+function routedCollectionDetailCollectionMemberSource(
+  model: AppBuilderRoutedCollectionDetailSourceModel,
+  collectionMemberName: string,
+  entityTypeName: string,
+  initializer: string,
+): string {
+  if (model.sharedState != null) {
+    return `  readonly ${collectionMemberName} = this.${routedCollectionDetailSharedStateMemberName(model.sharedState)}.${collectionMemberName};`;
+  }
+  return `  readonly ${collectionMemberName}: ${entityTypeName}[] = ${initializer};`;
+}
+
+function routedCollectionDetailSharedStateMemberName(
+  sharedState: AppBuilderRoutedCollectionDetailSharedStateSource,
+): string {
+  return appBuilderLowerCamelCase(sharedState.className);
 }
 
 function routedCollectionDetailServiceFilterMethodSource(
@@ -2997,27 +3373,58 @@ function routedCollectionDetailFieldDisplays(
       && !relationshipLocalFieldNames.has(field.memberName)
     )
     .map((field) => {
+      const displayField = model.detailDisplayFields.find((candidate) =>
+        normalizedSourceInputText(candidate.fieldName) === field.memberName
+      ) ?? null;
+      const label = normalizedSourceInputText(displayField?.label) ?? field.field.title;
+      const booleanDisplayText = routedCollectionDetailSelectBooleanDisplayText(
+        displayField ?? {},
+        field,
+        `detail display field '${field.memberName}'`,
+      );
       if (field.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+        if (booleanDisplayText != null) {
+          const interpolation = appBuilderTextInterpolationFragment(
+            `${itemName}.${field.memberName} ? ${appBuilderSeedRecordLiteral(booleanDisplayText.trueText)} : ${appBuilderSeedRecordLiteral(booleanDisplayText.falseText)}`,
+          );
+          fragments.push(interpolation);
+          return authoredTemplateElementSource(
+            'p',
+            [],
+            `${authoredTemplateTextContentText(label)}: ${interpolation.text}`,
+          );
+        }
         const checkedAttribute = appBuilderAttributeToViewBindingAttributeFragment('checked', `${itemName}.${field.memberName}`);
         const checkboxFragment = appBuilderTemplateElementFragment('input', [
           { rawName: 'type', rawValue: 'checkbox' },
           checkedAttribute.templateAttribute,
           { rawName: 'disabled' },
-          { rawName: 'aria-label', rawValue: field.field.title },
+          { rawName: 'aria-label', rawValue: label },
         ]);
         const paragraphFragment = appBuilderTemplateElementFragment('p', [], null, [
-          authoredTemplatePlainTextChildSource(`${field.field.title}:`),
+          authoredTemplatePlainTextChildSource(`${label}:`),
           checkboxFragment.templateElement,
         ]);
         fragments.push(checkedAttribute, checkboxFragment, paragraphFragment);
         return paragraphFragment.templateElement;
       }
-      const interpolation = appBuilderTextInterpolationFragment(appBuilderDomainFieldDisplayExpression(field, itemName));
+      const displayExpression = appBuilderDomainFieldDisplayExpression(field, itemName);
+      const linkDisplay = routedCollectionDetailLinkDisplayElement(
+        field,
+        displayExpression,
+        'p',
+        `${authoredTemplateTextContentText(label)}: `,
+      );
+      if (linkDisplay != null) {
+        fragments.push(...linkDisplay.fragments);
+        return linkDisplay.element;
+      }
+      const interpolation = appBuilderTextInterpolationFragment(displayExpression);
       fragments.push(interpolation);
       return authoredTemplateElementSource(
         'p',
         [],
-        `${authoredTemplateTextContentText(field.field.title)}: ${interpolation.text}`,
+        `${authoredTemplateTextContentText(label)}: ${interpolation.text}`,
       );
     });
   const relationshipElements = routedCollectionDetailDisplayRelationships(model).map((relationship) => {

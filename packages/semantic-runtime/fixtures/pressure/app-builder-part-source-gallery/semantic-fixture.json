@@ -22,7 +22,24 @@
       "kind": "expected-semantic-effect"
     },
     {
-      "summary": "App-builder part source gallery has TypeScript project tooling.",
+      "summary": "App-builder part source gallery has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder part source gallery has TypeScript and build project tooling.",
       "topologyNodeKind": "build-tool",
       "effectKind": "project-tooling",
       "scope": "project",

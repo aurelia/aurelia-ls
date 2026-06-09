@@ -19,6 +19,9 @@
   <a repeat.for="product of products" href="${externalHref(product)}" target="_blank" rel="noreferrer">
     External ${product.name}
   </a>
+  <a repeat.for="product of products" href.bind="explicitExternalHref(product)" external>
+    Explicit external ${product.name}
+  </a>
   <a repeat.for="product of products" href="${externalPackageHref(product.id)}" target="_blank" rel="noreferrer">
     Vendor ${product.name}
   </a>

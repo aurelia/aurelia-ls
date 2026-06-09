@@ -44,6 +44,7 @@ export function appBuilderMinimalAppSourcePlan(
       entrypointPath: model.entrypointPath,
       rootComponentPath: model.componentPath,
       rootComponentClassName: model.className,
+      rootElementName: model.resourceName,
     })
     .addFile(minimalRootComponentFileArtifact(model))
     .addFile(appBuilderHtmlTemplateFileArtifact(model.templatePath, minimalRootTemplateSource()))

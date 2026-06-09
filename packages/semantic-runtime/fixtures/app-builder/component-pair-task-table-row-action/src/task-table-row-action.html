@@ -10,9 +10,7 @@
   <tbody>
     <tr repeat.for="taskItem of taskItems">
       <td>${taskItem.title.toUpperCase()}</td>
-      <td>
-        <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-      </td>
+      <td>${taskItem.done ? 'Done' : 'Open'}</td>
       <td>
         <button type="button" click.trigger="complete(taskItem)">Complete</button>
       </td>

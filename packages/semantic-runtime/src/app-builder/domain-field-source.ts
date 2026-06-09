@@ -1,5 +1,6 @@
 import { AppBuilderControlId } from './control-catalog.js';
 import {
+  AppBuilderDomainFieldAffordance,
   AppBuilderDomainFieldValueKind,
   appBuilderDomainFieldUsesFiniteOptions,
   type AppBuilderDomainFieldDescriptor,
@@ -25,6 +26,7 @@ export interface AppBuilderDomainFieldSourceModel {
   readonly memberName: string;
   readonly memberSegment: string;
   readonly valueKind: AppBuilderDomainFieldValueKind;
+  readonly fieldAffordance: AppBuilderDomainFieldAffordance | null;
   readonly typeScriptType: string;
   readonly controlId: AppBuilderControlId;
   readonly optionTypeName: string | null;
@@ -73,7 +75,7 @@ const APP_BUILDER_SCALAR_DOMAIN_FIELD_VALUE_POLICIES = {
   },
   [AppBuilderDomainFieldValueKind.Date]: {
     controlId: AppBuilderControlId.DateInput,
-    defaultValue: null,
+    defaultValue: '',
   },
 } satisfies Readonly<Record<Exclude<AppBuilderDomainFieldValueKind, AppBuilderDomainFieldValueKind.Choice | AppBuilderDomainFieldValueKind.ChoiceSet>, AppBuilderScalarDomainFieldValuePolicy>>;
 
@@ -97,6 +99,7 @@ export function appBuilderDomainFieldSourceModels(
       memberName: field.name,
       memberSegment,
       valueKind: field.valueKind,
+      fieldAffordance: appBuilderDomainFieldAffordance(field),
       typeScriptType: appBuilderDomainFieldTypeScriptType(fieldWithResolvedOptions, optionTypeName),
       controlId: appBuilderDomainFieldControlId(field),
       optionTypeName,
@@ -206,7 +209,7 @@ export function appBuilderDomainFieldTypeScriptType(
     case AppBuilderDomainFieldValueKind.Number:
       return 'number';
     case AppBuilderDomainFieldValueKind.Date:
-      return 'Date | null';
+      return 'string';
     case AppBuilderDomainFieldValueKind.Choice: {
       const optionValueType = optionTypeName
         ?? (field.options == null || field.options.length === 0 ? 'string' : appBuilderDomainFieldChoiceLiteralType(field));
@@ -225,12 +228,53 @@ export function appBuilderDomainFieldControlId(
   field: AppBuilderDomainFieldDescriptor,
 ): AppBuilderControlId {
   switch (field.valueKind) {
+    case AppBuilderDomainFieldValueKind.Text:
+      return appBuilderTextDomainFieldControlId(field);
     case AppBuilderDomainFieldValueKind.Choice:
       return AppBuilderControlId.SingleSelect;
     case AppBuilderDomainFieldValueKind.ChoiceSet:
       return AppBuilderControlId.MultiSelect;
     default:
       return APP_BUILDER_SCALAR_DOMAIN_FIELD_VALUE_POLICIES[field.valueKind].controlId;
+  }
+}
+
+/** Normalize field affordance to the value-kind territory where app-builder currently spends it. */
+export function appBuilderDomainFieldAffordance(
+  field: AppBuilderDomainFieldDescriptor,
+): AppBuilderDomainFieldAffordance | null {
+  return field.valueKind === AppBuilderDomainFieldValueKind.Text
+    ? field.fieldAffordance ?? AppBuilderDomainFieldAffordance.PlainText
+    : null;
+}
+
+function appBuilderTextDomainFieldControlId(
+  field: AppBuilderDomainFieldDescriptor,
+): AppBuilderControlId {
+  switch (appBuilderDomainFieldAffordance(field)) {
+    case AppBuilderDomainFieldAffordance.MultilineText:
+      return AppBuilderControlId.TextArea;
+    case AppBuilderDomainFieldAffordance.EmailAddress:
+      return AppBuilderControlId.EmailInput;
+    case AppBuilderDomainFieldAffordance.Url:
+      return AppBuilderControlId.UrlInput;
+    case AppBuilderDomainFieldAffordance.Telephone:
+      return AppBuilderControlId.TelInput;
+    case AppBuilderDomainFieldAffordance.Password:
+      return AppBuilderControlId.PasswordInput;
+    case AppBuilderDomainFieldAffordance.SearchQuery:
+      return AppBuilderControlId.SearchInput;
+    case AppBuilderDomainFieldAffordance.Time:
+      return AppBuilderControlId.TimeInput;
+    case AppBuilderDomainFieldAffordance.DateTimeLocal:
+      return AppBuilderControlId.DateTimeLocalInput;
+    case AppBuilderDomainFieldAffordance.Month:
+      return AppBuilderControlId.MonthInput;
+    case AppBuilderDomainFieldAffordance.Week:
+      return AppBuilderControlId.WeekInput;
+    case AppBuilderDomainFieldAffordance.PlainText:
+    case null:
+      return AppBuilderControlId.TextInput;
   }
 }
 
@@ -258,8 +302,8 @@ export function appBuilderDomainFieldSeedLiteral(
   field: AppBuilderDomainFieldSourceModel,
 ): string {
   const value = record?.[field.memberName] ?? appBuilderDomainFieldDefaultValue(field);
-  if (field.valueKind === AppBuilderDomainFieldValueKind.Date && typeof value === 'string') {
-    return `new Date(${singleQuotedTypeScriptStringLiteralText(value)})`;
+  if (field.valueKind === AppBuilderDomainFieldValueKind.Date && value == null) {
+    return singleQuotedTypeScriptStringLiteralText('');
   }
   return appBuilderSeedRecordLiteral(value);
 }
@@ -337,6 +381,31 @@ export function appBuilderDomainFieldDisplayExpression(
   return receiverExpression == null || receiverExpression.length === 0
     ? memberName
     : `${receiverExpression}.${memberName}`;
+}
+
+/** Template expression for href binding when a text field has a display-link affordance. */
+export function appBuilderDomainFieldDisplayHrefBindingExpression(
+  field: AppBuilderDomainFieldSourceModel,
+  displayExpression: string,
+): string | null {
+  switch (field.fieldAffordance) {
+    case AppBuilderDomainFieldAffordance.EmailAddress:
+      return `${singleQuotedTypeScriptStringLiteralText('mailto:')} + (${displayExpression})`;
+    case AppBuilderDomainFieldAffordance.Url:
+      return displayExpression;
+    case AppBuilderDomainFieldAffordance.Telephone:
+      return `${singleQuotedTypeScriptStringLiteralText('tel:')} + (${displayExpression})`;
+    case AppBuilderDomainFieldAffordance.MultilineText:
+    case AppBuilderDomainFieldAffordance.Time:
+    case AppBuilderDomainFieldAffordance.DateTimeLocal:
+    case AppBuilderDomainFieldAffordance.Month:
+    case AppBuilderDomainFieldAffordance.Week:
+    case AppBuilderDomainFieldAffordance.Password:
+    case AppBuilderDomainFieldAffordance.PlainText:
+    case AppBuilderDomainFieldAffordance.SearchQuery:
+    case null:
+      return null;
+  }
 }
 
 function appBuilderDomainFieldChoiceLiteralType(

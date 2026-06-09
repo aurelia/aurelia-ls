@@ -576,6 +576,7 @@ function componentPairServiceQueryReloadMethodSource(
   this.${queryState.resultMemberName} = queryValue === ${queryState.inactiveValueExpression}
     ? this.${componentMemberName}.${loadMethodName}()
     : this.${componentMemberName}.${queryState.filterMethodName}(queryValue);
+  return this.${queryState.resultMemberName};
 }`;
 }
 

@@ -7,8 +7,9 @@ export class FilterableServiceTaskTable {
   filterStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  showCompletedTaskItems() {
+  async showCompletedTaskItems() {
     this.taskItemsPromise = this.taskItemService.listTaskItemsByDone(true);
+    await this.taskItemsPromise;
     this.filterStatusMessage = 'Showing completed tasks.';
   }
 }

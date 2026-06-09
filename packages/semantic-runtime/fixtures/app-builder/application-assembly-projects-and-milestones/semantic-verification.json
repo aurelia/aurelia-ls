@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "application-assembly-projects-and-milestones",
   "ok": true,
-  "expectedEffects": 17,
+  "expectedEffects": 18,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder application assembly SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder application assembly SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder application assembly SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -78,12 +83,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "service-class",
-      "summary": "Application assembly service-backed route area SourcePlan should expose the generated service class. Observed 5 matching semantic fact(s)."
+      "summary": "Application assembly service-backed route area SourcePlan should expose the generated service class. Observed 6 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
       "effectKind": "service-interaction",
-      "summary": "Application assembly service-backed route area SourcePlan should expose a generated call into the service boundary. Observed 36 matching semantic fact(s)."
+      "summary": "Application assembly service-backed route area SourcePlan should expose a generated call into the service boundary. Observed 52 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -124,8 +129,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
-          "start": 525,
-          "end": 613
+          "start": 534,
+          "end": 622
         }
       }
     },
@@ -196,8 +201,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
-          "start": 252,
-          "end": 270
+          "start": 261,
+          "end": 279
         }
       }
     },
@@ -232,8 +237,8 @@
         "buttonType": "submit",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
-          "start": 304,
-          "end": 349
+          "start": 313,
+          "end": 358
         }
       }
     },
@@ -304,8 +309,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
-          "start": 1334,
-          "end": 1425
+          "start": 1275,
+          "end": 1366
         }
       }
     },
@@ -412,8 +417,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
-          "start": 390,
-          "end": 412
+          "start": 399,
+          "end": 421
         }
       }
     },
@@ -448,8 +453,8 @@
         "buttonType": "submit",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
-          "start": 571,
-          "end": 619
+          "start": 580,
+          "end": 628
         }
       }
     },
@@ -484,8 +489,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
-          "start": 1554,
-          "end": 1647
+          "start": 1478,
+          "end": 1571
         }
       }
     },
@@ -640,7 +645,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 27434,
+      "jsonLength": 37917,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -663,6 +668,12 @@
     },
     {
       "outcome": "satisfied",
+      "path": "src/app-state.ts",
+      "textLength": 1095,
+      "summary": "Generated SourcePlan file 'src/app-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
       "path": "src/routes/project-list-route.ts",
       "textLength": 301,
       "summary": "Generated SourcePlan file 'src/routes/project-list-route.ts' matches the stored app-builder request output."
@@ -670,7 +681,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/project-list-route.html",
-      "textLength": 687,
+      "textLength": 696,
       "summary": "Generated SourcePlan file 'src/routes/project-list-route.html' matches the stored app-builder request output."
     },
     {
@@ -682,7 +693,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/project-detail-route.html",
-      "textLength": 921,
+      "textLength": 841,
       "summary": "Generated SourcePlan file 'src/routes/project-detail-route.html' matches the stored app-builder request output."
     },
     {
@@ -700,7 +711,7 @@
     {
       "outcome": "satisfied",
       "path": "src/project-browse-state.ts",
-      "textLength": 980,
+      "textLength": 843,
       "summary": "Generated SourcePlan file 'src/project-browse-state.ts' matches the stored app-builder request output."
     },
     {
@@ -730,7 +741,7 @@
     {
       "outcome": "satisfied",
       "path": "src/milestone.ts",
-      "textLength": 266,
+      "textLength": 252,
       "summary": "Generated SourcePlan file 'src/milestone.ts' matches the stored app-builder request output."
     },
     {
@@ -748,7 +759,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-list-route.html",
-      "textLength": 1531,
+      "textLength": 1472,
       "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.html' matches the stored app-builder request output."
     },
     {
@@ -760,13 +771,13 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-detail-route.html",
-      "textLength": 393,
+      "textLength": 321,
       "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.html' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "src/task-item-browse-state.ts",
-      "textLength": 1205,
+      "textLength": 1068,
       "summary": "Generated SourcePlan file 'src/task-item-browse-state.ts' matches the stored app-builder request output."
     },
     {
@@ -778,7 +789,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/review-item-list-route.html",
-      "textLength": 1839,
+      "textLength": 1763,
       "summary": "Generated SourcePlan file 'src/routes/review-item-list-route.html' matches the stored app-builder request output."
     },
     {
@@ -790,7 +801,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/review-item-detail-route.html",
-      "textLength": 629,
+      "textLength": 545,
       "summary": "Generated SourcePlan file 'src/routes/review-item-detail-route.html' matches the stored app-builder request output."
     },
     {
@@ -814,14 +825,26 @@
     {
       "outcome": "satisfied",
       "path": "src/review-item-browse-state.ts",
-      "textLength": 1430,
+      "textLength": 1385,
       "summary": "Generated SourcePlan file 'src/review-item-browse-state.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 289,
+      "textLength": 444,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 303,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -838,8 +861,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 17,
-      "jsonLength": 5707,
+      "rowCount": 18,
+      "jsonLength": 6050,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -867,14 +890,14 @@
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
       "rowCount": 15,
-      "jsonLength": 14718,
+      "jsonLength": 14774,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 231,
-      "jsonLength": 107678,
+      "rowCount": 243,
+      "jsonLength": 111559,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

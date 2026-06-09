@@ -301,6 +301,87 @@ const APP_BUILDER_RECOMMENDATION_POLICY_OVERRIDES: readonly AppBuilderRecommenda
     ],
   },
   {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeEmailInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit email-address affordance or explicit email binding target.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native email inputs are browser form controls; Aurelia binding supplies the value channel.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeUrlInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit URL affordance or explicit URL binding target.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native URL inputs are browser form controls; Aurelia binding supplies the value channel.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeTelInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit telephone affordance or explicit telephone binding target.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native telephone inputs are browser form controls; Aurelia binding supplies the value channel.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativePasswordInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit secret/password affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native password inputs are browser form controls; Aurelia binding supplies the value channel.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeSearchInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit search/filter affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native search inputs are browser form controls; Aurelia binding supplies the value channel.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeTimeInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit time-of-day string affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native time inputs are browser form controls; Aurelia binding supplies the value channel as string transport.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeDateTimeLocalInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit local date-time string affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native datetime-local inputs are browser form controls; Aurelia binding supplies the value channel as string transport.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeMonthInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit month string affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native month inputs are browser form controls; Aurelia binding supplies the value channel as string transport.'),
+    ],
+  },
+  {
+    targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeWeekInput),
+    applicability: [
+      domainFieldApplicability('Text field with explicit week string affordance.'),
+    ],
+    evidence: [
+      webPlatformEvidence('Native week inputs are browser form controls; Aurelia binding supplies the value channel as string transport.'),
+    ],
+  },
+  {
     targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeNumberInput),
     applicability: [
       domainFieldApplicability('Numeric scalar field or explicit numeric binding expression.'),
@@ -313,10 +394,10 @@ const APP_BUILDER_RECOMMENDATION_POLICY_OVERRIDES: readonly AppBuilderRecommenda
   {
     targetRef: appBuilderOntologyRowRef(AppBuilderOntologyRowKind.ControlPattern, AppBuilderControlPatternId.NativeDateInput),
     applicability: [
-      domainFieldApplicability('Date-like scalar field with a domain Date/null value boundary. Formatting remains a separate display concern.'),
+      domainFieldApplicability('Date-like scalar field with a native browser date string boundary. Date-object conversion remains a separate explicit policy.'),
     ],
     evidence: [
-      webPlatformEvidence('Native date inputs are browser form controls; Aurelia value-as-date binding supplies the control value boundary.'),
+      webPlatformEvidence('Native date inputs are browser form controls; current generated source uses Aurelia value binding against the browser date string value.'),
     ],
   },
   {

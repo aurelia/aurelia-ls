@@ -119,7 +119,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appBuilderQuery,
     {
       title: 'Aurelia App Builder Query',
-      description: 'Forward a semantic-runtime app-builder query such as ontology-catalog, target-catalog, recommendation-policy, source-lowering-preflight, source-lowering-invocation, source-lowering-composition, source-lowering-source-plan, input-readiness, input-contract-detail, affordance-detail, application-pattern-detail, collection-concept-detail, control-manifest-detail, control-pattern-detail, effect-contract-detail, policy-detail, style-detail, paged part-menu, paged part-source-lowering-preview, or part-source-invocation; ontology, target, recommendation-policy, source-preflight, readiness, input-detail, affordance-detail, application-pattern-detail, collection-concept-detail, control-manifest-detail, control-pattern-detail, effect-contract-detail, policy-detail, and style-detail queries are read-only, source-lowering-source-plan requires explicit source-root/source-target-path placement through rootDir/templatePath or SourcePlacement suppliedInputs, and part menus/previews default to preferred authoring-tier rows unless exact part, package/resource-package, or explicit tier intent is supplied.',
+      description: 'Forward one semantic-runtime app-builder query. Use aurelia_app_builder_catalog for supported query kinds and then ask catalog/detail/preflight answers for field-level request contracts; this tool keeps nested envelopes compact so startup does not advertise every app-builder schema inline.',
       inputSchema: appBuilderQueryInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,

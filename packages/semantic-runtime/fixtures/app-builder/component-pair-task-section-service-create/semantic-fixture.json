@@ -24,7 +24,23 @@
       ]
     },
     {
-      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling.",
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=root-document",
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling.",
       "effectKind": "project-tooling",
       "scope": "project",
       "topologyNodeKind": "build-tool",
@@ -245,8 +261,8 @@
       "linkText": null,
       "buttonText": "Create task",
       "buttonType": "submit",
-      "labelText": null,
-      "labelTextSource": null,
+      "labelText": "Create task",
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -333,49 +349,6 @@
       "labelTextSource": "explicit-request",
       "fieldControlId": "done-field",
       "fieldControlIdSource": "selected-field-name",
-      "describedByIds": [],
-      "messageKind": null,
-      "messageText": null,
-      "messageTextSource": null,
-      "messageId": null,
-      "valueDomainExpression": null,
-      "valueDomainExpressionSource": null
-    },
-    {
-      "sourceReference": {
-        "sourceKind": "source-lowering-composition",
-        "targetRef": {
-          "kind": "application-pattern",
-          "domain": "application-pattern",
-          "id": "collection-table"
-        },
-        "compositionKind": "collection-table",
-        "fragmentKinds": [
-          "template-attribute",
-          "template-element"
-        ],
-        "fragmentCount": 3
-      },
-      "realizationPolicyId": "inline-native",
-      "controlPatternId": "native-boolean-checkbox",
-      "controlId": "checkbox",
-      "innerControlPatternId": null,
-      "fieldName": "done",
-      "actionName": null,
-      "bindingExpression": "taskItem.done",
-      "bindingExpressionSource": "selected-collection-field",
-      "handlerExpression": null,
-      "handlerExpressionSource": null,
-      "eventName": null,
-      "actionChannelKind": null,
-      "routeInstruction": null,
-      "linkText": null,
-      "buttonText": null,
-      "buttonType": null,
-      "labelText": "Done",
-      "labelTextSource": "explicit-request",
-      "fieldControlId": null,
-      "fieldControlIdSource": null,
       "describedByIds": [],
       "messageKind": null,
       "messageText": null,
@@ -623,7 +596,7 @@
         "innerControlPatternId": null
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 142
+      "fragmentTextLength": 179
     },
     {
       "rowKind": "file-artifact",
@@ -1074,16 +1047,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -1097,7 +1069,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 82
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -1111,7 +1083,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 95
+      "fragmentTextLength": 42
     },
     {
       "rowKind": "contribution",
@@ -1125,7 +1097,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 42
+      "fragmentTextLength": 167
     },
     {
       "rowKind": "contribution",
@@ -1136,20 +1108,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 24,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 223
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/service-create-task-section.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 25,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-composition",
       "contributionOrigin": {
@@ -1163,7 +1121,21 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 444
+      "fragmentTextLength": 380
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/service-create-task-section.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 25,
+      "contributionKind": "source-fragment",
+      "contributionOrigin": null,
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 436
     },
     {
       "rowKind": "contribution",
@@ -1177,7 +1149,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 504
+      "fragmentTextLength": 576
     },
     {
       "rowKind": "contribution",
@@ -1191,20 +1163,6 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 648
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/service-create-task-section.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 28,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
       "fragmentTextLength": 42
     },
     {
@@ -1215,7 +1173,7 @@
       "filePath": "src/service-create-task-section.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 29,
+      "contributionIndex": 28,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-composition",
       "contributionOrigin": {
@@ -1232,7 +1190,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 866
+      "fragmentTextLength": 790
     },
     {
       "rowKind": "contribution",
@@ -1242,7 +1200,7 @@
       "filePath": "src/service-create-task-section.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 30,
+      "contributionIndex": 29,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-composition",
       "contributionOrigin": {
@@ -1259,7 +1217,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 1453
+      "fragmentTextLength": 1373
     },
     {
       "rowKind": "file-artifact",
@@ -1281,6 +1239,17 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/runtime-html",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "aurelia",
       "dependencyVersionRange": "^2.0.0-rc.1",
       "dependencyScope": "dependency"
@@ -1292,9 +1261,51 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/vite-plugin",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "typescript",
       "dependencyVersionRange": "^6.0.3",
       "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "vite",
+      "dependencyVersionRange": "^7.0.2",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "dev",
+      "scriptCommand": "vite"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "build",
+      "scriptCommand": "vite build"
     },
     {
       "rowKind": "project-tooling-script",
@@ -1318,6 +1329,32 @@
       "hasText": true,
       "projectToolingFileKind": "package-manifest",
       "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "index.html",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "root-document",
+      "projectToolingFileLanguage": "html"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "vite.config.ts",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "build-config",
+      "projectToolingFileLanguage": "typescript"
     },
     {
       "rowKind": "project-tooling-file",

@@ -9,9 +9,7 @@
   <tbody>
     <tr repeat.for="taskItem of taskItems" class="task-table__row" data-row="task">
       <td>${taskItem.title}</td>
-      <td class="task-table__cell" data-field="done">
-        <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-      </td>
+      <td class="task-table__cell" data-field="done">${taskItem.done ? 'Done' : 'Open'}</td>
     </tr>
   </tbody>
 </table>

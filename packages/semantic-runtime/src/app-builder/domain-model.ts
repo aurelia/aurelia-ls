@@ -58,7 +58,7 @@ export enum AppBuilderDomainFieldValueKind {
   Boolean = 'boolean',
   /** Numeric scalar field. */
   Number = 'number',
-  /** Date-like field lowered through `value-as-date` and represented as `Date | null`. */
+  /** Date-like field lowered through native date-input string transport. */
   Date = 'date',
   /** One value selected from a finite caller/domain option set. */
   Choice = 'choice',
@@ -74,6 +74,47 @@ export const APP_BUILDER_DOMAIN_FIELD_VALUE_KINDS = [
   AppBuilderDomainFieldValueKind.Date,
   AppBuilderDomainFieldValueKind.Choice,
   AppBuilderDomainFieldValueKind.ChoiceSet,
+] as const;
+
+/** Semantic affordance for a field when primitive value kind is not enough to choose controls or display. */
+export enum AppBuilderDomainFieldAffordance {
+  /** Plain single-line string value with no stronger browser affordance. */
+  PlainText = 'plain-text',
+  /** Multi-line string value that should use textarea-style editing. */
+  MultilineText = 'multiline-text',
+  /** Email-address string that may use native email validation/input affordances. */
+  EmailAddress = 'email-address',
+  /** URL string that may use native URL validation/input affordances. */
+  Url = 'url',
+  /** Telephone string that may use native telephone input affordances. */
+  Telephone = 'telephone',
+  /** Secret string that should use password-style input affordances. */
+  Password = 'password',
+  /** Search/filter string that should use native search input affordances. */
+  SearchQuery = 'search-query',
+  /** Time-of-day string that should use native time input affordances. */
+  Time = 'time',
+  /** Local date-time string that should use native datetime-local input affordances. */
+  DateTimeLocal = 'datetime-local',
+  /** Month string that should use native month input affordances. */
+  Month = 'month',
+  /** Week string that should use native week input affordances. */
+  Week = 'week',
+}
+
+/** Stable value list for field-affordance transport schemas. */
+export const APP_BUILDER_DOMAIN_FIELD_AFFORDANCES = [
+  AppBuilderDomainFieldAffordance.PlainText,
+  AppBuilderDomainFieldAffordance.MultilineText,
+  AppBuilderDomainFieldAffordance.EmailAddress,
+  AppBuilderDomainFieldAffordance.Url,
+  AppBuilderDomainFieldAffordance.Telephone,
+  AppBuilderDomainFieldAffordance.Password,
+  AppBuilderDomainFieldAffordance.SearchQuery,
+  AppBuilderDomainFieldAffordance.Time,
+  AppBuilderDomainFieldAffordance.DateTimeLocal,
+  AppBuilderDomainFieldAffordance.Month,
+  AppBuilderDomainFieldAffordance.Week,
 ] as const;
 
 /** Whether a field value kind can carry finite option descriptors or needs a dynamic value domain. */
@@ -145,8 +186,8 @@ export const APP_BUILDER_DOMAIN_FIELD_VALUE_KIND_DESCRIPTORS: readonly AppBuilde
   {
     valueKind: AppBuilderDomainFieldValueKind.Date,
     title: 'Date',
-    summary: 'Date-like property lowered through value-as-date and typed as Date | null.',
-    seedDataShape: 'ISO date string or null',
+    summary: 'Date-like property lowered through native date input string transport and typed as string.',
+    seedDataShape: 'YYYY-MM-DD string, or empty string when absent',
     optionPolicy: AppBuilderDomainFieldOptionPolicy.None,
   },
   {
@@ -367,6 +408,16 @@ export interface AppBuilderNumericFieldConstraintDescriptor {
   readonly step?: number;
 }
 
+/** Text control boundary facts supplied by the caller/domain before source lowering spends them. */
+export interface AppBuilderTextFieldConstraintDescriptor {
+  /** Static minimum character count when native text controls need a lower bound. */
+  readonly minLength?: number;
+  /** Static maximum character count when native text controls need an upper bound. */
+  readonly maxLength?: number;
+  /** Native pattern attribute value for simple field-local format constraints. */
+  readonly pattern?: string;
+}
+
 /** Field supplied by a domain descriptor or caller slot before app-builder lowers source text. */
 export interface AppBuilderDomainFieldDescriptor {
   /** Entity type/name this field belongs to when a domain model supplies multiple entities. */
@@ -374,9 +425,14 @@ export interface AppBuilderDomainFieldDescriptor {
   readonly name: string;
   readonly title: string;
   readonly valueKind: AppBuilderDomainFieldValueKind;
+  /** Optional semantic affordance used when value kind alone would over-generalize text fields. */
+  readonly fieldAffordance?: AppBuilderDomainFieldAffordance;
   readonly required?: boolean;
   /** Explicit empty/draft value to emit when generated source initializes this field. */
   readonly defaultValue?: AppBuilderSeedRecordValue;
+  /** Native text constraint facts; these are not validation-library rules by themselves. */
+  readonly textConstraints?: AppBuilderTextFieldConstraintDescriptor;
+  /** Native numeric constraint facts; these are not validation-library rules by themselves. */
   readonly numericConstraints?: AppBuilderNumericFieldConstraintDescriptor;
   readonly valueSetName?: string;
   /** Explicit TypeScript alias name for one finite option value; useful when a choice-set field has a plural member name. */

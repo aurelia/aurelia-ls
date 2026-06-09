@@ -1,7 +1,7 @@
 <section class="service-search-task-section">
   <div class="service-search-task-section__search-field">
     <label for="task-search-query">Search tasks</label>
-    <input value.bind="taskItemTitleQuery" id="task-search-query">
+    <input type="search" value.bind="taskItemTitleQuery" id="task-search-query">
   </div>
   <button type="button" click.trigger="searchTaskItems()" class="service-search-task-section__search-button">Search tasks</button>
   <p if.bind="searchStatusMessage" role="status" id="task-search-status">${searchStatusMessage}</p>
@@ -22,9 +22,7 @@
           <tbody>
             <tr repeat.for="taskItem of loadedTaskItems" class="service-search-task-section__row">
               <td>${taskItem.title}</td>
-              <td>
-                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-              </td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
             </tr>
           </tbody>
         </table>

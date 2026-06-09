@@ -333,6 +333,8 @@ export enum AppBuilderSourceLoweringInvocationIssueKind {
   MissingNumericRangeConstraints = 'missing-numeric-range-constraints',
   /** Supplied numeric constraints cannot be safely spent as native number/range attributes. */
   InvalidNumericConstraints = 'invalid-numeric-constraints',
+  /** Supplied field-local constraints cannot be safely spent as native control attributes. */
+  InvalidNativeFieldConstraints = 'invalid-native-field-constraints',
   /** A choice control needs an option-domain expression and none was supplied or derivable. */
   MissingValueDomainExpression = 'missing-value-domain-expression',
   /** The caller or selected field named a value set absent from the domain-value-sets payload. */
@@ -446,6 +448,7 @@ export const APP_BUILDER_SOURCE_LOWERING_INVOCATION_ISSUE_KINDS = [
   AppBuilderSourceLoweringInvocationIssueKind.MissingDomainFieldsPayload,
   AppBuilderSourceLoweringInvocationIssueKind.MissingNumericRangeConstraints,
   AppBuilderSourceLoweringInvocationIssueKind.InvalidNumericConstraints,
+  AppBuilderSourceLoweringInvocationIssueKind.InvalidNativeFieldConstraints,
   AppBuilderSourceLoweringInvocationIssueKind.MissingValueDomainExpression,
   AppBuilderSourceLoweringInvocationIssueKind.UnknownRequestedValueSet,
   AppBuilderSourceLoweringInvocationIssueKind.AmbiguousDomainValueSet,

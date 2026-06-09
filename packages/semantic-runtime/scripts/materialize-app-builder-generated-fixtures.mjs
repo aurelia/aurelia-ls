@@ -16,11 +16,13 @@ import {
   AppBuilderCollectionDisplayRole,
   AppBuilderCollectionTableColumnDisplayKind,
   AppBuilderConventionPolicy,
+  AppBuilderControlId,
   AppBuilderControlPatternId,
   AppBuilderChoiceOptionBindingKind,
   AppBuilderDecisionBundleSource,
   AppBuilderDomainActionKind,
   AppBuilderDomainActionScope,
+  AppBuilderDomainFieldAffordance,
   AppBuilderDomainFieldValueKind,
   AppBuilderDomainIdentityValueKind,
   AppBuilderDomainModelingMode,
@@ -28,10 +30,12 @@ import {
   AppBuilderDomainRelationshipLocalValueKind,
   AppBuilderInputContractId,
   AppBuilderInputFacetId,
+  APP_BUILDER_GENERATED_FALLBACK_COPY_ROWS,
   AppBuilderOntologyDomain,
   AppBuilderOntologyRowKind,
   AppBuilderPolicySatisfactionSource,
   AppBuilderPolicySatisfactionState,
+  AppBuilderPartSlotKind,
   AppBuilderResourceCarrier,
   AppBuilderRouterAdmissionPolicy,
   AppBuilderLocalStatePolicy,
@@ -52,7 +56,10 @@ import {
   appBuilderPolicySatisfactionCandidateRow,
   appBuilderControlPatternIdForLeafControlId,
   appBuilderDomainFieldControlId,
+  appBuilderDomainFieldSourceModels,
   appBuilderRecommendationPolicyRows,
+  appBuilderSelectNativeFieldConstraints,
+  appBuilderSelectNumericControlConstraints,
   appBuilderSourceLoweringRequestFieldRegistryCoverageRows,
   appBuilderSourceLoweringRequestFieldRegistryCoverageSummary,
   appBuilderSourceLoweringRequestFieldUsageRowsFromAppBuilderRequest,
@@ -255,6 +262,8 @@ function generatedAppFixtureSpecs() {
                 fieldName: 'done',
                 header: 'Done',
                 displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+                booleanTrueText: 'Done',
+                booleanFalseText: 'Open',
               }, {
                 header: 'Open',
                 displayKind: AppBuilderCollectionTableColumnDisplayKind.Action,
@@ -385,6 +394,8 @@ function generatedAppFixtureSpecs() {
                 fieldName: 'done',
                 header: 'Done',
                 displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+                booleanTrueText: 'Done',
+                booleanFalseText: 'Open',
               }, {
                 actionName: 'openTask',
                 header: 'Open',
@@ -467,6 +478,8 @@ function generatedAppFixtureSpecs() {
                 fieldName: 'done',
                 header: 'Done',
                 displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+                booleanTrueText: 'Done',
+                booleanFalseText: 'Open',
               }, {
                 actionName: 'openReview',
                 header: 'Open',
@@ -523,6 +536,7 @@ function generatedAppFixtureSpecs() {
             taskBrowserRelationshipDomainDecision({
               actions: [openTaskAction()],
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -598,6 +612,7 @@ function generatedAppFixtureSpecs() {
                 createTaskAction({ inputFieldNames: ['title', 'done'] }),
               ],
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Create Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -658,6 +673,7 @@ function generatedAppFixtureSpecs() {
                 createTaskAction({ inputFieldNames: ['title', 'done'] }),
               ],
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Service Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -724,6 +740,7 @@ function generatedAppFixtureSpecs() {
                 createTaskAction({ inputFieldNames: ['title', 'done'] }),
               ],
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Service Vocabulary Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -820,6 +837,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -870,6 +889,160 @@ function generatedAppFixtureSpecs() {
               id: 3,
               title: 'Clear task search',
               done: false,
+            }]),
+          ])],
+        },
+      }),
+    },
+    {
+      fixtureId: 'router-backed-contact-service-search-create-browser',
+      title: 'Router-backed contact browser with service-backed search and create',
+      description: 'Routed collection/detail app that combines contact field affordances, native field constraints, service-backed search, create feedback, routed detail display links, and a runnable app shell in one generated fixture.',
+      request: sourcePlanQuery({
+        rootDir: '.',
+        includeControlUseInventoryRows: true,
+        sourceLoweringRouterBackedListDetail: {
+          targetRef: routerBackedListDetailTargetRef(),
+          actionName: 'openContact',
+          linkText: 'Open',
+          createForm: {
+            actionName: 'createContact',
+            fieldNames: ['fullName', 'email', 'websiteUrl', 'supportPhone', 'active'],
+            submitButtonText: 'Create contact',
+          },
+          serviceCollection: {
+            sourceTargetPath: 'src/services/contact-service.ts',
+            serviceClassName: 'ContactService',
+            loadMethodName: 'loadContacts',
+            findMethodName: 'loadContact',
+            createMethodName: 'createContact',
+            filterMethods: [{
+              methodName: 'searchContactsByName',
+              fieldName: 'fullName',
+              parameterName: 'query',
+              predicateKind: AppBuilderServiceCollectionFilterPredicateKind.TextContains,
+            }],
+            queryControls: [{
+              stateMemberName: 'contactNameQuery',
+              stateTypeText: 'string',
+              initialValueExpression: "''",
+              inactiveValueExpression: "''",
+              reloadMethodName: 'reloadContactsByName',
+              resultMemberName: 'contactsPromise',
+              filterMethodName: 'searchContactsByName',
+              fieldControlId: 'contact-search-query',
+              labelText: 'Search contacts',
+              applyActionName: 'searchContacts',
+              applyButtonText: 'Search contacts',
+              clearActionName: 'clearContactSearch',
+              clearButtonText: 'Clear search',
+            }],
+          },
+          includePreflight: true,
+          decisionBundles: [explicitDecisionBundle('contact-service-search-create-browser-decisions', 'contact service search create browser explicit choices', [
+            contactBrowserDomainDecision({
+              actions: [
+                openContactAction(),
+                searchContactsAction(),
+                clearContactSearchAction(),
+                createContactAction({
+                  inputFieldNames: ['fullName', 'email', 'websiteUrl', 'supportPhone', 'active'],
+                }),
+              ],
+            }),
+            collectionProjectionDecision([{
+              fieldName: 'fullName',
+              header: 'Name',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Text,
+            }, {
+              fieldName: 'email',
+              header: 'Email',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Text,
+            }, {
+              fieldName: 'websiteUrl',
+              header: 'Website',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Text,
+            }, {
+              fieldName: 'supportPhone',
+              header: 'Phone',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Text,
+            }, {
+              fieldName: 'active',
+              header: 'Status',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Active',
+              booleanFalseText: 'Inactive',
+            }, {
+              actionName: 'openContact',
+              header: 'Action',
+              displayKind: AppBuilderCollectionTableColumnDisplayKind.Action,
+            }]),
+            collectionDisplayProjectionDecision([{
+              fieldName: 'active',
+              role: AppBuilderCollectionDisplayRole.Boolean,
+              label: 'Status',
+              booleanTrueText: 'Active',
+              booleanFalseText: 'Inactive',
+            }]),
+            sourcePlacementDecision({
+              appName: 'Contact Service Search Create Browser',
+              resourceCarrier: AppBuilderResourceCarrier.Convention,
+              sourcePatternParameterValues: [{
+                key: SourcePatternParameterKey.ListRoutePath,
+                value: 'contacts',
+              }, {
+                key: SourcePatternParameterKey.DetailRouteParameter,
+                value: 'contactId',
+              }],
+            }),
+            aureliaPolicyDecision({
+              conventionPolicy: AppBuilderConventionPolicy.ConventionsEnabled,
+              routingPolicy: {
+                routerAdmission: AppBuilderRouterAdmissionPolicy.RouterConfiguration,
+                areaNavigationPolicies: [AppBuilderAreaNavigationPolicy.RouterDrivenViewSelection],
+              },
+              statePolicy: {
+                appStateOwnership: AppBuilderAppStateOwnershipMode.DiStateClass,
+                domainModeling: AppBuilderDomainModelingMode.PlainDomainComposition,
+              },
+            }),
+            interactionFeedbackDecision([{
+              actionName: 'searchContacts',
+              statusMemberName: 'searchStatusMessage',
+              statusText: 'Search applied.',
+              statusId: 'contact-search-status',
+            }, {
+              actionName: 'clearContactSearch',
+              statusMemberName: 'clearSearchStatusMessage',
+              statusText: 'Search cleared.',
+              statusId: 'contact-clear-search-status',
+            }, {
+              actionName: 'createContact',
+              statusMemberName: 'createStatusMessage',
+              statusText: 'Contact saved.',
+              statusId: 'contact-create-status',
+            }]),
+            seedDataDecision([{
+              contactId: 1,
+              fullName: 'Ada Lovelace',
+              email: 'ada@example.test',
+              websiteUrl: 'https://example.test/ada',
+              supportPhone: '+31 20 000 0001',
+              active: true,
+            }, {
+              contactId: 2,
+              fullName: 'Grace Hopper',
+              email: 'grace@example.test',
+              websiteUrl: 'https://example.test/grace',
+              supportPhone: '+31 20 000 0002',
+              active: true,
+            }, {
+              contactId: 3,
+              fullName: 'Katherine Johnson',
+              email: 'katherine@example.test',
+              websiteUrl: 'https://example.test/katherine',
+              supportPhone: '+31 20 000 0003',
+              active: false,
             }]),
           ])],
         },
@@ -961,6 +1134,7 @@ function generatedAppFixtureSpecs() {
               ],
               includeReviewers: true,
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Create Assignment Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -1047,6 +1221,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               relationshipName: 'assignee',
               header: 'Assignee',
@@ -1149,6 +1325,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1254,6 +1432,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1359,6 +1539,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1461,6 +1643,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               relationshipName: 'assignee',
               header: 'Assignee',
@@ -1577,6 +1761,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1659,6 +1845,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1772,6 +1960,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -1904,6 +2094,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Action',
@@ -2034,6 +2226,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -2102,6 +2296,7 @@ function generatedAppFixtureSpecs() {
               actions: [openTaskAction()],
               includeReviewers: true,
             }),
+            taskDoneBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Task Review Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -2179,6 +2374,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               relationshipName: 'assignee',
               header: 'Assignee',
@@ -2256,6 +2453,7 @@ function generatedAppFixtureSpecs() {
           includePreflight: true,
           decisionBundles: [explicitDecisionBundle('note-browser-decisions', 'note browser explicit choices', [
             noteDomainDecision(),
+            noteArchivedBooleanDisplayDecision(),
             sourcePlacementDecision({
               appName: 'Note Browser',
               resourceCarrier: AppBuilderResourceCarrier.Convention,
@@ -2354,19 +2552,33 @@ function generatedAppFixtureSpecs() {
               role: AppBuilderCollectionDisplayRole.Summary,
               label: 'Email',
             }, {
+              fieldName: 'websiteUrl',
+              role: AppBuilderCollectionDisplayRole.Summary,
+              label: 'Website',
+            }, {
+              fieldName: 'supportPhone',
+              role: AppBuilderCollectionDisplayRole.Summary,
+              label: 'Support Phone',
+            }, {
               fieldName: 'active',
               role: AppBuilderCollectionDisplayRole.Boolean,
               label: 'Active',
+              booleanTrueText: 'Active',
+              booleanFalseText: 'Inactive',
             }]),
             seedDataDecision([{
               contactId: 'contact-alex',
               fullName: 'Alex Morgan',
               email: 'alex@example.com',
+              websiteUrl: 'https://example.com/alex',
+              supportPhone: '+31 20 000 0001',
               active: true,
             }, {
               contactId: 'contact-riley',
               fullName: 'Riley Chen',
               email: 'riley@example.com',
+              websiteUrl: 'https://example.com/riley',
+              supportPhone: '+31 20 000 0002',
               active: false,
             }]),
           ])],
@@ -2472,6 +2684,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -2563,6 +2777,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'create',
@@ -2675,6 +2891,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -2800,6 +3018,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -2934,6 +3154,8 @@ function generatedAppFixtureSpecs() {
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalSorting,
               fieldNames: ['title'],
@@ -3182,6 +3404,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -3279,6 +3503,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalSorting,
               fieldNames: ['title'],
@@ -3439,6 +3665,8 @@ this.taskItemsPage = Math.min(this.taskItemsPage, this.taskItemsPageCount);`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -3548,6 +3776,8 @@ this.taskItemsPage = Math.min(this.taskItemsPage, this.taskItemsPageCount);`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'create',
@@ -3710,6 +3940,8 @@ this.taskItemsPage = Math.min(this.taskItemsPage, this.taskItemsPageCount);`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalSorting,
               fieldNames: ['title'],
@@ -3921,6 +4153,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -4040,6 +4274,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -4129,6 +4365,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -4222,6 +4460,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -4310,6 +4550,8 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.AppSection,
@@ -4569,6 +4811,15 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
             fieldNames: [
               'title',
               'description',
+              'contactEmail',
+              'websiteUrl',
+              'supportPhone',
+              'accessCode',
+              'filterText',
+              'appointmentTime',
+              'scheduledAtLocal',
+              'billingMonth',
+              'reviewWeek',
               'estimateHours',
               'progressPercent',
               'dueDate',
@@ -4598,7 +4849,15 @@ this.batchStatusMessage = 'Selected tasks deleted.';`,
             targetRef: domainCommandActionTargetRef(),
             actionName: 'saveDraft',
             methodBodyStatements: `this.title = this.title.trim();
-this.description = this.description.trim();`,
+this.description = this.description.trim();
+this.contactEmail = this.contactEmail.trim();
+this.websiteUrl = this.websiteUrl.trim();
+this.supportPhone = this.supportPhone.trim();
+this.appointmentTime = this.appointmentTime.trim();
+this.scheduledAtLocal = this.scheduledAtLocal.trim();
+this.billingMonth = this.billingMonth.trim();
+this.reviewWeek = this.reviewWeek.trim();
+this.filterText = this.filterText.trim();`,
           }],
         },
       }),
@@ -4859,6 +5118,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             seedDataDecision([{
               id: 1,
@@ -4917,6 +5178,8 @@ this.done = false;`,
               fieldName: 'done',
               role: AppBuilderCollectionDisplayRole.Boolean,
               label: 'Done',
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             seedDataDecision([{
               id: 1,
@@ -4975,6 +5238,8 @@ this.done = false;`,
               fieldName: 'done',
               role: AppBuilderCollectionDisplayRole.Boolean,
               label: 'Done',
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             seedDataDecision([{
               id: 1,
@@ -5033,6 +5298,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.CollectionTable,
@@ -5114,6 +5381,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.StatusRegion,
@@ -5206,6 +5475,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'refreshTaskItems',
@@ -5330,6 +5601,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'showCompletedTaskItems',
@@ -5463,6 +5736,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'create',
@@ -5597,6 +5872,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -5725,6 +6002,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -5898,6 +6177,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -6173,6 +6454,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             interactionFeedbackDecision([{
               actionName: 'searchTaskItems',
@@ -6259,7 +6542,7 @@ this.done = false;`,
                 targetRef: fieldGroupTargetRef(),
                 fieldName: 'title',
                 bindingExpression: 'taskItemTitleQuery',
-                innerControlPatternId: AppBuilderControlPatternId.NativeTextInput,
+                innerControlPatternId: AppBuilderControlPatternId.NativeSearchInput,
                 labelText: 'Search tasks',
                 fieldControlId: 'task-search-query',
               },
@@ -6372,6 +6655,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -6483,7 +6768,7 @@ this.done = false;`,
                 targetRef: fieldGroupTargetRef(),
                 fieldName: 'title',
                 bindingExpression: 'taskItemTitleQuery',
-                innerControlPatternId: AppBuilderControlPatternId.NativeTextInput,
+                innerControlPatternId: AppBuilderControlPatternId.NativeSearchInput,
                 labelText: 'Search tasks',
                 fieldControlId: 'task-search-query',
               },
@@ -6629,6 +6914,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalSorting,
               fieldNames: ['title'],
@@ -6702,6 +6989,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalFiltering,
               fieldNames: ['title'],
@@ -6773,6 +7062,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.LocalPagination,
               pageSize: 2,
@@ -6854,6 +7145,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.RowSelection,
               initiallyEnabled: true,
@@ -6931,6 +7224,8 @@ this.done = false;`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }], [{
               featureId: AppBuilderCollectionFeatureId.RowSelection,
               initiallyEnabled: true,
@@ -7029,6 +7324,8 @@ this.selectedTaskItemIds = [];`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }]),
             visualClassHooksDecision([{
               target: AppBuilderSourceLoweringVisualHookTarget.CollectionTable,
@@ -7112,6 +7409,8 @@ this.selectedTaskItemIds = [];`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'complete',
               header: 'Complete',
@@ -7195,6 +7494,8 @@ this.selectedTaskItemIds = [];`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'openTask',
               header: 'Open',
@@ -7269,6 +7570,8 @@ this.selectedTaskItemIds = [];`,
               fieldName: 'done',
               header: 'Done',
               displayKind: AppBuilderCollectionTableColumnDisplayKind.Boolean,
+              booleanTrueText: 'Done',
+              booleanFalseText: 'Open',
             }, {
               actionName: 'updateTask',
               header: 'Update',
@@ -8602,14 +8905,80 @@ function taskFieldVarietyDomainDecision({
       name: 'title',
       title: 'Title',
       valueKind: AppBuilderDomainFieldValueKind.Text,
+      required: true,
+      textConstraints: {
+        minLength: 2,
+        maxLength: 80,
+      },
     }, {
       name: 'description',
       title: 'Description',
       valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.MultilineText,
+      textConstraints: {
+        maxLength: 240,
+      },
+    }, {
+      name: 'contactEmail',
+      title: 'Contact Email',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.EmailAddress,
+      required: true,
+      defaultValue: 'owner@example.com',
+    }, {
+      name: 'websiteUrl',
+      title: 'Website URL',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Url,
+      defaultValue: 'https://example.com/task',
+    }, {
+      name: 'supportPhone',
+      title: 'Support Phone',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Telephone,
+      defaultValue: '+31 20 000 0000',
+    }, {
+      name: 'accessCode',
+      title: 'Access Code',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Password,
+      textConstraints: {
+        minLength: 8,
+      },
+    }, {
+      name: 'filterText',
+      title: 'Filter Text',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.SearchQuery,
+    }, {
+      name: 'appointmentTime',
+      title: 'Appointment Time',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Time,
+      defaultValue: '09:30',
+    }, {
+      name: 'scheduledAtLocal',
+      title: 'Scheduled At',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.DateTimeLocal,
+      defaultValue: '2026-06-07T09:30',
+    }, {
+      name: 'billingMonth',
+      title: 'Billing Month',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Month,
+      defaultValue: '2026-06',
+    }, {
+      name: 'reviewWeek',
+      title: 'Review Week',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Week,
+      defaultValue: '2026-W24',
     }, {
       name: 'estimateHours',
       title: 'Estimate Hours',
       valueKind: AppBuilderDomainFieldValueKind.Number,
+      required: true,
       numericConstraints: {
         minimum: 0,
         maximum: 40,
@@ -8817,6 +9186,46 @@ function openTaskAction() {
   };
 }
 
+function openContactAction() {
+  return {
+    name: 'openContact',
+    kind: AppBuilderDomainActionKind.Custom,
+    scope: AppBuilderDomainActionScope.Navigation,
+    targetEntityName: 'ContactEntry',
+  };
+}
+
+function createContactAction({
+  inputFieldNames,
+} = {}) {
+  return {
+    name: 'createContact',
+    kind: AppBuilderDomainActionKind.Create,
+    scope: AppBuilderDomainActionScope.Form,
+    targetEntityName: 'ContactEntry',
+    mutatesState: true,
+    ...(inputFieldNames == null ? {} : { inputFieldNames }),
+  };
+}
+
+function searchContactsAction() {
+  return {
+    name: 'searchContacts',
+    kind: AppBuilderDomainActionKind.Custom,
+    scope: AppBuilderDomainActionScope.Integration,
+    targetEntityName: 'ContactEntry',
+  };
+}
+
+function clearContactSearchAction() {
+  return {
+    name: 'clearContactSearch',
+    kind: AppBuilderDomainActionKind.Custom,
+    scope: AppBuilderDomainActionScope.Integration,
+    targetEntityName: 'ContactEntry',
+  };
+}
+
 function openProjectAction() {
   return {
     name: 'openProject',
@@ -9013,10 +9422,84 @@ function contactDomainDecision() {
       name: 'email',
       title: 'Email',
       valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.EmailAddress,
+    }, {
+      name: 'websiteUrl',
+      title: 'Website',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Url,
+    }, {
+      name: 'supportPhone',
+      title: 'Support Phone',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Telephone,
     }, {
       name: 'active',
       title: 'Active',
       valueKind: AppBuilderDomainFieldValueKind.Boolean,
+    }],
+  }]);
+}
+
+function contactBrowserDomainDecision({
+  actions = [],
+} = {}) {
+  return domainModelDecision([{
+    inputFacetId: AppBuilderInputFacetId.DomainEntities,
+    value: {
+      entityTitle: 'Contact',
+      entityTypeName: 'ContactEntry',
+      collectionMemberName: 'contacts',
+      identityMemberName: 'contactId',
+      identityValueKind: AppBuilderDomainIdentityValueKind.Number,
+    },
+  }, ...(actions.length === 0
+    ? []
+    : [{
+        inputFacetId: AppBuilderInputFacetId.DomainActions,
+        value: actions,
+      }]), {
+    inputFacetId: AppBuilderInputFacetId.DomainFields,
+    value: [{
+      name: 'fullName',
+      title: 'Full Name',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      required: true,
+      textConstraints: {
+        minLength: 2,
+        maxLength: 80,
+      },
+    }, {
+      name: 'email',
+      title: 'Email',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.EmailAddress,
+      required: true,
+      textConstraints: {
+        maxLength: 120,
+      },
+    }, {
+      name: 'websiteUrl',
+      title: 'Website',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Url,
+      textConstraints: {
+        maxLength: 160,
+      },
+    }, {
+      name: 'supportPhone',
+      title: 'Support Phone',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Telephone,
+      textConstraints: {
+        maxLength: 32,
+        pattern: '[0-9+() -]{7,}',
+      },
+    }, {
+      name: 'active',
+      title: 'Active',
+      valueKind: AppBuilderDomainFieldValueKind.Boolean,
+      defaultValue: true,
     }],
   }]);
 }
@@ -9202,6 +9685,26 @@ function collectionDisplayProjectionDecision(displayFields) {
   };
 }
 
+function taskDoneBooleanDisplayDecision() {
+  return collectionDisplayProjectionDecision([{
+    fieldName: 'done',
+    role: AppBuilderCollectionDisplayRole.Boolean,
+    label: 'Done',
+    booleanTrueText: 'Done',
+    booleanFalseText: 'Open',
+  }]);
+}
+
+function noteArchivedBooleanDisplayDecision() {
+  return collectionDisplayProjectionDecision([{
+    fieldName: 'archived',
+    role: AppBuilderCollectionDisplayRole.Boolean,
+    label: 'Archived',
+    booleanTrueText: 'Archived',
+    booleanFalseText: 'Current',
+  }]);
+}
+
 function requestWithFixtureRoot(request, fixtureRoot) {
   return {
     ...request,
@@ -9304,12 +9807,22 @@ function generatedFixtureIndexRow(spec, value, artifactMetrics) {
     controlUseInventoryRowCount: value.controlUseInventoryRows.length,
     controlUseInventoryControlPatternIds: controlUseControlPatternIds,
     controlUseInventoryLeafControlIds: controlUseLeafControlIds,
+    visibleTextReview: generatedVisibleTextReview(value.controlUseInventoryRows),
+    accessibilityReview: generatedAccessibilityReview(value.controlUseInventoryRows),
+    nativeConstraintReview: generatedNativeConstraintReview(
+      value.sourcePlan,
+      value.controlUseInventoryRows,
+      spec.request,
+    ),
     generatedControlUsePolicyRows: generatedControlUsePolicyRows(
       value.controlUseInventoryRows,
       value.sourceLoweringTargetRefs,
       spec.request,
     ),
     sourcePlanWitnessCount: value.sourcePlanWitnessRows.length,
+    handoffNoteCount: value.handoffNotes.length,
+    handoffNoteKinds: uniqueSortedStrings(value.handoffNotes.map((note) => note.kind)),
+    handoffNotes: value.handoffNotes,
     suppliedInputCount: value.suppliedInputCount,
     explicitSuppliedInputCount: value.explicitSuppliedInputCount,
     decisionBundleCount: value.decisionBundleCount,
@@ -9317,6 +9830,7 @@ function generatedFixtureIndexRow(spec, value, artifactMetrics) {
     decisionBundleInputContractIds: decisionBundleInputContractIds(spec.request),
     decisionBundleInputFacetIds: decisionBundleInputFacetIds(spec.request),
     decisionBundleInputSummaries: decisionBundleInputSummaries(spec.request),
+    callerExpressionReview: generatedCallerExpressionReview(spec.request),
     domainModelReview: domainModelReviewFromRequest(spec.fixtureId, spec.request),
     sourceLoweringRequestFieldUsageCount: sourceLoweringRequestFieldUsageRows(spec.request).length,
     sourceLoweringRequestFieldUsageIds: sourceLoweringRequestFieldUsageIds(spec.request),
@@ -9367,12 +9881,523 @@ function controlUseInventoryLeafControlIds(rows) {
   return uniqueSortedStrings(rows.map((row) => row.controlId));
 }
 
+function generatedVisibleTextReview(controlUseInventoryRows) {
+  const visibleTextRows = controlUseInventoryRows.filter(hasVisibleText);
+  const labelTextRows = controlUseInventoryRows.filter((row) => row.labelText != null);
+  const buttonTextRows = controlUseInventoryRows.filter((row) => row.buttonText != null);
+  const linkTextRows = controlUseInventoryRows.filter((row) => row.linkText != null);
+  const messageTextRows = controlUseInventoryRows.filter((row) =>
+    row.messageKind != null || row.messageText != null || row.messageTextSource != null
+  );
+  const untrackedVisibleTextCounts = {
+    labelText: labelTextRows.filter((row) => row.labelTextSource == null).length,
+    buttonText: buttonTextRows.filter((row) => row.labelTextSource == null).length,
+    linkText: linkTextRows.filter((row) => row.labelTextSource == null).length,
+    messageText: messageTextRows.filter((row) => row.messageTextSource == null).length,
+  };
+  return {
+    visibleTextRowCount: visibleTextRows.length,
+    labelTextRowCount: labelTextRows.length,
+    buttonTextRowCount: buttonTextRows.length,
+    linkTextRowCount: linkTextRows.length,
+    messageTextRowCount: messageTextRows.length,
+    messageKindCounts: countStringValues(messageTextRows.map((row) => row.messageKind).filter((value) => value != null)),
+    labelTextSourceCounts: countStringValues(labelTextRows.map((row) => row.labelTextSource).filter((value) => value != null)),
+    messageTextSourceCounts: countStringValues(messageTextRows.map((row) => row.messageTextSource).filter((value) => value != null)),
+    untrackedVisibleTextCounts,
+    untrackedVisibleTextTotal: Object.values(untrackedVisibleTextCounts).reduce((total, count) => total + count, 0),
+  };
+}
+
+function hasVisibleText(row) {
+  return row.labelText != null
+    || row.buttonText != null
+    || row.linkText != null
+    || row.messageText != null;
+}
+
+function generatedAccessibilityReview(controlUseInventoryRows) {
+  const fieldControlRows = controlUseInventoryRows.filter((row) => row.controlId != null);
+  const groupedControlRows = fieldControlRows.filter((row) => isGroupedNativeControlId(row.controlId));
+  const describedByRows = fieldControlRows.filter((row) => row.describedByIds.length > 0);
+  const messageIds = new Set(controlUseInventoryRows
+    .map((row) => row.messageId)
+    .filter((value) => typeof value === 'string' && value.length > 0));
+  const unresolvedDescribedByRows = describedByRows.flatMap((row) =>
+    row.describedByIds
+      .filter((id) => !messageIds.has(id))
+      .map((id) => ({
+        controlPatternId: row.controlPatternId,
+        controlId: row.controlId,
+        fieldName: row.fieldName,
+        describedById: id,
+      }))
+  );
+  return {
+    controlUseRowCount: controlUseInventoryRows.length,
+    fieldControlRowCount: fieldControlRows.length,
+    labeledFieldControlRowCount: fieldControlRows.filter((row) => row.labelText != null).length,
+    unlabeledFieldControlRowCount: fieldControlRows.filter((row) => row.labelText == null).length,
+    groupedControlRowCount: groupedControlRows.length,
+    groupedControlRowsWithLabelCount: groupedControlRows.filter((row) => row.labelText != null).length,
+    describedByFieldControlRowCount: describedByRows.length,
+    describedByIdCount: describedByRows.reduce((total, row) => total + row.describedByIds.length, 0),
+    messageIdCount: messageIds.size,
+    unresolvedDescribedByIdCount: unresolvedDescribedByRows.length,
+    unresolvedDescribedByRows,
+    labelTextSourceCounts: countStringValues(fieldControlRows.map((row) => row.labelTextSource).filter((value) => value != null)),
+    messageKindCounts: countStringValues(controlUseInventoryRows.map((row) => row.messageKind).filter((value) => value != null)),
+  };
+}
+
+function generatedNativeConstraintReview(sourcePlan, controlUseInventoryRows, request) {
+  const fieldModelsByName = domainFieldSourceModelsByNameFromRequest(request);
+  const expectedRows = generatedExpectedNativeConstraintRows(controlUseInventoryRows, fieldModelsByName);
+  const actualRows = generatedActualNativeConstraintRows(sourcePlan);
+  const actualRowsByControlKey = groupRowsByControlKey(actualRows);
+  const expectedRowsByControlKey = groupRowsByControlKey(expectedRows);
+  const missingRows = [];
+  const mismatchedRows = [];
+  const unexpectedRows = [];
+
+  for (const expectedRow of expectedRows) {
+    const actualCandidates = actualRowsByControlKey.get(nativeConstraintControlKey(expectedRow)) ?? [];
+    for (const [attributeName, expectedValue] of Object.entries(expectedRow.expectedAttributes)) {
+      const actualCandidate = actualCandidates.find((row) =>
+        Object.hasOwn(row.attributes, attributeName)
+      );
+      if (actualCandidate == null) {
+        missingRows.push({
+          controlId: expectedRow.controlId,
+          fieldName: expectedRow.fieldName,
+          bindingExpression: expectedRow.bindingExpression,
+          attributeName,
+          expectedValue,
+        });
+        continue;
+      }
+      const actualValue = actualCandidate.attributes[attributeName];
+      if (actualValue !== expectedValue) {
+        mismatchedRows.push({
+          controlId: expectedRow.controlId,
+          fieldName: expectedRow.fieldName,
+          bindingExpression: expectedRow.bindingExpression,
+          generatedSourcePath: actualCandidate.generatedSourcePath,
+          attributeName,
+          expectedValue,
+          actualValue,
+        });
+      }
+    }
+  }
+
+  for (const actualRow of actualRows) {
+    const expectedCandidates = expectedRowsByControlKey.get(nativeConstraintControlKey(actualRow)) ?? [];
+    for (const [attributeName, actualValue] of Object.entries(actualRow.attributes)) {
+      const expectedCandidate = expectedCandidates.find((row) =>
+        Object.hasOwn(row.expectedAttributes, attributeName)
+      );
+      if (expectedCandidate == null) {
+        unexpectedRows.push({
+          controlId: actualRow.controlId,
+          bindingExpression: actualRow.bindingExpression,
+          generatedSourcePath: actualRow.generatedSourcePath,
+          tagName: actualRow.tagName,
+          attributeName,
+          actualValue,
+        });
+      }
+    }
+  }
+
+  return {
+    expectedControlRowCount: expectedRows.length,
+    actualControlRowCount: actualRows.length,
+    expectedConstraintAttributeCount: sumNativeConstraintAttributes(expectedRows, 'expectedAttributes'),
+    actualConstraintAttributeCount: sumNativeConstraintAttributes(actualRows, 'attributes'),
+    missingConstraintAttributeCount: missingRows.length,
+    unexpectedConstraintAttributeCount: unexpectedRows.length,
+    mismatchedConstraintAttributeCount: mismatchedRows.length,
+    expectedAttributeCounts: countStringValues(expectedRows.flatMap((row) => Object.keys(row.expectedAttributes))),
+    actualAttributeCounts: countStringValues(actualRows.flatMap((row) => Object.keys(row.attributes))),
+    expectedRows,
+    actualRows,
+    missingRows,
+    unexpectedRows,
+    mismatchedRows,
+  };
+}
+
+function generatedExpectedNativeConstraintRows(controlUseInventoryRows, fieldModelsByName) {
+  const rows = [];
+  for (const controlUseRow of controlUseInventoryRows) {
+    if (
+      typeof controlUseRow.controlId !== 'string'
+      || typeof controlUseRow.fieldName !== 'string'
+      || typeof controlUseRow.bindingExpression !== 'string'
+      || !nativeConstraintReviewSpendsDomainFieldValue(controlUseRow)
+    ) {
+      continue;
+    }
+    const fieldModels = fieldModelsByName.get(controlUseRow.fieldName) ?? [];
+    const candidateAttributeRows = uniqueNativeConstraintAttributeRows(fieldModels
+      .map((fieldModel) => expectedNativeConstraintAttributes(controlUseRow.controlId, fieldModel))
+      .filter((attributes) => Object.keys(attributes).length > 0));
+    if (candidateAttributeRows.length === 0) {
+      continue;
+    }
+    const expectedAttributes = mergeNativeConstraintAttributeRows(candidateAttributeRows);
+    rows.push({
+      controlId: controlUseRow.controlId,
+      controlPatternId: controlUseRow.controlPatternId,
+      innerControlPatternId: controlUseRow.innerControlPatternId ?? null,
+      fieldName: controlUseRow.fieldName,
+      bindingExpression: controlUseRow.bindingExpression,
+      candidateFieldModelCount: fieldModels.length,
+      ambiguousConstraintSource: candidateAttributeRows.length > 1,
+      expectedAttributes,
+    });
+  }
+  return uniqueExpectedNativeConstraintRows(rows);
+}
+
+function nativeConstraintReviewSpendsDomainFieldValue(controlUseRow) {
+  return controlUseRow.bindingExpression === controlUseRow.fieldName
+    || controlUseRow.bindingExpression.endsWith(`.${controlUseRow.fieldName}`);
+}
+
+function expectedNativeConstraintAttributes(controlId, fieldModel) {
+  return nativeConstraintAttributesFromSlotAssignments([
+    ...appBuilderSelectNativeFieldConstraints(controlId, fieldModel).slotAssignments,
+    ...appBuilderSelectNumericControlConstraints(controlId, fieldModel).slotAssignments,
+  ]);
+}
+
+function nativeConstraintAttributesFromSlotAssignments(slotAssignments) {
+  const attributes = {};
+  for (const slotAssignment of slotAssignments) {
+    const attributeName = nativeConstraintAttributeNameForSlotKind(slotAssignment.slotKind);
+    if (attributeName == null) {
+      continue;
+    }
+    attributes[attributeName] = slotAssignment.slotKind === AppBuilderPartSlotKind.NativeRequired
+      ? 'true'
+      : String(slotAssignment.value);
+  }
+  return attributes;
+}
+
+function nativeConstraintAttributeNameForSlotKind(slotKind) {
+  switch (slotKind) {
+    case AppBuilderPartSlotKind.NativeRequired:
+      return 'required';
+    case AppBuilderPartSlotKind.TextMinLength:
+      return 'minlength';
+    case AppBuilderPartSlotKind.TextMaxLength:
+      return 'maxlength';
+    case AppBuilderPartSlotKind.TextPattern:
+      return 'pattern';
+    case AppBuilderPartSlotKind.NumericMinimum:
+      return 'min';
+    case AppBuilderPartSlotKind.NumericMaximum:
+      return 'max';
+    case AppBuilderPartSlotKind.NumericStep:
+      return 'step';
+    default:
+      return null;
+  }
+}
+
+function generatedActualNativeConstraintRows(sourcePlan) {
+  return sourcePlan.files.flatMap((file) =>
+    file.path.endsWith('.html')
+      ? nativeConstraintRowsFromHtmlSource(file.path, file.text?.text ?? '')
+      : []
+  );
+}
+
+function nativeConstraintRowsFromHtmlSource(generatedSourcePath, sourceText) {
+  const rows = [];
+  const tagPattern = /<(input|textarea|select)\b([^>]*)>/gim;
+  let match;
+  while ((match = tagPattern.exec(sourceText)) != null) {
+    const tagName = match[1].toLowerCase();
+    const attributes = parseGeneratedHtmlAttributes(match[2]);
+    const constraintAttributes = nativeConstraintAttributesFromHtmlAttributes(attributes);
+    if (Object.keys(constraintAttributes).length === 0) {
+      continue;
+    }
+    const controlId = nativeConstraintControlIdFromTag(tagName, attributes);
+    const bindingExpression = nativeConstraintBindingExpressionFromAttributes(attributes);
+    if (controlId == null || bindingExpression == null) {
+      rows.push({
+        generatedSourcePath,
+        tagName,
+        controlId,
+        bindingExpression,
+        attributes: constraintAttributes,
+        unmatchedReason: 'missing-control-or-binding',
+      });
+      continue;
+    }
+    rows.push({
+      generatedSourcePath,
+      tagName,
+      controlId,
+      bindingExpression,
+      attributes: constraintAttributes,
+      unmatchedReason: null,
+    });
+  }
+  return rows;
+}
+
+function parseGeneratedHtmlAttributes(rawAttributes) {
+  const attributes = {};
+  const attributePattern = /([:@A-Za-z0-9_.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+  let match;
+  while ((match = attributePattern.exec(rawAttributes)) != null) {
+    attributes[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? 'true';
+  }
+  return attributes;
+}
+
+function nativeConstraintAttributesFromHtmlAttributes(attributes) {
+  const result = {};
+  for (const attributeName of ['required', 'minlength', 'maxlength', 'pattern', 'min', 'max', 'step']) {
+    if (Object.hasOwn(attributes, attributeName)) {
+      result[attributeName] = attributeName === 'required' ? 'true' : attributes[attributeName];
+    }
+  }
+  return result;
+}
+
+function nativeConstraintBindingExpressionFromAttributes(attributes) {
+  return attributes['value.bind']
+    ?? attributes['value-as-number.bind']
+    ?? attributes['checked.bind']
+    ?? null;
+}
+
+function nativeConstraintControlIdFromTag(tagName, attributes) {
+  if (tagName === 'textarea') {
+    return AppBuilderControlId.TextArea;
+  }
+  if (tagName === 'select') {
+    return Object.hasOwn(attributes, 'multiple')
+      ? AppBuilderControlId.MultiSelect
+      : AppBuilderControlId.SingleSelect;
+  }
+  if (tagName !== 'input') {
+    return null;
+  }
+  switch ((attributes.type ?? 'text').toLowerCase()) {
+    case 'text':
+      return AppBuilderControlId.TextInput;
+    case 'email':
+      return AppBuilderControlId.EmailInput;
+    case 'url':
+      return AppBuilderControlId.UrlInput;
+    case 'tel':
+      return AppBuilderControlId.TelInput;
+    case 'password':
+      return AppBuilderControlId.PasswordInput;
+    case 'search':
+      return AppBuilderControlId.SearchInput;
+    case 'time':
+      return AppBuilderControlId.TimeInput;
+    case 'datetime-local':
+      return AppBuilderControlId.DateTimeLocalInput;
+    case 'month':
+      return AppBuilderControlId.MonthInput;
+    case 'week':
+      return AppBuilderControlId.WeekInput;
+    case 'number':
+      return AppBuilderControlId.NumberInput;
+    case 'date':
+      return AppBuilderControlId.DateInput;
+    case 'range':
+      return AppBuilderControlId.RangeInput;
+    case 'checkbox':
+      return AppBuilderControlId.Checkbox;
+    case 'radio':
+      return AppBuilderControlId.RadioGroup;
+    default:
+      return null;
+  }
+}
+
+function domainFieldSourceModelsByNameFromRequest(request) {
+  const fields = decisionFacetPayloadValues(request, AppBuilderInputFacetId.DomainFields).flatMap(normalizeReviewArray);
+  const valueSets = decisionFacetPayloadValues(request, AppBuilderInputFacetId.DomainValueSets).flatMap(normalizeReviewArray);
+  const fieldModelsByName = new Map();
+  for (const fieldModel of appBuilderDomainFieldSourceModels(fields, { valueSets })) {
+    const existing = fieldModelsByName.get(fieldModel.memberName) ?? [];
+    existing.push(fieldModel);
+    fieldModelsByName.set(fieldModel.memberName, existing);
+  }
+  return fieldModelsByName;
+}
+
+function uniqueNativeConstraintAttributeRows(attributeRows) {
+  const rowsByKey = new Map();
+  for (const attributeRow of attributeRows) {
+    rowsByKey.set(stableNativeConstraintAttributeKey(attributeRow), attributeRow);
+  }
+  return [...rowsByKey.values()];
+}
+
+function uniqueExpectedNativeConstraintRows(rows) {
+  const rowsByKey = new Map();
+  for (const row of rows) {
+    rowsByKey.set(`${nativeConstraintControlKey(row)}:${stableNativeConstraintAttributeKey(row.expectedAttributes)}`, row);
+  }
+  return [...rowsByKey.values()];
+}
+
+function mergeNativeConstraintAttributeRows(attributeRows) {
+  const result = {};
+  for (const attributeRow of attributeRows) {
+    for (const [attributeName, value] of Object.entries(attributeRow)) {
+      result[attributeName] = value;
+    }
+  }
+  return result;
+}
+
+function stableNativeConstraintAttributeKey(attributes) {
+  return Object.entries(attributes)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}:${value}`)
+    .join('|');
+}
+
+function groupRowsByControlKey(rows) {
+  const rowsByKey = new Map();
+  for (const row of rows) {
+    const key = nativeConstraintControlKey(row);
+    const existing = rowsByKey.get(key) ?? [];
+    existing.push(row);
+    rowsByKey.set(key, existing);
+  }
+  return rowsByKey;
+}
+
+function nativeConstraintControlKey(row) {
+  return `${row.controlId ?? ''}:${row.bindingExpression ?? ''}`;
+}
+
+function sumNativeConstraintAttributes(rows, attributeFieldName) {
+  return rows.reduce((total, row) => total + Object.keys(row[attributeFieldName] ?? {}).length, 0);
+}
+
+function isGroupedNativeControlId(controlId) {
+  return controlId === AppBuilderControlId.CheckboxList
+    || controlId === AppBuilderControlId.RadioGroup;
+}
+
 function sourceLoweringRequestFieldUsageIds(request) {
   return uniqueSortedStrings(sourceLoweringRequestFieldUsageRows(request).map((row) => row.fieldId));
 }
 
 function sourceLoweringRequestFieldUsageRows(request) {
   return appBuilderSourceLoweringRequestFieldUsageRowsFromAppBuilderRequest(request);
+}
+
+function generatedCallerExpressionReview(request) {
+  const rows = [];
+  collectGeneratedCallerExpressionReviewRows(request, '$', rows);
+  return {
+    expressionCount: rows.length,
+    expressionFieldCounts: countStringValues(rows.map((row) => row.fieldName)),
+    expressionShapeCounts: countStringValues(rows.map((row) => row.expressionShape)),
+    expressionsWithCallSyntaxCount: rows.filter((row) => row.containsCallSyntax).length,
+    expressionsWithOperatorSyntaxCount: rows.filter((row) => row.containsOperatorSyntax).length,
+    rows,
+  };
+}
+
+function collectGeneratedCallerExpressionReviewRows(value, requestPath, rows) {
+  if (value == null) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectGeneratedCallerExpressionReviewRows(item, `${requestPath}[${index}]`, rows));
+    return;
+  }
+  if (typeof value !== 'object') {
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const childPath = `${requestPath}.${key}`;
+    if (isGeneratedCallerExpressionFieldName(key)) {
+      collectGeneratedCallerExpressionValueRows(item, childPath, key, rows);
+    }
+    collectGeneratedCallerExpressionReviewRows(item, childPath, rows);
+  }
+}
+
+function collectGeneratedCallerExpressionValueRows(value, requestPath, fieldName, rows) {
+  if (typeof value === 'string') {
+    rows.push(generatedCallerExpressionReviewRow(requestPath, fieldName, value));
+    return;
+  }
+  if (!Array.isArray(value)) {
+    return;
+  }
+  value.forEach((item, index) => {
+    if (typeof item === 'string') {
+      rows.push(generatedCallerExpressionReviewRow(`${requestPath}[${index}]`, fieldName, item));
+    }
+  });
+}
+
+function generatedCallerExpressionReviewRow(requestPath, fieldName, expressionText) {
+  return {
+    requestPath,
+    fieldName,
+    expressionText,
+    expressionShape: generatedCallerExpressionShape(expressionText),
+    containsCallSyntax: /\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/.test(expressionText),
+    containsOperatorSyntax: generatedCallerExpressionContainsOperatorSyntax(expressionText),
+  };
+}
+
+function isGeneratedCallerExpressionFieldName(fieldName) {
+  return fieldName === 'bindingExpression'
+    || fieldName === 'handlerExpression'
+    || fieldName.endsWith('Expression')
+    || fieldName.endsWith('Expressions');
+}
+
+function generatedCallerExpressionShape(expressionText) {
+  const text = expressionText.trim();
+  if (/^'[^']*'$/.test(text) || /^"[^"]*"$/.test(text)) {
+    return 'literal-string';
+  }
+  if (/^(true|false|null|undefined)$/.test(text)) {
+    return 'literal-primitive';
+  }
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) {
+    return 'literal-number';
+  }
+  if (/^\{\s*[A-Za-z_$][\w$]*\s*:/.test(text)) {
+    return 'object-literal-text';
+  }
+  if (/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(text)) {
+    return 'identifier-or-member';
+  }
+  if (/\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/.test(text)) {
+    return 'call-containing';
+  }
+  if (generatedCallerExpressionContainsOperatorSyntax(text)) {
+    return 'operator-containing';
+  }
+  return 'other-expression';
+}
+
+function generatedCallerExpressionContainsOperatorSyntax(expressionText) {
+  return /(?:\?|\+|-|\*|\/|===|!==|==|!=|>=|<=|>|<|&&|\|\|)/.test(expressionText);
 }
 
 function decisionBundleInputSummaries(request) {
@@ -9586,13 +10611,26 @@ async function writeGeneratedFixtureIndex(rows) {
   const policySatisfactionCandidateCoverageRows = generatedPolicySatisfactionCandidateCoverageRows(rows);
   const domainModelCoverageRows = rows.map((row) => row.domainModelReview);
   const domainModelCoverageSummary = generatedDomainModelCoverageSummary(domainModelCoverageRows);
+  const visibleTextOwnershipSummary = generatedVisibleTextOwnershipSummary(rows);
+  const accessibilityReviewSummary = generatedAccessibilityReviewSummary(rows);
+  const nativeConstraintReviewSummary = generatedNativeConstraintReviewSummary(rows);
+  const callerExpressionReviewRows = generatedCallerExpressionReviewRows(rows);
+  assertGeneratedVisibleTextSourceClassification(rows, visibleTextOwnershipSummary);
+  assertGeneratedAccessibilityReview(rows, accessibilityReviewSummary);
+  assertGeneratedNativeConstraintReview(rows, nativeConstraintReviewSummary);
   const index = {
-    schemaVersion: 'app-builder-generated-fixture-index.v4',
+    schemaVersion: 'app-builder-generated-fixture-index.v7',
     fixtureRole: 'app-builder-generated-app-contract-index',
     generatedBy: 'packages/semantic-runtime/scripts/materialize-app-builder-generated-fixtures.mjs',
     summary: 'Review index for generated app-builder fixture requests, outputs, semantic manifests, and source-lowering coverage.',
     fixtureCount: rows.length,
     reviewArtifactByteCountSummary: generatedFixtureReviewArtifactByteCountSummary(rows),
+    visibleTextOwnershipSummary,
+    accessibilityReviewSummary,
+    nativeConstraintReviewSummary,
+    callerExpressionReviewSummary: generatedCallerExpressionReviewSummary(rows, callerExpressionReviewRows),
+    callerExpressionReviewRows,
+    generatedFallbackCopyRows: APP_BUILDER_GENERATED_FALLBACK_COPY_ROWS,
     domainModelCoverageSummary,
     domainModelKindCoverageSummary: generatedDomainModelKindCoverageSummary(domainModelCoverageSummary),
     domainModelCoverageRows,
@@ -9618,6 +10656,40 @@ async function writeGeneratedFixtureIndex(rows) {
   );
 }
 
+function assertGeneratedVisibleTextSourceClassification(rows, summary) {
+  if (summary.untrackedVisibleTextTotal === 0) {
+    return;
+  }
+  const offenders = rows
+    .filter((row) => row.visibleTextReview.untrackedVisibleTextTotal > 0)
+    .map((row) => `${row.fixtureId}:${JSON.stringify(row.visibleTextReview.untrackedVisibleTextCounts)}`)
+    .join(', ');
+  throw new Error(
+    `Generated app-builder fixtures include control-use visible text without source classification: ${offenders}.`
+  );
+}
+
+function assertGeneratedAccessibilityReview(rows, summary) {
+  if (
+    summary.unlabeledFieldControlRowCount === 0
+    && summary.unlabeledGroupedControlRowCount === 0
+    && summary.unresolvedDescribedByIdCount === 0
+  ) {
+    return;
+  }
+  const offenders = rows
+    .filter((row) =>
+      row.accessibilityReview.unlabeledFieldControlRowCount > 0
+      || row.accessibilityReview.unresolvedDescribedByIdCount > 0
+      || row.accessibilityReview.groupedControlRowsWithLabelCount < row.accessibilityReview.groupedControlRowCount
+    )
+    .map((row) => `${row.fixtureId}:unlabeled=${row.accessibilityReview.unlabeledFieldControlRowCount},grouped=${row.accessibilityReview.groupedControlRowsWithLabelCount}/${row.accessibilityReview.groupedControlRowCount},unresolvedDescribedBy=${row.accessibilityReview.unresolvedDescribedByIdCount}`)
+    .join(', ');
+  throw new Error(
+    `Generated app-builder fixtures violate lean accessibility review invariants: ${offenders}.`
+  );
+}
+
 function generatedFixtureMarkdownIndex(index) {
   const lines = [
     '# App-Builder Generated Fixture Index',
@@ -9637,6 +10709,14 @@ function generatedFixtureMarkdownIndex(index) {
     `- Domain action kinds covered: ${index.domainModelKindCoverageSummary.actionKinds.coveredKindCount}/${index.domainModelKindCoverageSummary.actionKinds.kindCount}`,
     `- Domain action scopes covered: ${index.domainModelKindCoverageSummary.actionScopes.coveredKindCount}/${index.domainModelKindCoverageSummary.actionScopes.kindCount}`,
     `- Domain relationship kinds covered: ${index.domainModelKindCoverageSummary.relationshipKinds.coveredKindCount}/${index.domainModelKindCoverageSummary.relationshipKinds.kindCount}`,
+    `- Visible text rows: ${index.visibleTextOwnershipSummary.visibleTextRowCount}`,
+    `- Visible text without source classification: ${index.visibleTextOwnershipSummary.untrackedVisibleTextTotal}`,
+    `- Field controls with labels: ${index.accessibilityReviewSummary.labeledFieldControlRowCount}/${index.accessibilityReviewSummary.fieldControlRowCount}`,
+    `- Grouped controls with legends/labels: ${index.accessibilityReviewSummary.groupedControlRowsWithLabelCount}/${index.accessibilityReviewSummary.groupedControlRowCount}`,
+    `- Unresolved aria-describedby ids: ${index.accessibilityReviewSummary.unresolvedDescribedByIdCount}`,
+    `- Native field-constraint attributes: expected=${index.nativeConstraintReviewSummary.expectedConstraintAttributeCount}, actual=${index.nativeConstraintReviewSummary.actualConstraintAttributeCount}, missing=${index.nativeConstraintReviewSummary.missingConstraintAttributeCount}, unexpected=${index.nativeConstraintReviewSummary.unexpectedConstraintAttributeCount}, mismatched=${index.nativeConstraintReviewSummary.mismatchedConstraintAttributeCount}`,
+    `- Caller expression payloads: ${index.callerExpressionReviewSummary.expressionCount}; call syntax=${index.callerExpressionReviewSummary.expressionsWithCallSyntaxCount}, operator syntax=${index.callerExpressionReviewSummary.expressionsWithOperatorSyntaxCount}`,
+    `- Generated fallback copy rows: ${index.generatedFallbackCopyRows.length}`,
     `- Generated source/tooling bytes: ${index.reviewArtifactByteCountSummary.generatedSourceAndProjectToolingTextTotal}`,
     '',
     '## Fixtures',
@@ -9650,6 +10730,20 @@ function generatedFixtureMarkdownIndex(index) {
     ...index.fixtureSummaryRows.flatMap((row) => generatedFixtureMarkdownDetailLines(row)),
     '',
     '## Coverage',
+    '',
+    `- Visible text source rows: labels=${index.visibleTextOwnershipSummary.labelTextRowCount}, buttons=${index.visibleTextOwnershipSummary.buttonTextRowCount}, links=${index.visibleTextOwnershipSummary.linkTextRowCount}, messages=${index.visibleTextOwnershipSummary.messageTextRowCount}`,
+    `- Label text sources: ${markdownCountObject(index.visibleTextOwnershipSummary.labelTextSourceCounts)}`,
+    `- Message kinds: ${markdownCountObject(index.visibleTextOwnershipSummary.messageKindCounts)}`,
+    `- Message text sources: ${markdownCountObject(index.visibleTextOwnershipSummary.messageTextSourceCounts)}`,
+    `- Untracked visible text: ${markdownCountObject(index.visibleTextOwnershipSummary.untrackedVisibleTextCounts)}`,
+    `- Generated fallback copy: ${index.generatedFallbackCopyRows.map((row) => `${markdownCode(row.id)}=${markdownEscape(row.text)}`).join(', ')}`,
+    `- Accessibility field controls: labeled=${index.accessibilityReviewSummary.labeledFieldControlRowCount}/${index.accessibilityReviewSummary.fieldControlRowCount}, unlabeled=${index.accessibilityReviewSummary.unlabeledFieldControlRowCount}`,
+    `- Accessibility grouped controls: labeled=${index.accessibilityReviewSummary.groupedControlRowsWithLabelCount}/${index.accessibilityReviewSummary.groupedControlRowCount}, unlabeled=${index.accessibilityReviewSummary.unlabeledGroupedControlRowCount}`,
+    `- Accessibility described-by: rows=${index.accessibilityReviewSummary.describedByFieldControlRowCount}, ids=${index.accessibilityReviewSummary.describedByIdCount}, unresolved=${index.accessibilityReviewSummary.unresolvedDescribedByIdCount}`,
+    `- Native field constraints: expected=${index.nativeConstraintReviewSummary.expectedConstraintAttributeCount}, actual=${index.nativeConstraintReviewSummary.actualConstraintAttributeCount}, missing=${index.nativeConstraintReviewSummary.missingConstraintAttributeCount}, unexpected=${index.nativeConstraintReviewSummary.unexpectedConstraintAttributeCount}, mismatched=${index.nativeConstraintReviewSummary.mismatchedConstraintAttributeCount}`,
+    `- Native field constraint attributes: expected ${markdownCountObject(index.nativeConstraintReviewSummary.expectedAttributeCounts)}, actual ${markdownCountObject(index.nativeConstraintReviewSummary.actualAttributeCounts)}`,
+    `- Caller expression fields: ${markdownCountObject(index.callerExpressionReviewSummary.expressionFieldCounts)}`,
+    `- Caller expression shapes: ${markdownCountObject(index.callerExpressionReviewSummary.expressionShapeCounts)}`,
     '',
     `- Domain entities: ${markdownCodeList(index.domainModelCoverageSummary.entityTypeNames)}`,
     `- Domain identity kinds: ${markdownCountObject(index.domainModelCoverageSummary.identityValueKindCounts)}`,
@@ -9675,6 +10769,12 @@ function generatedFixtureMarkdownIndex(index) {
     '### Request-Field Review Rows',
     '',
     ...generatedFixtureMarkdownRequestFieldReviewLines(index.sourceLoweringRequestFieldReviewRows),
+    '',
+    '### Caller Expression Review Rows',
+    '',
+    'Caller expression rows are explicit app-builder request payloads. This projection exists so generated fixtures that contain calls or operators can be reviewed as caller-owned source decisions rather than mistaken for app-builder defaults.',
+    '',
+    ...generatedFixtureMarkdownCallerExpressionReviewLines(index.callerExpressionReviewRows),
     '',
     `- Policy-satisfaction states: ${markdownCountObject(index.policySatisfactionCandidateCoverageSummary.satisfactionStateCounts)}`,
     `- Policy-satisfaction sources: ${markdownCountObject(index.policySatisfactionCandidateCoverageSummary.satisfactionSourceCounts)}`,
@@ -9703,6 +10803,23 @@ function generatedFixtureMarkdownRequestFieldReviewLines(rows) {
       markdownCode(row.reviewDisposition),
       markdownEscape(row.summary),
       markdownEscape(row.nextReview),
+    ].join(' | ').replace(/^/, '| ').replace(/$/, ' |')),
+  ];
+}
+
+function generatedFixtureMarkdownCallerExpressionReviewLines(rows) {
+  if (rows.length === 0) {
+    return ['(none)'];
+  }
+  return [
+    '| fixture | field | shape | request path | expression |',
+    '| --- | --- | --- | --- | --- |',
+    ...rows.map((row) => [
+      markdownCode(row.fixtureId),
+      markdownCode(row.fieldName),
+      markdownCode(row.expressionShape),
+      markdownCode(row.requestPath),
+      markdownCode(row.expressionText),
     ].join(' | ').replace(/^/, '| ').replace(/$/, ' |')),
   ];
 }
@@ -9806,6 +10923,12 @@ function generatedFixtureMarkdownDetailLines(row) {
     `- Control-use rows: ${row.controlUseInventoryRowCount}`,
     `- Control patterns: ${markdownCodeList(row.controlUseInventoryControlPatternIds)}`,
     `- Leaf controls: ${markdownCodeList(row.controlUseInventoryLeafControlIds)}`,
+    `- Visible text rows: ${row.visibleTextReview.visibleTextRowCount}; untracked=${row.visibleTextReview.untrackedVisibleTextTotal}`,
+    `- Label text sources: ${markdownCountObject(row.visibleTextReview.labelTextSourceCounts)}`,
+    `- Message text sources: ${markdownCountObject(row.visibleTextReview.messageTextSourceCounts)}`,
+    `- Accessibility: field labels=${row.accessibilityReview.labeledFieldControlRowCount}/${row.accessibilityReview.fieldControlRowCount}, grouped labels=${row.accessibilityReview.groupedControlRowsWithLabelCount}/${row.accessibilityReview.groupedControlRowCount}, described-by unresolved=${row.accessibilityReview.unresolvedDescribedByIdCount}`,
+    `- Native constraints: expected=${row.nativeConstraintReview.expectedConstraintAttributeCount}, actual=${row.nativeConstraintReview.actualConstraintAttributeCount}, missing=${row.nativeConstraintReview.missingConstraintAttributeCount}, unexpected=${row.nativeConstraintReview.unexpectedConstraintAttributeCount}, mismatched=${row.nativeConstraintReview.mismatchedConstraintAttributeCount}`,
+    `- Caller expression payloads: ${row.callerExpressionReview.expressionCount}; shapes=${markdownCountObject(row.callerExpressionReview.expressionShapeCounts)}`,
     `- Generated-control recommendation statuses: ${markdownCodeList(row.generatedControlUseRecommendationStatuses)}`,
     `- Generated-control policy satisfaction: ${markdownCountObject(row.generatedControlUsePolicySatisfactionCounts.stateCounts)}`,
     `- Decision-bundle input contracts: ${markdownCodeList(row.decisionBundleInputContractIds)}`,
@@ -9816,6 +10939,7 @@ function generatedFixtureMarkdownDetailLines(row) {
     `- Domain action kinds: ${markdownCountObject(row.domainModelReview.actionKindCounts)}`,
     `- Seed records: ${row.domainModelReview.seedRecordCount}`,
     `- Request fields: ${markdownCodeList(row.sourceLoweringRequestFieldUsageIds)}`,
+    `- Handoff notes: ${row.handoffNoteCount} total; ${markdownCodeList(row.handoffNoteKinds)}`,
     `- Expected effects: ${row.expectedEffectCount} total; ${markdownCodeList(row.expectedEffectKinds)}`,
     `- Review artifacts: ${markdownLink('request', row.appBuilderRequestPath)}, ${markdownLink('response', row.appBuilderResponsePath)}, ${markdownLink('manifest', row.semanticFixturePath)}, ${markdownLink('verification', row.semanticVerificationPath)}`,
     '',
@@ -9925,11 +11049,17 @@ function generatedFixtureSummaryRows(rows) {
     decisionBundleInputFacetIds: row.decisionBundleInputFacetIds,
     domainModelReview: row.domainModelReview,
     sourceLoweringRequestFieldUsageIds: row.sourceLoweringRequestFieldUsageIds,
+    handoffNoteCount: row.handoffNoteCount,
+    handoffNoteKinds: row.handoffNoteKinds,
     expectedEffectKinds: row.expectedEffectKinds,
     expectedEffectCount: row.expectedEffectCount,
     controlUseInventoryRowCount: row.controlUseInventoryRowCount,
     controlUseInventoryControlPatternIds: row.controlUseInventoryControlPatternIds,
     controlUseInventoryLeafControlIds: row.controlUseInventoryLeafControlIds,
+    visibleTextReview: row.visibleTextReview,
+    accessibilityReview: row.accessibilityReview,
+    nativeConstraintReview: row.nativeConstraintReview,
+    callerExpressionReview: row.callerExpressionReview,
   }));
 }
 
@@ -9971,6 +11101,113 @@ function mergeCountObjects(countObjects) {
     }
   }
   return Object.fromEntries([...counts.entries()].sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function generatedVisibleTextOwnershipSummary(rows) {
+  const reviews = rows.map((row) => row.visibleTextReview);
+  return {
+    fixtureCount: rows.length,
+    fixturesWithVisibleText: reviews.filter((review) => review.visibleTextRowCount > 0).length,
+    fixturesWithUntrackedVisibleText: reviews.filter((review) => review.untrackedVisibleTextTotal > 0).length,
+    visibleTextRowCount: sumReviewField(reviews, 'visibleTextRowCount'),
+    labelTextRowCount: sumReviewField(reviews, 'labelTextRowCount'),
+    buttonTextRowCount: sumReviewField(reviews, 'buttonTextRowCount'),
+    linkTextRowCount: sumReviewField(reviews, 'linkTextRowCount'),
+    messageTextRowCount: sumReviewField(reviews, 'messageTextRowCount'),
+    untrackedVisibleTextTotal: sumReviewField(reviews, 'untrackedVisibleTextTotal'),
+    untrackedVisibleTextCounts: mergeCountObjects(reviews.map((review) => review.untrackedVisibleTextCounts)),
+    labelTextSourceCounts: mergeCountObjects(reviews.map((review) => review.labelTextSourceCounts)),
+    messageKindCounts: mergeCountObjects(reviews.map((review) => review.messageKindCounts)),
+    messageTextSourceCounts: mergeCountObjects(reviews.map((review) => review.messageTextSourceCounts)),
+  };
+}
+
+function generatedAccessibilityReviewSummary(rows) {
+  const reviews = rows.map((row) => row.accessibilityReview);
+  return {
+    fixtureCount: rows.length,
+    fixturesWithFieldControls: reviews.filter((review) => review.fieldControlRowCount > 0).length,
+    fixturesWithUnlabeledFieldControls: reviews.filter((review) => review.unlabeledFieldControlRowCount > 0).length,
+    fixturesWithUnresolvedDescribedByIds: reviews.filter((review) => review.unresolvedDescribedByIdCount > 0).length,
+    fieldControlRowCount: sumReviewField(reviews, 'fieldControlRowCount'),
+    labeledFieldControlRowCount: sumReviewField(reviews, 'labeledFieldControlRowCount'),
+    unlabeledFieldControlRowCount: sumReviewField(reviews, 'unlabeledFieldControlRowCount'),
+    groupedControlRowCount: sumReviewField(reviews, 'groupedControlRowCount'),
+    groupedControlRowsWithLabelCount: sumReviewField(reviews, 'groupedControlRowsWithLabelCount'),
+    unlabeledGroupedControlRowCount: reviews.reduce((total, review) =>
+      total + Math.max(0, review.groupedControlRowCount - review.groupedControlRowsWithLabelCount),
+    0),
+    describedByFieldControlRowCount: sumReviewField(reviews, 'describedByFieldControlRowCount'),
+    describedByIdCount: sumReviewField(reviews, 'describedByIdCount'),
+    messageIdCount: sumReviewField(reviews, 'messageIdCount'),
+    unresolvedDescribedByIdCount: sumReviewField(reviews, 'unresolvedDescribedByIdCount'),
+    labelTextSourceCounts: mergeCountObjects(reviews.map((review) => review.labelTextSourceCounts)),
+    messageKindCounts: mergeCountObjects(reviews.map((review) => review.messageKindCounts)),
+  };
+}
+
+function generatedNativeConstraintReviewSummary(rows) {
+  const reviews = rows.map((row) => row.nativeConstraintReview);
+  return {
+    fixtureCount: rows.length,
+    fixturesWithExpectedNativeConstraints: reviews.filter((review) => review.expectedControlRowCount > 0).length,
+    fixturesWithActualNativeConstraints: reviews.filter((review) => review.actualControlRowCount > 0).length,
+    expectedControlRowCount: sumReviewField(reviews, 'expectedControlRowCount'),
+    actualControlRowCount: sumReviewField(reviews, 'actualControlRowCount'),
+    expectedConstraintAttributeCount: sumReviewField(reviews, 'expectedConstraintAttributeCount'),
+    actualConstraintAttributeCount: sumReviewField(reviews, 'actualConstraintAttributeCount'),
+    missingConstraintAttributeCount: sumReviewField(reviews, 'missingConstraintAttributeCount'),
+    unexpectedConstraintAttributeCount: sumReviewField(reviews, 'unexpectedConstraintAttributeCount'),
+    mismatchedConstraintAttributeCount: sumReviewField(reviews, 'mismatchedConstraintAttributeCount'),
+    expectedAttributeCounts: mergeCountObjects(reviews.map((review) => review.expectedAttributeCounts)),
+    actualAttributeCounts: mergeCountObjects(reviews.map((review) => review.actualAttributeCounts)),
+  };
+}
+
+function generatedCallerExpressionReviewSummary(rows, expressionRows) {
+  return {
+    fixtureCount: rows.length,
+    fixturesWithExpressions: rows.filter((row) => row.callerExpressionReview.expressionCount > 0).length,
+    expressionCount: expressionRows.length,
+    expressionsWithCallSyntaxCount: expressionRows.filter((row) => row.containsCallSyntax).length,
+    expressionsWithOperatorSyntaxCount: expressionRows.filter((row) => row.containsOperatorSyntax).length,
+    expressionFieldCounts: countStringValues(expressionRows.map((row) => row.fieldName)),
+    expressionShapeCounts: countStringValues(expressionRows.map((row) => row.expressionShape)),
+  };
+}
+
+function generatedCallerExpressionReviewRows(rows) {
+  return rows.flatMap((row) =>
+    row.callerExpressionReview.rows.map((expressionRow) => ({
+      fixtureId: row.fixtureId,
+      ...expressionRow,
+    }))
+  );
+}
+
+function assertGeneratedNativeConstraintReview(rows, summary) {
+  if (
+    summary.missingConstraintAttributeCount === 0
+    && summary.unexpectedConstraintAttributeCount === 0
+    && summary.mismatchedConstraintAttributeCount === 0
+  ) {
+    return;
+  }
+  const offenders = rows
+    .filter((row) =>
+      row.nativeConstraintReview.missingConstraintAttributeCount > 0
+      || row.nativeConstraintReview.unexpectedConstraintAttributeCount > 0
+      || row.nativeConstraintReview.mismatchedConstraintAttributeCount > 0
+    )
+    .map((row) => `${row.fixtureId}:missing=${row.nativeConstraintReview.missingConstraintAttributeCount},unexpected=${row.nativeConstraintReview.unexpectedConstraintAttributeCount},mismatched=${row.nativeConstraintReview.mismatchedConstraintAttributeCount}`)
+    .join(', ');
+  throw new Error(
+    `Generated app-builder fixtures have native field-constraint source mismatches: ${offenders}.`
+  );
+}
+
+function sumReviewField(rows, fieldName) {
+  return rows.reduce((total, row) => total + (row[fieldName] ?? 0), 0);
 }
 
 function generatedFixtureReviewArtifactByteCountSummary(rows) {
@@ -10059,6 +11296,20 @@ function generatedControlUsePolicySatisfactionSourcesByPatternId(controlUseInven
       sources.set(controlPatternId, AppBuilderPolicySatisfactionSource.DomainFieldControlInput);
     }
   }
+
+  const collectionQueryControlPatternIds = collectionQueryControlPatternIdsFromGeneratedUses(controlUseInventoryRows, request);
+  for (const controlPatternId of collectionQueryControlPatternIds) {
+    if (!sources.has(controlPatternId)) {
+      sources.set(controlPatternId, AppBuilderPolicySatisfactionSource.CollectionQueryControlInput);
+    }
+  }
+
+  const feedbackMessagePatternIds = feedbackMessagePatternIdsFromGeneratedUses(controlUseInventoryRows, request);
+  for (const controlPatternId of feedbackMessagePatternIds) {
+    if (!sources.has(controlPatternId)) {
+      sources.set(controlPatternId, AppBuilderPolicySatisfactionSource.FeedbackMessageInput);
+    }
+  }
   return sources;
 }
 
@@ -10082,6 +11333,10 @@ function collectExplicitNestedControlPatternIds(value, ids) {
     return;
   }
   for (const [key, item] of Object.entries(value)) {
+    if (key === 'innerControlPatternId' && typeof item === 'string') {
+      ids.add(item);
+      continue;
+    }
     if ((key === 'fieldControlSelections' || key === 'relationshipControlSelections') && Array.isArray(item)) {
       for (const selection of item) {
         if (typeof selection?.innerControlPatternId === 'string') {
@@ -10092,6 +11347,52 @@ function collectExplicitNestedControlPatternIds(value, ids) {
     }
     collectExplicitNestedControlPatternIds(item, ids);
   }
+}
+
+function collectionQueryControlPatternIdsFromGeneratedUses(controlUseInventoryRows, request) {
+  const requestFieldIds = new Set(sourceLoweringRequestFieldUsageIds(request));
+  const hasExplicitQueryControlInput = [
+    AppBuilderSourceLoweringRequestFieldId.FilterBindingExpressions,
+    AppBuilderSourceLoweringRequestFieldId.ServiceCollectionQueryControls,
+    AppBuilderSourceLoweringRequestFieldId.ServiceCollectionQueryStates,
+    AppBuilderSourceLoweringRequestFieldId.ServiceCollectionQueryStateMemberName,
+    AppBuilderSourceLoweringRequestFieldId.ServiceCollectionQueryFilterMethodName,
+    AppBuilderSourceLoweringRequestFieldId.ServiceQueryStateMemberName,
+    AppBuilderSourceLoweringRequestFieldId.ServiceQueryStateValueExpression,
+    AppBuilderSourceLoweringRequestFieldId.ServiceQueryReloadMethodName,
+  ].some((fieldId) => requestFieldIds.has(fieldId));
+  if (!hasExplicitQueryControlInput) {
+    return new Set();
+  }
+  return controlUsePatternIdsFromGeneratedUses(controlUseInventoryRows, AppBuilderControlPatternId.NativeSearchInput);
+}
+
+function feedbackMessagePatternIdsFromGeneratedUses(controlUseInventoryRows, request) {
+  const requestFieldIds = new Set(sourceLoweringRequestFieldUsageIds(request));
+  const hasExplicitFeedbackMessageInput = [
+    AppBuilderSourceLoweringRequestFieldId.MessageKind,
+    AppBuilderSourceLoweringRequestFieldId.MessageText,
+    AppBuilderSourceLoweringRequestFieldId.MessageId,
+  ].some((fieldId) => requestFieldIds.has(fieldId))
+    || decisionBundleInputFacetIds(request).some((facetId) =>
+      facetId === AppBuilderInputFacetId.AccessibilityHelpError
+      || facetId === AppBuilderInputFacetId.ActionFeedback
+    );
+  if (!hasExplicitFeedbackMessageInput) {
+    return new Set();
+  }
+  return controlUsePatternIdsFromGeneratedUses(controlUseInventoryRows, AppBuilderControlPatternId.FormMessage);
+}
+
+function controlUsePatternIdsFromGeneratedUses(controlUseInventoryRows, controlPatternId) {
+  const ids = new Set();
+  for (const row of controlUseInventoryRows) {
+    const actualControlPatternId = row.innerControlPatternId ?? row.controlPatternId;
+    if (actualControlPatternId === controlPatternId) {
+      ids.add(actualControlPatternId);
+    }
+  }
+  return ids;
 }
 
 function domainFieldControlPatternIdsFromGeneratedUses(controlUseInventoryRows, request) {

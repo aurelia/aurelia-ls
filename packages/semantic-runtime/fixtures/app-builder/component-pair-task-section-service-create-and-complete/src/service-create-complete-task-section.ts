@@ -11,13 +11,15 @@ export class ServiceCreateCompleteTaskSection {
   completeStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  create() {
+  async create() {
     this.taskItemsPromise = this.taskItemService.createTaskItem(this.title, this.done);
+    await this.taskItemsPromise;
     this.createStatusMessage = 'Task saved.';
   }
 
-  complete(taskItem: TaskItemRecord) {
+  async complete(taskItem: TaskItemRecord) {
     this.taskItemsPromise = this.taskItemService.completeTaskItem(taskItem.id, true);
+    await this.taskItemsPromise;
     this.completeStatusMessage = 'Task completed.';
   }
 }

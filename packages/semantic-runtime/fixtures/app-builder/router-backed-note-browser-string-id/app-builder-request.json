@@ -46,6 +46,23 @@
               ]
             },
             {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-display-fields",
+                  "value": [
+                    {
+                      "fieldName": "archived",
+                      "role": "boolean",
+                      "label": "Archived",
+                      "booleanTrueText": "Archived",
+                      "booleanFalseText": "Current"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
               "inputContractId": "source-placement",
               "facetPayloads": [
                 {

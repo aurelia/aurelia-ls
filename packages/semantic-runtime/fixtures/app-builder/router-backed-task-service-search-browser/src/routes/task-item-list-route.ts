@@ -14,16 +14,17 @@ export class TaskItemListRoute {
     this.taskItemsPromise = queryValue === ''
       ? this.state.loadTaskItems()
       : this.state.searchTaskItemsByTitle(queryValue);
+    return this.taskItemsPromise;
   }
 
-  searchTaskItems() {
-    this.reloadTaskItemsByTitle();
+  async searchTaskItems() {
+    await this.reloadTaskItemsByTitle();
     this.searchStatusMessage = 'Search applied.';
   }
 
-  clearTaskItemSearch() {
+  async clearTaskItemSearch() {
     this.taskItemTitleQuery = '';
-    this.reloadTaskItemsByTitle();
+    await this.reloadTaskItemsByTitle();
     this.clearSearchStatusMessage = 'Search cleared.';
   }
 }

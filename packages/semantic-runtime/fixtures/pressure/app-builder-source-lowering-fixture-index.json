@@ -12,13 +12,13 @@
       "fragment-composition",
       "target-invocation"
     ],
-    "requestFieldCount": 74,
-    "registeredFieldCount": 74,
+    "requestFieldCount": 75,
+    "registeredFieldCount": 75,
     "usedFieldCount": 47,
-    "unusedFieldCount": 27,
+    "unusedFieldCount": 28,
     "unregisteredUsedFieldCount": 0,
     "unusedRequiredFieldCount": 0,
-    "unusedConditionalOnlyFieldCount": 18,
+    "unusedConditionalOnlyFieldCount": 19,
     "unusedOptionalOnlyFieldCount": 9,
     "unusedMixedRequirementFieldCount": 0,
     "registryOwnerKinds": [
@@ -370,12 +370,32 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-datetime-local-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-email-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-month-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-multi-select"
         },
         {
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-number-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-password-input"
         },
         {
           "kind": "control-pattern",
@@ -390,7 +410,17 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-search-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-single-select"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-tel-input"
         },
         {
           "kind": "control-pattern",
@@ -401,6 +431,21 @@
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-textarea"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-time-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-url-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-week-input"
         }
       ],
       "registeredSourcePlanSelectionKinds": [],
@@ -412,7 +457,7 @@
       ],
       "requiredRegistryRowCount": 0,
       "conditionalRegistryRowCount": 0,
-      "optionalRegistryRowCount": 11,
+      "optionalRegistryRowCount": 20,
       "usedBySource": true,
       "usageSourceIds": [
         "app-builder-source-lowering-gallery"
@@ -1082,12 +1127,32 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-datetime-local-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-email-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-month-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-multi-select"
         },
         {
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-number-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-password-input"
         },
         {
           "kind": "control-pattern",
@@ -1102,7 +1167,17 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-search-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-single-select"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-tel-input"
         },
         {
           "kind": "control-pattern",
@@ -1113,6 +1188,21 @@
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-textarea"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-time-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-url-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-week-input"
         }
       ],
       "registeredSourcePlanSelectionKinds": [],
@@ -1123,7 +1213,7 @@
         "conditional"
       ],
       "requiredRegistryRowCount": 0,
-      "conditionalRegistryRowCount": 11,
+      "conditionalRegistryRowCount": 20,
       "optionalRegistryRowCount": 0,
       "usedBySource": true,
       "usageSourceIds": [
@@ -1138,7 +1228,7 @@
           "kind": "string"
         }
       ],
-      "usageCount": 16
+      "usageCount": 25
     },
     {
       "fieldId": "field-names",
@@ -1496,12 +1586,32 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-datetime-local-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-email-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-month-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-multi-select"
         },
         {
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-number-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-password-input"
         },
         {
           "kind": "control-pattern",
@@ -1516,7 +1626,17 @@
         {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "native-search-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "native-single-select"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-tel-input"
         },
         {
           "kind": "control-pattern",
@@ -1527,6 +1647,21 @@
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-textarea"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-time-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-url-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-week-input"
         }
       ],
       "registeredSourcePlanSelectionKinds": [],
@@ -1539,7 +1674,7 @@
       ],
       "requiredRegistryRowCount": 0,
       "conditionalRegistryRowCount": 1,
-      "optionalRegistryRowCount": 10,
+      "optionalRegistryRowCount": 19,
       "usedBySource": true,
       "usageSourceIds": [
         "app-builder-source-lowering-gallery"
@@ -2387,6 +2522,43 @@
       "requiredRegistryRowCount": 0,
       "conditionalRegistryRowCount": 0,
       "optionalRegistryRowCount": 2,
+      "usedBySource": false,
+      "usageSourceIds": [],
+      "usageOwnerKinds": [],
+      "usageValueShapes": [],
+      "usageCount": 0
+    },
+    {
+      "fieldId": "relationship-name",
+      "requestFieldNames": [
+        "relationshipName"
+      ],
+      "registeredBySourceLoweringRegistry": true,
+      "registryOwnerKinds": [
+        "source-lowering-target"
+      ],
+      "registeredTargetRefs": [
+        {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "domain-backed-submit-form"
+        },
+        {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        }
+      ],
+      "registeredSourcePlanSelectionKinds": [],
+      "registeredSurfaceKinds": [
+        "fragment-composition"
+      ],
+      "registeredRequirementKinds": [
+        "conditional"
+      ],
+      "requiredRegistryRowCount": 0,
+      "conditionalRegistryRowCount": 2,
+      "optionalRegistryRowCount": 0,
       "usedBySource": false,
       "usageSourceIds": [],
       "usageOwnerKinds": [],
@@ -3314,6 +3486,18 @@
           "textAuthority": "app-builder-generated"
         },
         {
+          "path": "app-builder-source-lowering-gallery/index.html",
+          "fileKind": "root-document",
+          "language": "html",
+          "textAuthority": "app-builder-generated"
+        },
+        {
+          "path": "app-builder-source-lowering-gallery/vite.config.ts",
+          "fileKind": "build-config",
+          "language": "typescript",
+          "textAuthority": "app-builder-generated"
+        },
+        {
           "path": "app-builder-source-lowering-gallery/tsconfig.json",
           "fileKind": "typescript-config",
           "language": "json",
@@ -3346,6 +3530,51 @@
           "kind": "control-pattern",
           "domain": "control",
           "id": "native-text-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-email-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-url-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-tel-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-password-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-search-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-time-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-datetime-local-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-month-input"
+        },
+        {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "native-week-input"
         },
         {
           "kind": "control-pattern",
@@ -3460,8 +3689,8 @@
         "existing-app-fact-read",
         "component-manifest-publication"
       ],
-      "expectedEffectCount": 8,
-      "sourceLoweringRequestFieldUsageCount": 122,
+      "expectedEffectCount": 9,
+      "sourceLoweringRequestFieldUsageCount": 131,
       "sourceLoweringRequestFieldUsageIds": [
         "action-handler-expressions",
         "action-name",
@@ -3617,6 +3846,87 @@
           "ownerKind": "invocation",
           "fieldId": "label-text",
           "requestFieldName": "labelText",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-email-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-url-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-tel-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-password-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-search-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-time-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-datetime-local-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-month-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
+          "valueShape": {
+            "kind": "string"
+          }
+        },
+        {
+          "requestPath": "fragmentGallery.invocation.native-week-input.fieldName",
+          "ownerKind": "invocation",
+          "fieldId": "field-name",
+          "requestFieldName": "fieldName",
           "valueShape": {
             "kind": "string"
           }
@@ -4659,6 +4969,18 @@
           "textAuthority": "app-builder-generated"
         },
         {
+          "path": "app-builder-source-lowering-app-shell/index.html",
+          "fileKind": "root-document",
+          "language": "html",
+          "textAuthority": "app-builder-generated"
+        },
+        {
+          "path": "app-builder-source-lowering-app-shell/vite.config.ts",
+          "fileKind": "build-config",
+          "language": "typescript",
+          "textAuthority": "app-builder-generated"
+        },
+        {
           "path": "app-builder-source-lowering-app-shell/tsconfig.json",
           "fileKind": "typescript-config",
           "language": "json",
@@ -4682,7 +5004,7 @@
         "source-plan-preview",
         "semantic-runtime-reopen"
       ],
-      "expectedEffectCount": 8,
+      "expectedEffectCount": 9,
       "sourceLoweringRequestFieldUsageCount": 2,
       "sourceLoweringRequestFieldUsageIds": [
         "root-dir",
@@ -4843,6 +5165,18 @@
           "textAuthority": "app-builder-generated"
         },
         {
+          "path": "app-builder-source-lowering-application-assembly/index.html",
+          "fileKind": "root-document",
+          "language": "html",
+          "textAuthority": "app-builder-generated"
+        },
+        {
+          "path": "app-builder-source-lowering-application-assembly/vite.config.ts",
+          "fileKind": "build-config",
+          "language": "typescript",
+          "textAuthority": "app-builder-generated"
+        },
+        {
           "path": "app-builder-source-lowering-application-assembly/tsconfig.json",
           "fileKind": "typescript-config",
           "language": "json",
@@ -4881,7 +5215,7 @@
         "source-plan-preview",
         "semantic-runtime-reopen"
       ],
-      "expectedEffectCount": 17,
+      "expectedEffectCount": 18,
       "sourceLoweringRequestFieldUsageCount": 9,
       "sourceLoweringRequestFieldUsageIds": [
         "action-name",
@@ -5056,6 +5390,18 @@
           "textAuthority": "app-builder-generated"
         },
         {
+          "path": "app-builder-source-lowering-router-backed-list-detail/index.html",
+          "fileKind": "root-document",
+          "language": "html",
+          "textAuthority": "app-builder-generated"
+        },
+        {
+          "path": "app-builder-source-lowering-router-backed-list-detail/vite.config.ts",
+          "fileKind": "build-config",
+          "language": "typescript",
+          "textAuthority": "app-builder-generated"
+        },
+        {
           "path": "app-builder-source-lowering-router-backed-list-detail/tsconfig.json",
           "fileKind": "typescript-config",
           "language": "json",
@@ -5079,7 +5425,7 @@
         "source-plan-preview",
         "semantic-runtime-reopen"
       ],
-      "expectedEffectCount": 21,
+      "expectedEffectCount": 22,
       "sourceLoweringRequestFieldUsageCount": 2,
       "sourceLoweringRequestFieldUsageIds": [
         "root-dir",
@@ -5257,6 +5603,18 @@
           "textAuthority": "app-builder-generated"
         },
         {
+          "path": "app-builder-source-lowering-service-backed-load-save/index.html",
+          "fileKind": "root-document",
+          "language": "html",
+          "textAuthority": "app-builder-generated"
+        },
+        {
+          "path": "app-builder-source-lowering-service-backed-load-save/vite.config.ts",
+          "fileKind": "build-config",
+          "language": "typescript",
+          "textAuthority": "app-builder-generated"
+        },
+        {
           "path": "app-builder-source-lowering-service-backed-load-save/tsconfig.json",
           "fileKind": "typescript-config",
           "language": "json",
@@ -5295,7 +5653,7 @@
         "source-plan-preview",
         "semantic-runtime-reopen"
       ],
-      "expectedEffectCount": 11,
+      "expectedEffectCount": 12,
       "sourceLoweringRequestFieldUsageCount": 27,
       "sourceLoweringRequestFieldUsageIds": [
         "async-data-initializer-expression",

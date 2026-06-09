@@ -1,16 +1,12 @@
+import { resolve } from 'aurelia';
 import { Project } from './project';
+import { AppState } from './app-state';
 import { TaskItem } from './task-item';
 
 export class ProjectBrowseState {
-  readonly taskItems: TaskItem[] = [
-    new TaskItem(1, 'Prepare release notes', false, 1),
-    new TaskItem(2, 'Check deployment checklist', true, 2),
-    new TaskItem(3, 'Collect preview feedback', false, 1),
-  ];
-  readonly projects: Project[] = [
-    new Project(1, 'Platform refresh', 'Planning'),
-    new Project(2, 'Docs cleanup', 'Active'),
-  ];
+  private readonly appState = resolve(AppState);
+  readonly taskItems = this.appState.taskItems;
+  readonly projects = this.appState.projects;
 
   findProject(id: string): Project | null {
     return this.projects.find((project) => String(project.id) === id) ?? null;

@@ -1751,6 +1751,7 @@ function semanticRuntimeAppBuilderMaterializationPolicy(
     || request.kind === SemanticRuntimeAppBuilderQueryKind.OntologyCatalog
     || request.kind === SemanticRuntimeAppBuilderQueryKind.InputReadiness
     || request.kind === SemanticRuntimeAppBuilderQueryKind.InputContractDetail
+    || request.kind === SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions
     || request.kind === SemanticRuntimeAppBuilderQueryKind.AffordanceDetail
     || request.kind === SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail
     || request.kind === SemanticRuntimeAppBuilderQueryKind.CollectionConceptDetail

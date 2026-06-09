@@ -100,6 +100,10 @@ const APP_BUILDER_PART_SLOT_SAMPLE_VALUE_ROWS: readonly AppBuilderPartSlotSample
   { slotKind: AppBuilderPartSlotKind.OptionLabelExpression, sampleValue: 'option' },
   { slotKind: AppBuilderPartSlotKind.MatcherExpression, sampleValue: 'matcher' },
   { slotKind: AppBuilderPartSlotKind.RadioGroupName, sampleValue: 'choice-group' },
+  { slotKind: AppBuilderPartSlotKind.NativeRequired, sampleValue: 'true' },
+  { slotKind: AppBuilderPartSlotKind.TextMinLength, sampleValue: '2' },
+  { slotKind: AppBuilderPartSlotKind.TextMaxLength, sampleValue: '80' },
+  { slotKind: AppBuilderPartSlotKind.TextPattern, sampleValue: '[A-Za-z0-9 -]+' },
   { slotKind: AppBuilderPartSlotKind.NumericMinimum, sampleValue: '0' },
   { slotKind: AppBuilderPartSlotKind.NumericMaximum, sampleValue: '100' },
   { slotKind: AppBuilderPartSlotKind.NumericStep, sampleValue: '5' },
@@ -275,6 +279,15 @@ function sampleControlBindingExpression(
 ): string {
   switch (control.id) {
     case AppBuilderControlId.TextInput:
+    case AppBuilderControlId.EmailInput:
+    case AppBuilderControlId.UrlInput:
+    case AppBuilderControlId.TelInput:
+    case AppBuilderControlId.PasswordInput:
+    case AppBuilderControlId.SearchInput:
+    case AppBuilderControlId.TimeInput:
+    case AppBuilderControlId.DateTimeLocalInput:
+    case AppBuilderControlId.MonthInput:
+    case AppBuilderControlId.WeekInput:
     case AppBuilderControlId.TextArea:
       return 'draft.title';
     case AppBuilderControlId.NumberInput:

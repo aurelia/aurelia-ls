@@ -13,9 +13,7 @@
         <tbody>
           <tr repeat.for="taskItem of loadedTaskItems" class="async-task-table__row">
             <td>${taskItem.title}</td>
-            <td class="async-task-table__done-cell">
-              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-            </td>
+            <td class="async-task-table__done-cell">${taskItem.done ? 'Done' : 'Open'}</td>
           </tr>
         </tbody>
       </table>

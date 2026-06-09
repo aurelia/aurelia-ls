@@ -3,10 +3,7 @@
   <article if.bind="noteItem">
     <section>
       <h2>${noteItem.title}</h2>
-      <p>
-        Archived:
-        <input type="checkbox" checked.to-view="noteItem.archived" disabled aria-label="Archived">
-      </p>
+      <p>Archived: ${noteItem.archived ? 'Archived' : 'Current'}</p>
     </section>
   </article>
   <p else>No note found for this route.</p>

@@ -1,6 +1,7 @@
 import {
   APP_BUILDER_DOMAIN_ACTION_KINDS,
   APP_BUILDER_DOMAIN_ACTION_SCOPES,
+  APP_BUILDER_DOMAIN_FIELD_AFFORDANCES,
   APP_BUILDER_DOMAIN_FIELD_VALUE_KINDS,
   APP_BUILDER_DOMAIN_IDENTITY_VALUE_KINDS,
   APP_BUILDER_DOMAIN_RELATIONSHIP_LOCAL_VALUE_KINDS,
@@ -15,6 +16,7 @@ import {
   AppBuilderCustomElementViewForm,
   AppBuilderDomainModelingMode,
   AppBuilderLocalStatePolicy,
+  AppBuilderPackageCapability,
   AppBuilderResourceCarrier,
   AppBuilderRouterAdmissionPolicy,
 } from '../aurelia-lowering-option.js';
@@ -64,6 +66,9 @@ import {
 import {
   APP_BUILDER_SOURCE_LOWERING_VISUAL_HOOK_TARGETS,
 } from './source-lowering-inputs.js';
+import {
+  SemanticAppQueryKind,
+} from '../../api/contracts.js';
 
 /** Small schema vocabulary used to explain app-builder input payloads without owning a full JSON Schema engine. */
 export enum AppBuilderInputPayloadSchemaKind {
@@ -123,6 +128,60 @@ export const APP_BUILDER_INPUT_PAYLOAD_SCHEMA_STATES = [
   AppBuilderInputPayloadSchemaState.NotCallerPayload,
 ] as const;
 
+/** Why one app-world query is useful for a deterministic existing-app fact facet. */
+export enum AppBuilderExistingAppFactQueryPurpose {
+  /** Discover concrete resource definitions, bindables, dependencies, and declaration modes. */
+  ResourceDefinitionCatalog = 'resource-definition-catalog',
+  /** Discover compiler-world visibility and scope for resources or syntax resources. */
+  ResourceScopeVisibility = 'resource-scope-visibility',
+  /** Discover authored native/control uses and their value/accessibility/action channels. */
+  ControlUseInventory = 'control-use-inventory',
+  /** Discover route topology, routeable components, viewports, and route parameters. */
+  RouteTopology = 'route-topology',
+  /** Discover optional plugin-specific products or diagnostics without generating plugin architecture. */
+  PluginProductSurface = 'plugin-product-surface',
+}
+
+/** Stable value list for existing-app fact query purposes. */
+export const APP_BUILDER_EXISTING_APP_FACT_QUERY_PURPOSES = [
+  AppBuilderExistingAppFactQueryPurpose.ResourceDefinitionCatalog,
+  AppBuilderExistingAppFactQueryPurpose.ResourceScopeVisibility,
+  AppBuilderExistingAppFactQueryPurpose.ControlUseInventory,
+  AppBuilderExistingAppFactQueryPurpose.RouteTopology,
+  AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+] as const;
+
+/** How app-builder may use a deterministic existing-app query result. */
+export enum AppBuilderExistingAppFactUseKind {
+  /** Report what exists so the caller/AI can decide whether it fits. */
+  ReportAvailability = 'report-availability',
+  /** Inform an explicit app-builder policy choice without selecting that policy by itself. */
+  InformPolicySelection = 'inform-policy-selection',
+  /** Mark a boundary where app-builder should hand off to the caller/AI instead of lowering source. */
+  HandoffBoundary = 'handoff-boundary',
+}
+
+/** Stable value list for existing-app fact use kinds. */
+export const APP_BUILDER_EXISTING_APP_FACT_USE_KINDS = [
+  AppBuilderExistingAppFactUseKind.ReportAvailability,
+  AppBuilderExistingAppFactUseKind.InformPolicySelection,
+  AppBuilderExistingAppFactUseKind.HandoffBoundary,
+] as const;
+
+/** Public app query that supplies one deterministic existing-app fact facet. */
+export interface AppBuilderExistingAppFactQueryRow {
+  /** Existing-app input facet supplied by this app-world query. */
+  readonly inputFacetId: AppBuilderInputFacetId;
+  /** Public semantic-runtime app query that produces the fact rows. */
+  readonly queryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+  /** Why this query belongs to the facet. */
+  readonly purpose: AppBuilderExistingAppFactQueryPurpose;
+  /** How app-builder may use the facts without inventing intent. */
+  readonly useKind: AppBuilderExistingAppFactUseKind;
+  /** Compact explanation for MCP/AI callers. */
+  readonly summary: string;
+}
+
 /** One property in the compact app-builder input payload schema vocabulary. */
 export interface AppBuilderInputPayloadPropertySchema {
   /** Property name expected in the payload object. */
@@ -175,6 +234,8 @@ export interface AppBuilderInputContractDetailRequest {
   readonly includeSourceLoweringConsumers?: boolean | null;
   /** Include value-level source-lowering support rows for enum-like facet payload values. */
   readonly includeSourceLoweringValueSupport?: boolean | null;
+  /** Include app-world query rows that supply deterministic existing-app fact facets. */
+  readonly includeExistingAppFactQueries?: boolean | null;
 }
 
 /** Detail row for one fine-grained input facet. */
@@ -193,6 +254,10 @@ export interface AppBuilderInputFacetDetailRow {
   readonly sourceLoweringValueSupportCount: number;
   /** Source-lowering support rows for enum-like values inside this facet when requested. */
   readonly sourceLoweringValueSupportRows?: readonly AppBuilderInputFacetValueSourceLoweringSupportRow[];
+  /** Number of app-world query families that can supply this deterministic existing-app fact facet. */
+  readonly existingAppFactQueryCount: number;
+  /** App-world query families that can supply this deterministic existing-app fact facet when detail is requested. */
+  readonly existingAppFactQueryRows?: readonly AppBuilderExistingAppFactQueryRow[];
   /** Compact explanation for caller/AI negotiation. */
   readonly summary: string;
 }
@@ -217,6 +282,8 @@ export interface AppBuilderInputContractDetail {
   readonly sourceLoweringConsumersIncluded: boolean;
   /** Whether value-level source-lowering support rows were included for returned facets. */
   readonly sourceLoweringValueSupportIncluded: boolean;
+  /** Whether existing-app fact query rows were included for returned facets. */
+  readonly existingAppFactQueriesIncluded: boolean;
   /** Number of selected facet details. */
   readonly facetCount: number;
   /** Number of selected facet details consumed by at least one executable source-lowering target. */
@@ -227,6 +294,10 @@ export interface AppBuilderInputContractDetail {
   readonly sourceLoweringValueSupportFacetCount: number;
   /** Number of value-level source-lowering support rows across selected facets. */
   readonly sourceLoweringValueSupportRowCount: number;
+  /** Number of selected app-fact facets with app-world query suppliers. */
+  readonly existingAppFactQueryFacetCount: number;
+  /** Number of app-world query supplier rows across selected app-fact facets. */
+  readonly existingAppFactQueryRowCount: number;
   /** Number of selected facet details with modeled payload schemas. */
   readonly modeledPayloadSchemaCount: number;
   /** Number of selected facet details whose payload schema is still TBD. */
@@ -244,6 +315,8 @@ type AppBuilderInputFacetPayloadDetail = Omit<
   | 'sourceLoweringConsumerRows'
   | 'sourceLoweringValueSupportCount'
   | 'sourceLoweringValueSupportRows'
+  | 'existingAppFactQueryCount'
+  | 'existingAppFactQueryRows'
 >;
 
 const INPUT_FACETS_BY_CONTRACT_ID = APP_BUILDER_INPUT_FACET_ROWS.reduce(
@@ -272,6 +345,10 @@ export function appBuilderInputContractDetail(
   );
   const includeSourceLoweringValueSupport = appBuilderIncludeDetail(
     request.includeSourceLoweringValueSupport,
+    hasExplicitSelection,
+  );
+  const includeExistingAppFactQueries = appBuilderIncludeDetail(
+    request.includeExistingAppFactQueries,
     hasExplicitSelection,
   );
   const inputFacetSelections = request.inputFacetSelections == null || request.inputFacetSelections.length === 0
@@ -306,6 +383,7 @@ export function appBuilderInputContractDetail(
             includePayloadSchemas,
             includeSourceLoweringConsumers,
             includeSourceLoweringValueSupport,
+            includeExistingAppFactQueries,
           )
         )
         .filter((detail) => payloadSchemaStates == null || payloadSchemaStates.has(detail.payloadSchemaState)),
@@ -335,21 +413,29 @@ export function appBuilderInputContractDetail(
   ).length;
   const sourceLoweringValueSupportRowCount = facetDetails.reduce((sum, detail) =>
     sum + detail.sourceLoweringValueSupportCount, 0);
+  const existingAppFactQueryFacetCount = facetDetails.filter((detail) =>
+    detail.existingAppFactQueryCount > 0
+  ).length;
+  const existingAppFactQueryRowCount = facetDetails.reduce((sum, detail) =>
+    sum + detail.existingAppFactQueryCount, 0);
   return {
     rows,
     payloadSchemasIncluded: includePayloadSchemas,
     sourceLoweringConsumersIncluded: includeSourceLoweringConsumers,
     sourceLoweringValueSupportIncluded: includeSourceLoweringValueSupport,
+    existingAppFactQueriesIncluded: includeExistingAppFactQueries,
     facetCount: facetDetails.length,
     sourceLoweringConsumerFacetCount,
     sourceLoweringConsumerTargetCount: sourceLoweringConsumerTargetKeys.size,
     sourceLoweringValueSupportFacetCount,
     sourceLoweringValueSupportRowCount,
+    existingAppFactQueryFacetCount,
+    existingAppFactQueryRowCount,
     modeledPayloadSchemaCount,
     toBeDeterminedCount,
     deferredCount,
     notCallerPayloadCount,
-    displayText: `App-builder input contract detail: ${rows.length} contract(s), ${facetDetails.length} facet(s), ${modeledPayloadSchemaCount} modeled payload schema(s), ${toBeDeterminedCount} TBD, ${deferredCount} deferred, ${notCallerPayloadCount} app-fact supplied, sourceLoweringConsumerFacets=${sourceLoweringConsumerFacetCount}, sourceLoweringConsumerTargets=${sourceLoweringConsumerTargetKeys.size}, sourceLoweringValueSupportFacets=${sourceLoweringValueSupportFacetCount}, sourceLoweringValueSupportRows=${sourceLoweringValueSupportRowCount}${includePayloadSchemas ? '' : '; payloadSchemas=false'}${includeSourceLoweringConsumers ? '' : '; sourceLoweringConsumers=false'}${includeSourceLoweringValueSupport ? '' : '; sourceLoweringValueSupport=false'}.`,
+    displayText: `App-builder input contract detail: ${rows.length} contract(s), ${facetDetails.length} facet(s), ${modeledPayloadSchemaCount} modeled payload schema(s), ${toBeDeterminedCount} TBD, ${deferredCount} deferred, ${notCallerPayloadCount} app-fact supplied, sourceLoweringConsumerFacets=${sourceLoweringConsumerFacetCount}, sourceLoweringConsumerTargets=${sourceLoweringConsumerTargetKeys.size}, sourceLoweringValueSupportFacets=${sourceLoweringValueSupportFacetCount}, sourceLoweringValueSupportRows=${sourceLoweringValueSupportRowCount}, existingAppFactQueryFacets=${existingAppFactQueryFacetCount}, existingAppFactQueryRows=${existingAppFactQueryRowCount}${includePayloadSchemas ? '' : '; payloadSchemas=false'}${includeSourceLoweringConsumers ? '' : '; sourceLoweringConsumers=false'}${includeSourceLoweringValueSupport ? '' : '; sourceLoweringValueSupport=false'}${includeExistingAppFactQueries ? '' : '; existingAppFactQueries=false'}.`,
   };
 }
 
@@ -359,10 +445,12 @@ export function appBuilderInputFacetDetail(
   includePayloadSchema: boolean,
   includeSourceLoweringConsumers = false,
   includeSourceLoweringValueSupport = false,
+  includeExistingAppFactQueries = false,
 ): AppBuilderInputFacetDetailRow {
   const detail = facetDetail(facet);
   const sourceLoweringConsumerRows = appBuilderSourceLoweringConsumersForInputFacet(facet);
   const sourceLoweringValueSupportRows = appBuilderInputFacetValueSourceLoweringSupportRows(facet);
+  const existingAppFactQueryRows = appBuilderExistingAppFactQueryRowsForInputFacet(facet);
   return {
     facet,
     payloadSchemaState: detail.payloadSchemaState,
@@ -377,7 +465,130 @@ export function appBuilderInputFacetDetail(
     ...(includeSourceLoweringValueSupport
       ? { sourceLoweringValueSupportRows }
       : {}),
+    existingAppFactQueryCount: existingAppFactQueryRows.length,
+    ...(includeExistingAppFactQueries
+      ? { existingAppFactQueryRows }
+      : {}),
     summary: detail.summary,
+  };
+}
+
+/** Return app-world query families that can supply deterministic existing-app fact facets. */
+export function appBuilderExistingAppFactQueryRowsForInputFacet(
+  facet: AppBuilderInputFacetRow,
+): readonly AppBuilderExistingAppFactQueryRow[] {
+  switch (facet.id) {
+    case AppBuilderInputFacetId.ExistingResourceFacts:
+      return [
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.ResourceDefinitions,
+          AppBuilderExistingAppFactQueryPurpose.ResourceDefinitionCatalog,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Reports detected custom elements, custom attributes, template controllers, value converters, binding behaviors, binding commands, bindables, aliases, declaration modes, and local dependencies.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.ResourceVisibility,
+          AppBuilderExistingAppFactQueryPurpose.ResourceScopeVisibility,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Reports which resources are visible in each compiler world, including local, inherited, configured, and routeable scope visibility.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.ControlUseInventory,
+          AppBuilderExistingAppFactQueryPurpose.ControlUseInventory,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Reports authored native/control uses and their generated or existing value, action, label, and message channels.',
+        ),
+      ];
+    case AppBuilderInputFacetId.ExistingRouteFacts:
+      return [
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.RouterOverview,
+          AppBuilderExistingAppFactQueryPurpose.RouteTopology,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Summarizes routes, route contexts, viewports, navigation, route trees, and router issues before app-builder extends a routed area.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.Routes,
+          AppBuilderExistingAppFactQueryPurpose.RouteTopology,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Reports concrete route configuration rows, including route ids, paths, titles, and configured component references where modeled.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.RouteContexts,
+          AppBuilderExistingAppFactQueryPurpose.RouteTopology,
+          AppBuilderExistingAppFactUseKind.ReportAvailability,
+          'Reports route-context products and parameter reads that can keep generated route-aware source aligned with existing routing facts.',
+        ),
+      ];
+    case AppBuilderInputFacetId.ExistingPluginFacts:
+      return [
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.StateStores,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.HandoffBoundary,
+          'Reports modeled @aurelia/state stores when present; app-builder may report this availability but should not generate store architecture in the v1 handoff posture.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.I18nTranslationKeys,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.HandoffBoundary,
+          'Reports modeled i18n translation keys when present; localization resources and generated translation copy remain caller/plugin owned for v1.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.I18nTranslationBindings,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.HandoffBoundary,
+          'Reports modeled i18n translation bindings when present; app-builder should treat localization integration as explicit existing-app/plugin context.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.ValidationIssues,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.InformPolicySelection,
+          'Reports validation-library diagnostics when semantic-runtime models them; absence of issues is not proof that validation is unavailable.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.FetchClientIssues,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.InformPolicySelection,
+          'Reports fetch-client diagnostics when semantic-runtime models them; server/API contracts and fetch-client configuration remain handoff territory for v1.',
+        ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.DialogIssues,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.InformPolicySelection,
+          'Reports dialog diagnostics when semantic-runtime models them; dialog source generation is not part of the current app-builder v1 floor.',
+        ),
+      ];
+    default:
+      return [];
+  }
+}
+
+function existingAppFactQueryRow(
+  inputFacetId: AppBuilderInputFacetId,
+  queryKind: SemanticAppQueryKind,
+  purpose: AppBuilderExistingAppFactQueryPurpose,
+  useKind: AppBuilderExistingAppFactUseKind,
+  summary: string,
+): AppBuilderExistingAppFactQueryRow {
+  return {
+    inputFacetId,
+    queryKind,
+    purpose,
+    useKind,
+    summary,
   };
 }
 
@@ -425,7 +636,7 @@ function facetDetail(
     case AppBuilderInputFacetId.AureliaStylingPolicy:
       return modeled('Style mechanism choices separated from visual taste.', stylingPolicySchema());
     case AppBuilderInputFacetId.AureliaPluginPolicy:
-      return deferred('Optional plugin admission remains visible, but first-ring app-builder generation is native/core focused.');
+      return modeled('Optional plugin admission choices; many plugin-specific source lowerers remain deferred or handoff-only.', pluginPolicySchema());
     case AppBuilderInputFacetId.ExistingResourceFacts:
     case AppBuilderInputFacetId.ExistingRouteFacts:
     case AppBuilderInputFacetId.ExistingPluginFacts:
@@ -521,8 +732,14 @@ function domainFieldSchema(): AppBuilderInputPayloadSchema {
     property('name', true, stringSchema('Field Name', 'TypeScript-safe property name.')),
     property('title', true, stringSchema('Field Title', 'Human-facing field label.')),
     property('valueKind', true, enumSchema('Field Value Kind', 'Field value kind supported by app-builder domain fields.', APP_BUILDER_DOMAIN_FIELD_VALUE_KINDS)),
+    property('fieldAffordance', false, enumSchema('Field Affordance', 'Semantic field affordance used when text value kind alone is too broad, such as email, URL, phone, password, search, or temporal string controls.', APP_BUILDER_DOMAIN_FIELD_AFFORDANCES)),
     property('required', false, booleanSchema('Required', 'Whether the field should be treated as required by generated controls/data.')),
     property('defaultValue', false, seedRecordValueSchema(), 'Explicit empty/draft value emitted when generated source initializes this field; omitted fields use the current field-kind default.'),
+    property('textConstraints', false, objectSchema('Text Constraints', 'Static text facts that native text-like controls can spend as required/minlength/maxlength/pattern attributes; these are not validation rules by themselves.', [
+      property('minLength', false, numberSchema('Minimum Length', 'Static minimum character count for native text controls.')),
+      property('maxLength', false, numberSchema('Maximum Length', 'Static maximum character count for native text controls.')),
+      property('pattern', false, stringSchema('Pattern', 'Native pattern attribute value for simple field-local format constraints.')),
+    ]), 'Only meaningful when valueKind is text and the selected control is text-like.'),
     property('numericConstraints', false, objectSchema('Numeric Constraints', 'Static numeric facts that native number/range controls can spend as min/max/step attributes; these are not validation rules by themselves.', [
       property('minimum', false, numberSchema('Minimum', 'Static lower bound for native numeric controls.')),
       property('maximum', false, numberSchema('Maximum', 'Static upper bound for native numeric controls.')),
@@ -609,7 +826,7 @@ function sourceProjectToolingSchema(): AppBuilderInputPayloadSchema {
       property('name', true, stringSchema('Script Name', 'package.json script key.')),
       property('command', true, stringSchema('Script Command', 'Command text for the script.')),
     ]))),
-    property('toolingFiles', false, arraySchema('Tooling Files', 'Generated package/tsconfig/declaration artifacts carried beside app source files.', objectSchema('Project Tooling File', 'One project tooling file carried by SourcePlanProjectTooling.', [
+    property('toolingFiles', false, arraySchema('Tooling Files', 'Generated package/root-document/build-config/tsconfig/declaration artifacts carried beside app source files.', objectSchema('Project Tooling File', 'One project tooling file carried by SourcePlanProjectTooling.', [
       property('path', true, stringSchema('Path', 'Project-relative tooling file path.')),
       property('fileKind', true, enumSchema('File Kind', 'Kind of project tooling file.', appBuilderEnumValues(SourcePlanProjectToolingFileKind))),
       property('language', true, enumSchema('Language', 'Tooling file source language.', appBuilderEnumValues(SourcePlanProjectToolingLanguage))),
@@ -640,11 +857,19 @@ function stylingPolicySchema(): AppBuilderInputPayloadSchema {
   ]);
 }
 
+function pluginPolicySchema(): AppBuilderInputPayloadSchema {
+  return objectSchema('Plugin Policy', 'Optional Aurelia package/plugin capabilities selected by caller, AI, existing-app facts, or future policy.', [
+    property('packageCapabilities', false, arraySchema('Package Capabilities', 'Plugin/package capability ids that app-builder should admit, report, or hand off without inventing plugin-specific architecture.', enumSchema('Package Capability', 'Optional Aurelia package/plugin capability.', appBuilderEnumValues(AppBuilderPackageCapability)))),
+  ]);
+}
+
 function collectionDisplayFieldSchema(): AppBuilderInputPayloadSchema {
   return arraySchema('Collection Display Fields', 'Array of field projection roles for list/card/table output.', objectSchema('Collection Display Field', 'One domain field projected into a collection presentation role.', [
     property('fieldName', true, stringSchema('Field Name', 'Domain field name to project.')),
     property('role', true, enumSchema('Display Role', 'Collection display role.', APP_BUILDER_COLLECTION_DISPLAY_ROLES)),
     property('label', false, stringSchema('Display Label', 'Optional human-facing label/header override for roles that render labels.')),
+    property('booleanTrueText', false, stringSchema('Boolean True Text', 'Visible text rendered when a boolean display field evaluates to true; supply together with booleanFalseText.')),
+    property('booleanFalseText', false, stringSchema('Boolean False Text', 'Visible text rendered when a boolean display field evaluates to false; supply together with booleanTrueText.')),
   ]));
 }
 
@@ -662,6 +887,8 @@ function collectionTableColumnSchema(): AppBuilderInputPayloadSchema {
     property('routeActiveExpression', false, stringSchema('Route Active Expression', 'Exact active-state binding expression for navigation-scoped action columns or relationship columns that link to another route.')),
     property('routeTargetAttributeName', false, stringSchema('Route Target Attribute Name', 'Router target attribute name for navigation-scoped action columns or relationship columns that link to another route.')),
     property('linkText', false, stringSchema('Link Text', 'Visible link text for navigation-scoped action columns; omitted reuses the explicit table-column header.')),
+    property('booleanTrueText', false, stringSchema('Boolean True Text', 'Visible text rendered when a boolean field-backed column evaluates to true; supply together with booleanFalseText.')),
+    property('booleanFalseText', false, stringSchema('Boolean False Text', 'Visible text rendered when a boolean field-backed column evaluates to false; supply together with booleanTrueText.')),
     property('sortable', false, booleanSchema('Sortable', 'Whether local/server sorting should be offered for this field-backed column.')),
     property('filterable', false, booleanSchema('Filterable', 'Whether local/server filtering should be offered for this field-backed column.')),
   ]));

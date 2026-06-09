@@ -2,7 +2,7 @@
   "outcome": "hit",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=src/task-preferences.html, target=src/task-preferences.ts, source=component-pair, files=3, witnesses=26, controlUses=4, expectedEffects=8, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=src/task-preferences.html, target=src/task-preferences.ts, source=component-pair, files=3, witnesses=33, controlUses=4, expectedEffects=9, handoffNotes=3, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": "src/task-preferences.html",
     "sourceTargetPath": "src/task-preferences.ts",
@@ -47,7 +47,7 @@
       "runtime-controller",
       "open-seam-closure"
     ],
-    "expectedEffectCount": 8,
+    "expectedEffectCount": 9,
     "controlUseInventoryRowCount": 4,
     "sourceLoweringRequestFieldSummary": {
       "requestFieldCount": 36,
@@ -107,7 +107,116 @@
         }
       ]
     },
-    "sourcePlanWitnessCount": 26,
+    "sourcePlanWitnessCount": 33,
+    "handoffNoteCount": 3,
+    "handoffNotes": [
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 3/3 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 4 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "resource-definition",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
     "suppliedInputCount": 3,
     "explicitSuppliedInputCount": 0,
     "decisionBundleCount": 1,
@@ -158,9 +267,21 @@
         "buildToolPolicy": "app-builder-baseline",
         "dependencies": [
           {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
             "specifier": "aurelia",
             "versionRange": "^2.0.0-rc.1",
             "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },
           {
@@ -168,9 +289,25 @@
             "versionRange": "^6.0.3",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
           }
         ],
         "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
           {
             "name": "check",
             "command": "tsc -p tsconfig.json --noEmit",
@@ -183,7 +320,21 @@
             "fileKind": "package-manifest",
             "language": "json",
             "textAuthority": "app-builder-generated",
-            "textLength": 246
+            "textLength": 401
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 318
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
           },
           {
             "path": "tsconfig.json",

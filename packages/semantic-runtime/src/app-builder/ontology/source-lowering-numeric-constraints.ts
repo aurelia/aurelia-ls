@@ -125,6 +125,15 @@ function appBuilderNumericControlCanSpendConstraints(
     case AppBuilderControlId.RangeInput:
       return true;
     case AppBuilderControlId.TextInput:
+    case AppBuilderControlId.EmailInput:
+    case AppBuilderControlId.UrlInput:
+    case AppBuilderControlId.TelInput:
+    case AppBuilderControlId.PasswordInput:
+    case AppBuilderControlId.SearchInput:
+    case AppBuilderControlId.TimeInput:
+    case AppBuilderControlId.DateTimeLocalInput:
+    case AppBuilderControlId.MonthInput:
+    case AppBuilderControlId.WeekInput:
     case AppBuilderControlId.DateInput:
     case AppBuilderControlId.TextArea:
     case AppBuilderControlId.Checkbox:

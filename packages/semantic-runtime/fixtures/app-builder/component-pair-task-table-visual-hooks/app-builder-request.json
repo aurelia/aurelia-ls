@@ -96,7 +96,9 @@
                     {
                       "fieldName": "done",
                       "header": "Done",
-                      "displayKind": "boolean"
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
                     }
                   ]
                 }

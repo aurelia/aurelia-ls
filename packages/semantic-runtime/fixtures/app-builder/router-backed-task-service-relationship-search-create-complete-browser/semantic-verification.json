@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "router-backed-task-service-relationship-search-create-complete-browser",
   "ok": true,
-  "expectedEffects": 21,
+  "expectedEffects": 22,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder routed collection/detail SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder routed collection/detail SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder routed collection/detail SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -144,8 +149,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 2646,
-          "end": 2726
+          "start": 2584,
+          "end": 2664
         }
       }
     },
@@ -180,8 +185,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 752,
-          "end": 770
+          "start": 766,
+          "end": 784
         }
       }
     },
@@ -216,8 +221,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 882,
-          "end": 901
+          "start": 896,
+          "end": 915
         }
       }
     },
@@ -252,8 +257,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 1008,
-          "end": 1031
+          "start": 1022,
+          "end": 1045
         }
       }
     },
@@ -288,8 +293,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 1302,
-          "end": 1326
+          "start": 1316,
+          "end": 1340
         }
       }
     },
@@ -324,8 +329,8 @@
         "buttonType": "submit",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 1513,
-          "end": 1555
+          "start": 1527,
+          "end": 1569
         }
       }
     },
@@ -333,8 +338,8 @@
       "outcome": "satisfied",
       "expected": {
         "controlPatternId": "field-group",
-        "innerControlPatternId": "native-text-input",
-        "controlId": "text-input",
+        "innerControlPatternId": "native-search-input",
+        "controlId": "search-input",
         "bindingExpression": "taskRelationshipTitleQuery",
         "handlerExpression": null,
         "actionChannelKind": null,
@@ -348,8 +353,8 @@
         "definitionName": "task-item-list-route",
         "sourceKind": "authored-runtime-binding",
         "classificationKind": "native-value-channel",
-        "controlPatternId": "native-text-input",
-        "controlId": "text-input",
+        "controlPatternId": "native-search-input",
+        "controlId": "search-input",
         "bindingExpression": "taskRelationshipTitleQuery",
         "handlerExpression": null,
         "actionChannelKind": null,
@@ -360,8 +365,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 128,
-          "end": 167
+          "start": 142,
+          "end": 181
         }
       }
     },
@@ -396,8 +401,8 @@
         "buttonType": "button",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 238,
-          "end": 279
+          "start": 252,
+          "end": 293
         }
       }
     },
@@ -432,8 +437,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 1568,
-          "end": 1678
+          "start": 1582,
+          "end": 1692
         }
       }
     },
@@ -468,8 +473,8 @@
         "buttonType": "button",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 452,
-          "end": 497
+          "start": 466,
+          "end": 511
         }
       }
     },
@@ -504,8 +509,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 1568,
-          "end": 1678
+          "start": 1582,
+          "end": 1692
         }
       }
     },
@@ -540,8 +545,8 @@
         "buttonType": "button",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-search-create-complete-browser/src/routes/task-item-list-route.html",
-          "start": 2544,
-          "end": 2578
+          "start": 2482,
+          "end": 2516
         }
       }
     }
@@ -552,7 +557,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 22930,
+      "jsonLength": 32607,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -576,13 +581,13 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-list-route.ts",
-      "textLength": 1538,
+      "textLength": 1602,
       "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-list-route.html",
-      "textLength": 2916,
+      "textLength": 2854,
       "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.html' matches the stored app-builder request output."
     },
     {
@@ -594,7 +599,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-detail-route.html",
-      "textLength": 897,
+      "textLength": 813,
       "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.html' matches the stored app-builder request output."
     },
     {
@@ -624,8 +629,20 @@
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 324,
+      "textLength": 479,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 338,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -642,8 +659,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 21,
-      "jsonLength": 7409,
+      "rowCount": 22,
+      "jsonLength": 7756,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -663,22 +680,22 @@
     {
       "outcome": "satisfied",
       "rowFamily": "ontologyTargetRefs",
-      "rowCount": 12,
-      "jsonLength": 981,
+      "rowCount": 13,
+      "jsonLength": 1054,
       "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
       "rowCount": 12,
-      "jsonLength": 11777,
+      "jsonLength": 11795,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 113,
-      "jsonLength": 52620,
+      "rowCount": 117,
+      "jsonLength": 53647,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

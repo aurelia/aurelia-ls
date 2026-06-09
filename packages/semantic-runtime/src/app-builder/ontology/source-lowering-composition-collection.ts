@@ -11,8 +11,9 @@ import {
   AppBuilderDomainFieldValueKind,
   AppBuilderDomainRelationshipKind,
 } from '../domain-model.js';
-import type {
-  AppBuilderDomainFieldSourceModel,
+import {
+  appBuilderDomainFieldDisplayHrefBindingExpression,
+  type AppBuilderDomainFieldSourceModel,
 } from '../domain-field-source.js';
 import { AppBuilderPartSlotKind } from '../part-application.js';
 import { AppBuilderPartKind } from '../part-catalog.js';
@@ -30,6 +31,7 @@ import {
   appBuilderIsTypeScriptIdentifier,
   appBuilderAttributeBindingAttributeFragment,
   appBuilderAttributeToViewBindingAttributeFragment,
+  appBuilderSeedRecordLiteral,
   appBuilderTemplateElementFragment,
   appBuilderTextInterpolationFragment,
 } from '../source-lowering-helpers.js';
@@ -52,6 +54,7 @@ import {
   AppBuilderApplicationPatternId,
 } from './application-pattern.js';
 import {
+  type AppBuilderCollectionBooleanDisplayText,
   type AppBuilderCollectionDisplayFieldPayload,
   AppBuilderCollectionDisplayRole,
   type AppBuilderCollectionTableColumnPayload,
@@ -1191,6 +1194,8 @@ function collectionTablePaginationElement(
         actionChannelKind: AppBuilderControlUseActionChannelKind.DirectControlEvent,
         buttonText: controls.previousButtonText,
         buttonType: AppBuilderSourceLoweringButtonType.Button,
+        labelText: controls.previousButtonText,
+        labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
       })),
       ...optionalControlUseInventoryRow(appBuilderControlUseInventoryRow({
         sourceKind: AppBuilderControlUseInventorySourceKind.SourceLoweringComposition,
@@ -1205,6 +1210,8 @@ function collectionTablePaginationElement(
         actionChannelKind: AppBuilderControlUseActionChannelKind.DirectControlEvent,
         buttonText: controls.nextButtonText,
         buttonType: AppBuilderSourceLoweringButtonType.Button,
+        labelText: controls.nextButtonText,
+        labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
       })),
     ],
   };
@@ -1395,11 +1402,24 @@ function selectCollectionDisplayFields(
       });
       continue;
     }
+    const booleanDisplayText = selectCollectionBooleanDisplayText(
+      projection,
+      field,
+      targetRef,
+      {
+        fieldName: field.memberName,
+      },
+    );
+    issues.push(...booleanDisplayText.issues);
+    if (booleanDisplayText.value == null && booleanDisplayText.issues.length > 0) {
+      continue;
+    }
     selected.push({
       projection,
       field,
       bindingExpression,
       label: normalizedSourceInputText(projection.label) ?? field.field.title,
+      booleanDisplayText: booleanDisplayText.value,
     });
   }
   return {
@@ -1527,6 +1547,8 @@ function selectCollectionTableColumnPayload(
   const actionName = normalizedSourceInputText(column.actionName);
   const relationshipName = normalizedSourceInputText(column.relationshipName);
   const header = normalizedSourceInputText(column.header);
+  const hasBooleanDisplayTextInput = normalizedSourceInputText(column.booleanTrueText) != null
+    || normalizedSourceInputText(column.booleanFalseText) != null;
   const selectedKindCount = [
     fieldName,
     actionName,
@@ -1587,6 +1609,19 @@ function selectCollectionTableColumnPayload(
         relationshipNames: [relationshipName],
         columnHeaders: [header],
         summary: `Collection table relationship column '${relationshipName}' must use displayKind '${AppBuilderCollectionTableColumnDisplayKind.Relation}' when displayKind is supplied.`,
+      }],
+    };
+  }
+  if (fieldName == null && hasBooleanDisplayTextInput) {
+    return {
+      selection: null,
+      issues: [{
+        issueKind: AppBuilderSourceLoweringCompositionIssueKind.InvalidCollectionBooleanDisplayText,
+        targetRef,
+        actionNames: [actionName].filter((value): value is string => value != null),
+        relationshipNames: [relationshipName].filter((value): value is string => value != null),
+        columnHeaders: [header],
+        summary: `Collection table column '${header}' supplied boolean display text, but boolean display text is only valid for field-backed boolean columns.`,
       }],
     };
   }
@@ -1755,6 +1790,7 @@ function selectCollectionTableActionColumn(
       sortEventLowering: null,
       sortEventAttributeFragment: null,
       filterBindingExpression: null,
+      booleanDisplayText: null,
       header,
     },
     issues: [],
@@ -1818,6 +1854,7 @@ function selectCollectionTableNavigationActionColumn(
       sortEventLowering: null,
       sortEventAttributeFragment: null,
       filterBindingExpression: null,
+      booleanDisplayText: null,
       header,
     },
     issues: [],
@@ -1887,6 +1924,7 @@ function selectCollectionTableRelationshipColumn(
       sortEventLowering: null,
       sortEventAttributeFragment: null,
       filterBindingExpression: null,
+      booleanDisplayText: null,
       header,
     },
     issues: [],
@@ -1979,6 +2017,21 @@ function selectCollectionTableFieldColumn(
       issues: filterBindingExpression.issues,
     };
   }
+  const booleanDisplayText = selectCollectionBooleanDisplayText(
+    column,
+    field,
+    targetRef,
+    {
+      fieldName: field.memberName,
+      columnHeader: header,
+    },
+  );
+  if (booleanDisplayText.value == null && booleanDisplayText.issues.length > 0) {
+    return {
+      column: null,
+      issues: booleanDisplayText.issues,
+    };
+  }
   return {
     column: {
       column,
@@ -1993,9 +2046,83 @@ function selectCollectionTableFieldColumn(
       sortEventLowering: sortEvent.lowering,
       sortEventAttributeFragment: sortEvent.attributeFragment,
       filterBindingExpression: filterBindingExpression.expression,
+      booleanDisplayText: booleanDisplayText.value,
       header,
     },
-    issues: [...sortHandlerExpression.issues, ...filterBindingExpression.issues],
+    issues: [
+      ...sortHandlerExpression.issues,
+      ...filterBindingExpression.issues,
+      ...booleanDisplayText.issues,
+    ],
+  };
+}
+
+function selectCollectionBooleanDisplayText(
+  payload: {
+    readonly booleanTrueText?: string;
+    readonly booleanFalseText?: string;
+  },
+  field: AppBuilderDomainFieldSourceModel,
+  targetRef: AppBuilderOntologyRowRef,
+  context: {
+    readonly fieldName: string;
+    readonly columnHeader?: string;
+  },
+): {
+  readonly value: AppBuilderCollectionBooleanDisplayText | null;
+  readonly issues: readonly AppBuilderSourceLoweringCompositionIssue[];
+} {
+  const trueText = normalizedSourceInputText(payload.booleanTrueText);
+  const falseText = normalizedSourceInputText(payload.booleanFalseText);
+  if (trueText == null && falseText == null) {
+    return {
+      value: null,
+      issues: [],
+    };
+  }
+  if (trueText == null || falseText == null) {
+    return {
+      value: null,
+      issues: [invalidCollectionBooleanDisplayTextIssue(
+        targetRef,
+        context,
+        `Collection boolean display for field '${context.fieldName}' must supply both booleanTrueText and booleanFalseText so source lowering does not invent visible status copy.`,
+      )],
+    };
+  }
+  if (field.valueKind !== AppBuilderDomainFieldValueKind.Boolean) {
+    return {
+      value: null,
+      issues: [invalidCollectionBooleanDisplayTextIssue(
+        targetRef,
+        context,
+        `Collection boolean display text was supplied for '${context.fieldName}', but that field is '${field.valueKind}', not '${AppBuilderDomainFieldValueKind.Boolean}'.`,
+      )],
+    };
+  }
+  return {
+    value: {
+      trueText,
+      falseText,
+    },
+    issues: [],
+  };
+}
+
+function invalidCollectionBooleanDisplayTextIssue(
+  targetRef: AppBuilderOntologyRowRef,
+  context: {
+    readonly fieldName: string;
+    readonly columnHeader?: string;
+  },
+  summary: string,
+): AppBuilderSourceLoweringCompositionIssue {
+  return {
+    issueKind: AppBuilderSourceLoweringCompositionIssueKind.InvalidCollectionBooleanDisplayText,
+    targetRef,
+    fieldNames: [context.fieldName],
+    columnHeaders: context.columnHeader == null ? [] : [context.columnHeader],
+    summary,
   };
 }
 
@@ -2027,13 +2154,27 @@ function collectionDisplayFieldElement(
 } {
   const prefix = field.projection.role === AppBuilderCollectionDisplayRole.Title
     ? ''
-    : `${authoredTemplateTextContentText(field.label)}:`;
+    : `${authoredTemplateTextContentText(field.label)}: `;
   const attributes = appBuilderSourceLoweringVisualHookAttributes(
     suppliedInputs,
     AppBuilderSourceLoweringVisualHookTarget.CollectionField,
     { fieldName: field.field.memberName },
   );
   if (field.field.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+    if (field.booleanDisplayText != null) {
+      const textDisplay = collectionBooleanTextDisplayElement(
+        field.bindingExpression,
+        field.booleanDisplayText,
+        field.projection.role === AppBuilderCollectionDisplayRole.Title ? 'strong' : 'span',
+        attributes,
+        prefix,
+      );
+      return {
+        elementFragment: textDisplay.elementFragment,
+        contributingFragments: textDisplay.contributingFragments,
+        controlUseInventoryRows: [],
+      };
+    }
     const booleanDisplay = collectionBooleanDisplayElement(
       field.bindingExpression,
       field.label,
@@ -2141,6 +2282,8 @@ function collectionTableHeaderElement(
         actionChannelKind: AppBuilderControlUseActionChannelKind.DirectControlEvent,
         buttonText: column.header,
         buttonType: AppBuilderSourceLoweringButtonType.Button,
+        labelText: column.header,
+        labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
       })),
       ...(filterControl?.controlUseInventoryRows ?? []),
     ],
@@ -2176,8 +2319,8 @@ function collectionTableHeaderFilterControl(
       compositionKind: AppBuilderSourceLoweringCompositionKind.CollectionTable,
       fragments: [elementFragment],
       realizationPolicyId: AppBuilderControlRealizationPolicyId.InlineNative,
-      controlPatternId: AppBuilderControlPatternId.NativeTextInput,
-      controlId: AppBuilderControlId.TextInput,
+      controlPatternId: AppBuilderControlPatternId.NativeSearchInput,
+      controlId: AppBuilderControlId.SearchInput,
       fieldName: column.field?.memberName ?? null,
       bindingExpression: column.filterBindingExpression,
       bindingExpressionSource: AppBuilderSourceLoweringBindingExpressionSource.ExplicitRequest,
@@ -2232,6 +2375,20 @@ function collectionTableCellElement(
     collectionColumnVisualFilter(column),
   );
   if (column.field?.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+    if (column.booleanDisplayText != null) {
+      const textDisplay = collectionBooleanTextDisplayElement(
+        column.bindingExpression,
+        column.booleanDisplayText,
+        'td',
+        attributes,
+        '',
+      );
+      return {
+        elementFragment: textDisplay.elementFragment,
+        contributingFragments: textDisplay.contributingFragments,
+        controlUseInventoryRows: [],
+      };
+    }
     const booleanDisplay = collectionBooleanDisplayElement(
       column.bindingExpression,
       column.header,
@@ -2250,6 +2407,20 @@ function collectionTableCellElement(
         column.header,
         booleanDisplay.contributingFragments,
       ),
+    };
+  }
+  const linkDisplay = collectionLinkDisplayElement(
+    column.field,
+    column.bindingExpression,
+    'td',
+    attributes,
+    '',
+  );
+  if (linkDisplay != null) {
+    return {
+      elementFragment: linkDisplay.elementFragment,
+      contributingFragments: linkDisplay.contributingFragments,
+      controlUseInventoryRows: [],
     };
   }
   const textInterpolationFragment = appBuilderTextInterpolationFragment(column.bindingExpression);
@@ -2282,6 +2453,20 @@ function collectionCardDisplayFieldElement(
     { fieldName: field.field.memberName },
   );
   if (field.field.valueKind === AppBuilderDomainFieldValueKind.Boolean) {
+    if (field.booleanDisplayText != null) {
+      const textDisplay = collectionBooleanTextDisplayElement(
+        field.bindingExpression,
+        field.booleanDisplayText,
+        collectionCardDisplayFieldTag(field.projection.role),
+        attributes,
+        prefix,
+      );
+      return {
+        elementFragment: textDisplay.elementFragment,
+        contributingFragments: textDisplay.contributingFragments,
+        controlUseInventoryRows: [],
+      };
+    }
     const booleanDisplay = collectionBooleanDisplayElement(
       field.bindingExpression,
       field.label,
@@ -2302,6 +2487,20 @@ function collectionCardDisplayFieldElement(
       ),
     };
   }
+  const linkDisplay = collectionLinkDisplayElement(
+    field.field,
+    field.bindingExpression,
+    collectionCardDisplayFieldTag(field.projection.role),
+    attributes,
+    prefix,
+  );
+  if (linkDisplay != null) {
+    return {
+      elementFragment: linkDisplay.elementFragment,
+      contributingFragments: linkDisplay.contributingFragments,
+      controlUseInventoryRows: [],
+    };
+  }
   const textInterpolationFragment = appBuilderTextInterpolationFragment(field.bindingExpression);
   const elementFragment = appBuilderTemplateElementFragment(
     collectionCardDisplayFieldTag(field.projection.role),
@@ -2312,6 +2511,71 @@ function collectionCardDisplayFieldElement(
     elementFragment,
     contributingFragments: [textInterpolationFragment, elementFragment],
     controlUseInventoryRows: [],
+  };
+}
+
+function collectionLinkDisplayElement(
+  field: AppBuilderDomainFieldSourceModel | null,
+  bindingExpression: string,
+  tagName: string,
+  attributes: readonly { readonly rawName: string; readonly rawValue?: string | null }[],
+  prefix: string,
+): {
+  readonly elementFragment: AppBuilderTemplateElementPartSourceFragment;
+  readonly contributingFragments: readonly AppBuilderPartSourceFragment[];
+} | null {
+  if (field == null) {
+    return null;
+  }
+  const hrefBindingExpression = appBuilderDomainFieldDisplayHrefBindingExpression(field, bindingExpression);
+  if (hrefBindingExpression == null) {
+    return null;
+  }
+  const hrefAttribute = appBuilderAttributeBindingAttributeFragment('href', hrefBindingExpression);
+  const textInterpolationFragment = appBuilderTextInterpolationFragment(bindingExpression);
+  const linkFragment = appBuilderTemplateElementFragment(
+    'a',
+    [
+      hrefAttribute.templateAttribute,
+      { rawName: 'external' },
+    ],
+    textInterpolationFragment.text,
+  );
+  const elementFragment = appBuilderTemplateElementFragment(
+    tagName,
+    attributes,
+    null,
+    [
+      ...(prefix.length === 0 ? [] : [authoredTemplatePlainTextChildSource(prefix)]),
+      linkFragment.templateElement,
+    ],
+  );
+  return {
+    elementFragment,
+    contributingFragments: [hrefAttribute, textInterpolationFragment, linkFragment, elementFragment],
+  };
+}
+
+function collectionBooleanTextDisplayElement(
+  bindingExpression: string,
+  booleanDisplayText: AppBuilderCollectionBooleanDisplayText,
+  tagName: string,
+  attributes: readonly { readonly rawName: string; readonly rawValue?: string | null }[],
+  prefix: string,
+): {
+  readonly elementFragment: AppBuilderTemplateElementPartSourceFragment;
+  readonly contributingFragments: readonly AppBuilderPartSourceFragment[];
+} {
+  const expression = `${bindingExpression} ? ${appBuilderSeedRecordLiteral(booleanDisplayText.trueText)} : ${appBuilderSeedRecordLiteral(booleanDisplayText.falseText)}`;
+  const textInterpolationFragment = appBuilderTextInterpolationFragment(expression);
+  const elementFragment = appBuilderTemplateElementFragment(
+    tagName,
+    attributes,
+    `${prefix}${textInterpolationFragment.text}`,
+  );
+  return {
+    elementFragment,
+    contributingFragments: [textInterpolationFragment, elementFragment],
   };
 }
 
@@ -2551,7 +2815,7 @@ function collectionCardDisplayFieldLabelPrefix(
     case AppBuilderCollectionDisplayRole.Number:
     case AppBuilderCollectionDisplayRole.Boolean:
     case AppBuilderCollectionDisplayRole.Relation:
-      return `${authoredTemplateTextContentText(field.label)}:`;
+      return `${authoredTemplateTextContentText(field.label)}: `;
   }
 }
 

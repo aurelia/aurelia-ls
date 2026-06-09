@@ -43,6 +43,8 @@ export function appBuilderGeneratedFixturePublicResponseSnapshot(answer, normali
       ...(answer.value.sourcePlanWitnessRows == null
         ? {}
         : { sourcePlanWitnessRows: answer.value.sourcePlanWitnessRows }),
+      handoffNoteCount: answer.value.handoffNoteCount,
+      handoffNotes: answer.value.handoffNotes,
       suppliedInputCount: answer.value.suppliedInputCount,
       explicitSuppliedInputCount: answer.value.explicitSuppliedInputCount,
       decisionBundleCount: answer.value.decisionBundleCount,

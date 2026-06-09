@@ -241,7 +241,7 @@ export {
 
 /** Request for compact source-lowering preview rows over the app-builder part menu. */
 export interface AppBuilderPartSourceLoweringPreviewRequest extends AppBuilderPartMenuRequest {
-  /** Restrict preview rows to required-only, optional-slot, or both sample families. */
+  /** Restrict preview rows to required-only, optional-slot, or both sample families; omitted keeps broad previews required-only. */
   readonly sampleKinds?: readonly AppBuilderPartSourceLoweringSampleKind[];
   /** Include generated source text in addition to fragment kinds and structural hints. */
   readonly includeSourceText?: boolean;
@@ -651,10 +651,7 @@ export function appBuilderPartSourceLoweringPreview(
 ): AppBuilderPartSourceLoweringPreview {
   const filter = appBuilderPartMenuDescriptorFilter(request);
   const authoringTierPolicy = filter.authoringTierPolicy;
-  const sampleKinds = request.sampleKinds ?? [
-    AppBuilderPartSourceLoweringSampleKind.RequiredOnly,
-    AppBuilderPartSourceLoweringSampleKind.WithOptionalSlots,
-  ];
+  const sampleKinds = request.sampleKinds ?? [AppBuilderPartSourceLoweringSampleKind.RequiredOnly];
   const rows: AppBuilderPartSourceLoweringPreviewRow[] = [];
   for (const part of filter.parts) {
     for (const sample of sampleSlotAssignmentSamplesForPart(part)) {
@@ -1217,6 +1214,15 @@ function sourceLowererLookupForPart(
 
 const APP_BUILDER_PART_SOURCE_LOWERERS: readonly AppBuilderPartSourceLowererRegistration[] = [
   appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.TextInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.EmailInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.UrlInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.TelInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.PasswordInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.SearchInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.TimeInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.DateTimeLocalInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.MonthInput, lower: lowerSimpleControlElement }),
+  appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.WeekInput, lower: lowerSimpleControlElement }),
   appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.NumberInput, lower: lowerSimpleControlElement }),
   appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.DateInput, lower: lowerSimpleControlElement }),
   appBuilderPartSourceLowererRegistration({ partKind: AppBuilderPartKind.Control, partId: AppBuilderControlId.RangeInput, lower: lowerSimpleControlElement }),
@@ -1896,20 +1902,31 @@ function lowerSimpleControlElement(
     [
       ...control.sourceElement.staticAttributes,
       partBindingCommandAttributeSource(part, control.bindingTargetName, expression),
-      ...optionalControlNumericAttributes(slots),
+      ...optionalControlNativeConstraintAttributes(slots),
     ],
     control.sourceElement.childText,
   )];
 }
 
-function optionalControlNumericAttributes(
+function optionalControlNativeConstraintAttributes(
   slots: AppBuilderPartSlotReader,
 ): readonly AuthoredTemplateAttributeSource[] {
   return [
+    ...optionalBooleanAttribute('required', slots.optionalBooleanLiteral(AppBuilderPartSlotKind.NativeRequired)),
+    ...optionalStaticAttribute('minlength', slots.get(AppBuilderPartSlotKind.TextMinLength)),
+    ...optionalStaticAttribute('maxlength', slots.get(AppBuilderPartSlotKind.TextMaxLength)),
+    ...optionalStaticAttribute('pattern', slots.get(AppBuilderPartSlotKind.TextPattern)),
     ...optionalStaticAttribute('min', slots.get(AppBuilderPartSlotKind.NumericMinimum)),
     ...optionalStaticAttribute('max', slots.get(AppBuilderPartSlotKind.NumericMaximum)),
     ...optionalStaticAttribute('step', slots.get(AppBuilderPartSlotKind.NumericStep)),
   ];
+}
+
+function optionalBooleanAttribute(
+  rawName: string,
+  value: boolean | null,
+): readonly AuthoredTemplateAttributeSource[] {
+  return value === true ? [{ rawName }] : [];
 }
 
 function optionalStaticAttribute(
@@ -1932,11 +1949,13 @@ interface ChoiceInputGroupElementInput extends ChoiceOptionSourceInput {
   readonly type: 'checkbox' | 'radio';
   readonly expression: string;
   readonly radioGroupName?: string | null;
+  readonly required: boolean;
 }
 
 interface SelectElementInput extends ChoiceOptionSourceInput {
   readonly multiple: boolean;
   readonly expression: string;
+  readonly required: boolean;
 }
 
 function lowerCheckboxListControl(
@@ -1947,6 +1966,7 @@ function lowerCheckboxListControl(
     type: 'checkbox',
     expression: slots.required(AppBuilderPartSlotKind.BindingExpression),
     ...choiceOptionSourceInput(part, slots),
+    required: false,
   })];
 }
 
@@ -1959,6 +1979,7 @@ function lowerRadioGroupControl(
     expression: slots.required(AppBuilderPartSlotKind.BindingExpression),
     ...choiceOptionSourceInput(part, slots),
     radioGroupName: slots.optionalNonEmpty(AppBuilderPartSlotKind.RadioGroupName),
+    required: slots.optionalBooleanLiteral(AppBuilderPartSlotKind.NativeRequired) === true,
   })];
 }
 
@@ -1970,6 +1991,7 @@ function lowerSingleSelectControl(
     multiple: false,
     expression: slots.required(AppBuilderPartSlotKind.BindingExpression),
     ...choiceOptionSourceInput(part, slots),
+    required: slots.optionalBooleanLiteral(AppBuilderPartSlotKind.NativeRequired) === true,
   })];
 }
 
@@ -1981,6 +2003,7 @@ function lowerMultiSelectControl(
     multiple: true,
     expression: slots.required(AppBuilderPartSlotKind.BindingExpression),
     ...choiceOptionSourceInput(part, slots),
+    required: false,
   })];
 }
 
@@ -2717,6 +2740,7 @@ function selectElement(
         targetName: BuiltInBindingCommandTargetName.Value,
         rawValue: input.expression,
       }),
+      ...optionalBooleanAttribute('required', input.required),
       ...optionalMatcherAttribute(input.matcherExpression),
     ],
     null,
@@ -2760,6 +2784,7 @@ function choiceInputControlElement(
       rawValue: input.type,
     },
     ...(input.type === 'radio' ? optionalStaticAttribute('name', input.radioGroupName) : []),
+    ...optionalBooleanAttribute('required', input.required),
     builtInBindingCommandAttributeSource({
       commandName: BuiltInBindingCommandName.Bind,
       targetName: BuiltInBindingCommandTargetName.Checked,

@@ -67,7 +67,7 @@ const VALUE_CONTROL_CHANNEL_KINDS = new Set<RuntimeBindingValueChannelKind>([
 
 const BUTTON_INPUT_TYPES = new Set(['button', 'submit', 'reset']);
 const VALUE_CONTROL_PREFERRED_ACTION_EVENTS = ['change', 'input'] as const;
-const TEXT_VALUE_INPUT_TYPES = new Set(['email', 'password', 'search', 'tel', 'text', 'url']);
+const PLAIN_TEXT_INPUT_TYPES = new Set(['text']);
 
 export function readControlUseInventoryRows(
   emission: AureliaAppWorldProjectEmission,
@@ -556,7 +556,7 @@ function descriptorMatchesElement(
   switch (descriptor.id) {
     case AppBuilderControlId.TextInput: {
       const type = staticAttributeValue(attributes, 'type');
-      return type == null || TEXT_VALUE_INPUT_TYPES.has(type.toLowerCase());
+      return type == null || PLAIN_TEXT_INPUT_TYPES.has(type.toLowerCase());
     }
     case AppBuilderControlId.SingleSelect:
       return !hasStaticAttribute(attributes, 'multiple')
@@ -794,6 +794,24 @@ function controlPatternForControlId(id: AppBuilderControlId): AppBuilderControlP
   switch (id) {
     case AppBuilderControlId.TextInput:
       return AppBuilderControlPatternId.NativeTextInput;
+    case AppBuilderControlId.EmailInput:
+      return AppBuilderControlPatternId.NativeEmailInput;
+    case AppBuilderControlId.UrlInput:
+      return AppBuilderControlPatternId.NativeUrlInput;
+    case AppBuilderControlId.TelInput:
+      return AppBuilderControlPatternId.NativeTelInput;
+    case AppBuilderControlId.PasswordInput:
+      return AppBuilderControlPatternId.NativePasswordInput;
+    case AppBuilderControlId.SearchInput:
+      return AppBuilderControlPatternId.NativeSearchInput;
+    case AppBuilderControlId.TimeInput:
+      return AppBuilderControlPatternId.NativeTimeInput;
+    case AppBuilderControlId.DateTimeLocalInput:
+      return AppBuilderControlPatternId.NativeDateTimeLocalInput;
+    case AppBuilderControlId.MonthInput:
+      return AppBuilderControlPatternId.NativeMonthInput;
+    case AppBuilderControlId.WeekInput:
+      return AppBuilderControlPatternId.NativeWeekInput;
     case AppBuilderControlId.NumberInput:
       return AppBuilderControlPatternId.NativeNumberInput;
     case AppBuilderControlId.DateInput:

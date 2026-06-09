@@ -15,6 +15,7 @@ export * from './di-state-class-source.js';
 export * from './framework-api-catalog.js';
 export * from './framework-component-catalog.js';
 export * from './framework-syntax-catalog.js';
+export * from './generated-copy.js';
 export * from './minimal-app-source.js';
 export * from './ontology/index.js';
 export * from './policy/index.js';

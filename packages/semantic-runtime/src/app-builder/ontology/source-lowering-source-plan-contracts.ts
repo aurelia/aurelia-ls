@@ -95,6 +95,9 @@ import type {
 import type {
   AppBuilderSourcePlanWitnessRow,
 } from './source-plan-witness.js';
+import type {
+  AppBuilderSourcePlanHandoffNote,
+} from './source-lowering-handoff.js';
 
 /** Source-lowering source-plan issue category. */
 export enum AppBuilderSourceLoweringSourcePlanIssueKind {
@@ -308,6 +311,8 @@ export enum AppBuilderSourceLoweringSourcePlanIssueKind {
   RouterBackedListDetailInvalidRelationshipEntity = 'router-backed-list-detail-invalid-relationship-entity',
   /** Router-backed list/detail lowering received an incomplete relationship descriptor for reference lookup source. */
   RouterBackedListDetailInvalidRelationshipDescriptor = 'router-backed-list-detail-invalid-relationship-descriptor',
+  /** Router-backed list/detail lowering received an invalid CollectionDisplayFields payload for detail display. */
+  RouterBackedListDetailInvalidCollectionDisplayField = 'router-backed-list-detail-invalid-collection-display-field',
   /** Router-backed list/detail lowering received an invalid CollectionTableColumns payload. */
   RouterBackedListDetailInvalidCollectionTableColumn = 'router-backed-list-detail-invalid-collection-table-column',
   /** Router-backed list/detail table presentation selected a field absent from the primary domain. */
@@ -454,6 +459,7 @@ export const APP_BUILDER_SOURCE_LOWERING_SOURCE_PLAN_ISSUE_KINDS = [
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailAmbiguousRelationshipPrimaryEntity,
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidRelationshipEntity,
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidRelationshipDescriptor,
+  AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionDisplayField,
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailInvalidCollectionTableColumn,
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailUnknownCollectionTableColumnField,
   AppBuilderSourceLoweringSourcePlanIssueKind.RouterBackedListDetailUnknownCollectionTableColumnRelationship,
@@ -1212,6 +1218,10 @@ export interface AppBuilderSourceLoweringSourcePlan {
   readonly sourcePlanWitnessCount: number;
   /** Compact witnesses derived from the generated SourcePlan file, contribution, and tooling rows. */
   readonly sourcePlanWitnessRows?: readonly AppBuilderSourcePlanWitnessRow[];
+  /** Number of AI handoff/result-boundary notes attached to this generated SourcePlan preview. */
+  readonly handoffNoteCount: number;
+  /** Public handoff/result-boundary notes for AI and IDE consumers. */
+  readonly handoffNotes: readonly AppBuilderSourcePlanHandoffNote[];
   /** SourcePlan preview when explicit placement and source lowering are both complete. */
   readonly sourcePlan: SourcePlan | null;
   /** Number of supplied input markers considered after decision-bundle expansion. */

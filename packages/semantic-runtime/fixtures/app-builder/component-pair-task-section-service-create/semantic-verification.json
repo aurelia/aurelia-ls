@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "component-pair-task-section-service-create",
   "ok": true,
-  "expectedEffects": 11,
+  "expectedEffects": 12,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -61,7 +66,7 @@
       "summary": "Component-pair service collection SourcePlan should bind template reads back to the service-backed member. Observed 2 matching semantic fact(s)."
     }
   ],
-  "expectedControlUseRows": 4,
+  "expectedControlUseRows": 3,
   "controlUseResults": [
     {
       "outcome": "satisfied",
@@ -170,42 +175,6 @@
           "end": 340
         }
       }
-    },
-    {
-      "outcome": "satisfied",
-      "expected": {
-        "controlPatternId": "native-boolean-checkbox",
-        "innerControlPatternId": null,
-        "controlId": "checkbox",
-        "bindingExpression": "taskItem.done",
-        "handlerExpression": null,
-        "actionChannelKind": null,
-        "routeInstruction": null,
-        "linkText": null,
-        "eventName": null,
-        "buttonText": null,
-        "buttonType": null
-      },
-      "actual": {
-        "definitionName": "service-create-task-section",
-        "sourceKind": "authored-runtime-binding",
-        "classificationKind": "native-value-channel",
-        "controlPatternId": "native-boolean-checkbox",
-        "controlId": "checkbox",
-        "bindingExpression": "taskItem.done",
-        "handlerExpression": null,
-        "actionChannelKind": null,
-        "routeInstruction": null,
-        "linkText": null,
-        "eventName": null,
-        "buttonText": null,
-        "buttonType": null,
-        "source": {
-          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-create/src/service-create-task-section.html",
-          "start": 1215,
-          "end": 1246
-        }
-      }
     }
   ],
   "generatedSourceQualityResults": [],
@@ -214,7 +183,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 5101,
+      "jsonLength": 11178,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -226,13 +195,13 @@
     {
       "outcome": "satisfied",
       "path": "src/service-create-task-section.ts",
-      "textLength": 545,
+      "textLength": 584,
       "summary": "Generated SourcePlan file 'src/service-create-task-section.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "src/service-create-task-section.html",
-      "textLength": 1453,
+      "textLength": 1373,
       "summary": "Generated SourcePlan file 'src/service-create-task-section.html' matches the stored app-builder request output."
     },
     {
@@ -244,8 +213,20 @@
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 257,
+      "textLength": 412,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 351,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -262,8 +243,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 11,
-      "jsonLength": 3343,
+      "rowCount": 12,
+      "jsonLength": 3690,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -290,15 +271,15 @@
     {
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
-      "rowCount": 4,
-      "jsonLength": 3827,
+      "rowCount": 3,
+      "jsonLength": 2868,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 54,
-      "jsonLength": 25123,
+      "rowCount": 60,
+      "jsonLength": 26859,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

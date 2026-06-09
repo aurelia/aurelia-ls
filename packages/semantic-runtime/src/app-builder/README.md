@@ -118,6 +118,13 @@ effects, style rows, and input payload detail.
 facets. Those rows mean "this executable target consumes this facet payload",
 not "this input facet is itself source-lowerable"; exact callable targets remain
 registered in `ontology/source-lowering-surface.ts`.
+Existing-app fact facets use the same selector-sensitive posture. Compact
+answers expose fact-query counts; selected/detail answers expose
+`existingAppFactQueryRows` that point to ordinary app-world query families such
+as resource definitions, resource visibility, control-use inventory, router
+queries, and plugin product/diagnostic queries. Treat those rows as a typed path
+for an AI to gather app facts before extending a repo, not as an external
+control-library source-lowering mechanism.
 
 ## Source Lowering
 
@@ -221,6 +228,18 @@ Refresh them with:
 pnpm --filter @aurelia-ls/semantic-runtime fixtures:app-builder-generated
 ```
 
+Runtime-smoke runnable generated fixtures with:
+
+```powershell
+pnpm --filter @aurelia-ls/semantic-runtime check:fixture-runtime
+```
+
+That command fresh-copies runnable fixtures outside the workspace, installs
+their package dependencies, runs `pnpm check`, runs `pnpm build`, and renders
+each app through Vite plus Playwright. Use `FIXTURE_RUNTIME_START` and
+`FIXTURE_RUNTIME_LIMIT` for batch runs. This is fixture verification, not an
+app-builder source-lowering subsystem.
+
 Those fixtures preserve exact public request inputs, compact public response
 snapshots, generated source, manifests, expected effects, and semantic-runtime
 verification snapshots. They are the review lane for end-user-shaped output,
@@ -317,6 +336,10 @@ schema if we need it later. It also proves domain-owned finite option type
 aliases for collection-backed submit/create forms, so a plural choice-set field can
 still generate a singular option value type without coupling the alias to the
 component name. The
+native date control currently uses browser date string transport with
+`value.bind`; do not generate `value-as-date.bind` or `Date | null` for v1
+native date inputs unless a future date-object conversion policy is explicitly
+designed against runtime-html observer support. The
 sorting fixture is intentionally narrow: collection-table lowering wires a
 caller-supplied sort handler through a native header button, while
 `DomainCommandAction` emits the caller-supplied method body. The filtering

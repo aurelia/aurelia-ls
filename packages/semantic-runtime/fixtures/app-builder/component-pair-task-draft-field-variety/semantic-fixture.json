@@ -24,7 +24,23 @@
       ]
     },
     {
-      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling.",
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=root-document",
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling.",
       "effectKind": "project-tooling",
       "scope": "project",
       "topologyNodeKind": "build-tool",
@@ -184,8 +200,8 @@
       "linkText": null,
       "buttonText": "Save draft",
       "buttonType": "submit",
-      "labelText": null,
-      "labelTextSource": null,
+      "labelText": "Save draft",
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -246,6 +262,48 @@
         "targetRef": {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "title",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "help",
+      "messageText": "Enter a short task title before saving the draft.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "title-field-help",
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "field-group"
         },
         "compositionKind": null,
@@ -277,6 +335,426 @@
       "describedByIds": [
         "description-field-help"
       ],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "description",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "help",
+      "messageText": "Describe the expected outcome in one or two sentences.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "description-field-help",
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "email-input",
+      "innerControlPatternId": "native-email-input",
+      "fieldName": "contactEmail",
+      "actionName": null,
+      "bindingExpression": "contactEmail",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Contact Email",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "contact-email-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "url-input",
+      "innerControlPatternId": "native-url-input",
+      "fieldName": "websiteUrl",
+      "actionName": null,
+      "bindingExpression": "websiteUrl",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Website URL",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "website-url-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "tel-input",
+      "innerControlPatternId": "native-tel-input",
+      "fieldName": "supportPhone",
+      "actionName": null,
+      "bindingExpression": "supportPhone",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Support Phone",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "support-phone-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "password-input",
+      "innerControlPatternId": "native-password-input",
+      "fieldName": "accessCode",
+      "actionName": null,
+      "bindingExpression": "accessCode",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Access Code",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "access-code-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "search-input",
+      "innerControlPatternId": "native-search-input",
+      "fieldName": "filterText",
+      "actionName": null,
+      "bindingExpression": "filterText",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Filter Text",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "filter-text-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "time-input",
+      "innerControlPatternId": "native-time-input",
+      "fieldName": "appointmentTime",
+      "actionName": null,
+      "bindingExpression": "appointmentTime",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Appointment Time",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "appointment-time-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "datetime-local-input",
+      "innerControlPatternId": "native-datetime-local-input",
+      "fieldName": "scheduledAtLocal",
+      "actionName": null,
+      "bindingExpression": "scheduledAtLocal",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Scheduled At",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "scheduled-at-local-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "month-input",
+      "innerControlPatternId": "native-month-input",
+      "fieldName": "billingMonth",
+      "actionName": null,
+      "bindingExpression": "billingMonth",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Billing Month",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "billing-month-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
+      "messageKind": null,
+      "messageText": null,
+      "messageTextSource": null,
+      "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "field-group"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "field-group",
+      "controlId": "week-input",
+      "innerControlPatternId": "native-week-input",
+      "fieldName": "reviewWeek",
+      "actionName": null,
+      "bindingExpression": "reviewWeek",
+      "bindingExpressionSource": "explicit-request",
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": "Review Week",
+      "labelTextSource": "explicit-request",
+      "fieldControlId": "review-week-field",
+      "fieldControlIdSource": "selected-field-name",
+      "describedByIds": [],
       "messageKind": null,
       "messageText": null,
       "messageTextSource": null,
@@ -367,6 +845,48 @@
       "messageText": null,
       "messageTextSource": null,
       "messageId": null,
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "progressPercent",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "status",
+      "messageText": "Use the slider to capture a rough completion signal.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "progress-percent-field-status",
       "valueDomainExpression": null,
       "valueDomainExpressionSource": null
     },
@@ -504,6 +1024,48 @@
         "targetRef": {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "priority",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "help",
+      "messageText": "Pick the urgency that should drive review order.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "priority-field-help",
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "field-group"
         },
         "compositionKind": null,
@@ -590,6 +1152,48 @@
         "targetRef": {
           "kind": "control-pattern",
           "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "reviewType",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "help",
+      "messageText": "Choose the review mode that fits the task.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "review-type-field-help",
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
           "id": "field-group"
         },
         "compositionKind": null,
@@ -627,6 +1231,48 @@
       "messageId": null,
       "valueDomainExpression": "checkpointOptions",
       "valueDomainExpressionSource": "field-options"
+    },
+    {
+      "sourceReference": {
+        "sourceKind": "source-lowering-invocation",
+        "targetRef": {
+          "kind": "control-pattern",
+          "domain": "control",
+          "id": "form-message"
+        },
+        "compositionKind": null,
+        "fragmentKinds": [
+          "template-element"
+        ],
+        "fragmentCount": 1
+      },
+      "realizationPolicyId": "inline-native",
+      "controlPatternId": "form-message",
+      "controlId": null,
+      "innerControlPatternId": null,
+      "fieldName": "checkpoints",
+      "actionName": null,
+      "bindingExpression": null,
+      "bindingExpressionSource": null,
+      "handlerExpression": null,
+      "handlerExpressionSource": null,
+      "eventName": null,
+      "actionChannelKind": null,
+      "routeInstruction": null,
+      "linkText": null,
+      "buttonText": null,
+      "buttonType": null,
+      "labelText": null,
+      "labelTextSource": null,
+      "fieldControlId": null,
+      "fieldControlIdSource": null,
+      "describedByIds": [],
+      "messageKind": "status",
+      "messageText": "Select every checkpoint already completed.",
+      "messageTextSource": "accessibility-help-error-payload",
+      "messageId": "checkpoints-field-status",
+      "valueDomainExpression": null,
+      "valueDomainExpressionSource": null
     }
   ],
   "sourcePlanWitnessRows": [
@@ -913,7 +1559,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 26
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -933,7 +1579,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 28
+      "fragmentTextLength": 48
     },
     {
       "rowKind": "contribution",
@@ -953,7 +1599,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 28
+      "fragmentTextLength": 41
     },
     {
       "rowKind": "contribution",
@@ -973,7 +1619,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 22
+      "fragmentTextLength": 24
     },
     {
       "rowKind": "contribution",
@@ -993,7 +1639,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 45
+      "fragmentTextLength": 24
     },
     {
       "rowKind": "contribution",
@@ -1013,7 +1659,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 49
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -1033,7 +1679,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 36
+      "fragmentTextLength": 46
     },
     {
       "rowKind": "contribution",
@@ -1053,7 +1699,7 @@
         "surfaceKind": "source-plan-preview"
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 46
+      "fragmentTextLength": 33
     },
     {
       "rowKind": "contribution",
@@ -1065,6 +1711,186 @@
       "fileLanguage": "typescript",
       "contributionIndex": 18,
       "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 32
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 19,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 26
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 20,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 28
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 21,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 21
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 22,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 22
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 23,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 45
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 24,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 49
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 25,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 36
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 26,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-target",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-target",
+        "targetKind": "application-pattern",
+        "targetId": "local-view-model-state",
+        "surfaceKind": "source-plan-preview"
+      },
+      "fragmentLanguage": "typescript",
+      "fragmentTextLength": 46
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.ts",
+      "fileRole": "root-component",
+      "fileLanguage": "typescript",
+      "contributionIndex": 27,
+      "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
         "kind": "app-builder-source-lowering-invocation",
@@ -1075,7 +1901,7 @@
         "innerControlPatternId": null
       },
       "fragmentLanguage": "typescript",
-      "fragmentTextLength": 95
+      "fragmentTextLength": 481
     },
     {
       "rowKind": "file-artifact",
@@ -1110,7 +1936,7 @@
         "innerControlPatternId": "native-text-input"
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 320
+      "fragmentTextLength": 358
     },
     {
       "rowKind": "contribution",
@@ -1132,7 +1958,7 @@
         "innerControlPatternId": "native-textarea"
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 375
+      "fragmentTextLength": 391
     },
     {
       "rowKind": "contribution",
@@ -1150,11 +1976,11 @@
         "targetKind": "control-pattern",
         "targetId": "field-group",
         "controlPatternId": "field-group",
-        "controlId": "number-input",
-        "innerControlPatternId": "native-number-input"
+        "controlId": "email-input",
+        "innerControlPatternId": "native-email-input"
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 261
+      "fragmentTextLength": 229
     },
     {
       "rowKind": "contribution",
@@ -1165,6 +1991,204 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 3,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "url-input",
+        "innerControlPatternId": "native-url-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 210
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 4,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "tel-input",
+        "innerControlPatternId": "native-tel-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 218
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 5,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "password-input",
+        "innerControlPatternId": "native-password-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 229
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 6,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "search-input",
+        "innerControlPatternId": "native-search-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 213
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 7,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "time-input",
+        "innerControlPatternId": "native-time-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 231
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 8,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "datetime-local-input",
+        "innerControlPatternId": "native-datetime-local-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 242
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 9,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "month-input",
+        "innerControlPatternId": "native-month-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 220
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 10,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "week-input",
+        "innerControlPatternId": "native-week-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 211
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 11,
+      "contributionKind": "source-fragment",
+      "contributionOriginKind": "app-builder-source-lowering-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-source-lowering-invocation",
+        "targetKind": "control-pattern",
+        "targetId": "field-group",
+        "controlPatternId": "field-group",
+        "controlId": "number-input",
+        "innerControlPatternId": "native-number-input"
+      },
+      "fragmentLanguage": "html",
+      "fragmentTextLength": 270
+    },
+    {
+      "rowKind": "contribution",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-draft-fields.html",
+      "fileRole": "template",
+      "fileLanguage": "html",
+      "contributionIndex": 12,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1186,7 +2210,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 4,
+      "contributionIndex": 13,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1198,7 +2222,7 @@
         "innerControlPatternId": "native-date-input"
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 207
+      "fragmentTextLength": 199
     },
     {
       "rowKind": "contribution",
@@ -1208,7 +2232,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 5,
+      "contributionIndex": 14,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1230,7 +2254,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 6,
+      "contributionIndex": 15,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1252,7 +2276,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 7,
+      "contributionIndex": 16,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1274,7 +2298,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 8,
+      "contributionIndex": 17,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1296,7 +2320,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 9,
+      "contributionIndex": 18,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1318,7 +2342,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 10,
+      "contributionIndex": 19,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -1343,7 +2367,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 11,
+      "contributionIndex": 20,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-composition",
       "contributionOrigin": {
@@ -1366,7 +2390,7 @@
       "filePath": "src/task-draft-fields.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 12,
+      "contributionIndex": 21,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-composition",
       "contributionOrigin": {
@@ -1380,7 +2404,18 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 3809
+      "fragmentTextLength": 5948
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/runtime-html",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
     },
     {
       "rowKind": "project-tooling-dependency",
@@ -1400,9 +2435,51 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/vite-plugin",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "typescript",
       "dependencyVersionRange": "^6.0.3",
       "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "vite",
+      "dependencyVersionRange": "^7.0.2",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "dev",
+      "scriptCommand": "vite"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "build",
+      "scriptCommand": "vite build"
     },
     {
       "rowKind": "project-tooling-script",
@@ -1426,6 +2503,32 @@
       "hasText": true,
       "projectToolingFileKind": "package-manifest",
       "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "index.html",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "root-document",
+      "projectToolingFileLanguage": "html"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "vite.config.ts",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "build-config",
+      "projectToolingFileLanguage": "typescript"
     },
     {
       "rowKind": "project-tooling-file",

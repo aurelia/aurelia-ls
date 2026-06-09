@@ -17,9 +17,7 @@
           <tbody>
             <tr repeat.for="taskItem of state.taskItemsForProject(project)">
               <td>${taskItem.title}</td>
-              <td>
-                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-              </td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
               <td>
                 <a load.bind="'/assignments/' + taskItem.id">Open assignment</a>
               </td>

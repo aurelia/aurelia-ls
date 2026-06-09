@@ -37,7 +37,20 @@
                     {
                       "name": "email",
                       "title": "Email",
-                      "valueKind": "text"
+                      "valueKind": "text",
+                      "fieldAffordance": "email-address"
+                    },
+                    {
+                      "name": "websiteUrl",
+                      "title": "Website",
+                      "valueKind": "text",
+                      "fieldAffordance": "url"
+                    },
+                    {
+                      "name": "supportPhone",
+                      "title": "Support Phone",
+                      "valueKind": "text",
+                      "fieldAffordance": "telephone"
                     },
                     {
                       "name": "active",
@@ -104,9 +117,21 @@
                       "label": "Email"
                     },
                     {
+                      "fieldName": "websiteUrl",
+                      "role": "summary",
+                      "label": "Website"
+                    },
+                    {
+                      "fieldName": "supportPhone",
+                      "role": "summary",
+                      "label": "Support Phone"
+                    },
+                    {
                       "fieldName": "active",
                       "role": "boolean",
-                      "label": "Active"
+                      "label": "Active",
+                      "booleanTrueText": "Active",
+                      "booleanFalseText": "Inactive"
                     }
                   ]
                 }
@@ -122,12 +147,16 @@
                       "contactId": "contact-alex",
                       "fullName": "Alex Morgan",
                       "email": "alex@example.com",
+                      "websiteUrl": "https://example.com/alex",
+                      "supportPhone": "+31 20 000 0001",
                       "active": true
                     },
                     {
                       "contactId": "contact-riley",
                       "fullName": "Riley Chen",
                       "email": "riley@example.com",
+                      "websiteUrl": "https://example.com/riley",
+                      "supportPhone": "+31 20 000 0002",
                       "active": false
                     }
                   ]

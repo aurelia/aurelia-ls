@@ -51,6 +51,8 @@ export enum AppBuilderPolicyAxisId {
   DomEncapsulation = 'dom-encapsulation',
   /** Which styling mechanism is used for source/tooling integration. */
   StylingMechanism = 'styling-mechanism',
+  /** How field-local validation facts are spent as native constraints, plugin rules, or handoff. */
+  ValidationMechanism = 'validation-mechanism',
   /** Whether optional plugins such as validation, i18n, state, or virtual-repeat are admitted. */
   PluginAdmission = 'plugin-admission',
 }
@@ -66,6 +68,7 @@ export const APP_BUILDER_POLICY_AXIS_IDS = [
   AppBuilderPolicyAxisId.CustomElementViewForm,
   AppBuilderPolicyAxisId.DomEncapsulation,
   AppBuilderPolicyAxisId.StylingMechanism,
+  AppBuilderPolicyAxisId.ValidationMechanism,
   AppBuilderPolicyAxisId.PluginAdmission,
 ] as const;
 
@@ -240,6 +243,28 @@ export const APP_BUILDER_POLICY_AXIS_ROWS: readonly AppBuilderPolicyAxisRow[] = 
       recommendationStatus: AppBuilderRecommendationStatus.Contextual,
       requiresExplicitInput: true,
       reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+    }),
+  },
+  {
+    id: AppBuilderPolicyAxisId.ValidationMechanism,
+    scope: AppBuilderPolicyScope.ControlLocal,
+    title: 'Validation Mechanism',
+    summary: 'Field/control policy for spending field-local scalar rules as native browser constraints, validation-plugin rules, both, or explicit LLM handoff; cross-field and business validation remain separate domain design.',
+    inputContractIds: [
+      AppBuilderInputContractId.AureliaPolicy,
+      AppBuilderInputContractId.DomainModel,
+    ],
+    inputFacetSelections: [
+      APP_BUILDER_AURELIA_PLUGIN_INPUT_SELECTION,
+      APP_BUILDER_DOMAIN_ENTITY_FIELD_INPUT_SELECTION,
+    ],
+    status: appBuilderOntologyStatus({
+      modeled: true,
+      sourceLoweringImplemented: false,
+      recommendationStatus: AppBuilderRecommendationStatus.Contextual,
+      requiresExplicitInput: true,
+      reasonAuthority: AppBuilderOntologyReasonAuthority.OperatorConfirmed,
+      note: 'Native constraint slots can spend required/text/numeric field facts today; validation-library rule generation remains deferred until a shared rule contract exists.',
     }),
   },
   {

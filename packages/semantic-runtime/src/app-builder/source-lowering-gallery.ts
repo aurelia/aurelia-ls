@@ -30,6 +30,7 @@ import {
 import {
   AppBuilderDomainActionKind,
   AppBuilderDomainActionScope,
+  AppBuilderDomainFieldAffordance,
   AppBuilderDomainFieldValueKind,
   AppBuilderDomainIdentityValueKind,
   type AppBuilderDomainActionDescriptor,
@@ -286,6 +287,7 @@ function fragmentGalleryPlan(
       entrypointPath,
       rootComponentPath: appPath,
       rootComponentClassName: 'MyApp',
+      rootElementName: 'my-app',
     });
   for (const file of componentPairSourcePlan.files) {
     assembly.addSourcePlanFile(file);
@@ -683,6 +685,15 @@ function fragmentGalleryControlLowerings(
       bindingExpression: 'title',
       labelText: 'Explicit gallery title',
     }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeEmailInput, { fieldName: 'contactEmail' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeUrlInput, { fieldName: 'websiteUrl' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeTelInput, { fieldName: 'supportPhone' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativePasswordInput, { fieldName: 'accessCode' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeSearchInput, { fieldName: 'filterText' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeTimeInput, { fieldName: 'appointmentTime' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeDateTimeLocalInput, { fieldName: 'scheduledAtLocal' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeMonthInput, { fieldName: 'billingMonth' }),
+    controlInvocation(emissionContext, AppBuilderControlPatternId.NativeWeekInput, { fieldName: 'reviewWeek' }),
     controlInvocation(emissionContext, AppBuilderControlPatternId.NativeTextarea, { fieldName: 'description' }),
     controlInvocation(emissionContext, AppBuilderControlPatternId.NativeNumberInput, { fieldName: 'quantity' }),
     controlInvocation(emissionContext, AppBuilderControlPatternId.NativeDateInput, { fieldName: 'dueDate' }),
@@ -1003,11 +1014,14 @@ function compositionKindForApplicationPattern(
     case AppBuilderApplicationPatternId.AppShell:
     case AppBuilderApplicationPatternId.ApplicationAssembly:
     case AppBuilderApplicationPatternId.NativeControlBinding:
+    case AppBuilderApplicationPatternId.ToastNotification:
     case AppBuilderApplicationPatternId.DomainCommandAction:
     case AppBuilderApplicationPatternId.RouteNavigationAction:
     case AppBuilderApplicationPatternId.AsyncDataSource:
     case AppBuilderApplicationPatternId.RouterBackedListDetail:
+    case AppBuilderApplicationPatternId.QueryStringState:
     case AppBuilderApplicationPatternId.ServiceBackedLoadSave:
+    case AppBuilderApplicationPatternId.RemoteFetchIntegration:
     case AppBuilderApplicationPatternId.LocalViewModelState:
     case AppBuilderApplicationPatternId.DiStateClass:
     case AppBuilderApplicationPatternId.EditBuffer:
@@ -1024,8 +1038,13 @@ function fragmentGallerySupportTopLevelFragments(): readonly AppBuilderPartSourc
     text: `interface GalleryItem {
   readonly title: string;
   readonly description: string;
+  readonly contactEmail: string;
+  readonly websiteUrl: string;
+  readonly supportPhone: string;
+  readonly accessCode: string;
+  readonly filterText: string;
   readonly quantity: number;
-  readonly dueDate: Date | null;
+  readonly dueDate: string;
   readonly enabled: boolean;
   readonly priority: MyAppPriority;
   readonly labels: readonly MyAppLabel[];
@@ -1041,8 +1060,13 @@ function fragmentGallerySupportClassMemberFragments(): readonly AppBuilderPartSo
   {
     title: 'Alpha',
     description: 'First gallery item',
+    contactEmail: 'alpha@example.com',
+    websiteUrl: 'https://example.com/alpha',
+    supportPhone: '+31 20 000 0001',
+    accessCode: 'alpha-secret',
+    filterText: 'alpha',
     quantity: 2,
-    dueDate: new Date('2026-06-01T00:00:00.000Z'),
+    dueDate: '2026-06-01',
     enabled: true,
     priority: 'normal',
     labels: ['frontend'],
@@ -1050,8 +1074,13 @@ function fragmentGallerySupportClassMemberFragments(): readonly AppBuilderPartSo
   {
     title: 'Beta',
     description: 'Second gallery item',
+    contactEmail: 'beta@example.com',
+    websiteUrl: 'https://example.com/beta',
+    supportPhone: '+31 20 000 0002',
+    accessCode: 'beta-secret',
+    filterText: 'beta',
     quantity: 5,
-    dueDate: null,
+    dueDate: '',
     enabled: false,
     priority: 'urgent',
     labels: ['backend', 'docs'],
@@ -1063,8 +1092,13 @@ function fragmentGallerySupportClassMemberFragments(): readonly AppBuilderPartSo
       text: `draftItem: GalleryItem = {
   title: 'Draft',
   description: 'Editable gallery item',
+  contactEmail: 'draft@example.com',
+  websiteUrl: 'https://example.com/draft',
+  supportPhone: '+31 20 000 0003',
+  accessCode: 'draft-secret',
+  filterText: 'draft',
   quantity: 1,
-  dueDate: null,
+  dueDate: '',
   enabled: true,
   priority: 'normal',
   labels: ['frontend'],
@@ -1660,16 +1694,76 @@ function fragmentGalleryDomainFields(): readonly AppBuilderDomainFieldDescriptor
       title: 'Title',
       valueKind: AppBuilderDomainFieldValueKind.Text,
       required: true,
+      textConstraints: { minLength: 2, maxLength: 80 },
     },
     {
       name: 'description',
       title: 'Description',
       valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.MultilineText,
+      textConstraints: { maxLength: 240 },
+    },
+    {
+      name: 'contactEmail',
+      title: 'Contact Email',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.EmailAddress,
+      required: true,
+    },
+    {
+      name: 'websiteUrl',
+      title: 'Website URL',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Url,
+    },
+    {
+      name: 'supportPhone',
+      title: 'Support Phone',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Telephone,
+    },
+    {
+      name: 'accessCode',
+      title: 'Access Code',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Password,
+      textConstraints: { minLength: 8 },
+    },
+    {
+      name: 'filterText',
+      title: 'Filter Text',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.SearchQuery,
+    },
+    {
+      name: 'appointmentTime',
+      title: 'Appointment Time',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Time,
+    },
+    {
+      name: 'scheduledAtLocal',
+      title: 'Scheduled At',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.DateTimeLocal,
+    },
+    {
+      name: 'billingMonth',
+      title: 'Billing Month',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Month,
+    },
+    {
+      name: 'reviewWeek',
+      title: 'Review Week',
+      valueKind: AppBuilderDomainFieldValueKind.Text,
+      fieldAffordance: AppBuilderDomainFieldAffordance.Week,
     },
     {
       name: 'quantity',
       title: 'Quantity',
       valueKind: AppBuilderDomainFieldValueKind.Number,
+      required: true,
       numericConstraints: { minimum: 0, maximum: 10, step: 1 },
     },
     {
@@ -1703,7 +1797,7 @@ function fragmentGalleryDomainActions(): readonly AppBuilderDomainActionDescript
       name: 'save',
       kind: AppBuilderDomainActionKind.Save,
       mutatesState: true,
-      inputFieldNames: ['title', 'description', 'quantity', 'dueDate', 'enabled', 'priority', 'labels'],
+      inputFieldNames: ['title', 'description', 'contactEmail', 'websiteUrl', 'supportPhone', 'accessCode', 'filterText', 'quantity', 'dueDate', 'enabled', 'priority', 'labels'],
     },
     {
       name: 'selectItem',

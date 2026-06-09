@@ -12,6 +12,7 @@ export class ServiceSearchCreateCompleteTaskSection {
     this.taskItemsPromise = queryValue === ''
       ? this.taskItemService.listTaskItems()
       : this.taskItemService.searchTaskItemsByTitle(queryValue);
+    return this.taskItemsPromise;
   }
 
   title: string = '';
@@ -22,26 +23,26 @@ export class ServiceSearchCreateCompleteTaskSection {
   completeStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  searchTaskItems() {
-    this.reloadTaskItemsByTitle();
+  async searchTaskItems() {
+    await this.reloadTaskItemsByTitle();
     this.searchStatusMessage = 'Search applied.';
   }
 
-  clearTaskItemSearch() {
+  async clearTaskItemSearch() {
     this.taskItemTitleQuery = '';
-    this.reloadTaskItemsByTitle();
+    await this.reloadTaskItemsByTitle();
     this.clearSearchStatusMessage = 'Search cleared.';
   }
 
   async create() {
     await this.taskItemService.createTaskItem(this.title, this.done);
-    this.reloadTaskItemsByTitle();
+    await this.reloadTaskItemsByTitle();
     this.createStatusMessage = 'Task saved.';
   }
 
   async complete(taskItem: TaskItemRecord) {
     await this.taskItemService.completeTaskItem(taskItem.id, true);
-    this.reloadTaskItemsByTitle();
+    await this.reloadTaskItemsByTitle();
     this.completeStatusMessage = 'Task completed.';
   }
 }

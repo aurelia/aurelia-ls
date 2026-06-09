@@ -103,6 +103,7 @@ export function appBuilderRootCustomElementPairSourcePlan(
       entrypointPath: request.entrypointPath ?? 'src/main.ts',
       rootComponentPath: layout.componentPath,
       rootComponentClassName: layout.className,
+      rootElementName: layout.resourceName,
       configurationAdmission: request.configurationAdmission,
     })
     .addFile(appBuilderCustomElementClassFileArtifact(layout, {

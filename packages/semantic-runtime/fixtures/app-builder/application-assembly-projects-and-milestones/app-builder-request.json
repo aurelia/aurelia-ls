@@ -77,7 +77,9 @@
                 {
                   "fieldName": "done",
                   "header": "Done",
-                  "displayKind": "boolean"
+                  "displayKind": "boolean",
+                  "booleanTrueText": "Done",
+                  "booleanFalseText": "Open"
                 },
                 {
                   "header": "Open",
@@ -627,7 +629,9 @@
                         {
                           "fieldName": "done",
                           "header": "Done",
-                          "displayKind": "boolean"
+                          "displayKind": "boolean",
+                          "booleanTrueText": "Done",
+                          "booleanFalseText": "Open"
                         },
                         {
                           "actionName": "openTask",
@@ -900,7 +904,9 @@
                         {
                           "fieldName": "done",
                           "header": "Done",
-                          "displayKind": "boolean"
+                          "displayKind": "boolean",
+                          "booleanTrueText": "Done",
+                          "booleanFalseText": "Open"
                         },
                         {
                           "actionName": "openReview",

@@ -155,6 +155,12 @@ export enum AppBuilderPackageCapability {
   ValidationHtml = 'validation-html',
   /** Use i18n configuration and translation bindings. */
   I18n = 'i18n',
+  /** Use @aurelia/state store configuration, state binding behavior, and state/dispatch commands. */
+  State = 'state',
+  /** Use virtual-repeat for large collection rendering when virtualization is explicitly selected. */
+  VirtualRepeat = 'virtual-repeat',
+  /** Use Aurelia fetch-client integration for HTTP service boundaries when explicitly selected. */
+  Fetch = 'fetch',
 }
 
 /** Mutually exclusive custom-element DOM encapsulation posture. Custom-element-only: shadow DOM is a custom-element

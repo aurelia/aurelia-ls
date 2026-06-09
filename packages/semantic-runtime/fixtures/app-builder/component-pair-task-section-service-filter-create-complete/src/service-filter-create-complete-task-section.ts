@@ -12,6 +12,7 @@ export class ServiceFilterCreateCompleteTaskSection {
     this.taskItemsPromise = queryValue === null
       ? this.taskItemService.listTaskItems()
       : this.taskItemService.listTaskItemsByDone(queryValue);
+    return this.taskItemsPromise;
   }
 
   title: string = '';
@@ -23,33 +24,33 @@ export class ServiceFilterCreateCompleteTaskSection {
   completeStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  showAllTaskItems() {
+  async showAllTaskItems() {
     this.taskItemDoneFilter = null;
-    this.reloadTaskItems();
+    await this.reloadTaskItems();
     this.allFilterStatusMessage = 'Showing all tasks.';
   }
 
-  showOpenTaskItems() {
+  async showOpenTaskItems() {
     this.taskItemDoneFilter = false;
-    this.reloadTaskItems();
+    await this.reloadTaskItems();
     this.openFilterStatusMessage = 'Showing open tasks.';
   }
 
-  showCompletedTaskItems() {
+  async showCompletedTaskItems() {
     this.taskItemDoneFilter = true;
-    this.reloadTaskItems();
+    await this.reloadTaskItems();
     this.completedFilterStatusMessage = 'Showing completed tasks.';
   }
 
   async create() {
     await this.taskItemService.createTaskItem(this.title, this.done);
-    this.reloadTaskItems();
+    await this.reloadTaskItems();
     this.createStatusMessage = 'Task saved.';
   }
 
   async complete(taskItem: TaskItemRecord) {
     await this.taskItemService.completeTaskItem(taskItem.id, true);
-    this.reloadTaskItems();
+    await this.reloadTaskItems();
     this.completeStatusMessage = 'Task completed.';
   }
 }

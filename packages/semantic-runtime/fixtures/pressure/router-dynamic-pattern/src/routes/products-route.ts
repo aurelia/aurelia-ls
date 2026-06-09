@@ -49,6 +49,10 @@ export class ProductsRoute {
     return product.externalUrl;
   }
 
+  explicitExternalHref(product: ProductSummary): string {
+    return product.externalUrl;
+  }
+
   stateBackedHref(productId: string): string {
     const product = this.state.products.find((candidate) => candidate.id === productId);
     return product == null ? `/products/${productId}` : `/products/${product.id}`;

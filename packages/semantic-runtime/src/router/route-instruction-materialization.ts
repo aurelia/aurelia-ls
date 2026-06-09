@@ -534,6 +534,9 @@ function closeRouterResourceInstruction(
   issues: RouterIssueModel[],
   issueRecords: KernelStoreRecord[],
 ): ClosedRouterResourceInstruction | null {
+  if (site.kind === RouterResourceInstructionKind.Href && hrefHostHasExplicitExternalMarker(store, site.host)) {
+    return null;
+  }
   if (site.routeContext == null) {
     recordOpenSeam(
       store,
@@ -2795,10 +2798,17 @@ function hrefRouteExpressionIsExternal(
   site: RouterResourceInstructionSite,
   value: StaticStringBindingValue,
 ): boolean {
-  if (hasHostAttribute(store, site.host, 'external') || hasHostAttribute(store, site.host, 'data-external')) {
+  if (hrefHostHasExplicitExternalMarker(store, site.host)) {
     return true;
   }
   return hrefStringIsExternal(value.value);
+}
+
+function hrefHostHasExplicitExternalMarker(
+  store: KernelStore,
+  host: HtmlElement | null,
+): boolean {
+  return hasHostAttribute(store, host, 'external') || hasHostAttribute(store, host, 'data-external');
 }
 
 function hrefStringIsExternal(value: string): boolean {

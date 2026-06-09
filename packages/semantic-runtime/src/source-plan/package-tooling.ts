@@ -37,6 +37,10 @@ export enum SourcePlanPackageDependencyScope {
 export enum SourcePlanProjectToolingFileKind {
   /** package.json style manifest. */
   PackageManifest = 'package-manifest',
+  /** Root browser document that hosts the Aurelia app shell. */
+  RootDocument = 'root-document',
+  /** Bundler/build-tool configuration. */
+  BuildConfig = 'build-config',
   /** TypeScript project configuration. */
   TypeScriptConfig = 'typescript-config',
   /** TypeScript declaration file for non-TS imports. */
@@ -46,6 +50,8 @@ export enum SourcePlanProjectToolingFileKind {
 export enum SourcePlanProjectToolingLanguage {
   /** JSON tooling file. */
   Json = 'json',
+  /** HTML root document. */
+  Html = 'html',
   /** TypeScript tooling file. */
   TypeScript = 'typescript',
 }
@@ -101,19 +107,29 @@ export interface AureliaSourcePlanProjectToolingModel {
   readonly appName: string;
   readonly dependencySpecifiers?: readonly string[];
   readonly buildToolPolicy?: SourcePlanBuildToolPolicy;
+  readonly entrypointPath?: string | null;
+  readonly rootElementName?: string | null;
   readonly textAuthority?: SourcePlanTextAuthority;
 }
 
 export function aureliaSourcePlanProjectTooling(
   model: AureliaSourcePlanProjectToolingModel,
 ): SourcePlanProjectTooling {
-  const dependencies = packageDependencies(model.dependencySpecifiers ?? []);
+  const buildToolPolicy = model.buildToolPolicy ?? SourcePlanBuildToolPolicy.NotModeled;
+  const usesAppBuilderBuildTooling = buildToolPolicy === SourcePlanBuildToolPolicy.AppBuilderBaseline;
+  const dependencies = packageDependencies(model.dependencySpecifiers ?? [], usesAppBuilderBuildTooling);
   const scripts = [
+    ...(usesAppBuilderBuildTooling
+      ? [
+          new SourcePlanPackageScript('dev', 'vite'),
+          new SourcePlanPackageScript('build', 'vite build'),
+        ]
+      : []),
     new SourcePlanPackageScript('check', 'tsc -p tsconfig.json --noEmit'),
   ];
   return new SourcePlanProjectTooling(
     SourcePlanPackageManager.HostSelected,
-    model.buildToolPolicy ?? SourcePlanBuildToolPolicy.NotModeled,
+    buildToolPolicy,
     dependencies,
     scripts,
     [
@@ -124,6 +140,7 @@ export function aureliaSourcePlanProjectTooling(
         packageManifestText(model.appName, dependencies, scripts),
         model.textAuthority,
       ),
+      ...appBuilderBaselineProjectToolingFiles(model, usesAppBuilderBuildTooling),
       new SourcePlanProjectToolingFile(
         'tsconfig.json',
         SourcePlanProjectToolingFileKind.TypeScriptConfig,
@@ -177,19 +194,39 @@ export function sourcePlanPackageImportDependencySpecifiers(
 
 function packageDependencies(
   dependencySpecifiers: readonly string[],
+  includeAppBuilderBuildTooling: boolean,
 ): readonly SourcePlanPackageDependency[] {
   const specifiers = new Set<string>([
     'aurelia',
+    ...appBuilderBuildToolRuntimeDependencySpecifiers(includeAppBuilderBuildTooling),
     ...dependencySpecifiers,
   ]);
   const dependencies = [...specifiers].map((specifier) =>
     new SourcePlanPackageDependency(specifier, aureliaPackageVersion(specifier), SourcePlanPackageDependencyScope.Dependency)
   );
   dependencies.push(new SourcePlanPackageDependency('typescript', '^6.0.3', SourcePlanPackageDependencyScope.DevDependency));
+  if (includeAppBuilderBuildTooling) {
+    dependencies.push(
+      new SourcePlanPackageDependency('@aurelia/vite-plugin', aureliaPackageVersion('@aurelia/vite-plugin'), SourcePlanPackageDependencyScope.DevDependency),
+      new SourcePlanPackageDependency('vite', '^7.0.2', SourcePlanPackageDependencyScope.DevDependency),
+    );
+  }
   return dependencies.sort((left, right) =>
     dependencyScopeRank(left.scope) - dependencyScopeRank(right.scope)
     || left.specifier.localeCompare(right.specifier)
   );
+}
+
+function appBuilderBuildToolRuntimeDependencySpecifiers(
+  includeAppBuilderBuildTooling: boolean,
+): readonly string[] {
+  if (!includeAppBuilderBuildTooling) {
+    return [];
+  }
+  return [
+    // The Aurelia Vite plugin emits transformed source imports from this package.
+    '@aurelia/runtime-html',
+  ];
 }
 
 function isPackageModuleSpecifier(
@@ -211,6 +248,71 @@ function dependencyScopeRank(scope: SourcePlanPackageDependencyScope): number {
     case SourcePlanPackageDependencyScope.DevDependency:
       return 1;
   }
+}
+
+function appBuilderBaselineProjectToolingFiles(
+  model: AureliaSourcePlanProjectToolingModel,
+  enabled: boolean,
+): readonly SourcePlanProjectToolingFile[] {
+  if (!enabled || model.entrypointPath == null || model.rootElementName == null) {
+    return [];
+  }
+  return [
+    new SourcePlanProjectToolingFile(
+      'index.html',
+      SourcePlanProjectToolingFileKind.RootDocument,
+      SourcePlanProjectToolingLanguage.Html,
+      rootDocumentText(model.appName, model.rootElementName, model.entrypointPath),
+      model.textAuthority,
+    ),
+    new SourcePlanProjectToolingFile(
+      'vite.config.ts',
+      SourcePlanProjectToolingFileKind.BuildConfig,
+      SourcePlanProjectToolingLanguage.TypeScript,
+      viteConfigText(),
+      model.textAuthority,
+    ),
+  ];
+}
+
+function rootDocumentText(
+  appName: string,
+  rootElementName: string,
+  entrypointPath: string,
+): string {
+  const modulePath = `/${entrypointPath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtmlText(appName)}</title>
+  </head>
+  <body>
+    <${rootElementName}></${rootElementName}>
+    <script type="module" src="${modulePath}"></script>
+  </body>
+</html>
+`;
+}
+
+function viteConfigText(): string {
+  return `import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+
+export default defineConfig({
+  build: {
+    target: 'es2022',
+  },
+  esbuild: {
+    target: 'es2022',
+  },
+  plugins: [aurelia({
+    include: ['src/**/*.{ts,js,html}', '**/src/**/*.{ts,js,html}'],
+    hmr: false,
+  })],
+});
+`;
 }
 
 function packageManifestText(
@@ -277,6 +379,13 @@ function packageNameForAppName(appName: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return normalized.length === 0 ? 'aurelia-source-plan-app' : normalized;
+}
+
+function escapeHtmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function jsonText(value: unknown): string {

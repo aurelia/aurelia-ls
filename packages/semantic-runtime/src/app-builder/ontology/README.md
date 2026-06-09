@@ -231,7 +231,13 @@ specific facet ids and carry facet payloads. Readiness validates those payloads
 against input-contract detail schemas when the facet is modeled, and leaves
 TBD/deferred/not-caller-payload facets visible instead of guessing. Existing-app
 facts are explicitly `not-caller-payload`; they must come from semantic-runtime
-app analysis rather than caller-authored JSON.
+app analysis rather than caller-authored JSON. Existing-app fact facet detail
+reports query supplier counts by default and, for selected/detail calls,
+`existingAppFactQueryRows` that point to concrete app-world query families such
+as `resource-definitions`, `resource-visibility`, `control-use-inventory`,
+router queries, and plugin-specific product/diagnostic queries. These rows are
+fact-gathering hints for the caller/AI, not permission for app-builder to infer
+business intent or lower source into an external control library.
 Input contracts and input facets are not executable source-lowering targets, so
 their `sourceLoweringImplemented` status remains false even when source lowerers
 consume their payloads. Facet detail exposes `sourceLoweringConsumerCount` and,
@@ -256,6 +262,9 @@ rows, payload schema states, and schema counts, but omits payload schema bodies
 unless the caller selects/filters contracts or facets, filters schema states, or
 explicitly sets `includePayloadSchemas: true`. This lets broad MCP/menu calls
 see what input terrain exists without paying for every modeled payload shape.
+The same compact/detail split applies to existing-app fact query suppliers:
+unfiltered answers keep counts, while selected/detail answers include query
+rows.
 Source-placement facets spend existing source-plan substrate where available:
 source naming exposes app/source name seeds and `SourcePatternParameterValue`
 rows for coordinated source rewrites, while source project tooling exposes the

@@ -1,5 +1,6 @@
 export * from './affordance.js';
 export * from './affordance-detail.js';
+export * from './architecture-options.js';
 export * from './application-pattern-detail.js';
 export * from './application-pattern.js';
 export * from './catalog.js';
@@ -31,6 +32,9 @@ export * from './source-lowering-inputs.js';
 export * from './source-lowering-invocation.js';
 export * from './source-lowering-preflight.js';
 export * from './source-lowering-request-field.js';
+export * from './source-lowering-handoff.js';
+export * from './source-lowering-native-field-constraints.js';
+export * from './source-lowering-numeric-constraints.js';
 export * from './source-lowering-source-plan.js';
 export * from './source-lowering-surface.js';
 export * from './source-plan-witness.js';

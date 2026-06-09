@@ -93,6 +93,8 @@ import {
 } from './effect.js';
 import {
   AppBuilderControlUseActionChannelKind,
+  AppBuilderControlUseInventorySourceKind,
+  appBuilderControlUseInventoryRow,
   appBuilderControlUseInventoryRowsForInvocation,
   type AppBuilderControlUseInventoryRow,
 } from './control-use-inventory.js';
@@ -129,6 +131,10 @@ import {
   AppBuilderNumericControlConstraintIssueKind,
   type AppBuilderNumericControlConstraintIssue,
 } from './source-lowering-numeric-constraints.js';
+import {
+  appBuilderSelectNativeFieldConstraints,
+  type AppBuilderNativeFieldConstraintIssue,
+} from './source-lowering-native-field-constraints.js';
 import {
   appBuilderSourceLoweringAccessibilityHelpErrorPayloads,
   appBuilderSourceLoweringAccessibilityLabelPayloads,
@@ -393,6 +399,7 @@ interface AppBuilderNativeButtonReadySelectionFrame {
   readonly handlerExpressionSource: AppBuilderSourceLoweringHandlerExpressionSource;
   readonly eventName: string;
   readonly buttonText: string;
+  readonly buttonTextSource: AppBuilderSourceLoweringLabelTextSource;
   readonly buttonType: AppBuilderSourceLoweringButtonType;
   readonly issues: readonly [];
 }
@@ -406,6 +413,7 @@ interface AppBuilderNativeButtonBlockedSelectionFrame {
   readonly handlerExpressionSource: AppBuilderSourceLoweringHandlerExpressionSource | null;
   readonly eventName: string | null;
   readonly buttonText: string | null;
+  readonly buttonTextSource: AppBuilderSourceLoweringLabelTextSource | null;
   readonly buttonType: AppBuilderSourceLoweringButtonType | null;
   readonly issues: readonly AppBuilderSourceLoweringInvocationIssue[];
 }
@@ -484,6 +492,7 @@ interface AppBuilderFieldGroupRenderedFragments {
   readonly describedByIds: readonly string[];
   readonly fragments: readonly AppBuilderPartSourceFragment[];
   readonly additionalSourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
+  readonly additionalControlUseInventoryRows: readonly AppBuilderControlUseInventoryRow[];
 }
 
 /** Lower one app-builder ontology target to source fragments through existing part-source callbacks. */
@@ -908,9 +917,14 @@ function fieldControlSourceSelectionFrame(
   const numericConstraintIssue = numericConstraintSelection.issue == null
     ? null
     : numericConstraintInvocationIssue(targetRef, numericConstraintSelection.issue);
+  const nativeFieldConstraintSelection = appBuilderSelectNativeFieldConstraints(controlId, selectedField.sourceModel);
+  const nativeFieldConstraintIssue = nativeFieldConstraintSelection.issue == null
+    ? null
+    : nativeFieldConstraintInvocationIssue(targetRef, nativeFieldConstraintSelection.issue);
   const issues = [
     ...optionalIssue(valueDomainSelection.issue),
     ...optionalIssue(numericConstraintIssue),
+    ...optionalIssue(nativeFieldConstraintIssue),
   ];
   return {
     suppliedInputs,
@@ -922,6 +936,7 @@ function fieldControlSourceSelectionFrame(
     slotAssignments: issues.length === 0
       ? [
           ...controlSourceSlotAssignments(controlId, bindingExpression, selectedField, request, valueDomainSelection),
+          ...nativeFieldConstraintSelection.slotAssignments,
           ...numericConstraintSelection.slotAssignments,
         ]
       : [],
@@ -1145,6 +1160,7 @@ function lowerFieldGroupSourceInvocation(
     describedByIds: rendered.describedByIds,
     fragments: rendered.fragments,
     additionalSourceLoweringTargetRefs: rendered.additionalSourceLoweringTargetRefs,
+    additionalControlUseInventoryRows: rendered.additionalControlUseInventoryRows,
     issues: [],
   });
 }
@@ -1297,11 +1313,31 @@ function fieldGroupRenderedFragments(
     AppBuilderOntologyRowKind.ControlPattern,
     AppBuilderControlPatternId.FormMessage,
   );
+  const messageControlUseInventoryRows = messageRows.flatMap((message, index) =>
+    optionalGeneratedControlUseInventoryRow(appBuilderControlUseInventoryRow({
+      sourceKind: AppBuilderControlUseInventorySourceKind.SourceLoweringInvocation,
+      targetRef: formMessageTargetRef,
+      fragments: [messageFragments[index]!],
+      controlPatternId: AppBuilderControlPatternId.FormMessage,
+      fieldName: selection.selectedField.sourceModel.memberName,
+      messageKind: message.messageKind,
+      messageText: message.text,
+      messageTextSource: AppBuilderSourceLoweringMessageTextSource.AccessibilityHelpErrorPayload,
+      messageId: message.messageId,
+    }))
+  );
   return {
     describedByIds,
     fragments: [wrapperFragment],
     additionalSourceLoweringTargetRefs: messageRows.length === 0 ? [] : [formMessageTargetRef],
+    additionalControlUseInventoryRows: messageControlUseInventoryRows,
   };
+}
+
+function optionalGeneratedControlUseInventoryRow(
+  row: AppBuilderControlUseInventoryRow | null,
+): readonly AppBuilderControlUseInventoryRow[] {
+  return row == null ? [] : [row];
 }
 
 function appBuilderLabelledFieldGroupFragment(
@@ -1762,7 +1798,7 @@ function lowerDomainCommandActionSourceInvocation(
     fragments: [{
       kind: AppBuilderPartSourceFragmentKind.TypeScriptClassMember,
       text: domainCommandActionMethodSourceText(selectedAction.action.name, methodParameters.parameters, methodBodyStatements, {
-        isAsync: serviceCall.value?.refreshMethodName != null,
+        isAsync: domainCommandActionNeedsAsync(queryStateEffect.value, serviceCall.value, actionFeedback.value),
       }),
       requiredImports: [],
     }],
@@ -1851,6 +1887,7 @@ function lowerRouteNavigationActionSourceInvocation(
       : loadAttributeFragment.templateAttribute.rawValue ?? authoredTemplateAttributeText(loadAttributeFragment.templateAttribute),
     linkText: selection.linkText,
     labelText: selection.linkText,
+    labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
   });
 
   return sourceLoweringInvocationResult({
@@ -2084,6 +2121,8 @@ function lowerNativeButtonSourceInvocation(
       handlerExpressionSource: selection.handlerExpressionSource,
       eventName: selection.eventName,
       buttonText: selection.buttonText,
+      labelText: selection.buttonText,
+      labelTextSource: selection.buttonTextSource,
       buttonType: selection.buttonType,
       issues: selection.issues,
     });
@@ -2101,6 +2140,8 @@ function lowerNativeButtonSourceInvocation(
     handlerExpressionSource: selection.handlerExpressionSource,
     eventName: selection.eventName,
     buttonText: selection.buttonText,
+    labelText: selection.buttonText,
+    labelTextSource: selection.buttonTextSource,
     buttonType: selection.buttonType,
     partInvocation: rendered.partInvocation,
     partSourceLowering: rendered.partSourceLowering,
@@ -2126,6 +2167,7 @@ function nativeButtonSelectionFrame(
       handlerExpressionSource: null,
       eventName: null,
       buttonText: null,
+      buttonTextSource: null,
       buttonType: null,
       issues: [{
         issueKind: AppBuilderSourceLoweringInvocationIssueKind.MissingDomainActionsPayload,
@@ -2146,6 +2188,7 @@ function nativeButtonSelectionFrame(
       handlerExpressionSource: null,
       eventName: null,
       buttonText: null,
+      buttonTextSource: null,
       buttonType: null,
       issues: actionSelection.issue == null ? [] : [actionSelection.issue],
     };
@@ -2172,6 +2215,7 @@ function nativeButtonSelectionFrame(
     || handlerSelection.expression == null
     || handlerSelection.source == null
     || buttonTextSelection.text == null
+    || buttonTextSelection.source == null
     || buttonTypeSelection.buttonType == null) {
     return {
       ready: false,
@@ -2182,6 +2226,7 @@ function nativeButtonSelectionFrame(
       handlerExpressionSource: handlerSelection.source,
       eventName: handlerSelection.eventName,
       buttonText: buttonTextSelection.text,
+      buttonTextSource: buttonTextSelection.source,
       buttonType: buttonTypeSelection.buttonType,
       issues,
     };
@@ -2195,6 +2240,7 @@ function nativeButtonSelectionFrame(
     handlerExpressionSource: handlerSelection.source,
     eventName: handlerSelection.eventName,
     buttonText: buttonTextSelection.text,
+    buttonTextSource: buttonTextSelection.source,
     buttonType: buttonTypeSelection.buttonType,
     issues: [],
   };
@@ -2561,21 +2607,31 @@ function selectButtonText(
   request: AppBuilderSourceLoweringInvocationRequest,
 ): {
   readonly text: string;
+  readonly source: AppBuilderSourceLoweringLabelTextSource | null;
   readonly issue: AppBuilderSourceLoweringInvocationIssue | null;
 } {
   const explicitText = normalizedSourceInputText(request.buttonText);
   if (explicitText != null) {
-    return { text: explicitText, issue: null };
+    return {
+      text: explicitText,
+      source: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
+      issue: null,
+    };
   }
   const labels = accessibilityLabels
     .map((row) => normalizedSourceInputText(row.label))
     .filter((value): value is string => value != null);
   if (labels.length === 1) {
-    return { text: labels[0]!, issue: null };
+    return {
+      text: labels[0]!,
+      source: AppBuilderSourceLoweringLabelTextSource.AccessibilityLabelPayload,
+      issue: null,
+    };
   }
   if (labels.length > 1) {
     return {
       text: '',
+      source: null,
       issue: {
         issueKind: AppBuilderSourceLoweringInvocationIssueKind.AmbiguousButtonText,
         targetRef,
@@ -2586,6 +2642,7 @@ function selectButtonText(
   }
   return {
     text: '',
+    source: null,
     issue: {
       issueKind: AppBuilderSourceLoweringInvocationIssueKind.MissingButtonText,
       targetRef,
@@ -2835,6 +2892,18 @@ function numericConstraintInvocationIssue(
     issueKind: issue.issueKind === AppBuilderNumericControlConstraintIssueKind.MissingRangeConstraints
       ? AppBuilderSourceLoweringInvocationIssueKind.MissingNumericRangeConstraints
       : AppBuilderSourceLoweringInvocationIssueKind.InvalidNumericConstraints,
+    targetRef,
+    fieldNames: issue.fieldNames,
+    summary: issue.summary,
+  };
+}
+
+function nativeFieldConstraintInvocationIssue(
+  targetRef: AppBuilderOntologyRowRef,
+  issue: AppBuilderNativeFieldConstraintIssue,
+): AppBuilderSourceLoweringInvocationIssue {
+  return {
+    issueKind: AppBuilderSourceLoweringInvocationIssueKind.InvalidNativeFieldConstraints,
     targetRef,
     fieldNames: issue.fieldNames,
     summary: issue.summary,
@@ -3289,8 +3358,12 @@ function derivedDomainCommandActionMethodBodyStatements(
 ): string | null {
   const derivedStatements = ((): string | null => {
     const commandStatements = [
-      ...(queryStateEffect == null ? [] : [queryStateEffectMethodBodyStatements(queryStateEffect)]),
-      ...(serviceCall == null ? [] : [serviceCallMethodBodyStatements(serviceCall)]),
+      ...(queryStateEffect == null ? [] : [
+        queryStateEffectMethodBodyStatements(queryStateEffect, {
+          awaitsReload: actionFeedback != null,
+        }),
+      ]),
+      ...(serviceCall == null ? [] : [serviceCallMethodBodyStatements(serviceCall, actionFeedback)]),
     ];
     if (commandStatements.length > 0) {
       return commandStatements.join('\n');
@@ -3316,28 +3389,48 @@ function derivedDomainCommandActionMethodBodyStatements(
 
 function queryStateEffectMethodBodyStatements(
   queryStateEffect: DomainCommandQueryStateEffectSource,
+  options: {
+    readonly awaitsReload: boolean;
+  },
 ): string {
   return [
     ...(queryStateEffect.valueExpression == null ? [] : [
       `this.${queryStateEffect.stateMemberName} = ${queryStateEffect.valueExpression};`,
     ]),
-    `this.${queryStateEffect.reloadMethodName}();`,
+    `${options.awaitsReload ? 'await ' : ''}this.${queryStateEffect.reloadMethodName}();`,
   ].join('\n');
 }
 
 function serviceCallMethodBodyStatements(
   serviceCall: DomainCommandServiceCallSource,
+  actionFeedback: AppBuilderSourceLoweringActionFeedbackPayload | null,
 ): string {
   const callExpression = `this.${serviceCall.serviceMemberName}.${serviceCall.serviceMethodName}(${serviceCall.argumentExpressions.join(', ')})`;
   if (serviceCall.refreshMethodName != null) {
     return [
       `await ${callExpression};`,
-      `this.${serviceCall.refreshMethodName}();`,
+      `await this.${serviceCall.refreshMethodName}();`,
     ].join('\n');
   }
-  return serviceCall.resultMemberName == null
+  if (serviceCall.resultMemberName != null) {
+    return [
+      `this.${serviceCall.resultMemberName} = ${callExpression};`,
+      ...(actionFeedback == null ? [] : [`await this.${serviceCall.resultMemberName};`]),
+    ].join('\n');
+  }
+  return actionFeedback == null
     ? `${callExpression};`
-    : `this.${serviceCall.resultMemberName} = ${callExpression};`;
+    : `await ${callExpression};`;
+}
+
+function domainCommandActionNeedsAsync(
+  queryStateEffect: DomainCommandQueryStateEffectSource | null,
+  serviceCall: DomainCommandServiceCallSource | null,
+  actionFeedback: AppBuilderSourceLoweringActionFeedbackPayload | null,
+): boolean {
+  return serviceCall?.refreshMethodName != null
+    || (serviceCall != null && actionFeedback != null)
+    || (queryStateEffect != null && actionFeedback != null);
 }
 
 function appendActionFeedbackStatement(

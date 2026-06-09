@@ -129,7 +129,9 @@
                     {
                       "fieldName": "done",
                       "header": "Done",
-                      "displayKind": "boolean"
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
                     },
                     {
                       "actionName": "complete",
@@ -393,7 +395,7 @@
               },
               "fieldName": "title",
               "bindingExpression": "taskItemTitleQuery",
-              "innerControlPatternId": "native-text-input",
+              "innerControlPatternId": "native-search-input",
               "labelText": "Search tasks",
               "fieldControlId": "task-search-query"
             }

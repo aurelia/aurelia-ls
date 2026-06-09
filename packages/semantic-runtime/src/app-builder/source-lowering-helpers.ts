@@ -27,6 +27,7 @@ import {
   AppBuilderPartSourceFragmentKind,
   type AppBuilderBindingExpressionPartSourceFragment,
   type AppBuilderPartSourceFragment,
+  type AppBuilderPartSlotAssignment,
   type AppBuilderTemplateAttributePartSourceFragment,
   type AppBuilderTextInterpolationPartSourceFragment,
   type AppBuilderTypeScriptDecoratorPartSourceFragment,
@@ -81,12 +82,15 @@ export interface AppBuilderChoiceControlElementOptions {
   readonly optionBindingKind?: AppBuilderChoiceOptionBindingKind;
   readonly optionLabelExpression?: string;
   readonly matcherExpression?: string;
+  /** Additional low-level slots derived from caller-supplied field facts. */
+  readonly slotAssignments?: readonly AppBuilderPartSlotAssignment[];
 }
 
 /** Lower a native app-builder control part and keep its structured fragment. */
 export function appBuilderControlElementFragment(
   controlId: AppBuilderControlId,
   bindingExpression: string,
+  slotAssignments: readonly AppBuilderPartSlotAssignment[] = [],
 ): AppBuilderTemplateElementPartSourceFragment {
   return lowerAppBuilderPartSourceFragment({
     partKind: AppBuilderPartKind.Control,
@@ -94,6 +98,7 @@ export function appBuilderControlElementFragment(
     applicationSite: AppBuilderPartApplicationSiteKind.TemplateElement,
     slotAssignments: [
       { slotKind: AppBuilderPartSlotKind.BindingExpression, value: bindingExpression },
+      ...slotAssignments,
     ],
   }, AppBuilderPartSourceFragmentKind.TemplateElement);
 }
@@ -102,16 +107,18 @@ export function appBuilderControlElementFragment(
 export function appBuilderControlElementSource(
   controlId: AppBuilderControlId,
   bindingExpression: string,
+  slotAssignments: readonly AppBuilderPartSlotAssignment[] = [],
 ): AppBuilderTemplateElementSource {
-  return appBuilderControlElementFragment(controlId, bindingExpression).templateElement;
+  return appBuilderControlElementFragment(controlId, bindingExpression, slotAssignments).templateElement;
 }
 
 /** Lower a native app-builder control part to authored template text. */
 export function appBuilderControlElement(
   controlId: AppBuilderControlId,
   bindingExpression: string,
+  slotAssignments: readonly AppBuilderPartSlotAssignment[] = [],
 ): string {
-  return appBuilderControlElementFragment(controlId, bindingExpression).text;
+  return appBuilderControlElementFragment(controlId, bindingExpression, slotAssignments).text;
 }
 
 /** Format generated TypeScript class members while keeping simple field runs compact. */
@@ -171,6 +178,7 @@ export function appBuilderChoiceControlElementFragment(
       [AppBuilderPartSlotKind.OptionBindingKind, options.optionBindingKind],
       [AppBuilderPartSlotKind.OptionLabelExpression, options.optionLabelExpression],
       [AppBuilderPartSlotKind.MatcherExpression, options.matcherExpression],
+      ...(options.slotAssignments ?? []).map((slot): [AppBuilderPartSlotKind, string] => [slot.slotKind, slot.value]),
     ]),
   }, AppBuilderPartSourceFragmentKind.TemplateElement);
 }

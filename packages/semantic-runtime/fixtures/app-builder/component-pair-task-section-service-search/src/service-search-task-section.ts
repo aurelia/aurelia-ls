@@ -11,20 +11,21 @@ export class ServiceSearchTaskSection {
     this.taskItemsPromise = queryValue === ''
       ? this.taskItemService.listTaskItems()
       : this.taskItemService.searchTaskItemsByTitle(queryValue);
+    return this.taskItemsPromise;
   }
 
   searchStatusMessage: string = '';
   clearSearchStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  searchTaskItems() {
-    this.reloadTaskItemsByTitle();
+  async searchTaskItems() {
+    await this.reloadTaskItemsByTitle();
     this.searchStatusMessage = 'Search applied.';
   }
 
-  clearTaskItemSearch() {
+  async clearTaskItemSearch() {
     this.taskItemTitleQuery = '';
-    this.reloadTaskItemsByTitle();
+    await this.reloadTaskItemsByTitle();
     this.clearSearchStatusMessage = 'Search cleared.';
   }
 }

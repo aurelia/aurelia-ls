@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "component-pair-task-domain-backed-submit-form",
   "ok": true,
-  "expectedEffects": 12,
+  "expectedEffects": 13,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -99,8 +104,8 @@
         "buttonType": "submit",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-domain-backed-submit-form/src/task-domain-backed-submit-form.html",
-          "start": 288,
-          "end": 366
+          "start": 297,
+          "end": 375
         }
       }
     },
@@ -171,8 +176,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-domain-backed-submit-form/src/task-domain-backed-submit-form.html",
-          "start": 230,
-          "end": 259
+          "start": 239,
+          "end": 268
         }
       }
     }
@@ -183,7 +188,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 4417,
+      "jsonLength": 7751,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -201,14 +206,26 @@
     {
       "outcome": "satisfied",
       "path": "src/task-domain-backed-submit-form.html",
-      "textLength": 374,
+      "textLength": 383,
       "summary": "Generated SourcePlan file 'src/task-domain-backed-submit-form.html' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 260,
+      "textLength": 415,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 360,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -225,8 +242,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 12,
-      "jsonLength": 4350,
+      "rowCount": 13,
+      "jsonLength": 4697,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -254,14 +271,14 @@
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
       "rowCount": 3,
-      "jsonLength": 2877,
+      "jsonLength": 2899,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 20,
-      "jsonLength": 8794,
+      "rowCount": 27,
+      "jsonLength": 10897,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

@@ -24,7 +24,23 @@
       ]
     },
     {
-      "summary": "App-builder routed collection/detail SourcePlan has TypeScript project tooling.",
+      "summary": "App-builder routed collection/detail SourcePlan has a browser root document.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "semanticTargetKey": "project-tooling:role=root-document",
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document"
+        }
+      ]
+    },
+    {
+      "summary": "App-builder routed collection/detail SourcePlan has TypeScript and build project tooling.",
       "effectKind": "project-tooling",
       "scope": "project",
       "topologyNodeKind": "build-tool",
@@ -392,7 +408,7 @@
     {
       "kind": "control-pattern",
       "domain": "control",
-      "id": "native-text-input"
+      "id": "native-search-input"
     },
     {
       "kind": "control-pattern",
@@ -437,7 +453,7 @@
       "buttonText": null,
       "buttonType": null,
       "labelText": "Open",
-      "labelTextSource": null,
+      "labelTextSource": "explicit-request",
       "fieldControlId": null,
       "fieldControlIdSource": null,
       "describedByIds": [],
@@ -464,8 +480,8 @@
       },
       "realizationPolicyId": "inline-native",
       "controlPatternId": "field-group",
-      "controlId": "text-input",
-      "innerControlPatternId": "native-text-input",
+      "controlId": "search-input",
+      "innerControlPatternId": "native-search-input",
       "fieldName": "title",
       "actionName": null,
       "bindingExpression": "taskRelationshipTitleQuery",
@@ -1058,7 +1074,7 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "control",
-        "partId": "text-input",
+        "partId": "search-input",
         "operationKind": "create-control",
         "applicationSite": "template-element",
         "slotKinds": [
@@ -1066,7 +1082,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 83
+      "fragmentTextLength": 97
     },
     {
       "rowKind": "contribution",
@@ -1094,7 +1110,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 178
+      "fragmentTextLength": 192
     },
     {
       "rowKind": "contribution",
@@ -1571,16 +1587,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -1594,7 +1609,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 82
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -1605,20 +1620,6 @@
       "fileRole": "template",
       "fileLanguage": "html",
       "contributionIndex": 32,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 95
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-list-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 33,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -1643,7 +1644,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 34,
+      "contributionIndex": 33,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-source-lowering-invocation",
       "contributionOrigin": {
@@ -1665,7 +1666,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 35,
+      "contributionIndex": 34,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -1679,7 +1680,7 @@
       "filePath": "src/routes/task-item-list-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 36,
+      "contributionIndex": 35,
       "contributionKind": "source-fragment",
       "contributionOriginKind": "app-builder-part-source-invocation",
       "contributionOrigin": {
@@ -2021,16 +2022,15 @@
       "contributionOrigin": {
         "kind": "app-builder-part-source-invocation",
         "partKind": "binding-part",
-        "partId": "attribute-to-view-binding",
+        "partId": "text-interpolation",
         "operationKind": "apply-binding-part",
-        "applicationSite": "binding-command-target",
+        "applicationSite": "text-interpolation",
         "slotKinds": [
-          "attribute-name",
           "binding-expression"
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 31
+      "fragmentTextLength": 34
     },
     {
       "rowKind": "contribution",
@@ -2042,9 +2042,19 @@
       "fileLanguage": "html",
       "contributionIndex": 9,
       "contributionKind": "source-fragment",
-      "contributionOrigin": null,
+      "contributionOriginKind": "app-builder-part-source-invocation",
+      "contributionOrigin": {
+        "kind": "app-builder-part-source-invocation",
+        "partKind": "binding-part",
+        "partId": "text-interpolation",
+        "operationKind": "apply-binding-part",
+        "applicationSite": "text-interpolation",
+        "slotKinds": [
+          "binding-expression"
+        ]
+      },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 82
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -2058,7 +2068,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 101
+      "fragmentTextLength": 60
     },
     {
       "rowKind": "contribution",
@@ -2082,7 +2092,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 43
+      "fragmentTextLength": 44
     },
     {
       "rowKind": "contribution",
@@ -2096,7 +2106,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 60
+      "fragmentTextLength": 62
     },
     {
       "rowKind": "contribution",
@@ -2120,7 +2130,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 44
+      "fragmentTextLength": 43
     },
     {
       "rowKind": "contribution",
@@ -2134,7 +2144,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 62
+      "fragmentTextLength": 60
     },
     {
       "rowKind": "contribution",
@@ -2158,7 +2168,7 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 43
+      "fragmentTextLength": 46
     },
     {
       "rowKind": "contribution",
@@ -2172,7 +2182,7 @@
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
-      "fragmentTextLength": 60
+      "fragmentTextLength": 66
     },
     {
       "rowKind": "contribution",
@@ -2196,44 +2206,6 @@
         ]
       },
       "fragmentLanguage": "html",
-      "fragmentTextLength": 46
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 18,
-      "contributionKind": "source-fragment",
-      "contributionOrigin": null,
-      "fragmentLanguage": "html",
-      "fragmentTextLength": 66
-    },
-    {
-      "rowKind": "contribution",
-      "effectContractId": "source-plan-preview",
-      "rootDir": ".",
-      "hasCompleteFileText": true,
-      "filePath": "src/routes/task-item-detail-route.html",
-      "fileRole": "template",
-      "fileLanguage": "html",
-      "contributionIndex": 19,
-      "contributionKind": "source-fragment",
-      "contributionOriginKind": "app-builder-part-source-invocation",
-      "contributionOrigin": {
-        "kind": "app-builder-part-source-invocation",
-        "partKind": "binding-part",
-        "partId": "text-interpolation",
-        "operationKind": "apply-binding-part",
-        "applicationSite": "text-interpolation",
-        "slotKinds": [
-          "binding-expression"
-        ]
-      },
-      "fragmentLanguage": "html",
       "fragmentTextLength": 41
     },
     {
@@ -2244,7 +2216,7 @@
       "filePath": "src/routes/task-item-detail-route.html",
       "fileRole": "template",
       "fileLanguage": "html",
-      "contributionIndex": 20,
+      "contributionIndex": 18,
       "contributionKind": "source-fragment",
       "contributionOrigin": null,
       "fragmentLanguage": "html",
@@ -2390,6 +2362,17 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/runtime-html",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "dependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "aurelia",
       "dependencyVersionRange": "^2.0.0-rc.1",
       "dependencyScope": "dependency"
@@ -2401,9 +2384,51 @@
       "hasCompleteFileText": true,
       "packageManager": "host-selected",
       "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "@aurelia/vite-plugin",
+      "dependencyVersionRange": "^2.0.0-rc.1",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
       "dependencySpecifier": "typescript",
       "dependencyVersionRange": "^6.0.3",
       "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-dependency",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "dependencySpecifier": "vite",
+      "dependencyVersionRange": "^7.0.2",
+      "dependencyScope": "devDependency"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "dev",
+      "scriptCommand": "vite"
+    },
+    {
+      "rowKind": "project-tooling-script",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "scriptName": "build",
+      "scriptCommand": "vite build"
     },
     {
       "rowKind": "project-tooling-script",
@@ -2427,6 +2452,32 @@
       "hasText": true,
       "projectToolingFileKind": "package-manifest",
       "projectToolingFileLanguage": "json"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "index.html",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "root-document",
+      "projectToolingFileLanguage": "html"
+    },
+    {
+      "rowKind": "project-tooling-file",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "packageManager": "host-selected",
+      "buildToolPolicy": "app-builder-baseline",
+      "filePath": "vite.config.ts",
+      "textAuthority": "app-builder-generated",
+      "hasText": true,
+      "projectToolingFileKind": "build-config",
+      "projectToolingFileLanguage": "typescript"
     },
     {
       "rowKind": "project-tooling-file",

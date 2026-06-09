@@ -29,6 +29,8 @@ export interface AppBuilderSourcePlanAssemblyModel {
 export class AppBuilderSourcePlanAssembly {
   private readonly assembly: SourcePlanAssembly;
   private readonly generatedFileTextsByPath = new Map<string, string | null>();
+  private entrypointPath: string | null = null;
+  private rootElementName: string | null = null;
 
   public constructor(
     private readonly model: AppBuilderSourcePlanAssemblyModel,
@@ -45,8 +47,12 @@ export class AppBuilderSourcePlanAssembly {
   }
 
   public addConfiguredEntrypoint(
-    model: Omit<ConfiguredAureliaEntrypointFileModel, 'textAuthority'>,
+    model: Omit<ConfiguredAureliaEntrypointFileModel, 'textAuthority'> & {
+      readonly rootElementName?: string | null;
+    },
   ): this {
+    this.entrypointPath = model.entrypointPath;
+    this.rootElementName = model.rootElementName ?? null;
     this.assembly.addSourcePlanFile(configuredAureliaEntrypointFile({
       ...model,
       textAuthority: SourcePlanTextAuthority.AppBuilderGenerated,
@@ -85,6 +91,8 @@ export class AppBuilderSourcePlanAssembly {
         appName: this.model.appName,
         dependencySpecifiers: this.model.dependencySpecifiers,
         buildToolPolicy: SourcePlanBuildToolPolicy.AppBuilderBaseline,
+        entrypointPath: this.entrypointPath,
+        rootElementName: this.rootElementName,
         textAuthority: SourcePlanTextAuthority.AppBuilderGenerated,
       },
     );

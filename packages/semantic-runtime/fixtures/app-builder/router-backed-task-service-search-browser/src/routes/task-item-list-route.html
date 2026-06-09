@@ -2,7 +2,7 @@
   <h2>Tasks</h2>
   <div>
     <label for="task-search-query">Search tasks</label>
-    <input value.bind="taskItemTitleQuery" id="task-search-query">
+    <input type="search" value.bind="taskItemTitleQuery" id="task-search-query">
   </div>
   <button type="button" click.trigger="searchTaskItems()">Search tasks</button>
   <p if.bind="searchStatusMessage" role="status" id="task-search-status">${searchStatusMessage}</p>
@@ -23,9 +23,7 @@
         <tbody>
           <tr repeat.for="taskItem of loadedTaskItems">
             <td>${taskItem.title}</td>
-            <td>
-              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-            </td>
+            <td>${taskItem.done ? 'Done' : 'Open'}</td>
             <td>
               <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
             </td>

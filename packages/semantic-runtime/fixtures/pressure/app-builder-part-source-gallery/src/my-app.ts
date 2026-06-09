@@ -289,7 +289,7 @@ export class MyApp {
   draft = {
     title: 'Draft',
     quantity: 1,
-    dueDate: new Date('2026-06-01T00:00:00.000Z') as Date | null,
+    dueDate: '2026-06-01',
     enabled: true,
   };
   matcher = (left: GalleryOption, right: GalleryOption) => left.id === right.id;

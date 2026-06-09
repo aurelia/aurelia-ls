@@ -14,9 +14,7 @@
     <tbody>
       <tr repeat.for="taskItem of state.taskItems">
         <td>${taskItem.title}</td>
-        <td>
-          <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-        </td>
+        <td>${taskItem.done ? 'Done' : 'Open'}</td>
         <td>${state.assigneeLabelForTaskItem(taskItem)}</td>
         <td>${state.reviewersLabelForTaskItem(taskItem)}</td>
         <td>

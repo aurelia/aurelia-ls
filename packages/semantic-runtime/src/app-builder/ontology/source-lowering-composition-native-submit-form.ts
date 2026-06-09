@@ -403,6 +403,8 @@ function nativeSubmitFormRenderedFragments(
     actionChannelKind: AppBuilderControlUseActionChannelKind.ContainingFormSubmit,
     buttonText: readyFrame.submitButtonText,
     buttonType: AppBuilderSourceLoweringButtonType.Submit,
+    labelText: readyFrame.submitButtonText,
+    labelTextSource: AppBuilderSourceLoweringLabelTextSource.ExplicitRequest,
   }));
   const formFragment = appBuilderTemplateElementFragment(
     'form',

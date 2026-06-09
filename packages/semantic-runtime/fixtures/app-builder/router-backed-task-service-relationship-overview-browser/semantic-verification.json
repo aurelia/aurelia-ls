@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "router-backed-task-service-relationship-overview-browser",
   "ok": true,
-  "expectedEffects": 21,
+  "expectedEffects": 22,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder routed collection/detail SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder routed collection/detail SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder routed collection/detail SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -144,8 +149,8 @@
         "buttonType": null,
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/router-backed-task-service-relationship-overview-browser/src/routes/task-item-list-route.html",
-          "start": 1127,
-          "end": 1207
+          "start": 1051,
+          "end": 1131
         }
       }
     }
@@ -156,7 +161,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 11089,
+      "jsonLength": 16062,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -186,7 +191,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-list-route.html",
-      "textLength": 1397,
+      "textLength": 1321,
       "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.html' matches the stored app-builder request output."
     },
     {
@@ -198,7 +203,7 @@
     {
       "outcome": "satisfied",
       "path": "src/routes/task-item-detail-route.html",
-      "textLength": 897,
+      "textLength": 813,
       "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.html' matches the stored app-builder request output."
     },
     {
@@ -228,8 +233,20 @@
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 310,
+      "textLength": 465,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 324,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -246,8 +263,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 21,
-      "jsonLength": 7409,
+      "rowCount": 22,
+      "jsonLength": 7756,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -275,14 +292,14 @@
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
       "rowCount": 1,
-      "jsonLength": 984,
+      "jsonLength": 998,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 88,
-      "jsonLength": 40674,
+      "rowCount": 92,
+      "jsonLength": 41699,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

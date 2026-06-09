@@ -15,9 +15,7 @@
           <tbody>
             <tr repeat.for="taskItem of loadedTaskItems" class="service-complete-task-table__row">
               <td>${taskItem.title}</td>
-              <td>
-                <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-              </td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
               <td>
                 <button type="button" click.trigger="complete(taskItem)">Complete</button>
               </td>

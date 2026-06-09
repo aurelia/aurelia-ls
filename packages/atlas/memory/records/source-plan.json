@@ -18,7 +18,7 @@
         "Use SourcePlanAssembly when a generator creates multiple SourcePlanFile artifacts under one root, policy, and text-authority lifetime. This is the intended replacement for repeated SourcePlanFile/SourcePlanText constructor blocks in concrete source lowerers.",
         "Use AppBuilderSourcePlanAssembly for app-builder generated-app or source-starting lowerers that need the app-builder baseline conflict/formatting/tooling policy, generated text authority, configured entrypoint admission, dependency evidence, and runnable project tooling. Concrete source lowerers should not restate that transaction locally.",
         "Use SourcePlanContribution when generated file text is assembled from lower-level source facts. TypeScript imports and source fragments should stay available beside final text so MCP/IDE callers can explain which framework mechanism, app-builder part invocation, or app-builder source-lowering target produced a file without reparsing source.",
-        "Keep SourcePlan contributions and verification row families available internally, but do not assume every public SourcePlan answer should ship the full ledger. App-builder public SourcePlan projections expose generated text, contribution counts, witness counts, control-use counts, expected-effect counts/kinds, and request-field summaries by default; `includeSourcePlanContributions`, `includeSourcePlanWitnessRows`, `includeControlUseInventoryRows`, `includeExpectedEffectRows`, `includeSourceLoweringRequestFields`, and `includeDecisionBundleExpansionRows` are explicit provenance/verification detail flags.",
+        "Keep SourcePlan contributions and verification row families available internally, but do not assume every public SourcePlan answer should ship the full ledger. App-builder public SourcePlan projections expose generated text, contribution counts, witness counts, control-use counts, expected-effect counts/kinds, request-field summaries, and compact handoff/result-boundary notes by default; `includeSourcePlanContributions`, `includeSourcePlanWitnessRows`, `includeControlUseInventoryRows`, `includeExpectedEffectRows`, `includeSourceLoweringRequestFields`, and `includeDecisionBundleExpansionRows` are explicit provenance/verification detail flags.",
         "Preserve both app-builder source-lowering invocation and app-builder source-lowering composition origins. A one-target control fragment and a top-level Native Submit Form wrapper are different provenance layers, and SourcePlanContribution should keep both visible beside delegated part-source origins.",
         "Preserve direct app-builder source-lowering target origins when a fragment does not come from a part invocation or composition member. `SourceLoweringTarget` origins are the neutral handoff for generated support declarations such as local view-model state type aliases and option members.",
         "Treat TypeScript top-level declaration fragments as a first-class generated-source category beside class-member fragments. Custom-element pair assembly should keep top-level declarations outside the class body while still carrying their SourcePlan contribution origins.",
@@ -30,7 +30,7 @@
         "Use configuredAureliaEntrypointFile for entrypoint source. It spends the same TypeScriptImportRequirement lane for the default Aurelia import, root component import, configuration imports, and contribution-backed registration expressions.",
         "Use aureliaRegistrationChain when entrypoint source needs to format Aurelia registration calls. A single simple registration such as RouterConfiguration should stay compact, while multiple registrations or multiline registration expressions should remain expanded.",
         "Use the router-owned route-configuration source serializer when generated source needs `@route(...)` object literals. It owns multiline route-array/object formatting, including trailing commas, so app-builder routed fixtures do not grow local route text serializers.",
-        "Use SourcePlanProjectTooling for package dependencies, scripts, package manifests, tsconfig files, and local declaration files. Do not hide runnable-project requirements as ordinary app source files.",
+        "Use SourcePlanProjectTooling for package dependencies, scripts, package manifests, browser root documents, build configs, tsconfig files, and local declaration files. Do not hide runnable-project requirements as ordinary app source files.",
         "Use AureliaConfigurationAdmissionSource for framework/plugin entrypoint admission. App-builder source lowerers should request router, state, i18n, validation-html, or future configuration fragments instead of restating package imports, registration expressions, and dependency specifiers inline.",
         "Preserve configuration admission source authority through SourcePlanContributionOriginKind.AureliaConfigurationAdmission. Configuration imports and registration expressions should carry AureliaConfigurationAdmissionKind origin rows so previews and future IDE/MCP affordances can explain entrypoint source without reparsing text.",
         "Use SourcePattern on complete generated SourcePlans when callers need to distinguish source-text relation to caller domain, style, data, code economy, reusable modules, and analyzer pressure. SourcePattern should describe generated-source shape without owning app-builder menu taste.",
@@ -39,7 +39,7 @@
         "When app-builder wraps app-builder source-lowering fragments in a SourcePlan preview, SourceRoot and SourceTargetPath may arrive either as resolved rootDir/templatePath transport fields or as SourcePlacement facet payloads. These are one placement model; conflicts should block with typed issues rather than establishing hidden precedence.",
         "Keep SourcePlan neutral: app-builder owns generation intent and taste, fixture verification owns semantic promises, diagnostics-to-action owns repair intent, and future edit application owns host write policy.",
         "SourcePlan contribution origins may carry raw string identities for product-specific concepts to preserve the neutral boundary. Product-specific coverage rows should split expected typed identities from observed raw origin text instead of widening product request or catalog types to anonymous strings.",
-        "A complete SourcePlan means the source text is available for preview/materialization; it is not permission to write files or overwrite user source.",
+        "A complete SourcePlan means the source text is available for preview/materialization; it is not permission to write files or overwrite user source. App-builder SourcePlan handoff notes may tell an AI/host to write returned `sourcePlan.files` rows and apply returned project tooling, but that instruction is a boundary statement for an external materialization surface, not an app-builder lowerer side effect.",
         "App-builder SourcePlan contributions should carry current source-lowering target/invocation/composition origins, not deleted starter composition evidence.",
         "Direct app-builder SourcePlan target admission is centralized through `directSourcePlanTargetFrame` plus descriptor-backed issue policy in `directSourcePlanTargetIssues`. New direct SourcePlan targets should add explicit descriptors for target support, missing/unknown/unsupported target issues, availability issues, and input-gate issues, then reuse the frame for preflight rows, target refs, and effect contract ids rather than cloning app-shell/router/state preflight checks.",
         "`componentPairSourcePlan` is the app-builder component-pair phase that crosses into neutral SourcePlan artifact assembly. Earlier component-pair phases own selection, nested lowerings, local-state derivation, fragments, and issues; they should remain app-builder internals unless a future source/edit surface needs them directly.",
@@ -62,7 +62,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/app-builder/source-plan-assembly.ts",
           "symbolName": "AppBuilderSourcePlanAssembly",
-          "summary": "App-builder source-plan transaction carrying generated-source policy, entrypoint admission, dependency evidence, and project tooling."
+          "summary": "App-builder source-plan transaction carrying generated-source policy, entrypoint admission, dependency evidence, and runnable project tooling."
         },
         {
           "kind": "source",
@@ -152,7 +152,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/source-plan/package-tooling.ts",
           "symbolName": "SourcePlanProjectTooling",
-          "summary": "Structured package/build sidecar for runnable generated projects."
+          "summary": "Structured package/build sidecar for runnable generated projects, including package metadata, root documents, build config, tsconfig, and local declarations."
         },
         {
           "kind": "source",
@@ -385,7 +385,7 @@
         }
       ],
       "createdAt": "2026-05-30",
-      "updatedAt": "2026-06-04"
+      "updatedAt": "2026-06-07"
     }
   ]
 }

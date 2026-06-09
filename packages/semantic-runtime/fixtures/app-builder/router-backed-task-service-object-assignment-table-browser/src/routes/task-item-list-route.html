@@ -35,9 +35,7 @@
           <tr repeat.for="taskItem of loadedTaskItems">
             <td>${taskItem.title}</td>
             <td>${state.assigneeLabelForTaskItem(taskItem)}</td>
-            <td>
-              <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-            </td>
+            <td>${taskItem.done ? 'Done' : 'Open'}</td>
             <td>
               <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
             </td>

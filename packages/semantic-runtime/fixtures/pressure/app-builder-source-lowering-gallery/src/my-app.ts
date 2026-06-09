@@ -5,8 +5,13 @@ export type MyAppLabel = 'frontend' | 'backend' | 'docs';
 interface GalleryItem {
   readonly title: string;
   readonly description: string;
+  readonly contactEmail: string;
+  readonly websiteUrl: string;
+  readonly supportPhone: string;
+  readonly accessCode: string;
+  readonly filterText: string;
   readonly quantity: number;
-  readonly dueDate: Date | null;
+  readonly dueDate: string;
   readonly enabled: boolean;
   readonly priority: MyAppPriority;
   readonly labels: readonly MyAppLabel[];
@@ -27,8 +32,17 @@ export class MyApp {
 
   title: string = '';
   description: string = '';
+  contactEmail: string = '';
+  websiteUrl: string = '';
+  supportPhone: string = '';
+  accessCode: string = '';
+  filterText: string = '';
+  appointmentTime: string = '';
+  scheduledAtLocal: string = '';
+  billingMonth: string = '';
+  reviewWeek: string = '';
   quantity: number = 0;
-  dueDate: Date | null = null;
+  dueDate: string = '';
   enabled: boolean = false;
   priority: MyAppPriority = 'low';
   labels: MyAppLabel[] = [];
@@ -38,8 +52,13 @@ export class MyApp {
     {
       title: 'Alpha',
       description: 'First gallery item',
+      contactEmail: 'alpha@example.com',
+      websiteUrl: 'https://example.com/alpha',
+      supportPhone: '+31 20 000 0001',
+      accessCode: 'alpha-secret',
+      filterText: 'alpha',
       quantity: 2,
-      dueDate: new Date('2026-06-01T00:00:00.000Z'),
+      dueDate: '2026-06-01',
       enabled: true,
       priority: 'normal',
       labels: ['frontend'],
@@ -47,8 +66,13 @@ export class MyApp {
     {
       title: 'Beta',
       description: 'Second gallery item',
+      contactEmail: 'beta@example.com',
+      websiteUrl: 'https://example.com/beta',
+      supportPhone: '+31 20 000 0002',
+      accessCode: 'beta-secret',
+      filterText: 'beta',
       quantity: 5,
-      dueDate: null,
+      dueDate: '',
       enabled: false,
       priority: 'urgent',
       labels: ['backend', 'docs'],
@@ -58,8 +82,13 @@ export class MyApp {
   draftItem: GalleryItem = {
     title: 'Draft',
     description: 'Editable gallery item',
+    contactEmail: 'draft@example.com',
+    websiteUrl: 'https://example.com/draft',
+    supportPhone: '+31 20 000 0003',
+    accessCode: 'draft-secret',
+    filterText: 'draft',
     quantity: 1,
-    dueDate: null,
+    dueDate: '',
     enabled: true,
     priority: 'normal',
     labels: ['frontend'],
@@ -79,6 +108,10 @@ export class MyApp {
 
   selectItem(item: GalleryItem) {
     this.title = item.title;
+  }
+
+  adjustStock(item: GalleryItem, delta: number) {
+    this.quantity = item.quantity + delta;
   }
 
   readonly itemsPromise: Promise<GalleryItem[]> = Promise.resolve(this.items);

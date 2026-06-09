@@ -411,7 +411,7 @@ function localViewModelRequiredFieldReadyExpression(
     case AppBuilderDomainFieldValueKind.ChoiceSet:
       return `this.${field.memberName}.length > 0`;
     case AppBuilderDomainFieldValueKind.Date:
-      return `this.${field.memberName} != null`;
+      return `this.${field.memberName}.trim().length > 0`;
     case AppBuilderDomainFieldValueKind.Number:
       return `Number.isFinite(this.${field.memberName})`;
     case AppBuilderDomainFieldValueKind.Boolean:

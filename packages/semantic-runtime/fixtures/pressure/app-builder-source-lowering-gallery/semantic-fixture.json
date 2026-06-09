@@ -22,7 +22,24 @@
       "kind": "expected-semantic-effect"
     },
     {
-      "summary": "App-builder source-lowering fragment gallery has TypeScript project tooling.",
+      "summary": "App-builder source-lowering fragment gallery has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery has TypeScript and build project tooling.",
       "topologyNodeKind": "build-tool",
       "effectKind": "project-tooling",
       "scope": "project",
@@ -138,6 +155,51 @@
       "kind": "control-pattern",
       "domain": "control",
       "id": "native-text-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-email-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-url-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-tel-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-password-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-search-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-time-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-datetime-local-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-month-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-week-input"
     },
     {
       "kind": "control-pattern",
@@ -351,6 +413,87 @@
       "ownerKind": "invocation",
       "fieldId": "label-text",
       "requestFieldName": "labelText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-email-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-url-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-tel-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-password-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-search-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-time-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-datetime-local-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-month-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-week-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
       "valueShape": {
         "kind": "string"
       }

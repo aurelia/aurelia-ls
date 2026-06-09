@@ -2,7 +2,7 @@
   "outcome": "hit",
   "summary": "Previewed app-builder ontology SourcePlan with 1 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=none, target=src/task-state.ts, source=di-state-class, files=1, witnesses=2, controlUses=0, expectedEffects=0, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=src/task-state.ts, source=di-state-class, files=1, witnesses=2, controlUses=0, expectedEffects=0, handoffNotes=4, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": null,
     "sourceTargetPath": "src/task-state.ts",
@@ -49,6 +49,71 @@
       ]
     },
     "sourcePlanWitnessCount": 2,
+    "handoffNoteCount": 4,
+    "handoffNotes": [
+      {
+        "kind": "seed-data-scaffold",
+        "summary": "Generated seed records came from explicit app-builder input and keep the app runnable; replace them or connect them to real persistence when moving beyond scaffold data.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "di-state-class"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model",
+          "component",
+          "service"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "di-state-class"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 1/1 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "di-state-class"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 0 expected semantic effect(s), 0 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "di-state-class"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model"
+        ],
+        "expectedEffectKinds": []
+      }
+    ],
     "suppliedInputCount": 3,
     "explicitSuppliedInputCount": 0,
     "decisionBundleCount": 1,

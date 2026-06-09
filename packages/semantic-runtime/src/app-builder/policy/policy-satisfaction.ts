@@ -10,6 +10,10 @@ export enum AppBuilderPolicySatisfactionSource {
   ExplicitNestedControlSelection = 'explicit-nested-control-selection',
   /** The caller supplied domain field shape that deterministically selects this control. */
   DomainFieldControlInput = 'domain-field-control-input',
+  /** The caller supplied collection query or filter inputs that deterministically select this control. */
+  CollectionQueryControlInput = 'collection-query-control-input',
+  /** The caller supplied help/error/status feedback inputs that deterministically select this message control. */
+  FeedbackMessageInput = 'feedback-message-input',
 }
 
 /** Stable value list for app-builder policy-satisfaction source transport schemas. */
@@ -17,6 +21,8 @@ export const APP_BUILDER_POLICY_SATISFACTION_SOURCES = [
   AppBuilderPolicySatisfactionSource.ExplicitTargetSelection,
   AppBuilderPolicySatisfactionSource.ExplicitNestedControlSelection,
   AppBuilderPolicySatisfactionSource.DomainFieldControlInput,
+  AppBuilderPolicySatisfactionSource.CollectionQueryControlInput,
+  AppBuilderPolicySatisfactionSource.FeedbackMessageInput,
 ] as const;
 
 /** Policy gate state for contextual executable app-builder targets. */
@@ -105,5 +111,9 @@ function appBuilderPolicySatisfactionSourceSummary(sourceId: AppBuilderPolicySat
       return 'The caller explicitly selected this contextual control pattern inside a composition input.';
     case AppBuilderPolicySatisfactionSource.DomainFieldControlInput:
       return 'The caller supplied domain field shape that deterministically selects this contextual native control.';
+    case AppBuilderPolicySatisfactionSource.CollectionQueryControlInput:
+      return 'The caller supplied collection query or filter inputs that deterministically select this contextual native control.';
+    case AppBuilderPolicySatisfactionSource.FeedbackMessageInput:
+      return 'The caller supplied help/error/status feedback inputs that deterministically select this contextual message control.';
   }
 }

@@ -23,9 +23,11 @@ import {
   type AppBuilderCustomElementSourceLayout,
 } from './custom-element-source-layout.js';
 import {
+  appBuilderRoutedCollectionDetailSharedStateFileArtifact,
   appBuilderRoutedCollectionDetailRouteAreaRootImports,
   appBuilderRoutedCollectionDetailRouteAreaSourceFrame,
   type AppBuilderRoutedCollectionDetailRouteAreaSourceFrame,
+  type AppBuilderRoutedCollectionDetailSharedStateSource,
   type AppBuilderRoutedCollectionDetailSourceRequest,
 } from './routed-collection-detail-source.js';
 import {
@@ -58,7 +60,12 @@ export function appBuilderApplicationAssemblySourcePlan(
   request: AppBuilderApplicationAssemblySourceRequest,
 ): SourcePlan {
   const rootLayout = appBuilderRootCustomElementSourceLayout(request.carrier);
-  const routeAreaFrames = request.routeAreas.map(appBuilderRoutedCollectionDetailRouteAreaSourceFrame);
+  const sharedState = applicationAssemblySharedStateSource();
+  const sharedStateFile = appBuilderRoutedCollectionDetailSharedStateFileArtifact(sharedState, request.routeAreas);
+  const routeAreas = sharedStateFile == null
+    ? request.routeAreas
+    : request.routeAreas.map((routeArea) => ({ ...routeArea, sharedState }));
+  const routeAreaFrames = routeAreas.map(appBuilderRoutedCollectionDetailRouteAreaSourceFrame);
   const routerAdmission = aureliaConfigurationAdmissionSourceSet([
     aureliaRouterConfigurationAdmissionSource(),
   ]);
@@ -71,16 +78,27 @@ export function appBuilderApplicationAssemblySourcePlan(
       entrypointPath: 'src/main.ts',
       rootComponentPath: rootLayout.componentPath,
       rootComponentClassName: rootLayout.className,
+      rootElementName: rootLayout.resourceName,
       configurationAdmission: routerAdmission,
     })
     .addFile(applicationAssemblyRootComponentFileArtifact(rootLayout, request.appName, routeAreaFrames))
     .addFile(applicationAssemblyRootTemplateFileArtifact(rootLayout, routeAreaFrames));
+  if (sharedStateFile != null) {
+    assembly.addFile(sharedStateFile);
+  }
   for (const frame of routeAreaFrames) {
     for (const file of frame.files) {
       assembly.addFile(file);
     }
   }
   return assembly.build(appBuilderApplicationAssemblySourcePattern(request.carrier));
+}
+
+function applicationAssemblySharedStateSource(): AppBuilderRoutedCollectionDetailSharedStateSource {
+  return {
+    sourceTargetPath: 'src/app-state.ts',
+    className: 'AppState',
+  };
 }
 
 function applicationAssemblyRootComponentFileArtifact(

@@ -1,7 +1,7 @@
 <form submit.trigger="saveDraft()">
   <div>
     <label for="task-summary-input">Task summary</label>
-    <input value.bind="title" id="task-summary-input" aria-describedby="task-summary-guidance">
+    <input value.bind="title" required minlength="2" maxlength="80" id="task-summary-input" aria-describedby="task-summary-guidance">
     <p id="task-summary-guidance">Use a short active-voice summary.</p>
   </div>
   <div>

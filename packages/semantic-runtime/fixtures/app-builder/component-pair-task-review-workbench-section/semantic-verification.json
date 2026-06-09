@@ -3,7 +3,7 @@
   "fixtureRole": "app-builder-generated-app-contract",
   "fixtureId": "component-pair-task-review-workbench-section",
   "ok": true,
-  "expectedEffects": 8,
+  "expectedEffects": 9,
   "effectResults": [
     {
       "outcome": "satisfied",
@@ -13,7 +13,12 @@
     {
       "outcome": "satisfied",
       "effectKind": "project-tooling",
-      "summary": "App-builder component-pair app shell SourcePlan has TypeScript project tooling. Observed 4 matching semantic fact(s)."
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
     },
     {
       "outcome": "satisfied",
@@ -46,7 +51,7 @@
       "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
     }
   ],
-  "expectedControlUseRows": 13,
+  "expectedControlUseRows": 12,
   "controlUseResults": [
     {
       "outcome": "satisfied",
@@ -339,9 +344,9 @@
     {
       "outcome": "satisfied",
       "expected": {
-        "controlPatternId": "native-text-input",
+        "controlPatternId": "native-search-input",
         "innerControlPatternId": null,
-        "controlId": "text-input",
+        "controlId": "search-input",
         "bindingExpression": "titleFilter",
         "handlerExpression": null,
         "actionChannelKind": null,
@@ -355,8 +360,8 @@
         "definitionName": "task-review-workbench-section",
         "sourceKind": "authored-runtime-binding",
         "classificationKind": "native-value-channel",
-        "controlPatternId": "native-text-input",
-        "controlId": "text-input",
+        "controlPatternId": "native-search-input",
+        "controlId": "search-input",
         "bindingExpression": "titleFilter",
         "handlerExpression": null,
         "actionChannelKind": null,
@@ -369,42 +374,6 @@
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
           "start": 1798,
           "end": 1822
-        }
-      }
-    },
-    {
-      "outcome": "satisfied",
-      "expected": {
-        "controlPatternId": "native-boolean-checkbox",
-        "innerControlPatternId": null,
-        "controlId": "checkbox",
-        "bindingExpression": "taskItem.done",
-        "handlerExpression": null,
-        "actionChannelKind": null,
-        "routeInstruction": null,
-        "linkText": null,
-        "eventName": null,
-        "buttonText": null,
-        "buttonType": null
-      },
-      "actual": {
-        "definitionName": "task-review-workbench-section",
-        "sourceKind": "authored-runtime-binding",
-        "classificationKind": "native-value-channel",
-        "controlPatternId": "native-boolean-checkbox",
-        "controlId": "checkbox",
-        "bindingExpression": "taskItem.done",
-        "handlerExpression": null,
-        "actionChannelKind": null,
-        "routeInstruction": null,
-        "linkText": null,
-        "eventName": null,
-        "buttonText": null,
-        "buttonType": null,
-        "source": {
-          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
-          "start": 2477,
-          "end": 2508
         }
       }
     },
@@ -439,8 +408,8 @@
         "buttonType": "button",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
-          "start": 2714,
-          "end": 2753
+          "start": 2642,
+          "end": 2681
         }
       }
     },
@@ -475,8 +444,8 @@
         "buttonType": "button",
         "source": {
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
-          "start": 2912,
-          "end": 2947
+          "start": 2840,
+          "end": 2875
         }
       }
     },
@@ -523,7 +492,7 @@
       "outcome": "satisfied",
       "rowFamily": "appBuilderResponse",
       "rowCount": null,
-      "jsonLength": 4613,
+      "jsonLength": 9755,
       "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
     },
     {
@@ -541,14 +510,26 @@
     {
       "outcome": "satisfied",
       "path": "src/task-review-workbench-section.html",
-      "textLength": 3063,
+      "textLength": 2991,
       "summary": "Generated SourcePlan file 'src/task-review-workbench-section.html' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
       "path": "package.json",
-      "textLength": 259,
+      "textLength": 414,
       "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 357,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
     },
     {
       "outcome": "satisfied",
@@ -565,8 +546,8 @@
     {
       "outcome": "satisfied",
       "rowFamily": "expectedEffects",
-      "rowCount": 8,
-      "jsonLength": 2426,
+      "rowCount": 9,
+      "jsonLength": 2773,
       "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
     },
     {
@@ -593,15 +574,15 @@
     {
       "outcome": "satisfied",
       "rowFamily": "controlUseInventoryRows",
-      "rowCount": 13,
-      "jsonLength": 12611,
+      "rowCount": 12,
+      "jsonLength": 11762,
       "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
     },
     {
       "outcome": "satisfied",
       "rowFamily": "sourcePlanWitnessRows",
-      "rowCount": 96,
-      "jsonLength": 48592,
+      "rowCount": 102,
+      "jsonLength": 50326,
       "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
     }
   ],

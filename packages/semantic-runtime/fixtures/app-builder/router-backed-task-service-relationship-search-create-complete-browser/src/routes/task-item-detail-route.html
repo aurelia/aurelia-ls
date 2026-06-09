@@ -6,10 +6,7 @@
       <article if.bind="taskItem">
         <section>
           <h2>${taskItem.title}</h2>
-          <p>
-            Done:
-            <input type="checkbox" checked.to-view="taskItem.done" disabled aria-label="Done">
-          </p>
+          <p>Done: ${taskItem.done ? 'Done' : 'Open'}</p>
           <p>Assignee: ${state.assigneeLabelForTaskItem(taskItem)}</p>
           <p>Reviewers: ${state.reviewersLabelForTaskItem(taskItem)}</p>
           <p>Schedule: ${state.scheduleLabelForTaskItem(taskItem)}</p>

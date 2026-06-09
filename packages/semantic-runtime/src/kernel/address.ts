@@ -18,6 +18,8 @@ export const enum SourceLanguage {
 export const enum SourceFileRole {
   /** Source that can participate in the application semantic world. */
   AppSource = 'app-source',
+  /** Root HTML document that hosts the application rather than acting as an Aurelia template. */
+  RootDocument = 'root-document',
   /** HTML template source owned by an app/resource or discovered as an external template. */
   Template = 'template',
   /** CSS/style source owned by an app/resource or build pipeline. */

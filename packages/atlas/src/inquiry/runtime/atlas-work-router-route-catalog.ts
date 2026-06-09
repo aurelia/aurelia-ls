@@ -64,6 +64,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "target-catalog",
       "input-readiness",
       "input-contract-detail",
+      "architecture-options",
+      "architecture option menu",
+      "requested app architecture options",
+      "single-component-local-state",
+      "di-state-component-section",
+      "router-backed-list-detail-service",
       "app-builder-v1-scope-recalibration",
       "v1 scope recalibration",
       "app-builder v1 recalibration packet",
@@ -784,6 +790,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Public posture axis distinguishing ontology read model, source-lowering surface, part-source substrate, integrity probes, and catalog map.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/architecture-options.ts",
+        symbolName: "appBuilderArchitectureOptions",
+        role: "primary",
+        summary:
+          "Read-only app-builder architecture option menu over compact local component, DI-state component section, and router-backed list/detail/service shapes with target refs and follow-up query payloads.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/app-builder/ontology/architecture-options.ts",
+        symbolName: "AppBuilderArchitectureOptionId",
+        role: "supporting",
+        summary:
+          "Enum-backed architecture option identities for AI-facing requested-app shape selection before source-lowering.",
       },
       {
         kind: "source",

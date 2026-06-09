@@ -2,7 +2,7 @@
   "outcome": "hit",
   "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
   "value": {
-    "displayText": "App-builder SourcePlan preview: root=., template=src/task-draft-fields.html, target=src/task-draft-fields.ts, source=component-pair, files=3, witnesses=44, controlUses=11, expectedEffects=8, decisionBundles=1, issues=0.",
+    "displayText": "App-builder SourcePlan preview: root=., template=src/task-draft-fields.html, target=src/task-draft-fields.ts, source=component-pair, files=3, witnesses=69, controlUses=26, expectedEffects=9, handoffNotes=3, decisionBundles=1, issues=0.",
     "rootDir": ".",
     "templatePath": "src/task-draft-fields.html",
     "sourceTargetPath": "src/task-draft-fields.ts",
@@ -52,8 +52,8 @@
       "runtime-controller",
       "open-seam-closure"
     ],
-    "expectedEffectCount": 8,
-    "controlUseInventoryRowCount": 11,
+    "expectedEffectCount": 9,
+    "controlUseInventoryRowCount": 26,
     "sourceLoweringRequestFieldSummary": {
       "requestFieldCount": 36,
       "requiredCount": 4,
@@ -112,7 +112,131 @@
         }
       ]
     },
-    "sourcePlanWitnessCount": 44,
+    "sourcePlanWitnessCount": 69,
+    "handoffNoteCount": 3,
+    "handoffNotes": [
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "form-message"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 3/3 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "form-message"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 26 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "form-message"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "resource-definition",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
     "suppliedInputCount": 5,
     "explicitSuppliedInputCount": 0,
     "decisionBundleCount": 1,
@@ -144,8 +268,8 @@
           "editKind": "create",
           "operationKind": "create-component-view-model",
           "textAuthority": "app-builder-generated",
-          "textLength": 1786,
-          "contributionCount": 19
+          "textLength": 2533,
+          "contributionCount": 28
         },
         {
           "path": "src/task-draft-fields.html",
@@ -154,8 +278,8 @@
           "editKind": "create",
           "operationKind": "create-component-template",
           "textAuthority": "app-builder-generated",
-          "textLength": 3809,
-          "contributionCount": 13
+          "textLength": 5948,
+          "contributionCount": 22
         }
       ],
       "projectTooling": {
@@ -163,9 +287,21 @@
         "buildToolPolicy": "app-builder-baseline",
         "dependencies": [
           {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
             "specifier": "aurelia",
             "versionRange": "^2.0.0-rc.1",
             "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
             "kind": "source-plan-package-dependency"
           },
           {
@@ -173,9 +309,25 @@
             "versionRange": "^6.0.3",
             "scope": "devDependency",
             "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
           }
         ],
         "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
           {
             "name": "check",
             "command": "tsc -p tsconfig.json --noEmit",
@@ -188,7 +340,21 @@
             "fileKind": "package-manifest",
             "language": "json",
             "textAuthority": "app-builder-generated",
-            "textLength": 248
+            "textLength": 403
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 322
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
           },
           {
             "path": "tsconfig.json",

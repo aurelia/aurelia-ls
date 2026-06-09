@@ -7,8 +7,9 @@ export class RefreshableServiceTaskTable {
   refreshStatusMessage: string = '';
   taskItemsPromise: ReturnType<TaskItemService['listTaskItems']> = this.taskItemService.listTaskItems();
 
-  refreshTaskItems() {
+  async refreshTaskItems() {
     this.taskItemsPromise = this.taskItemService.listTaskItems();
+    await this.taskItemsPromise;
     this.refreshStatusMessage = 'Tasks refreshed.';
   }
 }

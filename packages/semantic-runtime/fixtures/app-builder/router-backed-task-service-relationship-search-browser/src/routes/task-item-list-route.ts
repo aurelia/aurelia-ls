@@ -14,16 +14,17 @@ export class TaskItemListRoute {
     this.taskItemsPromise = queryValue === ''
       ? this.state.loadTaskRelationships()
       : this.state.searchTaskRelationshipsByTitle(queryValue);
+    return this.taskItemsPromise;
   }
 
-  searchTaskRelationships() {
-    this.reloadTaskRelationshipsByTitle();
+  async searchTaskRelationships() {
+    await this.reloadTaskRelationshipsByTitle();
     this.searchStatusMessage = 'Search applied.';
   }
 
-  clearTaskRelationshipSearch() {
+  async clearTaskRelationshipSearch() {
     this.taskRelationshipTitleQuery = '';
-    this.reloadTaskRelationshipsByTitle();
+    await this.reloadTaskRelationshipsByTitle();
     this.clearSearchStatusMessage = 'Search cleared.';
   }
 }

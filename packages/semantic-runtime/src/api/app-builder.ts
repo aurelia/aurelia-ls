@@ -37,6 +37,7 @@ import type {
 import {
   appBuilderInputContractDetail,
   appBuilderInputReadiness,
+  appBuilderArchitectureOptions,
   appBuilderAffordanceDetail,
   appBuilderApplicationPatternDetail,
   appBuilderCollectionConceptDetail,
@@ -56,6 +57,8 @@ import {
   APP_BUILDER_ONTOLOGY_ROW_DESCRIPTORS,
   type AppBuilderAffordanceDetail,
   type AppBuilderAffordanceDetailRequest,
+  type AppBuilderArchitectureOptionsRequest,
+  type AppBuilderArchitectureOptionsResult,
   type AppBuilderApplicationPatternDetail,
   type AppBuilderApplicationPatternDetailRequest,
   type AppBuilderCollectionConceptDetail,
@@ -137,6 +140,8 @@ export enum SemanticRuntimeAppBuilderQueryKind {
   InputReadiness = 'input-readiness',
   /** Return payload schema details for app-builder input contracts and facets. */
   InputContractDetail = 'input-contract-detail',
+  /** Return concrete app architecture implementation shapes before source lowering. */
+  ArchitectureOptions = 'architecture-options',
   /** Return selected app-builder affordance details joined to inputs, effects, and declared follow-ups. */
   AffordanceDetail = 'affordance-detail',
   /** Return selected application pattern details joined to inputs, concept rows, and associated moves. */
@@ -180,6 +185,7 @@ export const SEMANTIC_RUNTIME_APP_BUILDER_QUERY_KINDS = [
   SemanticRuntimeAppBuilderQueryKind.OntologyCatalog,
   SemanticRuntimeAppBuilderQueryKind.InputReadiness,
   SemanticRuntimeAppBuilderQueryKind.InputContractDetail,
+  SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions,
   SemanticRuntimeAppBuilderQueryKind.AffordanceDetail,
   SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail,
   SemanticRuntimeAppBuilderQueryKind.CollectionConceptDetail,
@@ -247,6 +253,8 @@ export enum SemanticRuntimeAppBuilderRequestField {
   InputReadiness = 'inputReadiness',
   /** Input-contract detail filters over contracts, facets, and payload schema states. */
   InputContractDetail = 'inputContractDetail',
+  /** Architecture option filters for blank-slate/existing-app context and scale rung. */
+  ArchitectureOptions = 'architectureOptions',
   /** Affordance-detail filters over app-builder moves and joined readiness/detail rows. */
   AffordanceDetail = 'affordanceDetail',
   /** Application-pattern detail filters over pattern rows and coordinated concept joins. */
@@ -293,6 +301,7 @@ export const SEMANTIC_RUNTIME_APP_BUILDER_REQUEST_FIELDS = [
   SemanticRuntimeAppBuilderRequestField.OntologyCatalog,
   SemanticRuntimeAppBuilderRequestField.InputReadiness,
   SemanticRuntimeAppBuilderRequestField.InputContractDetail,
+  SemanticRuntimeAppBuilderRequestField.ArchitectureOptions,
   SemanticRuntimeAppBuilderRequestField.AffordanceDetail,
   SemanticRuntimeAppBuilderRequestField.ApplicationPatternDetail,
   SemanticRuntimeAppBuilderRequestField.CollectionConceptDetail,
@@ -353,6 +362,7 @@ export interface SemanticRuntimeAppBuilderQueryRequest {
   readonly ontologyCatalog?: AppBuilderOntologyCatalogRequest;
   readonly inputReadiness?: AppBuilderInputReadinessRequest;
   readonly inputContractDetail?: AppBuilderInputContractDetailRequest;
+  readonly architectureOptions?: AppBuilderArchitectureOptionsRequest;
   readonly affordanceDetail?: AppBuilderAffordanceDetailRequest;
   readonly applicationPatternDetail?: AppBuilderApplicationPatternDetailRequest;
   readonly collectionConceptDetail?: AppBuilderCollectionConceptDetailRequest;
@@ -462,6 +472,7 @@ export type SemanticRuntimeAppBuilderQueryResult =
   | AppBuilderOntologyCatalog
   | AppBuilderInputReadinessResult
   | AppBuilderInputContractDetail
+  | AppBuilderArchitectureOptionsResult
   | AppBuilderAffordanceDetail
   | AppBuilderApplicationPatternDetail
   | AppBuilderCollectionConceptDetail
@@ -549,6 +560,20 @@ const APP_BUILDER_QUERY_CATALOG_ROWS: readonly SemanticRuntimeAppBuilderQueryCat
     sourceTextPolicy: SemanticRuntimeAppBuilderSourceTextPolicy.Never,
     acceptedRequestFields: [
       SemanticRuntimeAppBuilderRequestField.InputContractDetail,
+      SemanticRuntimeAppBuilderRequestField.InquiryProfile,
+    ],
+    acceptedSelectionFields: [],
+    opensAppWorld: false,
+  },
+  {
+    queryKind: SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions,
+    group: SemanticRuntimeAppBuilderQueryGroup.Workflow,
+    posture: SemanticRuntimeAppBuilderQueryPosture.OntologyReadModel,
+    title: 'App-Builder Architecture Options',
+    summary: 'Return concrete implementation-shape options such as compact local component, DI state component section, and router-backed list/detail service boundary; does not infer user intent from prose.',
+    sourceTextPolicy: SemanticRuntimeAppBuilderSourceTextPolicy.Never,
+    acceptedRequestFields: [
+      SemanticRuntimeAppBuilderRequestField.ArchitectureOptions,
       SemanticRuntimeAppBuilderRequestField.InquiryProfile,
     ],
     acceptedSelectionFields: [],
@@ -804,6 +829,7 @@ SemanticRuntimeAppBuilderQueryAnswerer
   [SemanticRuntimeAppBuilderQueryKind.OntologyCatalog, answerAppBuilderOntologyCatalogQuery],
   [SemanticRuntimeAppBuilderQueryKind.InputReadiness, answerAppBuilderInputReadinessQuery],
   [SemanticRuntimeAppBuilderQueryKind.InputContractDetail, answerAppBuilderInputContractDetailQuery],
+  [SemanticRuntimeAppBuilderQueryKind.ArchitectureOptions, answerAppBuilderArchitectureOptionsQuery],
   [SemanticRuntimeAppBuilderQueryKind.AffordanceDetail, answerAppBuilderAffordanceDetailQuery],
   [SemanticRuntimeAppBuilderQueryKind.ApplicationPatternDetail, answerAppBuilderApplicationPatternDetailQuery],
   [SemanticRuntimeAppBuilderQueryKind.CollectionConceptDetail, answerAppBuilderCollectionConceptDetailQuery],
@@ -838,7 +864,7 @@ export function readSemanticRuntimeAppBuilderQueryCatalog(
   }));
   return {
     rows,
-    displayText: `App-builder catalog: ${rows.length} quer${rows.length === 1 ? 'y' : 'ies'}; appWorld=false.`,
+    displayText: `App-builder catalog: ${rows.length} quer${rows.length === 1 ? 'y' : 'ies'}; appWorld=false. For a requested app, start with architecture-options, then input-readiness/input-contract-detail for suppliedInputs or decisionBundles payload shape, then source-lowering-preflight/source-lowering-source-plan after explicit placement.`,
   };
 }
 
@@ -936,6 +962,17 @@ function answerAppBuilderInputContractDetailQuery(
   return answer(
     SemanticRuntimeAnswerOutcome.Hit,
     `Returned app-builder input contract detail for ${value.rows.length} contract row(s).`,
+    value,
+  );
+}
+
+function answerAppBuilderArchitectureOptionsQuery(
+  request: SemanticRuntimeAppBuilderQueryRequest,
+): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
+  const value = appBuilderArchitectureOptions(request.architectureOptions);
+  return answer(
+    SemanticRuntimeAnswerOutcome.Hit,
+    `Returned ${value.rows.length} app-builder architecture option row(s).`,
     value,
   );
 }

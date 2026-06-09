@@ -33,9 +33,18 @@ export class TaskDraftFields {
 
   title: string = '';
   description: string = '';
+  contactEmail: string = 'owner@example.com';
+  websiteUrl: string = 'https://example.com/task';
+  supportPhone: string = '+31 20 000 0000';
+  accessCode: string = '';
+  filterText: string = '';
+  appointmentTime: string = '09:30';
+  scheduledAtLocal: string = '2026-06-07T09:30';
+  billingMonth: string = '2026-06';
+  reviewWeek: string = '2026-W24';
   estimateHours: number = 0;
   progressPercent: number = 0;
-  dueDate: Date | null = null;
+  dueDate: string = '';
   done: boolean = false;
   priority: TaskDraftFieldsPriority = 'normal';
   reviewType: TaskDraftFieldsReviewType = 'manual';
@@ -45,5 +54,13 @@ export class TaskDraftFields {
   saveDraft() {
     this.title = this.title.trim();
     this.description = this.description.trim();
+    this.contactEmail = this.contactEmail.trim();
+    this.websiteUrl = this.websiteUrl.trim();
+    this.supportPhone = this.supportPhone.trim();
+    this.appointmentTime = this.appointmentTime.trim();
+    this.scheduledAtLocal = this.scheduledAtLocal.trim();
+    this.billingMonth = this.billingMonth.trim();
+    this.reviewWeek = this.reviewWeek.trim();
+    this.filterText = this.filterText.trim();
   }
 }

@@ -56,6 +56,9 @@ export function inferSourceFileRole(path: string): SourceFileRole {
   if (baseName === 'package.json') {
     return SourceFileRole.PackageManifest;
   }
+  if (isRootDocumentPath(segments, baseName)) {
+    return SourceFileRole.RootDocument;
+  }
 
   switch (language) {
     case SourceLanguage.TypeScript:
@@ -70,6 +73,10 @@ export function inferSourceFileRole(path: string): SourceFileRole {
     default:
       return SourceFileRole.Unknown;
   }
+}
+
+function isRootDocumentPath(segments: readonly string[], baseName: string): boolean {
+  return baseName === 'index.html' && segments.length === 1;
 }
 
 function isDeclarationFileName(baseName: string): boolean {

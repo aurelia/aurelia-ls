@@ -1,17 +1,53 @@
 <form submit.trigger="saveDraft()" class="task-form" data-au-role="native-submit-form">
   <div class="task-form__field">
     <label for="title-field" class="task-form__label">Title</label>
-    <input value.bind="title" class="task-form__control" id="title-field" aria-describedby="title-field-help">
+    <input value.bind="title" required minlength="2" maxlength="80" class="task-form__control" id="title-field" aria-describedby="title-field-help">
     <p id="title-field-help" class="task-form__message">Enter a short task title before saving the draft.</p>
   </div>
   <div class="task-form__field">
     <label for="description-field" class="task-form__label">Description</label>
-    <textarea value.bind="description" class="task-form__control" id="description-field" aria-describedby="description-field-help"></textarea>
+    <textarea value.bind="description" maxlength="240" class="task-form__control" id="description-field" aria-describedby="description-field-help"></textarea>
     <p id="description-field-help" class="task-form__message">Describe the expected outcome in one or two sentences.</p>
   </div>
   <div class="task-form__field">
+    <label for="contact-email-field" class="task-form__label">Contact Email</label>
+    <input type="email" value.bind="contactEmail" required class="task-form__control" id="contact-email-field">
+  </div>
+  <div class="task-form__field">
+    <label for="website-url-field" class="task-form__label">Website URL</label>
+    <input type="url" value.bind="websiteUrl" class="task-form__control" id="website-url-field">
+  </div>
+  <div class="task-form__field">
+    <label for="support-phone-field" class="task-form__label">Support Phone</label>
+    <input type="tel" value.bind="supportPhone" class="task-form__control" id="support-phone-field">
+  </div>
+  <div class="task-form__field">
+    <label for="access-code-field" class="task-form__label">Access Code</label>
+    <input type="password" value.bind="accessCode" minlength="8" class="task-form__control" id="access-code-field">
+  </div>
+  <div class="task-form__field">
+    <label for="filter-text-field" class="task-form__label">Filter Text</label>
+    <input type="search" value.bind="filterText" class="task-form__control" id="filter-text-field">
+  </div>
+  <div class="task-form__field">
+    <label for="appointment-time-field" class="task-form__label">Appointment Time</label>
+    <input type="time" value.bind="appointmentTime" class="task-form__control" id="appointment-time-field">
+  </div>
+  <div class="task-form__field">
+    <label for="scheduled-at-local-field" class="task-form__label">Scheduled At</label>
+    <input type="datetime-local" value.bind="scheduledAtLocal" class="task-form__control" id="scheduled-at-local-field">
+  </div>
+  <div class="task-form__field">
+    <label for="billing-month-field" class="task-form__label">Billing Month</label>
+    <input type="month" value.bind="billingMonth" class="task-form__control" id="billing-month-field">
+  </div>
+  <div class="task-form__field">
+    <label for="review-week-field" class="task-form__label">Review Week</label>
+    <input type="week" value.bind="reviewWeek" class="task-form__control" id="review-week-field">
+  </div>
+  <div class="task-form__field">
     <label for="estimate-hours-field" class="task-form__label">Estimate Hours</label>
-    <input type="number" value-as-number.bind="estimateHours" min="0" max="40" step="1" class="task-form__control" id="estimate-hours-field">
+    <input type="number" value-as-number.bind="estimateHours" required min="0" max="40" step="1" class="task-form__control" id="estimate-hours-field">
   </div>
   <div class="task-form__field">
     <label for="progress-percent-field" class="task-form__label">Progress</label>
@@ -20,7 +56,7 @@
   </div>
   <div class="task-form__field">
     <label for="due-date-field" class="task-form__label">Due Date</label>
-    <input type="date" value-as-date.bind="dueDate" class="task-form__control" id="due-date-field">
+    <input type="date" value.bind="dueDate" class="task-form__control" id="due-date-field">
   </div>
   <div class="task-form__field">
     <label for="done-field" class="task-form__label">Done</label>
