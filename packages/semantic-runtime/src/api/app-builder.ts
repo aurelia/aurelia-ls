@@ -886,7 +886,7 @@ export function answerSemanticRuntimeAppBuilderQuery(
 ): SemanticRuntimeAnswer<SemanticRuntimeAppBuilderQueryResult> {
   const answerer = APP_BUILDER_QUERY_ANSWERERS.get(request.kind);
   if (answerer == null) {
-    throw new Error(`Unsupported app-builder query kind '${String(request.kind)}'.`);
+    throw new Error(`Unsupported app-builder query kind '${String(request.kind)}'. Use the app-builder catalog to list supported queryKind values.`);
   }
   return answerer(request);
 }

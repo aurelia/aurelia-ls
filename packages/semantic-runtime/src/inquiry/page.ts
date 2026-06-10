@@ -1,3 +1,14 @@
+/** Default row count for public semantic-runtime API pages when callers omit page.size. */
+export const PUBLIC_INQUIRY_DEFAULT_PAGE_SIZE = 50;
+
+/** Maximum row count for public semantic-runtime API pages so MCP responses stay bounded. */
+export const PUBLIC_INQUIRY_MAX_PAGE_SIZE = 200;
+
+/** Apply public row-page bounds while preserving zero-row rollups when the caller asks for them. */
+export function clampPublicInquiryPageSize(size: number, minimum = 0): number {
+  return Math.max(minimum, Math.min(size, PUBLIC_INQUIRY_MAX_PAGE_SIZE));
+}
+
 export class InquiryPageRequest {
   constructor(
     /** Maximum rows requested for this page. */
@@ -19,5 +30,11 @@ export class InquiryPageInfo {
     readonly returned: number,
     /** Total rows in the current store/query basis when cheaply known. */
     readonly total: number | null = null,
+    /** Caller-requested size before public page-size clamping. */
+    readonly requestedSize: number | null = null,
+    /** Maximum public page size applied when the request was clamped. */
+    readonly maxSize: number | null = null,
+    /** True when size is smaller than the caller-requested page size. */
+    readonly clamped: boolean = false,
   ) {}
 }

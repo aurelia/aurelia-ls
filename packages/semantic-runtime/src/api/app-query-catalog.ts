@@ -143,7 +143,7 @@ export function semanticAppQueryCatalogRow(
 ): SemanticAppQueryCatalogRow {
   const row = semanticAppQueryCatalogRows.find((candidate) => candidate.queryKind === queryKind);
   if (row == null) {
-    throw new Error(`Semantic app query catalog is missing '${queryKind}'.`);
+    throw new Error(`Unsupported semantic app query kind '${queryKind}'. Use the app-query catalog to list supported queryKind values.`);
   }
   return row;
 }

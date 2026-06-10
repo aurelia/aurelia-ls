@@ -1259,7 +1259,7 @@ function appBuilderQueryCatalogRow(
 ): SemanticRuntimeAppBuilderQueryCatalogRow {
   const row = readSemanticRuntimeAppBuilderQueryCatalog({ queryKind: kind }).rows[0];
   if (row == null) {
-    throw new Error(`Unsupported app-builder query kind '${String(kind)}'.`);
+    throw new Error(`Unsupported app-builder query kind '${String(kind)}'. Use the app-builder catalog to list supported queryKind values.`);
   }
   return row;
 }

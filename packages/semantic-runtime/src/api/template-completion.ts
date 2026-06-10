@@ -10,7 +10,11 @@ import {
   SourceCursorInquiryLocus,
   SourceTextCursor,
 } from '../inquiry/locus.js';
-import { InquiryPageRequest } from '../inquiry/page.js';
+import {
+  clampPublicInquiryPageSize,
+  InquiryPageRequest,
+  PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+} from '../inquiry/page.js';
 import {
   isSourceFileAddress,
   sourceFilePathMatches,
@@ -179,6 +183,12 @@ interface TemplateDiagnosticsScanContext {
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
   readonly semanticAgreementRows: Set<string>;
+}
+
+interface CursorOffsetResolution {
+  readonly offset: number | null;
+  readonly missingInputs: readonly string[];
+  readonly summary: string | null;
 }
 
 export function readSemanticTemplateCompletions(
@@ -687,9 +697,16 @@ function readContextForCursor(
     return missingTemplateCompletion(page, ['source-cursor'], 'Template completion requires a source cursor.');
   }
 
-  const offset = cursor.offset ?? offsetForCursor(workspaceRootDir, projectRootDir, cursor);
+  const resolution = cursor.offset == null
+    ? offsetResolutionForCursor(workspaceRootDir, projectRootDir, cursor)
+    : { offset: cursor.offset, missingInputs: [], summary: null };
+  const offset = resolution.offset;
   if (offset == null) {
-    return missingTemplateCompletion(page, ['source-offset'], 'Template completion requires a source offset or readable source file.');
+    return missingTemplateCompletion(
+      page,
+      resolution.missingInputs,
+      resolution.summary ?? 'Template completion requires a source offset or readable source file.',
+    );
   }
 
   const selection = selectTemplateResourceForCursor(store, emission, cursor.filePath, offset);
@@ -1742,13 +1759,14 @@ function pageTemplateDiagnosticRows<TRow>(
   readonly rows: readonly TRow[];
   readonly page: SemanticRuntimePageResult;
 } {
-  const size = Math.max(0, page.size);
+  const requestedSize = Math.max(0, page.size);
+  const size = clampPublicInquiryPageSize(requestedSize);
   const cursor = page.cursor;
   const start = cursor == null ? 0 : diagnosticCursorStart(cursor, rows.length);
   const safeStart = start < 0 ? rows.length : start;
   const selected = rows.slice(safeStart, safeStart + size);
   const nextCursor = selected.length > 0 && safeStart + selected.length < rows.length
-    ? `offset:${safeStart + selected.length - 1}`
+    ? `after:${safeStart + selected.length - 1}`
     : null;
   return {
     rows: selected,
@@ -1758,6 +1776,13 @@ function pageTemplateDiagnosticRows<TRow>(
       nextCursor,
       returnedRows: selected.length,
       totalRows: rows.length,
+      ...(requestedSize === size
+        ? {}
+        : {
+          requestedSize,
+          maxSize: PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+          clamped: true,
+        }),
     },
   };
 }
@@ -1766,6 +1791,10 @@ function diagnosticCursorStart(
   cursor: string,
   rowCount: number,
 ): number {
+  if (cursor.startsWith('after:')) {
+    const offset = Number.parseInt(cursor.slice('after:'.length), 10);
+    return Number.isFinite(offset) ? offset + 1 : rowCount;
+  }
   if (cursor.startsWith('offset:')) {
     const offset = Number.parseInt(cursor.slice('offset:'.length), 10);
     return Number.isFinite(offset) ? offset + 1 : rowCount;
@@ -1820,6 +1849,13 @@ function semanticTemplateCompletionPage(
     nextCursor: page.nextCursor,
     returnedRows: page.returned,
     totalRows: page.total ?? rowCount,
+    ...(page.clamped
+      ? {
+        requestedSize: page.requestedSize ?? undefined,
+        maxSize: page.maxSize ?? undefined,
+        clamped: true,
+      }
+      : {}),
   };
 }
 
@@ -2258,19 +2294,43 @@ function templateSourceSpan(
   return null;
 }
 
-function offsetForCursor(
+function offsetResolutionForCursor(
   workspaceRootDir: string,
   projectRootDir: string,
   cursor: SemanticRuntimeSourceCursorInput,
-): number | null {
+): CursorOffsetResolution {
   const source = new AuthoredSourceTextCache('').readFirst(authoredSourceHostPathCandidates(
     workspaceRootDir,
     projectRootDir,
     cursor.filePath,
   ));
-  return source === null
-    ? null
-    : authoredSourceOffsetForLineCharacter(source, cursor.line, cursor.character);
+  if (source === null) {
+    return {
+      offset: null,
+      missingInputs: ['source-offset', 'readable-source-file'],
+      summary: `Template cursor file '${cursor.filePath}' was not readable; supply a valid source file path or explicit offset.`,
+    };
+  }
+  if (cursor.line >= source.lineStarts.length) {
+    return {
+      offset: null,
+      missingInputs: ['source-offset', 'source-line'],
+      summary: `Template cursor line ${cursor.line} is outside '${cursor.filePath}' (${source.lineStarts.length} zero-based line(s)).`,
+    };
+  }
+  const offset = authoredSourceOffsetForLineCharacter(source, cursor.line, cursor.character);
+  if (offset == null) {
+    return {
+      offset: null,
+      missingInputs: ['source-offset', 'source-character'],
+      summary: `Template cursor character ${cursor.character} is outside '${cursor.filePath}' line ${cursor.line}.`,
+    };
+  }
+  return {
+    offset,
+    missingInputs: [],
+    summary: null,
+  };
 }
 
 function templateCompletionCandidateRow(

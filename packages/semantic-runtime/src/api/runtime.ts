@@ -6,6 +6,7 @@ import {
   SemanticProjectShapeKind,
   type SemanticProjectShape,
 } from '../boot/project-shape.js';
+import { safeIsDirectory } from '../boot/host-files.js';
 import {
   readProjectCompilerOptionsCacheOverview,
 } from '../boot/project-compiler-options.js';
@@ -392,10 +393,20 @@ export class SemanticRuntime {
 
   static async open(options: SemanticRuntimeOptions): Promise<SemanticRuntime> {
     const workspaceRoot = path.resolve(options.workspaceRoot);
+    if (!safeIsDirectory(workspaceRoot)) {
+      throw new Error(`Cannot open semantic-runtime workspace: workspaceRoot '${workspaceRoot}' does not exist or is not a directory.`);
+    }
     const projects = options.projects?.map((project): BootProjectInput => ({
       ...project,
       rootDir: path.resolve(workspaceRoot, project.rootDir),
     }));
+    for (const project of projects ?? []) {
+      if (!safeIsDirectory(project.rootDir)) {
+        throw new Error(
+          `Cannot open semantic-runtime workspace: project rootDir '${project.rootDir}' does not exist or is not a directory.`,
+        );
+      }
+    }
     const workspace = bootWorkspace({
       rootDir: workspaceRoot,
       storeKey: options.storeKey,
@@ -4738,7 +4749,10 @@ function selectProject(
 ): ProjectBootFrame {
   const project = projects.find((candidate) => candidate.projectKey === projectKey);
   if (project == null) {
-    throw new Error(`Cannot open semantic app: project '${projectKey}' was not booted.`);
+    const validProjectKeys = projects.map((candidate) => candidate.projectKey).sort((left, right) => left.localeCompare(right));
+    throw new Error(
+      `Cannot open semantic app: project '${projectKey}' was not booted. Valid projectKey values: ${validProjectKeys.length === 0 ? '(none)' : validProjectKeys.join(', ')}.`,
+    );
   }
   return project;
 }

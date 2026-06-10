@@ -138,7 +138,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
       cursor: input.cursor ?? undefined,
-      sourceFile: input.sourceFile ?? undefined,
+      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
     });
   }
@@ -183,7 +183,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       kind: SemanticAppQueryKind.AppDiagnostics,
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
-      sourceFile: input.sourceFile ?? undefined,
+      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
     });
   }
@@ -228,7 +228,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
   async templateDiagnostics(input: AureliaMcpTemplateDiagnosticsInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     return this.answerAppQuery(aureliaMcpToolNames.templateDiagnostics, input, {
       kind: SemanticAppQueryKind.TemplateDiagnostics,
-      sourceFile: input.sourceFile ?? undefined,
+      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       analysisDepth: input.analysisDepth ?? semanticAppQueryCatalogRow(SemanticAppQueryKind.TemplateDiagnostics).minimumAnalysisDepth,
       page: input.page ?? undefined,
       detail: input.detail ?? undefined,
@@ -304,6 +304,27 @@ function cacheClearRequest(
   return {
     typeSystemDependencyCacheClearPolicy: input.typeSystemDependencyCacheClearPolicy ?? undefined,
   };
+}
+
+function normalizedSourceFileInput(
+  value: unknown,
+  fieldName: string,
+): { readonly filePath: string } | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  if (!isPlainRecord(value) || typeof value.filePath !== 'string') {
+    throw new Error(
+      `${fieldName} must be an object with a string filePath field, for example { "filePath": "src/my-app.html" }.`,
+    );
+  }
+  return {
+    filePath: value.filePath,
+  };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function toolResponse<TValue>(

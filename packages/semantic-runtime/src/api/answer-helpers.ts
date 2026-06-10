@@ -1,4 +1,9 @@
-import { InquiryPageRequest } from '../inquiry/page.js';
+import {
+  clampPublicInquiryPageSize,
+  InquiryPageRequest,
+  PUBLIC_INQUIRY_DEFAULT_PAGE_SIZE,
+  PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+} from '../inquiry/page.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticRuntimeAnswerOutcome,
@@ -9,8 +14,11 @@ import {
   type SemanticRuntimePageResult,
 } from './contracts.js';
 
+const PAGE_CURSOR_AFTER_PREFIX = 'after:';
+const PAGE_CURSOR_OFFSET_PREFIX = 'offset:';
+
 export function toPageRequest(page: SemanticRuntimePageInput | undefined): InquiryPageRequest {
-  return new InquiryPageRequest(page?.size ?? 50, page?.cursor ?? null);
+  return new InquiryPageRequest(Math.max(0, page?.size ?? PUBLIC_INQUIRY_DEFAULT_PAGE_SIZE), page?.cursor ?? null);
 }
 
 export function answer<TValue>(
@@ -41,13 +49,14 @@ export function pageRows<TRow>(
   readonly rows: readonly TRow[];
   readonly page: SemanticRuntimePageResult;
 } {
-  const size = Math.max(0, page?.size ?? 50);
+  const requestedSize = page?.size ?? PUBLIC_INQUIRY_DEFAULT_PAGE_SIZE;
+  const size = clampPublicInquiryPageSize(requestedSize);
   const cursor = page?.cursor ?? null;
   const start = cursor == null ? 0 : cursorStart(cursor, rows.length);
   const safeStart = start < 0 ? rows.length : start;
   const selected = rows.slice(safeStart, safeStart + size);
   const nextCursor = selected.length > 0 && safeStart + selected.length < rows.length
-    ? `offset:${safeStart + selected.length - 1}`
+    ? `${PAGE_CURSOR_AFTER_PREFIX}${safeStart + selected.length - 1}`
     : null;
   return {
     rows: selected,
@@ -57,6 +66,13 @@ export function pageRows<TRow>(
       nextCursor,
       returnedRows: selected.length,
       totalRows: rows.length,
+      ...(requestedSize === size
+        ? {}
+        : {
+          requestedSize,
+          maxSize: PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+          clamped: true,
+        }),
     },
   };
 }
@@ -71,8 +87,12 @@ function cursorStart(
   cursor: string,
   rowCount: number,
 ): number {
-  if (cursor.startsWith('offset:')) {
-    const offset = Number.parseInt(cursor.slice('offset:'.length), 10);
+  if (cursor.startsWith(PAGE_CURSOR_AFTER_PREFIX)) {
+    const offset = Number.parseInt(cursor.slice(PAGE_CURSOR_AFTER_PREFIX.length), 10);
+    return Number.isFinite(offset) ? offset + 1 : rowCount;
+  }
+  if (cursor.startsWith(PAGE_CURSOR_OFFSET_PREFIX)) {
+    const offset = Number.parseInt(cursor.slice(PAGE_CURSOR_OFFSET_PREFIX.length), 10);
     return Number.isFinite(offset) ? offset + 1 : rowCount;
   }
   return rowCount;

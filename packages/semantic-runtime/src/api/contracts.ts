@@ -813,11 +813,20 @@ export interface SemanticRuntimeAppWorldFreeProfileSummary {
 }
 
 export interface SemanticRuntimePageResult {
+  /** Applied page size after semantic-runtime public safety clamps. */
   readonly size: number;
+  /** Caller-supplied cursor, if any. */
   readonly cursor: string | null;
+  /** Opaque cursor for the next page; callers should pass it back without interpreting it. */
   readonly nextCursor: string | null;
   readonly returnedRows: number;
   readonly totalRows: number;
+  /** Caller-requested size when semantic-runtime had to clamp the public page size. */
+  readonly requestedSize?: number;
+  /** Maximum public page size used when semantic-runtime had to clamp the request. */
+  readonly maxSize?: number;
+  /** True when size is smaller than the caller-requested page size. */
+  readonly clamped?: boolean;
 }
 
 export interface SemanticRuntimeSourceCursorInput {

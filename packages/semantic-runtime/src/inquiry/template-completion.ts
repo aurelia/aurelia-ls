@@ -117,8 +117,10 @@ import { uniqueValues } from '../collections.js';
 import { InquiryLocusKind, type InquiryLocus } from './locus.js';
 import type { SourceCursorInquiryLocus } from './locus.js';
 import {
+  clampPublicInquiryPageSize,
   InquiryPageInfo,
   InquiryPageRequest,
+  PUBLIC_INQUIRY_MAX_PAGE_SIZE,
 } from './page.js';
 import { PAGED_INQUIRY_CONTINUATION } from './continuation-intent.js';
 
@@ -1738,7 +1740,8 @@ function pageCandidates(
   readonly rows: readonly TemplateCompletionCandidate[];
   readonly info: InquiryPageInfo;
 } {
-  const size = Math.max(1, request.size);
+  const requestedSize = Math.max(1, request.size);
+  const size = clampPublicInquiryPageSize(requestedSize, 1);
   const start = request.cursor == null
     ? 0
     : Math.max(0, candidates.findIndex((candidate) => candidate.key === request.cursor) + 1);
@@ -1748,7 +1751,16 @@ function pageCandidates(
     : null;
   return {
     rows,
-    info: new InquiryPageInfo(size, request.cursor, nextCursor, rows.length, candidates.length),
+    info: new InquiryPageInfo(
+      size,
+      request.cursor,
+      nextCursor,
+      rows.length,
+      candidates.length,
+      requestedSize === size ? null : requestedSize,
+      requestedSize === size ? null : PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+      requestedSize !== size,
+    ),
   };
 }
 

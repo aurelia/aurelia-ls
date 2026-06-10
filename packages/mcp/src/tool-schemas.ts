@@ -2,14 +2,18 @@ import { z } from 'zod/v4';
 import {
   SEMANTIC_APP_RETENTION_POLICIES,
   SEMANTIC_APP_ANALYSIS_DEPTHS,
-  SEMANTIC_APP_QUERY_KINDS,
   SEMANTIC_DIAGNOSTIC_PROJECTION_POLICIES,
   INQUIRY_CONTINUATION_INTENTS,
-  SEMANTIC_RUNTIME_APP_BUILDER_QUERY_KINDS,
   SEMANTIC_PROJECT_DISCOVERY_MODES,
   SEMANTIC_RUNTIME_DETAIL_VALUES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
 } from '@aurelia-ls/semantic-runtime';
+
+const appQueryKindSchema = z.string()
+  .describe('App query kind. Use aurelia_app_query_catalog to discover supported values.');
+
+const appBuilderQueryKindSchema = z.string()
+  .describe('App-builder query kind. Use aurelia_app_builder_catalog to discover supported values.');
 
 const pageSchema = z.object({
   size: z.number().int().nonnegative().optional(),
@@ -84,7 +88,7 @@ const cursorSchema = sourceFileSchema.extend({
 }).strict();
 
 const semanticAppQuerySchema = z.object({
-  kind: z.enum(SEMANTIC_APP_QUERY_KINDS),
+  kind: appQueryKindSchema,
   ...pagedShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
@@ -117,14 +121,14 @@ export const clearAnalysisCacheInputSchema = {
 export const appQueryCatalogInputSchema = {
   workspaceRoot: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
-  queryKind: z.enum(SEMANTIC_APP_QUERY_KINDS).nullable().optional(),
+  queryKind: appQueryKindSchema.nullable().optional(),
 } as const;
 
 export const appBuilderCatalogInputSchema = {
   workspaceRoot: z.string().nullable().optional(),
   storeKey: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
-  queryKind: z.enum(SEMANTIC_RUNTIME_APP_BUILDER_QUERY_KINDS).nullable().optional(),
+  queryKind: appBuilderQueryKindSchema.nullable().optional(),
   inquiryProfile: z.string().nullable().optional(),
   ...continuationIntentShape,
 } as const;
@@ -132,7 +136,7 @@ export const appBuilderCatalogInputSchema = {
 export const appBuilderQueryInputSchema = {
   workspaceRoot: z.string().nullable().optional(),
   storeKey: z.string().nullable().optional(),
-  queryKind: z.enum(SEMANTIC_RUNTIME_APP_BUILDER_QUERY_KINDS),
+  queryKind: appBuilderQueryKindSchema,
   inquiryProfile: z.string().nullable().optional(),
   ...continuationIntentShape,
   page: pageSchema.nullable().optional(),
@@ -164,7 +168,7 @@ export const appQueryInputSchema = {
   ...pagedShape,
   ...diagnosticProjectionShape,
   ...continuationIntentShape,
-  queryKind: z.enum(SEMANTIC_APP_QUERY_KINDS),
+  queryKind: appQueryKindSchema,
   cursor: cursorSchema.nullable().optional(),
   sourceFile: sourceFileSchema.nullable().optional(),
 } as const;

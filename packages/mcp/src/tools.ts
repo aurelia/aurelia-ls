@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
+import { z, type ZodRawShape } from 'zod/v4';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 import {
   appDiagnosticsInputSchema,
@@ -51,6 +52,10 @@ const cacheManagementToolAnnotations: ToolAnnotations = {
   openWorldHint: false,
 };
 
+function strictInputSchema<TShape extends ZodRawShape>(shape: TShape) {
+  return z.object(shape).strict();
+}
+
 export function registerAureliaSemanticRuntimeTools(
   server: McpServer,
   adapter = new AureliaMcpSemanticRuntimeAdapter(),
@@ -60,7 +65,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Workspace Overview',
       description: 'Boot a workspace through semantic-runtime and summarize discovered projects, app candidates, and paged project rows.',
-      inputSchema: workspaceOverviewInputSchema,
+      inputSchema: strictInputSchema(workspaceOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -72,7 +77,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Clear Analysis Cache',
       description: 'Clear semantic-runtime sessions cached inside this MCP server process after source edits or rebuilds.',
-      inputSchema: clearAnalysisCacheInputSchema,
+      inputSchema: strictInputSchema(clearAnalysisCacheInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: cacheManagementToolAnnotations,
     },
@@ -84,7 +89,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Analysis Cache Overview',
       description: 'Summarize semantic-runtime analysis sessions currently cached inside this MCP server process.',
-      inputSchema: analysisCacheOverviewInputSchema,
+      inputSchema: strictInputSchema(analysisCacheOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -96,7 +101,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Query Catalog',
       description: 'Return supported semantic-runtime app query kinds and their locus/paging/detail affordances, optionally filtered by group or queryKind.',
-      inputSchema: appQueryCatalogInputSchema,
+      inputSchema: strictInputSchema(appQueryCatalogInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -108,7 +113,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Builder Catalog',
       description: 'Return supported semantic-runtime app-builder query kinds for app-builder ontology, recommendation policy, input readiness, source lowering, and reusable part source lowering.',
-      inputSchema: appBuilderCatalogInputSchema,
+      inputSchema: strictInputSchema(appBuilderCatalogInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -120,7 +125,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Builder Query',
       description: 'Forward one semantic-runtime app-builder query. Use aurelia_app_builder_catalog for supported query kinds and then ask catalog/detail/preflight answers for field-level request contracts; this tool keeps nested envelopes compact so startup does not advertise every app-builder schema inline.',
-      inputSchema: appBuilderQueryInputSchema,
+      inputSchema: strictInputSchema(appBuilderQueryInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -132,7 +137,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Overview',
       description: 'Open an Aurelia app and return compact summary, topology, diagnostics, and open seams.',
-      inputSchema: appOverviewInputSchema,
+      inputSchema: strictInputSchema(appOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -144,7 +149,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Router Overview',
       description: 'Open an Aurelia app and summarize route, route-context, viewport, route-tree, navigation, and router-issue row families; pass rowPageSize for samples.',
-      inputSchema: routerOverviewInputSchema,
+      inputSchema: strictInputSchema(routerOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -156,7 +161,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Query',
       description: 'Forward a semantic-runtime app query kind against an opened Aurelia app, including focused drill-downs such as typescript-diagnostics after a diagnostic overview cluster.',
-      inputSchema: appQueryInputSchema,
+      inputSchema: strictInputSchema(appQueryInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -168,7 +173,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Query Batch',
       description: 'Forward several semantic-runtime app query kinds through one opened Aurelia app and one query-claim disposal boundary, including diagnostics plus focused TypeScript drill-downs.',
-      inputSchema: appQueryBatchInputSchema,
+      inputSchema: strictInputSchema(appQueryBatchInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -180,7 +185,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Open Seam Overview',
       description: 'Group open semantic seams by seam kind and reason-kind signature before paging raw seam rows.',
-      inputSchema: openSeamOverviewInputSchema,
+      inputSchema: strictInputSchema(openSeamOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -192,7 +197,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Diagnostic Overview',
       description: 'Group app diagnostics, including ordinary TypeScript project diagnostics, by domain, kind, authority, severity, framework code, and owning query. Use this after lint, formatter, or autofix tools before declaring an app clean.',
-      inputSchema: diagnosticOverviewInputSchema,
+      inputSchema: strictInputSchema(diagnosticOverviewInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -204,7 +209,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia App Diagnostics',
       description: 'Read semantic-runtime diagnostics for an app or source file, including ordinary TypeScript project diagnostics unless diagnosticProjection=available-products. Use after source-changing tools when exact rows are needed.',
-      inputSchema: appDiagnosticsInputSchema,
+      inputSchema: strictInputSchema(appDiagnosticsInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -216,7 +221,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Template Cursor Info',
       description: 'Read the semantic template site, selected resource/member, and cursor diagnostics at a source cursor.',
-      inputSchema: templateCursorInputSchema,
+      inputSchema: strictInputSchema(templateCursorInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -228,7 +233,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Template Completions',
       description: 'Read semantic-runtime template completion candidates at a source cursor.',
-      inputSchema: templateCursorInputSchema,
+      inputSchema: strictInputSchema(templateCursorInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
@@ -240,7 +245,7 @@ export function registerAureliaSemanticRuntimeTools(
     {
       title: 'Aurelia Template Diagnostics',
       description: 'Read template diagnostics for a source file or opened app.',
-      inputSchema: templateDiagnosticsInputSchema,
+      inputSchema: strictInputSchema(templateDiagnosticsInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
