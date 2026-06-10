@@ -39,6 +39,7 @@
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
         "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns that narrow path through `aureliaResolveDirectKey(...)` and `evaluateAureliaResolveDirectClassKey(...)`. Registered/interface DI keys join through RuntimeBindingSourceActivationContext.resolveCallFrame(...) and active-container resolver lookup when a modeled container is available, not through the generic evaluator.",
         "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams.",
+        "Project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
         "Primitive operator value algebra belongs in evaluation/operators.ts instead of bottom-of-evaluator helper islands. Loose == and != must model primitive/nullish ECMAScript equality instead of aliasing strict equality; this keeps common guards such as value == null aligned across StaticEvaluator and binding-source value reads.",
         "Relational operator reduction should close the deterministic numeric and string comparison lanes shared by StaticEvaluator and binding-source source-value callbacks. Leave mixed coercion or host-object comparison open until a consumer proves that broader ECMAScript coercion subset is needed.",
         "Representative evaluator values belong in evaluation/representative-values.ts. Repeated views and speculative conditionals should share the same conservative summary policy: unanimous exact values stay exact, string-like branches become string patterns, common object fields survive, and unrelated lanes become binding-scope boundaries."
@@ -102,6 +103,17 @@
           "filePath": "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
           "symbolName": "aureliaStaticEvaluationRuntimeHost",
           "summary": "Aurelia-specific static-evaluation host boundary for browser globals, app admission, and narrow ambient resolve(ClassKey) closure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
+          "symbolName": "readStaticEvaluationAmbientGlobalDeclarations",
+          "summary": "Project-local `.d.ts` ambient global reader for build-time/host-injected values exposed as host-environment boundaries."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
+          "summary": "Contract proving declared ambient globals do not become unresolved identifiers while missing globals remain source-filterable open seams."
         },
         {
           "kind": "source",

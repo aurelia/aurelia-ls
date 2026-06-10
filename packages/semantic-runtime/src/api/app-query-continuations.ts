@@ -1221,6 +1221,7 @@ function rowQuery(
     kind,
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
+    ...openSeamFilterFromQuery(kind, source),
     page,
   };
 }
@@ -1291,6 +1292,20 @@ function diagnosticProjectionFromQuery(
   return semanticAppQueryCatalogRow(kind).supportsDiagnosticProjection && query.diagnosticProjection != null
     ? { diagnosticProjection: query.diagnosticProjection }
     : {};
+}
+
+function openSeamFilterFromQuery(
+  kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
+  query: SemanticAppQuery,
+): Pick<SemanticAppQuery, 'sourceFile' | 'openSeamKindKey' | 'openSeamReasonKind'> {
+  if (!semanticAppQueryCatalogRow(kind).supportsOpenSeamFilters) {
+    return {};
+  }
+  return {
+    ...(query.sourceFile == null ? {} : { sourceFile: query.sourceFile }),
+    ...(query.openSeamKindKey == null ? {} : { openSeamKindKey: query.openSeamKindKey }),
+    ...(query.openSeamReasonKind == null ? {} : { openSeamReasonKind: query.openSeamReasonKind }),
+  };
 }
 
 function costForQuery(

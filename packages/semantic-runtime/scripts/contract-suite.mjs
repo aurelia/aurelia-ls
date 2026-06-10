@@ -14,6 +14,11 @@ const contractSuites = [
   ], 'contract-evaluation-module-graph.mjs', 'Runtime-shaped module graph erases type-only imports/re-exports while preserving value import/export edges.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'mcp',
+    'source-address',
+  ], 'contract-evaluation-ambient-globals.mjs', 'Project-local ambient global declarations resolve as host boundaries while open-seam filters expose unresolved identifier source samples.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'class',
     'module-order',
   ], 'contract-evaluation-class-declaration-order.mjs', 'Static class property evaluation runs when the class declaration executes, after prior module const bindings are initialized.'),

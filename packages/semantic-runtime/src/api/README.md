@@ -316,8 +316,10 @@ cursor from the completion inquiry because the candidate set is not a durable ro
 `OpenSeamSummary` reads the same unpaged seam row set as `OpenSeams`, then clusters by seam kind and reason-kind
 signature. Use it before raw seams when repeated runtime-dependent facts would otherwise make the first page look like
 many unrelated issues. Both raw seam and summary answers own compact `displayText`: raw rows report seam-kind and
-reason-kind rollups plus a few samples, while summary rows report dominant clusters and source-file coverage. Public
-adapters should forward that text before asking for handle detail.
+reason-kind rollups plus a few source-backed samples, while summary rows report dominant clusters, source-file
+coverage, and sample locations. `OpenSeams` and `OpenSeamSummary` accept `sourceFile`, `openSeamKindKey`, and
+`openSeamReasonKind` so a large cluster count always has a direct drill-down path. Public adapters should forward that
+text before asking for handle detail.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
 diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or

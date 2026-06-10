@@ -12,6 +12,7 @@ import {
 } from './contracts.js';
 import { answer } from './answer-helpers.js';
 import type { SemanticApplicationTopologyResult } from './app-topology.js';
+import type { SemanticSourceReference } from './source-reference.js';
 
 export function readSemanticAppOverview(
   ask: (query: SemanticAppQuery) => SemanticRuntimeAnswer<unknown>,
@@ -94,9 +95,37 @@ function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, '
     lines.push('Pressure: no diagnostic or open-seam clusters in the overview page.');
   } else {
     lines.push(`Pressure: ${diagnosticRows} diagnostic row(s) and ${openSeamRows} open seam row(s) in overview clusters.`);
+    const openSeamSamples = overviewOpenSeamSampleDisplay(value.openSeams.value);
+    if (openSeamSamples.length > 0) {
+      lines.push(`Open seam samples: ${openSeamSamples}.`);
+    }
   }
   lines.push('Next: use aurelia_app_query_batch for binding summaries, aurelia_router_overview for routed apps, or diagnostic/open-seam queries for repair planning inputs.');
   return lines.join('\n');
+}
+
+function overviewOpenSeamSampleDisplay(
+  openSeams: SemanticOpenSeamSummaryResult,
+): string {
+  return openSeams.rows
+    .slice(0, 3)
+    .map((row) => {
+      const source = row.sampleSources[0] ?? null;
+      return `${row.seamKindKey} x${row.count} at ${overviewSourceDisplay(source)}`;
+    })
+    .join(' | ');
+}
+
+function overviewSourceDisplay(
+  source: SemanticSourceReference | null,
+): string {
+  if (source == null) {
+    return '(no source)';
+  }
+  if (source.path != null) {
+    return source.start == null ? source.path : `${source.path}@${source.start}`;
+  }
+  return source.anchor == null ? source.label : overviewSourceDisplay(source.anchor);
 }
 
 function bindingProjectionDepthText(app: SemanticAppSummary): string {

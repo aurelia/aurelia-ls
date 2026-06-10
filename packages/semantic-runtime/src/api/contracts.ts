@@ -589,6 +589,10 @@ export interface SemanticAppQuery {
   readonly diagnosticPageSize?: number | null;
   /** AppOverview open-seam-cluster page size; defaults to the compact overview budget. */
   readonly openSeamPageSize?: number | null;
+  /** Open-seam query filter by exact seam kind key, such as `evaluation.unresolved-identifier`. */
+  readonly openSeamKindKey?: OpenSeam['seamKindKey'] | string | null;
+  /** Open-seam query filter by reason kind, such as `missing-static-value`. */
+  readonly openSeamReasonKind?: OpenSeamReasonKind | `${OpenSeamReasonKind}` | string | null;
   /** RouterOverview samples several independent route row families; defaults to zero sample rows. */
   readonly rowPageSize?: number | null;
   /** Source cursor used by cursor-scoped authoring queries such as template completions. */
@@ -737,6 +741,8 @@ export interface SemanticAppQueryCatalogRow {
   readonly supportsPaging: boolean;
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
+  /** Whether open-seam queries accept `openSeamKindKey`/`openSeamReasonKind` filters. */
+  readonly supportsOpenSeamFilters: boolean;
   readonly supportsDiagnosticProjection: boolean;
   /** Whether `continuationIntents` can narrow returned continuation rows without changing query identity. */
   readonly supportsContinuationIntentFilter: boolean;

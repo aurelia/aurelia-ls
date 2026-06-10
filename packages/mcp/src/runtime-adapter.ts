@@ -140,6 +140,8 @@ export class AureliaMcpSemanticRuntimeAdapter {
       cursor: input.cursor ?? undefined,
       sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
       diagnosticProjection: input.diagnosticProjection ?? undefined,
+      openSeamKindKey: input.openSeamKindKey ?? undefined,
+      openSeamReasonKind: input.openSeamReasonKind ?? undefined,
     });
   }
 
@@ -203,6 +205,9 @@ export class AureliaMcpSemanticRuntimeAdapter {
       kind: SemanticAppQueryKind.OpenSeamSummary,
       page: input.page ?? { size: 20 },
       detail: input.detail ?? undefined,
+      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
+      openSeamKindKey: input.openSeamKindKey ?? undefined,
+      openSeamReasonKind: input.openSeamReasonKind ?? undefined,
     });
   }
 

@@ -52,11 +52,13 @@ export function openSeamSummaryRows(
       clusters.set(key, cluster);
     }
     cluster.count += 1;
-    if (row.source?.path != null) {
-      cluster.sourceFiles.add(row.source.path);
-    }
-    if (row.source != null && cluster.sampleSources.length < 3 && !cluster.sampleSources.some((source) => source.label === row.source?.label)) {
-      cluster.sampleSources.push(row.source);
+    for (const source of semanticOpenSeamRowSources(row)) {
+      if (source.path != null) {
+        cluster.sourceFiles.add(source.path);
+      }
+      if (cluster.sampleSources.length < 3 && !cluster.sampleSources.some((sample) => sample.label === source.label)) {
+        cluster.sampleSources.push(source);
+      }
     }
   }
   return [...clusters.values()]
@@ -89,6 +91,15 @@ function openSeamSummaryKey(row: SemanticOpenSeamRow): string {
     row.seamKindKey,
     [...row.reasonKinds].sort().join('|'),
   ].join('\0');
+}
+
+function semanticOpenSeamRowSources(
+  row: SemanticOpenSeamRow,
+): readonly NonNullable<SemanticOpenSeamRow['source']>[] {
+  return [
+    row.source,
+    ...row.reasonSources.map((source) => source.source),
+  ].filter((source): source is NonNullable<SemanticOpenSeamRow['source']> => source != null);
 }
 
 function recordSourceFileOpenSeams(

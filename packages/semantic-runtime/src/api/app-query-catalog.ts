@@ -19,8 +19,8 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview'),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
-  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
-  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by sourceFile, openSeamKindKey, or openSeamReasonKind to inspect a cluster.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; filter by sourceFile, openSeamKindKey, or openSeamReasonKind before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
   queryRow(SemanticAppQueryKind.AppDiagnostics, 'diagnostics', 'Unified app diagnostics across TypeScript, modeled Aurelia issue lanes, and template diagnostics; optionally narrowed to one source file.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.AppDiagnosticSummary, 'diagnostics', 'Diagnostic clusters grouped by domain, kind, authority, severity, framework code, and owning query; explicit diagnostic projections include TypeScript diagnostics.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.TypeScriptDiagnostics, 'diagnostics', 'Ordinary TypeScript project diagnostics from the semantic-runtime Program/tsconfig epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, materializationPolicy: 'query-type-projection' }),
@@ -128,6 +128,9 @@ function appQueryCatalogDisplayText(
   if (rows.some((row) => row.group === 'router')) {
     lines.push('Router: start with router-overview before paging route, viewport, recognizer, or navigation row tables.');
   }
+  if (rows.some((row) => row.supportsOpenSeamFilters)) {
+    lines.push('Open seams: open-seams and open-seam-summary accept sourceFile, openSeamKindKey, and openSeamReasonKind filters for cluster drill-down.');
+  }
   if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
     lines.push('Type/cursor projection: cursor-locus and diagnostic projection queries may do answer-time TypeChecker work; request them only when the locus needs it.');
   }
@@ -172,6 +175,8 @@ export function semanticAppQueryCatalogShape(
     ...(query.kind !== SemanticAppQueryKind.AppTopology || query.includeTypeSurfaces == null ? {} : { includeTypeSurfaces: query.includeTypeSurfaces }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.diagnosticPageSize == null ? {} : { diagnosticPageSize: query.diagnosticPageSize }),
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.openSeamPageSize == null ? {} : { openSeamPageSize: query.openSeamPageSize }),
+    ...(row.supportsOpenSeamFilters && query.openSeamKindKey != null ? { openSeamKindKey: query.openSeamKindKey } : {}),
+    ...(row.supportsOpenSeamFilters && query.openSeamReasonKind != null ? { openSeamReasonKind: query.openSeamReasonKind } : {}),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
     ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
@@ -198,7 +203,7 @@ function queryRow(
   resultRole: SemanticAppQueryCatalogRow['resultRole'],
   options: Partial<Pick<
     SemanticAppQueryCatalogRow,
-    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'supportsDiagnosticProjection' | 'supportsContinuationIntentFilter' | 'requiresCursor' | 'routeProductKind'
+    'runtimeBoundary' | 'materializationPolicy' | 'pagingKind' | 'minimumAnalysisDepth' | 'supportsDetail' | 'supportsSourceFile' | 'supportsOpenSeamFilters' | 'supportsDiagnosticProjection' | 'supportsContinuationIntentFilter' | 'requiresCursor' | 'routeProductKind'
   >> = {},
 ): SemanticAppQueryCatalogRow {
   const pagingKind = options.pagingKind ?? 'none';
@@ -217,6 +222,7 @@ function queryRow(
     supportsPaging: pagingKind !== 'none',
     supportsDetail: options.supportsDetail ?? false,
     supportsSourceFile,
+    supportsOpenSeamFilters: options.supportsOpenSeamFilters ?? false,
     supportsDiagnosticProjection: options.supportsDiagnosticProjection ?? false,
     supportsContinuationIntentFilter: options.supportsContinuationIntentFilter ?? supportsContinuationIntentFilter(queryKind),
     requiresCursor,

@@ -215,6 +215,7 @@ import {
 import {
   compilerWorldLabel,
   describeAddress,
+  type SemanticSourceReference,
 } from './source-reference.js';
 import {
   sourceFileAddressForAddress,
@@ -1934,17 +1935,19 @@ function trimDisplayLine(line: string): string {
 function openSeamsDisplayText(
   rows: readonly SemanticOpenSeamRow[],
   totalRows: number,
+  filter: SemanticOpenSeamQueryFilter = {},
 ): string {
-  const lines = [`Open seams: returned ${rows.length} of ${totalRows} row(s).`];
+  const filterText = semanticOpenSeamFilterDisplayText(filter);
+  const lines = [`Open seams: returned ${rows.length} of ${totalRows} row(s)${filterText}.`];
   if (totalRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
     lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
     lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(rows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
     lines.push(`Samples: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey}: ${trimDisplayLine(row.summary)}`
+      `${row.seamKindKey} at ${semanticSourceReferenceDisplay(row.source)}: ${trimDisplayLine(row.summary)}`
     ).join(' | ')}.`);
-    lines.push('Next: use open-seam-summary for clusters or page open-seams with handles when an exact runtime boundary needs follow-up.');
+    lines.push('Next: add openSeamKindKey, openSeamReasonKind, sourceFile, or detail=handles when an exact runtime boundary needs follow-up.');
   }
   return lines.join('\n');
 }
@@ -1952,18 +1955,82 @@ function openSeamsDisplayText(
 function openSeamSummaryDisplayText(
   rows: readonly SemanticOpenSeamSummaryRow[],
   totalOpenSeamRows: number,
+  filter: SemanticOpenSeamQueryFilter = {},
 ): string {
-  const lines = [`Open seam clusters: returned ${rows.length} cluster(s) covering ${totalOpenSeamRows} open semantic seam(s).`];
+  const filterText = semanticOpenSeamFilterDisplayText(filter);
+  const lines = [`Open seam clusters: returned ${rows.length} cluster(s) covering ${totalOpenSeamRows} open semantic seam(s)${filterText}.`];
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
     lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} x${row.count} (${runtimeListDisplay(row.reasonKinds)})`
+      `${row.seamKindKey} x${row.count} (${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSources.map(semanticSourceReferenceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
     ).join(' | ')}.`);
     lines.push(`Source-file coverage: ${rows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
-    lines.push('Next: page raw open-seams only after the cluster identifies the runtime boundary or source family to inspect.');
+    lines.push('Next: page raw open-seams with the selected openSeamKindKey/openSeamReasonKind and optional sourceFile filter to inspect exact occurrences.');
   }
   return lines.join('\n');
+}
+
+interface SemanticOpenSeamQueryFilter {
+  readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+  readonly openSeamKindKey?: string | null;
+  readonly openSeamReasonKind?: string | null;
+}
+
+function semanticOpenSeamRowMatchesFilter(
+  row: SemanticOpenSeamRow,
+  filter: SemanticOpenSeamQueryFilter,
+): boolean {
+  return (filter.openSeamKindKey == null || row.seamKindKey === filter.openSeamKindKey)
+    && (filter.openSeamReasonKind == null || row.reasonKinds.some((reason) => reason === filter.openSeamReasonKind))
+    && (filter.sourceFile?.filePath == null || semanticOpenSeamRowMatchesSourceFile(row, filter.sourceFile.filePath));
+}
+
+function semanticOpenSeamRowMatchesSourceFile(
+  row: SemanticOpenSeamRow,
+  filePath: string,
+): boolean {
+  return semanticSourceReferenceMatchesFilePath(row.source, filePath)
+    || row.reasonSources.some((source) => semanticSourceReferenceMatchesFilePath(source.source, filePath));
+}
+
+function semanticSourceReferenceMatchesFilePath(
+  source: SemanticSourceReference | null,
+  filePath: string,
+): boolean {
+  if (source == null) {
+    return false;
+  }
+  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
+    || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
+}
+
+function semanticOpenSeamFilterDisplayText(
+  filter: SemanticOpenSeamQueryFilter,
+): string {
+  const parts = [
+    filter.openSeamKindKey == null ? null : `kind=${filter.openSeamKindKey}`,
+    filter.openSeamReasonKind == null ? null : `reason=${filter.openSeamReasonKind}`,
+    filter.sourceFile?.filePath == null ? null : `sourceFile=${filter.sourceFile.filePath}`,
+  ].filter((part): part is string => part != null);
+  return parts.length === 0 ? '' : ` for ${parts.join(', ')}`;
+}
+
+function semanticSourceReferenceDisplay(
+  source: SemanticSourceReference | null,
+): string {
+  if (source == null) {
+    return '(no source)';
+  }
+  const anchor = source.path == null && source.anchor != null
+    ? semanticSourceReferenceDisplay(source.anchor)
+    : null;
+  const label = source.path == null
+    ? source.label
+    : source.start == null
+      ? source.path
+      : `${source.path}@${source.start}`;
+  return anchor == null ? label : `${label} -> ${anchor}`;
 }
 
 function appDiagnosticsDisplayText(
@@ -2226,9 +2293,9 @@ export class SemanticApp {
       case SemanticAppQueryKind.UnresolvedModules:
         return answerCurrentQuery(() => this.unresolvedModules(query.page));
       case SemanticAppQueryKind.OpenSeams:
-        return answerCurrentQuery(() => this.openSeams(query.page, query.detail));
+        return answerCurrentQuery(() => this.openSeams(query.page, query.detail, query));
       case SemanticAppQueryKind.OpenSeamSummary:
-        return answerCurrentQuery(() => this.openSeamSummary(query.page, query.detail));
+        return answerCurrentQuery(() => this.openSeamSummary(query.page, query.detail, query));
       case SemanticAppQueryKind.AppDiagnostics:
         return answerCurrentQuery(() => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
@@ -2597,22 +2664,26 @@ export class SemanticApp {
   openSeams(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    filter: SemanticOpenSeamQueryFilter = {},
   ): SemanticRuntimeAnswer<SemanticOpenSeamsResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticOpenSeamsResult>({
       kind: SemanticAppQueryKind.OpenSeams,
       page,
       detail,
+      sourceFile: filter.sourceFile,
+      openSeamKindKey: filter.openSeamKindKey,
+      openSeamReasonKind: filter.openSeamReasonKind,
     });
     if (claimed != null) {
       return claimed;
     }
-    const rows = this.openSeamRows(detail);
+    const rows = this.openSeamRows(detail, filter);
     const paged = pageRows(rows, page);
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} open semantic seam(s).`,
       {
-        displayText: openSeamsDisplayText(paged.rows, rows.length),
+        displayText: openSeamsDisplayText(paged.rows, rows.length, filter),
         rows: paged.rows,
       },
       paged.page,
@@ -2622,16 +2693,20 @@ export class SemanticApp {
   openSeamSummary(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    filter: SemanticOpenSeamQueryFilter = {},
   ): SemanticRuntimeAnswer<SemanticOpenSeamSummaryResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticOpenSeamSummaryResult>({
       kind: SemanticAppQueryKind.OpenSeamSummary,
       page,
       detail,
+      sourceFile: filter.sourceFile,
+      openSeamKindKey: filter.openSeamKindKey,
+      openSeamReasonKind: filter.openSeamReasonKind,
     });
     if (claimed != null) {
       return claimed;
     }
-    const seamRows = this.openSeamRows(detail);
+    const seamRows = this.openSeamRows(detail, filter);
     const rows = openSeamSummaryRows(seamRows);
     const paged = pageRows(rows, page);
     return answer(
@@ -2639,7 +2714,7 @@ export class SemanticApp {
       `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamRows.length} open semantic seam(s).`,
       {
         totalOpenSeamRows: seamRows.length,
-        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length),
+        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length, filter),
         rows: paged.rows,
       },
       paged.page,
@@ -2648,6 +2723,7 @@ export class SemanticApp {
 
   private openSeamRows(
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+    filter: SemanticOpenSeamQueryFilter = {},
   ): readonly SemanticOpenSeamRow[] {
     const handles = includeHandles(detail);
     return readAppOpenSeams(this.emission, this.runtime.workspace.store)
@@ -2674,6 +2750,7 @@ export class SemanticApp {
           },
         } : {}),
       }))
+      .filter((row) => semanticOpenSeamRowMatchesFilter(row, filter))
       .sort((left, right) =>
         `${left.seamKindKey}:${left.summary}`.localeCompare(`${right.seamKindKey}:${right.summary}`)
       );

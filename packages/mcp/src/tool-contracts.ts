@@ -99,6 +99,8 @@ export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, Aurelia
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly diagnosticProjection?: SemanticAppQuery['diagnosticProjection'];
+  readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
+  readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
 }
 
 export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
@@ -124,7 +126,11 @@ export interface AureliaMcpAppDiagnosticsInput extends AureliaMcpOpenAppInput, A
 
 export interface AureliaMcpDiagnosticOverviewInput extends AureliaMcpAppDiagnosticsInput {}
 
-export interface AureliaMcpOpenSeamOverviewInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {}
+export interface AureliaMcpOpenSeamOverviewInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {
+  readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+  readonly openSeamKindKey?: SemanticAppQuery['openSeamKindKey'];
+  readonly openSeamReasonKind?: SemanticAppQuery['openSeamReasonKind'];
+}
 
 export interface AureliaMcpTemplateCursorInput extends AureliaMcpWorkspaceInput, AureliaMcpPagedInput {
   readonly cursor: SemanticRuntimeSourceCursorInput;

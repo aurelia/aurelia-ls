@@ -65,7 +65,8 @@
         "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
         "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
-        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO."
+        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
+        "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams` and `OpenSeamSummary` should accept sourceFile/openSeamKindKey/openSeamReasonKind filters, and continuations should preserve those filters when moving between cluster and raw rows."
       ],
       "anchors": [
         {
@@ -95,6 +96,17 @@
           "symbolName": "SemanticApp.answerOverviewSourceDiagnosticQuery",
           "line": 2200,
           "summary": "Grouped overview, source, diagnostics, evaluation, configuration, DI, plugin issue, and router overview query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-projections.ts",
+          "symbolName": "openSeamSummaryRows",
+          "summary": "Open-seam clustering keeps sample sources so large seam counts have source-backed drill-down affordances."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
+          "summary": "Contract proving filtered open-seam summary/raw rows and app overview expose concrete source samples."
         },
         {
           "kind": "source",

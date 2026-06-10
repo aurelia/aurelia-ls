@@ -20,6 +20,7 @@
     "contract:proxy-observation": "pnpm build && node scripts/contract-proxy-observation.mjs",
     "contract:computed-observer-source": "pnpm build && node scripts/contract-computed-observer-source.mjs",
     "contract:evaluation-module-graph": "pnpm build && node scripts/contract-evaluation-module-graph.mjs",
+    "contract:evaluation-ambient-globals": "pnpm build && node scripts/contract-evaluation-ambient-globals.mjs",
     "contract:evaluation-class-declaration-order": "pnpm build && node scripts/contract-evaluation-class-declaration-order.mjs",
     "contract:expression-object-literal-shorthand": "pnpm build && node scripts/contract-expression-object-literal-shorthand.mjs",
     "contract:expression-branch-narrowing": "pnpm build && node scripts/contract-expression-branch-narrowing.mjs",

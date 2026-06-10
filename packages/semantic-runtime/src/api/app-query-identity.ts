@@ -145,6 +145,8 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.includeTypeSurfaces === true ? 'type-surfaces' : 'no-type-surfaces',
     shapedQuery.diagnosticPageSize ?? 'default-diagnostic-page',
     shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
+    shapedQuery.openSeamKindKey ?? 'all-open-seam-kinds',
+    shapedQuery.openSeamReasonKind ?? 'all-open-seam-reasons',
     shapedQuery.rowPageSize ?? 'default-row-page',
     shapedQuery.page?.size ?? 'all',
     shapedQuery.page?.cursor ?? 'start',

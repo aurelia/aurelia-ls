@@ -33,6 +33,10 @@ import {
   DefaultStaticEvaluationPolicy,
   type StaticEvaluationPolicy,
 } from './policy.js';
+import {
+  readStaticEvaluationAmbientGlobalDeclarations,
+  withStaticEvaluationAmbientGlobals,
+} from './ambient-globals.js';
 
 export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
   readonly sourceFile: ts.SourceFile;
@@ -152,6 +156,7 @@ class StaticProjectEvaluationFrame {
   private readonly started = performance.now();
   private readonly phases: StaticProjectEvaluationPhaseTiming[] = [];
   private readonly host: FileSystemEvaluationModuleSourceHost;
+  private readonly runtimeHost: StaticEvaluationRuntimeHost;
   private readonly sources: StaticProjectEvaluationSourceResult[] = [];
   private readonly sourceResultsByModuleKey = new Map<string, StaticProjectEvaluationSourceResult>();
   private readonly admissionsByModuleKey = new Map<string, SourceFileAdmission>();
@@ -165,6 +170,10 @@ class StaticProjectEvaluationFrame {
       this.project.rootDir,
       undefined,
       this.options.moduleResolutionPolicy,
+    );
+    this.runtimeHost = withStaticEvaluationAmbientGlobals(
+      this.options.runtimeHost,
+      readStaticEvaluationAmbientGlobalDeclarations(this.project, (moduleKey) => this.host.readSourceFile(moduleKey)),
     );
   }
 
@@ -228,7 +237,7 @@ class StaticProjectEvaluationFrame {
       () => new StaticModuleGraphEvaluator(
         build.graph,
         this.options.policy,
-        this.options.runtimeHost,
+        this.runtimeHost,
         this.options.externalValueResolver,
       ).evaluate(moduleKey),
       (result) => result.modules.size,

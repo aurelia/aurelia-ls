@@ -3953,6 +3953,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "mcp restart",
       "mcp token economy",
       "mcp clean code",
+      "mcp open seam drill-down",
+      "open seam filters",
+      "unresolved identifier seam",
+      "vite injected variable",
+      "declare const build variable",
       "idiomatic Aurelia code",
       "low boilerplate Aurelia",
       "core observation MCP",
@@ -3975,6 +3980,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "mcp exposes ordinary typescript diagnostics with aurelia diagnostics",
         summary:
           "Diagnostics hardening should route through semantic-runtime query families and MCP pass-through, not adapter-local TypeScript checks.",
+      },
+      {
+        query: "mcp reports many open seams unresolved identifiers without locations",
+        summary:
+          "Open-seam release hardening should route to semantic-runtime OpenSeams/OpenSeamSummary filters, source samples, continuations, and API displayText before adapter-local formatting.",
+      },
+      {
+        query: "vite define injected variable declare const unresolved identifier",
+        summary:
+          "Build-time injected globals declared in project .d.ts files should route to StaticProjectEvaluationPass ambient global support, not feature-local unresolved-identifier suppression.",
       },
       {
         query: "aurelia_build_app_feature prompt source edits low boilerplate",
@@ -4055,6 +4070,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/api/open-seam-projections.ts",
+        symbolName: "openSeamSummaryRows",
+        role: "grounding",
+        summary:
+          "Open-seam summary rows carry sample source locations for MCP/IDE drill-down after compact counts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
+        symbolName: "readStaticEvaluationAmbientGlobalDeclarations",
+        role: "grounding",
+        summary:
+          "Project .d.ts ambient globals become host-environment boundaries before unresolved-identifier seams are emitted.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/api/app-builder.ts",
         symbolName: "SemanticRuntimeAppBuilderQueryKind",
         role: "grounding",
@@ -4111,6 +4142,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "MCP is a public API shell; semantic-runtime owns product concepts and query results.",
       "Atlas remains the internal development navigation layer and should not be required for end-user MCP operation.",
       "App generation must be exposed through app-builder's semantic-runtime facade, not transport-local recipe or source-plan policy.",
+      "Large diagnostic or seam counts are not useful unless the same semantic-runtime answer family exposes source samples, filters, and follow-up queries.",
     ],
     cautions: [
       "Do not reintroduce removed recipe/guidance tools just to make old prompts work.",

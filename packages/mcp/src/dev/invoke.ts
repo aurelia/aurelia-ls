@@ -77,6 +77,22 @@ const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas>
   [aureliaMcpToolNames.templateDiagnostics]: 'template-diagnostics',
 };
 
+const projectRootProjectCommands = new Set<string>([
+  'workspace-overview',
+  'analysis-cache-overview',
+  'clear-analysis-cache',
+  'app-overview',
+  'router-overview',
+  'app-query',
+  'app-query-batch',
+  'open-seam-overview',
+  'diagnostic-overview',
+  'app-diagnostics',
+  'template-cursor-info',
+  'template-completions',
+  'template-diagnostics',
+]);
+
 const adapter = new AureliaMcpSemanticRuntimeAdapter();
 const rawArgs = process.argv.slice(2);
 if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
@@ -354,6 +370,16 @@ function parseInvocation(args: readonly string[]): {
       index += 1;
       continue;
     }
+    if (key === '--openSeamKindKey') {
+      input.openSeamKindKey = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--openSeamReasonKind') {
+      input.openSeamReasonKind = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
     if (key === '--cursor') {
       input.cursor = parseCursor(requireValue(rest, index, key));
       index += 1;
@@ -361,7 +387,7 @@ function parseInvocation(args: readonly string[]): {
     }
     throw new Error(`Unknown argument '${key}'. ${usage()}`);
   }
-  applyProjectRootShortcut(input, projectRootDir);
+  applyProjectRootShortcut(command, input, projectRootDir);
   validateInvocationInput(command, input);
   return { command, input, outputMode };
 }
@@ -379,8 +405,13 @@ function validateInvocationInput(command: string, input: Record<string, unknown>
   }
 }
 
-function applyProjectRootShortcut(input: Record<string, unknown>, projectRootDir: string | null): void {
+function applyProjectRootShortcut(command: string, input: Record<string, unknown>, projectRootDir: string | null): void {
   if (projectRootDir == null) {
+    return;
+  }
+  const hadWorkspaceRoot = typeof input.workspaceRoot === 'string';
+  input.workspaceRoot ??= projectRootDir;
+  if (!projectRootProjectCommands.has(command)) {
     return;
   }
   if (input.projects != null) {
@@ -388,7 +419,7 @@ function applyProjectRootShortcut(input: Record<string, unknown>, projectRootDir
   }
   input.projects = [
     {
-      rootDir: projectRootDir,
+      rootDir: hadWorkspaceRoot ? projectRootDir : '.',
       ...(typeof input.projectKey === 'string' ? { projectKey: input.projectKey } : {}),
     },
   ];
@@ -458,7 +489,7 @@ function usage(): string {
     'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, app-builder-catalog, app-builder-query, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --openSeamKindKey, --openSeamReasonKind, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 
