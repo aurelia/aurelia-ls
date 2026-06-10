@@ -1,4 +1,5 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
+import { DefaultEvaluationModuleResolutionPolicy } from '../evaluation/module-host.js';
 import {
   StaticProjectEvaluationOptions,
   StaticProjectEvaluationPass,
@@ -16,6 +17,10 @@ export function aureliaProjectEvaluationOptions(): StaticProjectEvaluationOption
     aureliaConfigurationEvaluationPolicy,
     aureliaStaticEvaluationRuntimeHost,
     aureliaExternalEvaluationValueResolver,
+    {
+      ...DefaultEvaluationModuleResolutionPolicy,
+      admitSourceShippedPackageEntrypoints: true,
+    },
   );
 }
 

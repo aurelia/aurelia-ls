@@ -360,6 +360,7 @@
         "Keep Aurelia framework packages on the framework-emulation path rather than pulling `aurelia` or `@aurelia/*` from node_modules into app evaluation.",
         "Module graph performance should be read through the source-host profile first: source reads/parses, TypeScript module resolution, path probes, declaration-source cache, package-policy cache, and cached file-system probes are separate trade-off lanes.",
         "Use StaticProjectEvaluationProfile source-file composition before changing package-source admission. The profile distinguishes project, node_modules, external, TS/JS, asset, evaluated, open, and source-text buckets so a large graph can be attributed before refactoring.",
+        "Source-shipped package entrypoint admission is a product/app-analysis policy, not the generic evaluator default. Aurelia project evaluation may let bare package imports reach TypeScript/source admission when a package manifest points at authored source such as `src/index.ts`; opaque built package entrypoints should remain external-module boundaries with public reason-coded seams.",
         "Direct path probes are allowed for asset/query-shaped imports such as JSON/HTML/CSS and query-bearing specifiers. Ordinary TS/JS relative imports should let TypeScript choose source/declaration semantics first. The measured post-TypeScript path-probe retry is a deliberate `EvaluationModuleResolutionPolicy` fallback for relative specifiers whose local authored source or asset shape TypeScript did not close; read `postTsProbe`, `pathProbeBefore/After`, before/after probe milliseconds, `resolvedByPathProbeBefore/After`, and the specifier-shape counters before changing it.",
         "Keep path-probe candidate policy semantic, not exhaustive. Explicit supported asset/source extensions are exact candidates and should not expand into `specifier.ext/index.*`; emitted JavaScript extensions can map back to TypeScript source siblings; extensionless specifiers expand through supported evaluation-module extensions and index files.",
         "When TypeScript has already resolved a non-declaration module to an evaluation-module path, do not re-probe file existence before admitting it. Existence checks belong in candidate path probes or TypeScript's resolver, not in a duplicate post-resolution guard.",
@@ -384,6 +385,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/README.md",
           "summary": "Watchpoints for package and module-source resolution."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:external-package-source-admission",
+          "summary": "Contract proving app-world analysis admits source-shipped package entrypoints while opaque built packages stay reason-coded external-module boundaries."
         }
       ],
       "liveChecks": [
@@ -403,7 +409,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:static-project-evaluation-frame",

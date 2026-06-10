@@ -4,6 +4,7 @@ import {
   createSemanticRuntime,
   SemanticAppQueryKind,
 } from '../out/index.js';
+import { openSeamSiteRows } from '../out/api/open-seam-projections.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/evaluation-open-seam-sites');
@@ -58,6 +59,22 @@ const overview = app.ask({
 const openSeamCatalogAlias = runtime.appQueryCatalog({
   group: 'open-seams',
 }).value;
+const authoredFirstCanarySites = openSeamSiteRows([
+  ...Array.from({ length: 5 }, (_, index) => syntheticOpenSeamRow({
+    summary: `External repeated seam ${index}`,
+    sourceRole: 'external-source',
+    path: 'node_modules/pkg/index.ts',
+    start: 10,
+    end: 20,
+  })),
+  syntheticOpenSeamRow({
+    summary: 'Authored single seam',
+    sourceRole: 'app-source',
+    path: 'src/app.ts',
+    start: 30,
+    end: 40,
+  }),
+]);
 
 const failures = [];
 if (raw.rows.length !== 6) {
@@ -203,6 +220,9 @@ for (const queryKind of [
 if (openSeamCatalogAlias.rows.some((row) => !row.supportsOpenSeamFilters)) {
   failures.push(`Expected group=open-seams alias to return only open-seam filter-capable rows, observed ${JSON.stringify(openSeamCatalogAlias.rows)}.`);
 }
+if (authoredFirstCanarySites[0]?.sourceRole !== 'app-source') {
+  failures.push(`Expected authored open-seam sites to sort before larger external clusters, observed ${JSON.stringify(authoredFirstCanarySites.map((row) => ({ role: row.sourceRole, rawRowCount: row.rawRowCount, source: row.source?.label })))}`);
+}
 
 if (failures.length > 0) {
   console.error(JSON.stringify({
@@ -236,4 +256,25 @@ if (failures.length > 0) {
 
 function countOccurrences(text, needle) {
   return text.split(needle).length - 1;
+}
+
+function syntheticOpenSeamRow({ summary, sourceRole, path: sourcePath, start, end }) {
+  return {
+    seamKindKey: 'evaluation.dynamic-call',
+    summary,
+    attempt: { kind: 'static-module-evaluation', summary: 'Synthetic static evaluation canary.' },
+    boundary: { kind: 'runtime-execution-boundary', summary: 'Synthetic runtime boundary canary.' },
+    reasonKinds: ['static-evaluation-dynamic-call'],
+    reasonSources: [],
+    source: {
+      kind: 'source-span-address',
+      label: `${sourcePath}@${start}..${end}`,
+      path: sourcePath,
+      start,
+      end,
+      sourceFileRole: sourceRole,
+    },
+    sourceRange: null,
+    sourceRole,
+  };
 }

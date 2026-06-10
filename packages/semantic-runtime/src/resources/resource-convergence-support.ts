@@ -7,12 +7,18 @@ import {
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
+import { openSeamReasonKindForEvaluationBoundary } from '../evaluation/boundary-open-reason.js';
+import {
+  evaluationOpenSeamDefaultReasonKinds,
+  type EvaluationOpenSeam,
+} from '../evaluation/seams.js';
 import {
   hasStaticModifier,
   readPropertyName,
 } from '../evaluation/ts-syntax.js';
 import {
   EvaluationValueKind,
+  evaluationObjectUncertaintySummaries,
   type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -26,22 +32,22 @@ export class ConvergenceOpen {
   constructor(
     readonly summary: string,
     readonly node: ts.Node,
-    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+    readonly reasonKinds: readonly OpenSeamReasonKind[],
   ) {}
 }
 
 export function convergenceOpenForNode(
   summary: string,
   node: ts.Node | null | undefined,
-  reasonKinds: readonly OpenSeamReasonKind[] = [],
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): readonly ConvergenceOpen[] {
-  return node == null ? [] : [new ConvergenceOpen(summary, node, reasonKinds)];
+  return node == null ? [] : [new ConvergenceOpen(summary, node, compactConvergenceOpenReasonKinds(reasonKinds))];
 }
 
 export function nullableConvergenceOpenForNode(
   summary: string,
   node: ts.Node | null | undefined,
-  reasonKinds: readonly OpenSeamReasonKind[] = [],
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): ConvergenceOpen | null {
   return convergenceOpenForNode(summary, node, reasonKinds)[0] ?? null;
 }
@@ -50,7 +56,7 @@ export function appendConvergenceOpen(
   opens: ConvergenceOpen[],
   summary: string,
   node: ts.Node | null | undefined,
-  reasonKinds: readonly OpenSeamReasonKind[] = [],
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): void {
   const open = nullableConvergenceOpenForNode(summary, node, reasonKinds);
   if (open != null) {
@@ -61,17 +67,79 @@ export function appendConvergenceOpen(
 export function convergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
-  reasonKinds: readonly OpenSeamReasonKind[] = [],
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): readonly ConvergenceOpen[] {
-  return convergenceOpenForNode(summary, read?.node ?? read?.value?.node, reasonKinds);
+  return convergenceOpenForNode(
+    summary,
+    read?.node ?? read?.value?.node,
+    convergenceReasonKindsForRead(read, reasonKinds),
+  );
 }
 
 export function nullableConvergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
-  reasonKinds: readonly OpenSeamReasonKind[] = [],
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): ConvergenceOpen | null {
   return convergenceOpenForRead(summary, read, reasonKinds)[0] ?? null;
+}
+
+export function convergenceReasonKindsForRead(
+  read: EvaluationRead<EvaluationValue> | null,
+  fallbackReasonKinds: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return compactConvergenceOpenReasonKinds([
+    ...fallbackReasonKinds,
+    ...convergenceReasonKindsForEvaluationOpenSeams(read?.openSeams ?? []),
+    ...convergenceReasonKindsForEvaluationValue(read?.value ?? null),
+  ]);
+}
+
+export function convergenceSummaryForObjectUncertainties(
+  value: EvaluationObjectValue,
+  fallbackSummary: string,
+): string {
+  const summaries = evaluationObjectUncertaintySummaries(value);
+  return summaries.length === 0 ? fallbackSummary : `${fallbackSummary} ${summaries.join('; ')}.`;
+}
+
+function convergenceReasonKindsForEvaluationOpenSeams(
+  openSeams: readonly EvaluationOpenSeam[],
+): readonly OpenSeamReasonKind[] {
+  return openSeams.flatMap((seam) =>
+    seam.reasonKinds.length === 0
+      ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
+      : seam.reasonKinds
+  );
+}
+
+function convergenceReasonKindsForEvaluationValue(
+  value: EvaluationValue | null,
+): readonly OpenSeamReasonKind[] {
+  if (value == null) {
+    return [];
+  }
+  switch (value.kind) {
+    case EvaluationValueKind.BoundaryValue:
+    case EvaluationValueKind.BoundaryObject:
+      return [openSeamReasonKindForEvaluationBoundary(value.boundaryKind)];
+    case EvaluationValueKind.Object:
+      return value.uncertainties.flatMap((uncertainty) =>
+        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
+      );
+    case EvaluationValueKind.Array:
+      return value.uncertainties.flatMap((uncertainty) =>
+        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
+      );
+    default:
+      return [];
+  }
+}
+
+function compactConvergenceOpenReasonKinds(
+  reasonKinds: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set(reasonKinds)];
 }
 
 export function readStaticClassProperty(
@@ -268,13 +336,16 @@ export function openIfPresent(
   targetClass: ts.ClassLikeDeclarationBase | null,
   fieldName: string,
   summary: string,
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): readonly ConvergenceOpen[] {
   const definitionRead = readObjectProperty(context.expressionReader, definitionExpression, fieldName);
   const staticExpression = readStaticClassProperty(targetClass, fieldName);
   if (definitionRead == null && staticExpression == null) {
     return [];
   }
-  return convergenceOpenForNode(summary, definitionRead?.node ?? staticExpression);
+  return definitionRead == null
+    ? convergenceOpenForNode(summary, staticExpression, reasonKinds)
+    : convergenceOpenForRead(summary, definitionRead, reasonKinds);
 }
 
 export function mergeAliases(

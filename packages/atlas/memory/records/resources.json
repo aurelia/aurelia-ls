@@ -26,7 +26,8 @@
         "Resource metadata annotations live in resource-metadata-annotations.ts: shared @alias(...) annotation values feed all named resources, while custom-element @containerless, @useShadowDOM(...), @capture(...), and member @children/@slotted registry dependencies feed full-definition convergence before definition-object and static class fallbacks.",
         "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment.",
         "Resource source spans should use sourceFileAddressHandleForNode/readAdmittedNodeContext over contexts admitted by the resource-recognition pass. Do not re-resolve node source file names through KernelStore from resource convergence helpers.",
-        "Resource dependency uncertainty should carry resource-specific reason kinds through ConvergenceOpen and recordsForSourceOpenSeam. Vite-style `import.meta.env` optional dependency spreads should keep known dependency entries while reporting `resource-definition-dependencies-open`, not evaluator unsupported-expression noise."
+        "Resource dependency uncertainty should carry resource-specific reason kinds through ConvergenceOpen and recordsForSourceOpenSeam. Vite-style `import.meta.env` optional dependency spreads should keep known dependency entries while reporting `resource-definition-dependencies-open`, not evaluator unsupported-expression noise.",
+        "Do not drop resource convergence open seams merely because the node cannot be mapped to an authored source-file span. Publish an addressless `resource.open-definition-field` seam with evidence and reason kinds so public open-seam rows can report the unresolved fact as unlocated rather than silently losing it."
       ],
       "anchors": [
         {
@@ -45,6 +46,11 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-import-meta-dependencies",
           "summary": "Contract proving import.meta-dependent resource dependency spreads publish resource dependency reason kinds without evaluator syntax noise."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:external-package-source-admission",
+          "summary": "Contract proving source-shipped package bindable configs close through app-world source admission while opaque package configs remain resource open seams."
         },
         {
           "kind": "source",

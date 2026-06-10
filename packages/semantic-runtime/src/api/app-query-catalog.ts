@@ -152,6 +152,11 @@ export function semanticAppQueryCatalogRow(
   return row;
 }
 
+/** Return every public app-query catalog row in stable catalog order. */
+export function readSemanticAppQueryCatalogRows(): readonly SemanticAppQueryCatalogRow[] {
+  return semanticAppQueryCatalogRows;
+}
+
 /** Resolve query catalog rows in catalog order for selected public app-query kinds. */
 export function semanticAppQueryCatalogRowsForKinds(
   queryKinds: readonly (SemanticAppQueryKind | `${SemanticAppQueryKind}`)[],

@@ -1,5 +1,5 @@
 import type ts from 'typescript';
-import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 
@@ -32,6 +32,39 @@ export const EvaluationOpenSeamKind = {
 
 export type EvaluationOpenSeamKind =
   typeof EvaluationOpenSeamKind[keyof typeof EvaluationOpenSeamKind];
+
+/** Default public reason vocabulary for one evaluator seam kind. */
+export function evaluationOpenSeamDefaultReasonKinds(
+  seamKind: EvaluationOpenSeamKind,
+): readonly OpenSeamReasonKind[] {
+  switch (seamKind) {
+    case EvaluationOpenSeamKind.DepthLimit:
+    case EvaluationOpenSeamKind.StatementLimit:
+      return [OpenSeamReasonKind.StaticEvaluationGuardrailLimit];
+    case EvaluationOpenSeamKind.UnsupportedStatement:
+      return [OpenSeamReasonKind.StaticEvaluationUnsupportedStatement];
+    case EvaluationOpenSeamKind.UnsupportedExpression:
+      return [OpenSeamReasonKind.StaticEvaluationUnsupportedExpression];
+    case EvaluationOpenSeamKind.UnsupportedBindingPattern:
+      return [OpenSeamReasonKind.StaticEvaluationUnsupportedBindingPattern];
+    case EvaluationOpenSeamKind.UnresolvedIdentifier:
+      return [OpenSeamReasonKind.StaticEvaluationIdentifierNotInEnvironment];
+    case EvaluationOpenSeamKind.UnresolvedModule:
+      return [OpenSeamReasonKind.StaticEvaluationModuleNotResolved];
+    case EvaluationOpenSeamKind.DynamicCall:
+      return [OpenSeamReasonKind.StaticEvaluationDynamicCall];
+    case EvaluationOpenSeamKind.DynamicBranch:
+      return [OpenSeamReasonKind.StaticEvaluationDynamicBranch];
+    case EvaluationOpenSeamKind.DynamicLoop:
+      return [OpenSeamReasonKind.StaticEvaluationDynamicLoop];
+    case EvaluationOpenSeamKind.DynamicMutation:
+      return [OpenSeamReasonKind.StaticEvaluationDynamicMutation];
+    case EvaluationOpenSeamKind.DynamicImport:
+      return [OpenSeamReasonKind.StaticEvaluationDynamicImport];
+    default:
+      return [];
+  }
+}
 
 /** Evaluator-local unresolved point; kernel projection happens through evaluation/kernel-emitter.ts. */
 export class EvaluationOpenSeam {

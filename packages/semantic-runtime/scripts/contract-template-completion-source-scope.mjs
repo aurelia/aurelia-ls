@@ -26,6 +26,9 @@ const failures = [];
 if (rawCompletion.answer.value.candidates.some((candidate) => candidate.name === 'title')) {
   failures.push('Raw child interpolation should not complete state-only selectedTask.title.');
 }
+if (rawCompletion.answer.closure !== 'open') {
+  failures.push(`Raw child interpolation should report open closure for missing semantic inputs; got ${rawCompletion.answer.closure}.`);
+}
 if (!rawCompletion.answer.value.missingInputs.some((missing) => missing.includes('missing-member'))) {
   failures.push('Raw child interpolation should report missing member-owner input for state-only selectedTask.');
 }
@@ -38,6 +41,9 @@ if (!stateCompletion.answer.value.candidates.some((candidate) =>
 }
 if (stateCompletion.answer.value.missingInputs.length !== 0) {
   failures.push(`State-bound child interpolation should not report missing completion inputs; got ${stateCompletion.answer.value.missingInputs.join(', ')}.`);
+}
+if (stateCompletion.answer.closure !== 'complete') {
+  failures.push(`State-bound child interpolation should report complete closure; got ${stateCompletion.answer.closure}.`);
 }
 
 const summary = {
@@ -76,6 +82,7 @@ function completionAtMemberDot(label, markerOffset) {
 function completionSummary(completion) {
   return {
     outcome: completion.answer.outcome,
+    closure: completion.answer.closure,
     siteKind: completion.answer.value.siteKind,
     missingInputs: completion.answer.value.missingInputs,
     candidates: completion.answer.value.candidates.map((candidate) => ({

@@ -279,6 +279,21 @@ export const enum SemanticRuntimeAnswerOutcome {
   Unsupported = 'unsupported',
 }
 
+export const enum SemanticRuntimeAnswerClosure {
+  /** Answer is complete for the requested query envelope and no answer-local paging or open state remains. */
+  Complete = 'complete',
+  /** Answer is truncated by public paging; follow `page.nextCursor` to continue the same query. */
+  Paged = 'paged',
+  /** Answer is intentionally partial because some required semantic fact stayed open. */
+  Open = 'open',
+  /** Answer is intentionally partial because the request matched multiple possible semantic loci. */
+  Ambiguous = 'ambiguous',
+  /** Answer is intentionally partial because another query or locus should be used instead. */
+  Reroute = 'reroute',
+  /** Answer cannot be produced by this query family or runtime boundary. */
+  Unsupported = 'unsupported',
+}
+
 export const SEMANTIC_APP_RETENTION_POLICIES = [
   'profile-default',
   'retain-app',
@@ -805,6 +820,7 @@ export interface SemanticTemplateDiagnosticsQuery {
 export interface SemanticRuntimeAnswer<TValue> {
   readonly schemaVersion: typeof SEMANTIC_RUNTIME_API_VERSION;
   readonly outcome: SemanticRuntimeAnswerOutcome;
+  readonly closure: SemanticRuntimeAnswerClosure;
   readonly summary: string;
   readonly value: TValue;
   readonly page?: SemanticRuntimePageResult | null;

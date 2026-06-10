@@ -115,10 +115,18 @@ export interface EvaluationModuleResolutionPolicy {
    * filesystem probes on large apps, so keep it explicit and profile-gated rather than hiding it as a helper fallback.
    */
   readonly postTypeScriptRelativePathProbe: boolean;
+  /**
+   * Let bare package imports reach TypeScript resolution when the package manifest points at authored source.
+   *
+   * This is a completeness trade-off for source-shipped helper packages used by app code. Keep it policy-owned so
+   * generic static evaluation can remain conservative while product-facing app analysis can spend on real sources.
+   */
+  readonly admitSourceShippedPackageEntrypoints: boolean;
 }
 
 export const DefaultEvaluationModuleResolutionPolicy: EvaluationModuleResolutionPolicy = {
   postTypeScriptRelativePathProbe: true,
+  admitSourceShippedPackageEntrypoints: false,
 };
 
 /** Source host boundary for recursive module graph construction. */
@@ -633,7 +641,11 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
       return cached;
     }
     this.packagePolicyMisses += 1;
-    const shouldMap = readExternalPackageSourceMappingPolicy(packageRoot);
+    const shouldMap = readExternalPackageSourceMappingPolicy(packageRoot)
+      || (
+        this.moduleResolutionPolicy.admitSourceShippedPackageEntrypoints
+        && packageManifestPublishesAuthoredSourceEntrypoint(packageRoot)
+      );
     this.externalPackagePolicyCache.set(cacheKey, shouldMap);
     return shouldMap;
   }
@@ -997,6 +1009,60 @@ function readExternalPackageSourceMappingPolicy(packageRoot: string): boolean {
   }
   return dependencyNames(manifest).some((dependency) =>
     dependency === 'aurelia' || dependency.startsWith('@aurelia/')
+  );
+}
+
+function packageManifestPublishesAuthoredSourceEntrypoint(packageRoot: string): boolean {
+  const manifest = readPackageManifest(packageRoot);
+  if (manifest == null) {
+    return false;
+  }
+  return packageManifestEntrypoints(manifest).some((entrypoint) =>
+    packageEntrypointIsAuthoredSource(packageRoot, entrypoint)
+  );
+}
+
+function packageManifestEntrypoints(manifest: Record<string, unknown>): readonly string[] {
+  return uniquePackageEntrypoints([
+    ...packageManifestStringField(manifest.main),
+    ...packageManifestStringField(manifest.module),
+    ...packageManifestStringField(manifest.browser),
+    ...packageManifestStringField(manifest.source),
+    ...packageManifestExportEntrypoints(manifest.exports),
+  ]);
+}
+
+function packageManifestStringField(value: unknown): readonly string[] {
+  return typeof value === 'string' && value.length > 0 ? [value] : [];
+}
+
+function packageManifestExportEntrypoints(value: unknown): readonly string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(packageManifestExportEntrypoints);
+  }
+  if (value != null && typeof value === 'object') {
+    return Object.values(value).flatMap(packageManifestExportEntrypoints);
+  }
+  return [];
+}
+
+function uniquePackageEntrypoints(values: readonly string[]): readonly string[] {
+  return [...new Set(values
+    .map((value) => value.split(/[?#]/u, 1)[0] ?? '')
+    .filter((value) => value.length > 0 && !value.startsWith('#'))
+  )];
+}
+
+function packageEntrypointIsAuthoredSource(
+  packageRoot: string,
+  entrypoint: string,
+): boolean {
+  const base = path.resolve(packageRoot, entrypoint);
+  return candidateModulePaths(base).some((candidate) =>
+    existsSync(candidate) && isAuthoredPackageSourceModule(candidate, packageRoot)
   );
 }
 

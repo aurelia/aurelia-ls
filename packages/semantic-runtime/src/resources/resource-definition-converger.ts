@@ -35,6 +35,7 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  OpenSeam,
   OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
@@ -600,8 +601,8 @@ class CustomElementConvergenceFrame {
       ...bindables.open,
       ...watches.open,
       ...dependencies.open,
-      ...openIfPresent(this.context, this.definitionExpression, this.targetClass, 'instructions', 'Custom element instructions are present before template lowering is modeled.'),
-      ...openIfPresent(this.context, this.definitionExpression, this.targetClass, 'surrogates', 'Custom element surrogates are present before surrogate lowering is modeled.'),
+      ...openIfPresent(this.context, this.definitionExpression, this.targetClass, 'instructions', 'Custom element instructions are present before template lowering is modeled.', [OpenSeamReasonKind.FeatureNotYetModeled]),
+      ...openIfPresent(this.context, this.definitionExpression, this.targetClass, 'surrogates', 'Custom element surrogates are present before surrogate lowering is modeled.', [OpenSeamReasonKind.FeatureNotYetModeled]),
     ];
   }
 
@@ -1214,10 +1215,10 @@ export class ResourceDefinitionConverger {
     const span = sourceFileAddressHandle == null
       ? null
       : sourceSpanRangeForNode(sourceFile, open.node);
-    if (sourceFileAddressHandle == null || span == null) {
-      return null;
-    }
     const local = `resource-definition-converged:${header.localKey}:open:${index}`;
+    if (sourceFileAddressHandle == null || span == null) {
+      return this.recordsForUnlocatedOpenSeam(local, open);
+    }
     return recordsForSourceOpenSeam(this.store, {
       localKey: local,
       openKind: KernelVocabulary.Resource.OpenDefinitionField.key,
@@ -1228,6 +1229,37 @@ export class ResourceDefinitionConverger {
       evidenceRoles: [EvidenceRole.Diagnostic],
       reasonKinds: open.reasonKinds,
     });
+  }
+
+  private recordsForUnlocatedOpenSeam(
+    local: string,
+    open: ConvergenceOpen,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly handle: OpenSeamHandle;
+  } {
+    const evidenceHandle = this.store.handles.evidence(local);
+    const openSeamHandle = this.store.handles.openSeam(local);
+    return {
+      records: [
+        new EvidenceRecord(
+          evidenceHandle,
+          EvidenceKind.SemanticObservation,
+          [EvidenceRole.Diagnostic],
+          open.summary,
+          null,
+        ),
+        new OpenSeam(
+          openSeamHandle,
+          KernelVocabulary.Resource.OpenDefinitionField.key,
+          open.summary,
+          null,
+          evidenceHandle,
+          open.reasonKinds,
+        ),
+      ],
+      handle: openSeamHandle,
+    };
   }
 }
 

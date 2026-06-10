@@ -9,6 +9,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationRead } from '../evaluation/expression-reader.js';
 import { hasStaticModifier } from '../evaluation/ts-syntax.js';
 import {
@@ -321,19 +322,30 @@ function readWatchCall(
   extraRecords: readonly KernelStoreRecord[] = [],
 ): WatchEntryRead {
   if (expressionNode == null || callbackNode == null) {
-    return new WatchEntryRead(null, null, new ConvergenceOpen('@watch requires static expression and callback metadata.', expressionNode ?? optionsNode ?? carrierNode));
+    return new WatchEntryRead(null, null, new ConvergenceOpen(
+      '@watch requires static expression and callback metadata.',
+      expressionNode ?? optionsNode ?? carrierNode,
+      [OpenSeamReasonKind.ResourceWatchOpen],
+    ));
   }
   const expressionSource = sourceSpanAddressForNode(store, context, expressionNode, `${local}:expression`, SourceSpanRole.Value);
   const callbackSource = callbackNode instanceof WatchCallbackDefinition
     ? null
     : sourceSpanAddressForNode(store, context, callbackNode, `${local}:callback`, SourceSpanRole.Value);
-  const expression = readWatchExpression(context.expressionReader.evaluateExpression(expressionNode).value, expressionSource?.addressHandle ?? null);
+  const expressionRead = context.expressionReader.evaluateExpression(expressionNode);
+  const expression = readWatchExpression(expressionRead.value, expressionSource?.addressHandle ?? null);
+  const callbackRead = callbackNode instanceof WatchCallbackDefinition
+    ? null
+    : context.expressionReader.evaluateExpression(callbackNode);
   const callback = callbackNode instanceof WatchCallbackDefinition
     ? callbackNode
-    : readWatchCallback(context.expressionReader.evaluateExpression(callbackNode).value, callbackSource?.addressHandle ?? null);
+    : readWatchCallback(callbackRead?.value ?? null, callbackSource?.addressHandle ?? null);
   const flush = readWatchFlush(context, optionsNode);
   if (expression == null || callback == null || flush == null) {
-    return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch metadata did not close to a static expression, callback, and flush mode.', expressionNode));
+    const read = expression == null ? expressionRead : callbackRead;
+    return new WatchEntryRead(null, null, read == null
+      ? nullableConvergenceOpenForNode('Watch metadata did not close to a static expression, callback, and flush mode.', expressionNode, [OpenSeamReasonKind.ResourceWatchOpen])
+      : nullableConvergenceOpenForRead('Watch metadata did not close to a static expression, callback, and flush mode.', read, [OpenSeamReasonKind.ResourceWatchOpen]));
   }
   return watchEntry(
     store,
@@ -665,13 +677,13 @@ function readWatchListValue(
     return [];
   }
   if (value.kind !== EvaluationValueKind.Array) {
-    return [new WatchEntryRead(null, null, nullableConvergenceOpenForRead('Watch list did not close to a static array.', read))];
+    return [new WatchEntryRead(null, null, nullableConvergenceOpenForRead('Watch list did not close to a static array.', read, [OpenSeamReasonKind.ResourceWatchOpen]))];
   }
   const entries = value.elements.map((element, index) =>
     readWatchListEntry(store, context, publisher, `${local}:array:${index}`, element.value, element.expression, targetClass, ownerIdentityHandle, provenanceHandle, contributionKind)
   );
   return value.mayHaveUnknownElements || value.mayHaveUnknownOrder
-    ? [...entries, new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array includes open spread, hole, or unknown-order entries.', value.node))]
+    ? [...entries, new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array includes open spread, hole, or unknown-order entries.', value.node, [OpenSeamReasonKind.ResourceWatchOpen]))]
     : entries;
 }
 
@@ -688,14 +700,14 @@ function readWatchListEntry(
   contributionKind: WatchContributionKind,
 ): WatchEntryRead {
   if (value.kind !== EvaluationValueKind.Object) {
-    return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array entry did not close to a static object.', node));
+    return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array entry did not close to a static object.', node, [OpenSeamReasonKind.ResourceWatchOpen]));
   }
   const source = node == null ? null : sourceSpanAddressForNode(store, context, node, local, SourceSpanRole.Value);
   const expression = readWatchExpression(value.properties.get('expression')?.value ?? null, source?.addressHandle ?? null);
   const callback = readWatchCallback(value.properties.get('callback')?.value ?? null, source?.addressHandle ?? null);
   const flush = readWatchFlushValue(value.properties.get('flush')?.value ?? null);
   return expression == null || callback == null || flush == null
-    ? new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch entry did not expose static expression, callback, and flush fields.', node))
+    ? new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch entry did not expose static expression, callback, and flush fields.', node, [OpenSeamReasonKind.ResourceWatchOpen]))
     : watchEntry(
       store,
       context,

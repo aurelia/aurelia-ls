@@ -343,6 +343,26 @@ function evaluationArrayUncertaintyKey(
   ].join(':');
 }
 
+export const enum EvaluationObjectUncertaintyKind {
+  /** Object properties include a spread from a host, external-module, async, or binding-scope boundary. */
+  BoundarySpread = 'boundary-spread',
+  /** Object properties include a computed key whose property name did not close statically. */
+  ComputedProperty = 'computed-property',
+  /** Object properties depend on a spread value that did not reduce to an evaluator-local Object. */
+  NonObjectSpread = 'non-object-spread',
+  /** Object properties include a member shape the evaluator has not modeled yet. */
+  UnsupportedMember = 'unsupported-member',
+}
+
+export interface EvaluationObjectUncertainty {
+  readonly kind: EvaluationObjectUncertaintyKind;
+  readonly node: ts.Node | null;
+  readonly boundaryKind?: EvaluationBoundaryKind;
+  readonly boundaryPath?: string;
+}
+
+const emptyEvaluationObjectUncertainties: readonly EvaluationObjectUncertainty[] = [];
+
 /** Set value with evaluator-local element membership. */
 export class EvaluationSetValue {
   readonly kind = EvaluationValueKind.Set;
@@ -408,6 +428,7 @@ export class EvaluationObjectProperty {
 /** Object value with evaluator-local property values. */
 export class EvaluationObjectValue {
   readonly kind = EvaluationValueKind.Object;
+  readonly uncertainties: readonly EvaluationObjectUncertainty[];
 
   constructor(
     /** Known own properties by string key. */
@@ -416,7 +437,92 @@ export class EvaluationObjectValue {
     readonly mayHaveUnknownProperties: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
-  ) {}
+    /** Compact local reasons for unknown property membership, kept out of durable kernel records. */
+    uncertainties: readonly EvaluationObjectUncertainty[] = emptyEvaluationObjectUncertainties,
+  ) {
+    this.uncertainties = uncertainties.length === 0
+      ? emptyEvaluationObjectUncertainties
+      : uniqueEvaluationObjectUncertainties(uncertainties);
+  }
+}
+
+export function evaluationObjectBoundarySpreadUncertainty(
+  value: EvaluationBoundaryValue | EvaluationBoundaryObjectValue,
+  node: ts.Node | null,
+): EvaluationObjectUncertainty {
+  return {
+    kind: EvaluationObjectUncertaintyKind.BoundarySpread,
+    node,
+    boundaryKind: value.boundaryKind,
+    boundaryPath: value.path,
+  };
+}
+
+export function evaluationObjectUncertaintySummaries(
+  value: EvaluationObjectValue,
+): readonly string[] {
+  return value.uncertainties.map((uncertainty) => {
+    switch (uncertainty.kind) {
+      case EvaluationObjectUncertaintyKind.BoundarySpread:
+        return uncertainty.boundaryPath == null
+          ? 'properties depend on a boundary spread'
+          : `properties depend on boundary spread ${uncertainty.boundaryPath}`;
+      case EvaluationObjectUncertaintyKind.ComputedProperty:
+        return 'properties include a computed key that did not close statically';
+      case EvaluationObjectUncertaintyKind.NonObjectSpread:
+        return 'properties depend on a spread value that did not reduce to an object';
+      case EvaluationObjectUncertaintyKind.UnsupportedMember:
+        return 'properties include an object member the evaluator has not modeled yet';
+    }
+  });
+}
+
+export function mergeEvaluationObjectUncertainties(
+  ...sources: readonly (EvaluationObjectValue | readonly EvaluationObjectUncertainty[])[]
+): readonly EvaluationObjectUncertainty[] {
+  const uncertainties: EvaluationObjectUncertainty[] = [];
+  for (const source of sources) {
+    const sourceUncertainties = source instanceof EvaluationObjectValue
+      ? source.uncertainties
+      : source;
+    for (const uncertainty of sourceUncertainties) {
+      appendEvaluationObjectUncertainty(uncertainties, uncertainty);
+    }
+  }
+  return uncertainties;
+}
+
+function uniqueEvaluationObjectUncertainties(
+  uncertainties: readonly EvaluationObjectUncertainty[],
+): EvaluationObjectUncertainty[] {
+  const unique: EvaluationObjectUncertainty[] = [];
+  for (const uncertainty of uncertainties) {
+    appendEvaluationObjectUncertainty(unique, uncertainty);
+  }
+  return unique;
+}
+
+function appendEvaluationObjectUncertainty(
+  target: EvaluationObjectUncertainty[],
+  uncertainty: EvaluationObjectUncertainty,
+): void {
+  const key = evaluationObjectUncertaintyKey(uncertainty);
+  if (target.some((entry) => evaluationObjectUncertaintyKey(entry) === key)) {
+    return;
+  }
+  target.push(uncertainty);
+}
+
+function evaluationObjectUncertaintyKey(
+  uncertainty: EvaluationObjectUncertainty,
+): string {
+  return [
+    uncertainty.kind,
+    uncertainty.boundaryKind ?? '',
+    uncertainty.boundaryPath ?? '',
+    uncertainty.node?.pos ?? '',
+    uncertainty.node?.end ?? '',
+  ].join(':');
 }
 
 /** Boundary object whose property identities are static while unknown values belong outside local evaluation. */

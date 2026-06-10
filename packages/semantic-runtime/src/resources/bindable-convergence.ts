@@ -8,6 +8,7 @@ import type {
   KernelStore,
   KernelStoreRecord,
 } from '../kernel/store.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   EvaluationRead,
   readStaticStringValue,
@@ -42,6 +43,8 @@ import {
   memberNameNode,
   nullableConvergenceOpenForNode,
   nullableConvergenceOpenForRead,
+  convergenceReasonKindsForRead,
+  convergenceSummaryForObjectUncertainties,
   readNearestStaticClassProperty,
   readObjectProperty,
   readObjectString,
@@ -92,7 +95,8 @@ class ClassBindableDecoratorFrame {
     if (argument == null) {
       return this.publishMissingPropertyNameConfiguration(this.decorator, SourceSpanRole.Name);
     }
-    const value = this.context.expressionReader.evaluateExpression(argument).value;
+    const read = this.context.expressionReader.evaluateExpression(argument);
+    const value = read.value;
     const source = sourceSpanAddressForNode(this.store, this.context, argument, this.local, SourceSpanRole.Name);
     if (value?.kind === EvaluationValueKind.Null) {
       return this.publishInvalidConfiguration(
@@ -115,7 +119,11 @@ class ClassBindableDecoratorFrame {
     return {
       bindable: null,
       contribution: null,
-      open: new ConvergenceOpen('Class-level @bindable did not close to a static property name.', argument),
+      open: new ConvergenceOpen(
+        'Class-level @bindable did not close to a static property name.',
+        argument,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceBindableConfigurationOpen]),
+      ),
       records: [],
       issues: [],
     };
@@ -129,7 +137,17 @@ class ClassBindableDecoratorFrame {
     const nameProperty = value.properties.get('name') ?? null;
     const name = nameProperty == null ? null : readStaticStringValue(nameProperty.value);
     if (name != null && name.length > 0) {
-      return bindableEntry(name, value, this.contributionKind, this.provenanceHandle, source);
+      const entry = bindableEntry(name, value, this.contributionKind, this.provenanceHandle, source);
+      return value.mayHaveUnknownProperties
+        ? {
+          ...entry,
+          open: new ConvergenceOpen(
+            convergenceSummaryForObjectUncertainties(value, 'Class-level @bindable configuration included open object properties.'),
+            argument,
+            convergenceReasonKindsForRead(new EvaluationRead(value, argument), [OpenSeamReasonKind.ResourceBindableConfigurationOpen]),
+          ),
+        }
+        : entry;
     }
     if (nameProperty != null && nameProperty.value.kind !== EvaluationValueKind.String) {
       return this.publishInvalidConfiguration(
@@ -339,9 +357,20 @@ function readMemberBindableDecorator(
   if (argument == null) {
     return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
   }
-  const value = context.expressionReader.evaluateExpression(argument).value;
+  const read = context.expressionReader.evaluateExpression(argument);
+  const value = read.value;
   if (value?.kind === EvaluationValueKind.Object) {
-    return bindableEntry(propertyName, value, contributionKind, provenanceHandle, source);
+    const entry = bindableEntry(propertyName, value, contributionKind, provenanceHandle, source);
+    return value.mayHaveUnknownProperties
+      ? {
+        ...entry,
+        open: new ConvergenceOpen(
+          convergenceSummaryForObjectUncertainties(value, '@bindable(...) configuration included open object properties.'),
+          argument,
+          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceBindableConfigurationOpen]),
+        ),
+      }
+      : entry;
   }
   if (value != null && !memberBindableConfigurationMayHaveRuntimeProperties(value.kind)) {
     return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
@@ -358,7 +387,11 @@ function readMemberBindableDecorator(
     return {
       bindable: fallback.bindable,
       contribution: fallback.contribution,
-      open: new ConvergenceOpen('@bindable(...) configuration did not close to a static object.', argument),
+      open: new ConvergenceOpen(
+        '@bindable(...) configuration did not close to a static object.',
+        argument,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceBindableConfigurationOpen]),
+      ),
       records: fallback.records,
       issues: [],
     };
@@ -407,7 +440,7 @@ function readBindableListValue(
   contributionKind: BindableContributionKind,
 ): readonly BindableEntryRead[] {
   const value = read?.value;
-  if (value == null || value.kind === EvaluationValueKind.Undefined) {
+  if (read == null || value == null || value.kind === EvaluationValueKind.Undefined) {
     return [];
   }
   if (value.kind === EvaluationValueKind.Array) {
@@ -418,9 +451,19 @@ function readBindableListValue(
       }
       if (element.value.kind === EvaluationValueKind.Object) {
         const name = readObjectString(element.value, 'name');
-        return name == null
+        const entry = name == null
           ? bindableReadOpen('Bindable array entry did not expose a static name.', element.expression)
           : bindableEntry(name, element.value, contributionKind, provenanceHandle, source);
+        return name != null && element.value.mayHaveUnknownProperties
+          ? {
+            ...entry,
+            open: nullableConvergenceOpenForRead(
+              convergenceSummaryForObjectUncertainties(element.value, 'Bindable array entry included open object properties.'),
+              new EvaluationRead(element.value, element.expression ?? element.value.node ?? read.node ?? value.node, read.openSeams),
+              [OpenSeamReasonKind.ResourceBindableConfigurationOpen],
+            ),
+          }
+          : entry;
       }
       return bindableReadOpen('Bindable array entry did not close to a string or static object.', element.expression);
     });
@@ -442,6 +485,19 @@ function readBindableListValue(
       }
       if (property.value.kind === EvaluationValueKind.Object) {
         entries.push(bindableEntry(property.name, property.value, contributionKind, provenanceHandle, source));
+        if (property.value.mayHaveUnknownProperties) {
+          entries.push({
+            bindable: null,
+            contribution: null,
+            open: nullableConvergenceOpenForRead(
+              convergenceSummaryForObjectUncertainties(property.value, `Bindable '${property.name}' configuration included open object properties.`),
+              new EvaluationRead(property.value, property.node ?? property.value.node ?? read.node ?? value.node, read.openSeams),
+              [OpenSeamReasonKind.ResourceBindableConfigurationOpen],
+            ),
+            records: [],
+            issues: [],
+          });
+        }
         continue;
       }
       entries.push(bindableReadOpen(`Bindable '${property.name}' did not close to true or a static configuration object.`, property.node));
@@ -461,8 +517,8 @@ function bindableReadOpen(
   source: ts.Node | EvaluationRead<EvaluationValue> | null,
 ): BindableEntryRead {
   const open = source instanceof EvaluationRead
-    ? nullableConvergenceOpenForRead(summary, source)
-    : nullableConvergenceOpenForNode(summary, source);
+    ? nullableConvergenceOpenForRead(summary, source, [OpenSeamReasonKind.ResourceBindableConfigurationOpen])
+    : nullableConvergenceOpenForNode(summary, source, [OpenSeamReasonKind.ResourceBindableConfigurationOpen]);
   return { bindable: null, contribution: null, open, records: [], issues: [] };
 }
 
@@ -476,7 +532,7 @@ function bindableEntry(
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? bindableAttributeNameForProperty(propertyName);
   const callback = readObjectString(partial, 'callback') ?? `${propertyName}Changed`;
-  const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? BindableBindingMode.ToView;
+  const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? defaultBindableMode(partial);
   const name = readObjectString(partial, 'name') ?? propertyName;
   const setter = setterOverride ?? readBindableSetter(partial);
   return {
@@ -504,6 +560,14 @@ function bindableEntry(
   };
 }
 
+function defaultBindableMode(
+  partial: EvaluationObjectValue | null,
+): BindableBindingMode {
+  return partial?.mayHaveUnknownProperties === true
+    ? BindableBindingMode.Default
+    : BindableBindingMode.ToView;
+}
+
 function readBindableSetter(partial: EvaluationObjectValue | null): BindableSetterDefinition {
   const set = partial?.properties.get('set')?.value ?? null;
   if (set?.kind === EvaluationValueKind.Function) {
@@ -514,6 +578,9 @@ function readBindableSetter(partial: EvaluationObjectValue | null): BindableSett
   }
   if (partial?.properties.has('type') === true) {
     return new BindableSetterDefinition(BindableSetterKind.TypeCoercion);
+  }
+  if (partial?.mayHaveUnknownProperties === true) {
+    return new BindableSetterDefinition(BindableSetterKind.Open);
   }
   return new BindableSetterDefinition(BindableSetterKind.Default);
 }

@@ -79,7 +79,11 @@ import {
   type RuntimeBindingDataFlow,
 } from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
-import { semanticOutcomeForInquiry } from './answer.js';
+import {
+  semanticClosureForInquiry,
+  semanticOutcomeForInquiry,
+} from './answer.js';
+import { closureForAnswer } from './answer-helpers.js';
 import type {
   SemanticRuntimePageResult,
   SemanticRuntimeSourceFileInput,
@@ -101,6 +105,7 @@ import type {
 import {
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticDiagnosticProjectionPolicy,
+  SemanticRuntimeAnswerClosure,
   SemanticRuntimeAnswerOutcome,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
@@ -161,6 +166,7 @@ interface TemplateOverlayDiagnosticCache {
 
 interface TemplateCompletionReadResult {
   readonly outcome: SemanticRuntimeAnswerOutcome;
+  readonly closure: SemanticRuntimeAnswerClosure;
   readonly summary: string;
   readonly value: SemanticTemplateCompletionResult;
   readonly page: SemanticRuntimePageResult | null;
@@ -204,6 +210,7 @@ export function readSemanticTemplateCompletions(
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
     outcome: read.outcome,
+    closure: read.closure,
     summary: read.summary,
     value: read.value,
     page: read.page,
@@ -230,9 +237,11 @@ export function readSemanticTemplateCursorInfo(
     detail === SemanticRuntimeDetail.Handles,
     diagnosticProjection,
   );
+  const outcome = read.missingInputs.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial;
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
-    outcome: read.missingInputs.length === 0 ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+    outcome,
+    closure: closureForAnswer(outcome),
     summary: `Resolved template cursor as ${read.value.siteKind}.`,
     value: read.value,
     page: null,
@@ -517,6 +526,12 @@ export function readSemanticTemplateDiagnostics(
     outcome: paged.page.nextCursor == null
       ? SemanticRuntimeAnswerOutcome.Hit
       : SemanticRuntimeAnswerOutcome.Partial,
+    closure: closureForAnswer(
+      paged.page.nextCursor == null
+        ? SemanticRuntimeAnswerOutcome.Hit
+        : SemanticRuntimeAnswerOutcome.Partial,
+      paged.page,
+    ),
     summary: !scopedToSourceFile
       ? `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) from the opened app basis.`
       : `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) for the requested source file.`,
@@ -1809,6 +1824,11 @@ function templateCompletionReadResult(
   includeHandles: boolean,
 ): TemplateCompletionReadResult {
   const rows = answer.value.candidates.map((candidate) => templateCompletionCandidateRow(candidate, includeHandles));
+  const page = semanticTemplateCompletionPage(answer.page, rows.length);
+  const outcome = semanticOutcomeForInquiry(answer.outcome);
+  const closure = page?.nextCursor != null
+    ? SemanticRuntimeAnswerClosure.Paged
+    : semanticClosureForInquiry(answer.outcome);
   const value: Omit<SemanticTemplateCompletionResult, 'displayText'> = {
     siteKind: answer.value.siteKind,
     candidates: rows,
@@ -1825,13 +1845,14 @@ function templateCompletionReadResult(
     },
   };
   return {
-    outcome: semanticOutcomeForInquiry(answer.outcome),
+    outcome,
+    closure,
     summary: answer.summary,
     value: {
       displayText: semanticTemplateCompletionDisplayText(value),
       ...value,
     },
-    page: semanticTemplateCompletionPage(answer.page, rows.length),
+    page,
   };
 }
 
@@ -1866,6 +1887,7 @@ function missingTemplateCompletion(
 ): TemplateCompletionReadResult {
   return {
     outcome: SemanticRuntimeAnswerOutcome.Miss,
+    closure: closureForAnswer(SemanticRuntimeAnswerOutcome.Miss),
     summary,
     value: {
       displayText: semanticTemplateCompletionDisplayText({
@@ -1917,6 +1939,7 @@ function missingTemplateCursorInfo(
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
     outcome: read.outcome,
+    closure: read.closure,
     summary: read.summary,
     value: {
       displayText: semanticTemplateCursorInfoDisplayText(value),

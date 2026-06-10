@@ -42,6 +42,14 @@ export const enum OpenSeamReasonKind {
   ResourceDefinitionDependenciesOpen = 'resource-definition-dependencies-open',
   /** One resource dependency entry did not resolve to a class, function, or registry dependency. */
   ResourceDefinitionDependencyEntryOpen = 'resource-definition-dependency-entry-open',
+  /** Resource bindable metadata could not be fully converged from decorator/static/definition source. */
+  ResourceBindableConfigurationOpen = 'resource-bindable-configuration-open',
+  /** Resource annotation metadata could not be fully converged from decorator source. */
+  ResourceAnnotationOpen = 'resource-annotation-open',
+  /** Resource watch metadata could not be fully converged from decorator/static/definition source. */
+  ResourceWatchOpen = 'resource-watch-open',
+  /** A legal framework feature exists but this semantic-runtime substrate has not modeled it yet. */
+  FeatureNotYetModeled = 'feature-not-yet-modeled',
   /** Binding-source value evaluation needs runtime binding state rather than a static source value. */
   BindingSourceNeedsRuntimeValue = 'binding-source-needs-runtime-value',
   /** Binding-source lookup found a scope slot whose static value is not available. */

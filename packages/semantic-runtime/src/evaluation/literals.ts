@@ -5,13 +5,17 @@ import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationArrayUncertaintyKind,
+  EvaluationObjectUncertaintyKind,
   EvaluationFunctionValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
   EvaluationValueKind,
   evaluationArrayBoundarySpreadUncertainty,
+  evaluationObjectBoundarySpreadUncertainty,
   mergeEvaluationArrayUncertainties,
+  mergeEvaluationObjectUncertainties,
   type EvaluationArrayUncertainty,
+  type EvaluationObjectUncertainty,
   type EvaluationUnknownValue,
   type EvaluationValue,
 } from './values.js';
@@ -102,11 +106,16 @@ export function evaluateStaticObjectLiteral(
 ): EvaluationValue {
   const properties = new Map<string, EvaluationObjectProperty>();
   let mayHaveUnknownProperties = false;
+  const uncertainties: EvaluationObjectUncertainty[] = [];
   for (const property of literal.properties) {
     if (ts.isPropertyAssignment(property)) {
       const name = host.readPropertyName(property.name, environment, moduleKey, depth + 1);
       if (name == null) {
         mayHaveUnknownProperties = true;
+        uncertainties.push({
+          kind: EvaluationObjectUncertaintyKind.ComputedProperty,
+          node: property.name,
+        });
         host.open(EvaluationOpenSeamKind.UnsupportedExpression, 'Object property key did not reduce to a string key.', property.name, moduleKey);
         continue;
       }
@@ -130,6 +139,7 @@ export function evaluateStaticObjectLiteral(
       const spread = host.evaluateExpression(property.expression, environment, moduleKey, depth + 1);
       if (spread.kind === EvaluationValueKind.BoundaryValue || spread.kind === EvaluationValueKind.BoundaryObject) {
         mayHaveUnknownProperties = true;
+        uncertainties.push(evaluationObjectBoundarySpreadUncertainty(spread, property));
         continue;
       }
       if (spread.kind === EvaluationValueKind.Object) {
@@ -137,9 +147,14 @@ export function evaluateStaticObjectLiteral(
           properties.set(name, entry);
         }
         mayHaveUnknownProperties ||= spread.mayHaveUnknownProperties;
+        uncertainties.push(...spread.uncertainties);
         continue;
       }
       mayHaveUnknownProperties = true;
+      uncertainties.push({
+        kind: EvaluationObjectUncertaintyKind.NonObjectSpread,
+        node: property,
+      });
       host.open(EvaluationOpenSeamKind.DynamicMutation, 'Object spread did not reduce to a known object.', property, moduleKey);
       continue;
     }
@@ -147,6 +162,10 @@ export function evaluateStaticObjectLiteral(
       const name = host.readPropertyName(property.name, environment, moduleKey, depth + 1);
       if (name == null) {
         mayHaveUnknownProperties = true;
+        uncertainties.push({
+          kind: EvaluationObjectUncertaintyKind.ComputedProperty,
+          node: property.name,
+        });
         host.open(EvaluationOpenSeamKind.UnsupportedExpression, 'Object method key did not reduce to a string key.', property.name, moduleKey);
         continue;
       }
@@ -158,7 +177,11 @@ export function evaluateStaticObjectLiteral(
       continue;
     }
     mayHaveUnknownProperties = true;
+    uncertainties.push({
+      kind: EvaluationObjectUncertaintyKind.UnsupportedMember,
+      node: property,
+    });
     host.open(EvaluationOpenSeamKind.UnsupportedExpression, `Object literal member ${host.syntaxKindName(property)} is not evaluated.`, property, moduleKey);
   }
-  return new EvaluationObjectValue(properties, mayHaveUnknownProperties, literal);
+  return new EvaluationObjectValue(properties, mayHaveUnknownProperties, literal, mergeEvaluationObjectUncertainties(uncertainties));
 }

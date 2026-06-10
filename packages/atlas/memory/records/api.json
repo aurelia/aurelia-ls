@@ -75,11 +75,16 @@
         "`OpenSeamSummary` should distinguish raw derivation row counts from `uniqueSiteCount`. Cluster queries are often the first drill-down an MCP user tries, and raw counts alone can make repeated evaluator derivations look like hundreds of independent user problems.",
         "Open-seam rows are not diagnostics. Public MCP/IDE surfaces should project factual `attempt` and `boundary` interpretation from the controlled seam vocabulary so large clusters explain which semantic operation hit which boundary without inventing confidence, severity, or adapter-local classifications.",
         "Default public seam overview should prefer `open-seam-sites` over raw rows: repeated evaluator derivations can create many raw seams at one authored span, so first-read answers must distinguish unique authored sites from raw derivation rows, include attempt/boundary/reason-kind summaries, and preserve raw rows only as drill-down detail.",
+        "Open-seam site ordering should prefer authored app/template/style/root-document roles before test/example, tooling, generated, declaration, external, or unknown rows; raw-row count is only a secondary sort inside the same role band.",
         "Open-seam site rows should join factual application topology roles when available. `sourceRole=app-source` is boot/admission evidence; `applicationFileRoles` such as component-source, entrypoint, route-source, service-source, state-source, or model-source give public answers better context without turning seams into severity or actionability labels.",
         "Open-seam site rows should also join compact static-evaluation origins when available. `staticEvaluationOrigins` explains whether the source was a direct app-source evaluation root, a module-graph dependency from another root, or both; this is factual context, not severity or actionability.",
         "Use `pressure:app-api -- --query open-seam-sites` as the broad fixture canary for unique seam-site totals. The pressure harness should treat intentional non-app fixture roots as skipped, not failures, so fixture collection shape does not hide real app-world seam pressure.",
         "Named MCP open-seam overview may treat `sourceFilePath` as a row filter when explicit `sourceFile` is absent. Generic app-query should keep `sourceFilePath` as project/app selection and `sourceFile` as the row filter so the public envelope remains precise.",
         "Source-role open-seam filtering is factual boot/admission evidence, not severity, priority, or suppression policy. Use it to drill into app-source/tooling-script/generated/declaration/external pressure while keeping higher-level actionability decisions out of the MCP adapter.",
+        "Resource-level open seams should preserve lower evaluator or host-boundary reason kinds instead of replacing them with empty resource opens. Bindable, resource metadata, and watch convergence should use the shared convergence helpers so source ranges, reason kinds, and compact uncertainty summaries survive into public seam-site rows.",
+        "Open bindable configuration should not fabricate confident defaults. Preserve explicit fields from an open `@bindable(...)` object, but report open setter/configuration facts and use the neutral default binding mode when membership did not close.",
+        "Public app-query selectors that a query family cannot consume should return `unsupported` with accepted query-kind menus instead of being silently catalog-shaped away. Keep `diagnosticProjection` separate from selectors: it may be a continuation target-policy hint even when the current source query does not consume it.",
+        "Public answers carry both coarse `outcome` and precise `closure`. Use `closure` for transport/UI decisions about paging, open semantic facts, ambiguity, reroutes, and unsupported selectors; keep `outcome` backward-compatible for hit/miss/partial/unsupported grouping.",
         "MCP text previews are part of the trust surface, not decoration: bounded row previews should preserve identity fields, source labels, and source spans even when structuredContent carries the full row payload.",
         "Public row pagination is bounded by both row count and estimated row JSON payload size. If dense row families make structuredContent large, improve or reuse `pageRows(...)` and `SemanticRuntimePageResult` payload-budget metadata instead of hiding rows in the MCP adapter.",
         "Treat `partial` as a normal successful answer state for dense row families. Contracts, MCP tools, IDE clients, and fixture verifiers that need complete row sets must walk `page.nextCursor` to exhaustion instead of assuming one large `page.size` request returns all rows."
@@ -168,6 +173,21 @@
         },
         {
           "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-bindable-boundary-config",
+          "summary": "Contract proving open bindable configuration spreads carry resource and host-boundary reason kinds without fabricating bindable mode/setter certainty."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-filter-preflight",
+          "summary": "Contract proving unsupported app-query selectors return unsupported answers with accepted query-kind menus instead of silently dropping filters."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:source-reference-carriers",
+          "summary": "Contract proving public row DTO source-reference carrier keys include nested seam summary samples and remain reachable by the shared source-reference collector."
+        },
+        {
+          "kind": "script",
           "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
           "summary": "Contract proving MCP strict envelopes, row-count and byte-budget page clamps, source-preserving row previews, cursor vocabulary, and error-remedy text."
         },
@@ -182,6 +202,18 @@
           "filePath": "packages/semantic-runtime/src/api/contracts.ts",
           "symbolName": "SemanticRuntimePageResult",
           "summary": "Public page metadata including row-count clamp and row payload budget fields."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerClosure",
+          "summary": "Public answer closure vocabulary that distinguishes complete, paged, open, ambiguous, reroute, and unsupported answers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convergence-support.ts",
+          "symbolName": "convergenceOpenForRead",
+          "summary": "Shared resource convergence helper that folds evaluator open seams and value uncertainty into reason-coded resource opens."
         },
         {
           "kind": "source",

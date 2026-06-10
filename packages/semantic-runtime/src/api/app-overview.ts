@@ -58,6 +58,7 @@ function summarizeCollectionAnswer<TValue extends object>(
   return {
     schemaVersion: answer.schemaVersion,
     outcome: answer.outcome,
+    closure: answer.closure,
     summary: answer.summary,
     value: summarizeCollectionValue(answer.value),
     page: answer.page ?? null,

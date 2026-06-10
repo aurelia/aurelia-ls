@@ -52,12 +52,24 @@ const contractSuites = [
     'host-boundary',
     'vite',
   ], 'contract-evaluation-import-meta-boundary.mjs', 'import.meta.env reduces to host-environment boundaries while dependency-array spreads keep known entries imprecisely.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'package-source',
+    'resources',
+    'open-seams',
+  ], 'contract-external-package-source-admission.mjs', 'Source-shipped package entrypoints are admitted for app analysis while opaque package values remain reason-coded boundaries.'),
   contract('resources', 'fast', [
     'resources',
     'host-boundary',
     'vite',
     'open-seams',
   ], 'contract-resource-import-meta-dependencies.mjs', 'import.meta-dependent resource dependency spreads publish resource dependency reason kinds without evaluator syntax noise.'),
+  contract('resources', 'fast', [
+    'resources',
+    'host-boundary',
+    'bindables',
+    'open-seams',
+  ], 'contract-resource-bindable-boundary-config.mjs', 'Open bindable configuration spreads publish resource reason kinds while avoiding fabricated mode/setter certainty.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'class',
@@ -244,6 +256,12 @@ const contractSuites = [
     'template',
     'binding',
   ], 'contract-expression-context-usage.mjs', 'Aurelia expression evaluation contexts stay behind documented fallback owners or runtime binding-source projection.'),
+  contract('inquiry', 'fast', [
+    'inquiry',
+    'api',
+    'mcp',
+    'filters',
+  ], 'contract-app-query-filter-preflight.mjs', 'Public app-query selectors that would otherwise be silently dropped return unsupported answers with accepted query-kind menus.'),
   contract('inquiry', 'fast', [
     'inquiry',
     'api',

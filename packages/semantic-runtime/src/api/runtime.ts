@@ -55,6 +55,7 @@ import {
   readSemanticAppOverview,
 } from './app-overview.js';
 import {
+  readSemanticAppQueryCatalogRows,
   readSemanticAppQueryCatalog,
   semanticAppQueryCatalogShape,
   semanticAppQueryCatalogRow,
@@ -2416,6 +2417,10 @@ export class SemanticApp {
   }
 
   ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
+    const unsupportedFilterAnswer = this.answerUnsupportedQueryFilters(query);
+    if (unsupportedFilterAnswer != null) {
+      return unsupportedFilterAnswer;
+    }
     const continuationQuery = query;
     query = semanticAppQueryCatalogShape(query);
     const answerCurrentQuery = <TValue>(
@@ -2431,6 +2436,55 @@ export class SemanticApp {
       });
     }
     return this.answerCatalogQuery(query, answerCurrentQuery);
+  }
+
+  private answerUnsupportedQueryFilters(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<unknown> | null {
+    const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
+    const unsupportedFields: string[] = [];
+    if (query.sourceFile != null && !catalogRow.supportsSourceFile) {
+      unsupportedFields.push('sourceFile');
+    }
+    if (query.cursor != null && !catalogRow.requiresCursor && !catalogRow.supportsSourceFile) {
+      unsupportedFields.push('cursor');
+    }
+    if (query.openSeamKindKey != null && !catalogRow.supportsOpenSeamFilters) {
+      unsupportedFields.push('openSeamKindKey');
+    }
+    if (query.openSeamReasonKind != null && !catalogRow.supportsOpenSeamFilters) {
+      unsupportedFields.push('openSeamReasonKind');
+    }
+    if (query.sourceRole != null && !catalogRow.supportsOpenSeamFilters) {
+      unsupportedFields.push('sourceRole');
+    }
+    if (unsupportedFields.length === 0) {
+      return null;
+    }
+    const catalogRows = readSemanticAppQueryCatalogRows();
+    const sourceFileQueryKinds = catalogRows
+      .filter((row) => row.supportsSourceFile)
+      .map((row) => row.queryKind);
+    const openSeamFilterQueryKinds = catalogRows
+      .filter((row) => row.supportsOpenSeamFilters)
+      .map((row) => row.queryKind);
+    const diagnosticProjectionQueryKinds = catalogRows
+      .filter((row) => row.supportsDiagnosticProjection)
+      .map((row) => row.queryKind);
+    return answer(
+      SemanticRuntimeAnswerOutcome.Unsupported,
+      `Semantic app query '${query.kind}' does not support ${unsupportedFields.join(', ')}; the runtime will not silently drop query selectors.`,
+      {
+        query,
+        unsupportedFields,
+        catalogRow,
+        acceptedQueryKinds: {
+          sourceFile: sourceFileQueryKinds,
+          openSeamFilters: openSeamFilterQueryKinds,
+          diagnosticProjection: diagnosticProjectionQueryKinds,
+        },
+      },
+    );
   }
 
   private answerCatalogQuery(

@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
 import {
   CustomElementCaptureDefinition,
@@ -16,6 +17,7 @@ import {
 } from './resource-reference.js';
 import {
   ConvergenceOpen,
+  convergenceReasonKindsForRead,
   decoratorCallNamed,
   decoratorIdentifierNamed,
   memberName,
@@ -68,7 +70,11 @@ export function readAliasMetadataAnnotations(
       const read = context.expressionReader.evaluateExpression(argument);
       const alias = read.value == null ? null : readStaticStringValue(read.value);
       if (alias == null) {
-        open.push(new ConvergenceOpen('@alias(...) argument did not close to a static string.', argument));
+        open.push(new ConvergenceOpen(
+          '@alias(...) argument did not close to a static string.',
+          argument,
+          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+        ));
         continue;
       }
       aliases.push(alias);
@@ -223,7 +229,11 @@ function readShadowDomAnnotation(
     return {
       shadowOptions: null,
       sourceNode: argument,
-      open: new ConvergenceOpen('@useShadowDOM(...) options did not close to a static shadow-root mode.', argument),
+      open: new ConvergenceOpen(
+        '@useShadowDOM(...) options did not close to a static shadow-root mode.',
+        argument,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+      ),
     };
   }
   if (value.kind !== EvaluationValueKind.Object) {
@@ -244,7 +254,11 @@ function readShadowDomAnnotation(
       return {
         shadowOptions: null,
         sourceNode: argument,
-        open: new ConvergenceOpen('@useShadowDOM(...) options did not expose a static open/closed mode.', argument),
+        open: new ConvergenceOpen(
+          '@useShadowDOM(...) options did not expose a static open/closed mode.',
+          argument,
+          convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+        ),
       };
   }
 }
@@ -281,7 +295,11 @@ function readCaptureAnnotation(
     return {
       capture: new CustomElementCaptureDefinition(CustomElementCaptureKind.Open),
       sourceNode: argument,
-      open: new ConvergenceOpen('@capture(...) predicate did not close to a static function or non-function value.', argument),
+      open: new ConvergenceOpen(
+        '@capture(...) predicate did not close to a static function or non-function value.',
+        argument,
+        convergenceReasonKindsForRead(read, [OpenSeamReasonKind.ResourceAnnotationOpen]),
+      ),
     };
   }
   return {

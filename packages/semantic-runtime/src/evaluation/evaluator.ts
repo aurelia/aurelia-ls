@@ -45,7 +45,7 @@ import {
   type StaticIntrinsicEvaluationHost,
 } from './intrinsics.js';
 import { evaluateAureliaExpressionGlobalAccess } from './global-intrinsics.js';
-import { EvaluationOpenSeam, EvaluationOpenSeamKind } from './seams.js';
+import { EvaluationOpenSeam, EvaluationOpenSeamKind, evaluationOpenSeamDefaultReasonKinds } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
   StaticEvaluationExpressionStatementDisposition,
@@ -1856,38 +1856,6 @@ export class StaticEvaluator {
       this.open(EvaluationOpenSeamKind.UnsupportedExpression, 'Computed property name did not reduce to a string or number key.', name, moduleKey);
     }
     return null;
-  }
-}
-
-function evaluationOpenSeamDefaultReasonKinds(
-  seamKind: EvaluationOpenSeamKind,
-): readonly OpenSeamReasonKind[] {
-  switch (seamKind) {
-    case EvaluationOpenSeamKind.DepthLimit:
-    case EvaluationOpenSeamKind.StatementLimit:
-      return [OpenSeamReasonKind.StaticEvaluationGuardrailLimit];
-    case EvaluationOpenSeamKind.UnsupportedStatement:
-      return [OpenSeamReasonKind.StaticEvaluationUnsupportedStatement];
-    case EvaluationOpenSeamKind.UnsupportedExpression:
-      return [OpenSeamReasonKind.StaticEvaluationUnsupportedExpression];
-    case EvaluationOpenSeamKind.UnsupportedBindingPattern:
-      return [OpenSeamReasonKind.StaticEvaluationUnsupportedBindingPattern];
-    case EvaluationOpenSeamKind.UnresolvedIdentifier:
-      return [OpenSeamReasonKind.StaticEvaluationIdentifierNotInEnvironment];
-    case EvaluationOpenSeamKind.UnresolvedModule:
-      return [OpenSeamReasonKind.StaticEvaluationModuleNotResolved];
-    case EvaluationOpenSeamKind.DynamicCall:
-      return [OpenSeamReasonKind.StaticEvaluationDynamicCall];
-    case EvaluationOpenSeamKind.DynamicBranch:
-      return [OpenSeamReasonKind.StaticEvaluationDynamicBranch];
-    case EvaluationOpenSeamKind.DynamicLoop:
-      return [OpenSeamReasonKind.StaticEvaluationDynamicLoop];
-    case EvaluationOpenSeamKind.DynamicMutation:
-      return [OpenSeamReasonKind.StaticEvaluationDynamicMutation];
-    case EvaluationOpenSeamKind.DynamicImport:
-      return [OpenSeamReasonKind.StaticEvaluationDynamicImport];
-    default:
-      return [];
   }
 }
 

@@ -7,6 +7,7 @@ import {
 } from '../inquiry/page.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
+  SemanticRuntimeAnswerClosure,
   SemanticRuntimeAnswerOutcome,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
@@ -28,15 +29,37 @@ export function answer<TValue>(
   value: TValue,
   page: SemanticRuntimePageResult | null = null,
   continuations: readonly SemanticRuntimeContinuationRow[] = [],
+  closure: SemanticRuntimeAnswerClosure | `${SemanticRuntimeAnswerClosure}` = closureForAnswer(outcome, page),
 ): SemanticRuntimeAnswer<TValue> {
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
     outcome: outcome as SemanticRuntimeAnswerOutcome,
+    closure: closure as SemanticRuntimeAnswerClosure,
     summary,
     value,
     page,
     ...(continuations.length === 0 ? {} : { continuations }),
   };
+}
+
+export function closureForAnswer(
+  outcome: SemanticRuntimeAnswerOutcome | `${SemanticRuntimeAnswerOutcome}`,
+  page: SemanticRuntimePageResult | null = null,
+): SemanticRuntimeAnswerClosure {
+  if (page?.nextCursor != null) {
+    return SemanticRuntimeAnswerClosure.Paged;
+  }
+  switch (outcome) {
+    case SemanticRuntimeAnswerOutcome.Hit:
+    case SemanticRuntimeAnswerOutcome.Miss:
+      return SemanticRuntimeAnswerClosure.Complete;
+    case SemanticRuntimeAnswerOutcome.Unsupported:
+      return SemanticRuntimeAnswerClosure.Unsupported;
+    case SemanticRuntimeAnswerOutcome.Partial:
+      return SemanticRuntimeAnswerClosure.Open;
+    default:
+      return SemanticRuntimeAnswerClosure.Open;
+  }
 }
 
 export function includeHandles(detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`): boolean {

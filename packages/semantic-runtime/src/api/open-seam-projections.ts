@@ -1,6 +1,7 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { AddressHandle, OpenSeamHandle } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
+import { SourceFileRole } from '../kernel/address.js';
 import { addressBelongsToSourceFiles } from '../kernel/source-address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
@@ -184,7 +185,8 @@ export function openSeamSiteRows(
       };
     })
     .sort((left, right) =>
-      right.rawRowCount - left.rawRowCount
+      openSeamSourceRoleSortRank(left.sourceRole) - openSeamSourceRoleSortRank(right.sourceRole)
+      || right.rawRowCount - left.rawRowCount
       || left.seamKindKey.localeCompare(right.seamKindKey)
       || openSeamSourceSortKey(left.source).localeCompare(openSeamSourceSortKey(right.source))
     );
@@ -279,6 +281,36 @@ function openSeamSourceSortKey(source: SemanticSourceReference | null): string {
   return exact?.path == null
     ? source?.label ?? ''
     : `${exact.path}:${exact.start ?? -1}:${exact.end ?? -1}`;
+}
+
+function openSeamSourceRoleSortRank(
+  role: string | null,
+): number {
+  switch (role) {
+    case SourceFileRole.AppSource:
+    case SourceFileRole.Template:
+    case SourceFileRole.Style:
+    case SourceFileRole.RootDocument:
+      return 0;
+    case SourceFileRole.TestSource:
+    case SourceFileRole.ExampleSource:
+      return 1;
+    case SourceFileRole.PackageManifest:
+    case SourceFileRole.ToolingConfig:
+    case SourceFileRole.ToolingScript:
+      return 2;
+    case SourceFileRole.Generated:
+      return 3;
+    case SourceFileRole.Declaration:
+      return 4;
+    case SourceFileRole.ExternalSource:
+      return 5;
+    case SourceFileRole.Unknown:
+    case null:
+      return 6;
+    default:
+      return 6;
+  }
 }
 
 function openSeamSourceRoleCounts(
