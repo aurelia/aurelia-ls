@@ -25,8 +25,8 @@ Check the "Aurelia Language Server" output channel if anything isn't working.
 
 ## Prerequisites (for building from source)
 
-- Node.js 20+
-- pnpm
+- Node.js 22.13+
+- pnpm 11.5+
 
 ## Building from Source
 
@@ -34,20 +34,15 @@ Check the "Aurelia Language Server" output channel if anything isn't working.
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
 
-# Build the Aurelia framework (submodule)
-cd aurelia
-npm ci
-npm run build
-cd ..
-
 # Build aurelia-ls
 pnpm install
 pnpm run build
 ```
 
 The project uses the Aurelia framework as a git submodule. The
-`pnpm.overrides` in `package.json` link directly to packages inside
-`aurelia/`, so the submodule must be built first.
+`overrides` in `pnpm-workspace.yaml` link directly to packages inside
+`aurelia/`, so the submodule must be initialized. The MCP and semantic-runtime
+preview paths do not require building the Aurelia submodule itself.
 
 > **Note:** The submodule setup is temporary while we work towards full
 > bi-directional compatibility with Aurelia.

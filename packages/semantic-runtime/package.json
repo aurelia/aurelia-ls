@@ -12,7 +12,7 @@
     }
   },
   "engines": {
-    "node": ">=23 <25"
+    "node": ">=22.13 <25"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

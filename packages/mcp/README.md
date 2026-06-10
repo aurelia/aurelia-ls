@@ -10,6 +10,19 @@ app-builder API, not to the retired legacy authoring recipe surface.
 
 ## Local Development
 
+Fresh clone setup:
+
+```powershell
+git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
+cd aurelia-ls
+pnpm install
+pnpm --filter @aurelia-ls/semantic-runtime build
+pnpm --filter @aurelia-ls/mcp build
+```
+
+The `aurelia/` submodule must be initialized because workspace overrides link
+to its packages, but it does not need to be built for the MCP preview path.
+
 Build the package:
 
 ```powershell
