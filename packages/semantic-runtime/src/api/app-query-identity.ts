@@ -147,6 +147,7 @@ export function semanticAppQueryKey(query: SemanticAppQuery): string {
     shapedQuery.openSeamPageSize ?? 'default-open-seam-page',
     shapedQuery.openSeamKindKey ?? 'all-open-seam-kinds',
     shapedQuery.openSeamReasonKind ?? 'all-open-seam-reasons',
+    shapedQuery.sourceRole ?? 'all-source-roles',
     shapedQuery.rowPageSize ?? 'default-row-page',
     shapedQuery.page?.size ?? 'all',
     shapedQuery.page?.cursor ?? 'start',

@@ -1149,7 +1149,11 @@ function addUniqueTypeSystemRootName(
 function isTypeSystemProgramRootAdmission(
   admission: Pick<SourceFileAdmission, 'language' | 'role' | 'path'>,
 ): boolean {
-  return (admission.role === SourceFileRole.AppSource || admission.role === SourceFileRole.Declaration)
+  return (
+    admission.role === SourceFileRole.AppSource
+    || admission.role === SourceFileRole.ToolingScript
+    || admission.role === SourceFileRole.Declaration
+  )
     && isStaticEvaluationSource(admission.language)
     && isTypeSystemProgramRootSourceFile(admission.path);
 }

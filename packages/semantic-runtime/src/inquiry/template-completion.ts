@@ -38,7 +38,7 @@ import {
   bindingExpressionAstForProductAtOffset,
   readTemplateExpressionParse,
 } from '../template/expression-parse-product.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
   type CheckerExpressionTypeOpenSubject,
@@ -56,9 +56,14 @@ import type {
 } from '../type-system/type-shape.js';
 import {
   CheckerTypeShapeKind,
+  type CheckerTypeMemberKind,
+  type CheckerTypeMemberVisibilityKind,
   checkerIndexedAccessSupportsString,
   checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
+import {
+  checkerTypeMemberVisibilityKind,
+} from '../type-system/checker-member-surface.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
@@ -172,6 +177,30 @@ export const enum TemplateCompletionCandidateSourceKind {
   I18n = 'i18n',
 }
 
+export const enum TemplateCompletionAureliaHookKind {
+  /** Member name matches a custom-element/controller lifecycle hook such as attached or binding. */
+  ComponentLifecycle = 'component-lifecycle',
+  /** Member name matches a router viewport/component hook such as canLoad or load. */
+  RouterLifecycle = 'router-lifecycle',
+  /** Member name matches an app-task phase hook such as hydrating or activated. */
+  AppTaskLifecycle = 'app-task-lifecycle',
+}
+
+export class TemplateCompletionTypeMemberFacts {
+  constructor(
+    /** Checker member lane used by callers to distinguish property, method, accessor, and index-signature suggestions. */
+    readonly memberKind: CheckerTypeMemberKind,
+    /** TypeScript accessibility recovered from the member declaration when the checker exposes one. */
+    readonly visibilityKind: CheckerTypeMemberVisibilityKind,
+    /** Whether the member is optional on the owner type surface. */
+    readonly isOptional: boolean,
+    /** Whether the member is readonly on the owner type surface. */
+    readonly isReadonly: boolean,
+    /** Aurelia hook category for known framework hook names, if this member name matches one. */
+    readonly aureliaHookKind: TemplateCompletionAureliaHookKind | null = null,
+  ) {}
+}
+
 export class TemplateCompletionCandidate {
   readonly key: string;
 
@@ -192,6 +221,8 @@ export class TemplateCompletionCandidate {
     readonly summary: string | null = null,
     /** Type reached by this candidate, when checker projection has supplied one. */
     readonly typeReference: CheckerTypeReference | null = null,
+    /** Checker member facts for type-member candidates, when the candidate came from a projected member. */
+    readonly typeMemberFacts: TemplateCompletionTypeMemberFacts | null = null,
   ) {
     this.key = [
       candidateKind,
@@ -651,7 +682,7 @@ function collectBindingScopeCandidates(
   if (!shouldReadBindingScope(frame.query.siteKind, frame.expressionFrontier) || frame.bindingScope == null) {
     return;
   }
-  frame.candidates.push(...scopeCandidates(frame.bindingScope));
+  frame.candidates.push(...scopeCandidates(frame.store, frame.bindingScope));
 }
 
 function collectResourceScopeCandidates(
@@ -1355,6 +1386,7 @@ function deriveMemberOwnerTypeForCursorExpression(
   const context = memberOwnerEvaluationContextForCursorExpression(
     store,
     locusKey,
+    result,
     expressionParse,
     offset,
     sourceAddressHandle,
@@ -1389,6 +1421,7 @@ function deriveMemberOwnerTypeForCursorExpression(
 function memberOwnerEvaluationContextForCursorExpression(
   store: KernelStore,
   locusKey: string,
+  result: ExpressionParseResult | null,
   expressionParse: TemplateExpressionParse,
   offset: number,
   sourceAddressHandle: AddressHandle | null,
@@ -1397,7 +1430,8 @@ function memberOwnerEvaluationContextForCursorExpression(
   contextualType: CheckerTypeReference | null,
   expressionWorld: CheckerExpressionTypeWorld,
 ): CheckerExpressionTypeEvaluationContext | null {
-  const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset);
+  const expression = bindingExpressionAstForProductAtOffset(store, expressionParse.productHandle, offset)
+    ?? (result == null ? null : ExpressionParseResultInspector.memberOwnerAtOffset(result, offset));
   if (expression == null) {
     return null;
   }
@@ -1443,7 +1477,11 @@ function evaluateMemberOwnerFrontierAtOffset(
     missingInputs.push('expression-member-owner');
     return null;
   }
-  return evaluator.evaluate(context.child(owner, 'frontier', contextualType));
+  return evaluator.evaluate(
+    context.expression === owner
+      ? context
+      : context.child(owner, 'frontier', contextualType),
+  );
 }
 
 function deriveMemberOwnerTypeFromEvaluation(
@@ -1648,20 +1686,77 @@ function typeMemberCandidates(
     checkerTypeMemberSourceAddressHandle(store, member),
     `Member visible on checker-projected type.`,
     member.valueType,
+    new TemplateCompletionTypeMemberFacts(
+      member.memberKind,
+      checkerTypeMemberVisibilityKind(member),
+      member.isOptional,
+      member.isReadonly,
+      aureliaHookKindForMemberName(member.name),
+    ),
   ));
 }
 
-function scopeCandidates(scope: BindingScope): readonly TemplateCompletionCandidate[] {
+function aureliaHookKindForMemberName(
+  name: string,
+): TemplateCompletionAureliaHookKind | null {
+  if (COMPONENT_LIFECYCLE_HOOK_NAMES.has(name)) {
+    return TemplateCompletionAureliaHookKind.ComponentLifecycle;
+  }
+  if (ROUTER_LIFECYCLE_HOOK_NAMES.has(name)) {
+    return TemplateCompletionAureliaHookKind.RouterLifecycle;
+  }
+  if (APP_TASK_LIFECYCLE_HOOK_NAMES.has(name)) {
+    return TemplateCompletionAureliaHookKind.AppTaskLifecycle;
+  }
+  return null;
+}
+
+const COMPONENT_LIFECYCLE_HOOK_NAMES = new Set([
+  'created',
+  'binding',
+  'bound',
+  'attaching',
+  'attached',
+  'detaching',
+  'detached',
+  'unbinding',
+  'unbound',
+  'dispose',
+]);
+
+const ROUTER_LIFECYCLE_HOOK_NAMES = new Set([
+  'canLoad',
+  'loading',
+  'load',
+  'canUnload',
+  'unloading',
+  'unload',
+]);
+
+const APP_TASK_LIFECYCLE_HOOK_NAMES = new Set([
+  'creating',
+  'hydrating',
+  'hydrated',
+  'activating',
+  'activated',
+  'deactivating',
+  'deactivated',
+]);
+
+function scopeCandidates(
+  store: KernelStore,
+  scope: BindingScope,
+): readonly TemplateCompletionCandidate[] {
   const candidates: TemplateCompletionCandidate[] = [];
   let current: BindingScope | null = scope;
   let depth = 0;
 
   while (current != null) {
     for (const slot of current.overrideContext.slots) {
-      candidates.push(scopeSlotCandidate(slot, current, depth, BindingContextKind.Override));
+      candidates.push(scopeSlotCandidate(store, slot, current, depth, BindingContextKind.Override));
     }
     for (const slot of current.bindingContext.slots) {
-      candidates.push(scopeSlotCandidate(slot, current, depth, current.bindingContext.contextKind));
+      candidates.push(scopeSlotCandidate(store, slot, current, depth, current.bindingContext.contextKind));
     }
     if (current.isBoundary) {
       break;
@@ -1686,11 +1781,13 @@ function scopeCandidates(scope: BindingScope): readonly TemplateCompletionCandid
 }
 
 function scopeSlotCandidate(
+  store: KernelStore,
   slot: BindingContextSlot,
   scope: BindingScope,
   depth: number,
   contextKind: BindingContextKind,
 ): TemplateCompletionCandidate {
+  const typeMemberFacts = typeMemberFactsForSlot(store, slot);
   return new TemplateCompletionCandidate(
     contextKind === BindingContextKind.Override
       ? TemplateCompletionCandidateKind.OverrideContextSlot
@@ -1704,7 +1801,26 @@ function scopeSlotCandidate(
       ? `Name visible in current ${contextKind}.`
       : `Name visible from ancestor ${depth} ${contextKind}.`,
     slot.targetType,
+    typeMemberFacts,
   );
+}
+
+function typeMemberFactsForSlot(
+  store: KernelStore,
+  slot: BindingContextSlot,
+): TemplateCompletionTypeMemberFacts | null {
+  const member = slot.targetProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+  return member == null
+    ? null
+    : new TemplateCompletionTypeMemberFacts(
+      member.memberKind,
+      checkerTypeMemberVisibilityKind(member),
+      member.isOptional,
+      member.isReadonly,
+      aureliaHookKindForMemberName(member.name),
+    );
 }
 
 function uniqueCandidatesByKey(

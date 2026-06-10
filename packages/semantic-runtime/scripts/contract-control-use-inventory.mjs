@@ -25,16 +25,11 @@ const runtime = await createSemanticRuntime({
   projectDiscovery: 'single-root',
 });
 
-const answer = await runtime.answerAppQuery({
+const rows = await collectRuntimeAppQueryRows(runtime, {
   kind: SemanticAppQueryKind.ControlUseInventory,
   analysisDepth: SemanticAppAnalysisDepth.BindingObservation,
   detail: SemanticRuntimeDetail.Handles,
-  page: { size: 100 },
-});
-
-assert.equal(answer.outcome, SemanticRuntimeAnswerOutcome.Hit);
-
-const rows = answer.value.rows;
+}, 100);
 assert.ok(rows.length >= 20, 'Expected source-lowering gallery fixture to expose generated value controls and button actions.');
 
 for (const expected of [
@@ -147,3 +142,18 @@ console.log(JSON.stringify({
   rows: rows.length,
   controls: rows.map((row) => row.controlId ?? row.controlPatternId),
 }, null, 2));
+
+async function collectRuntimeAppQueryRows(runtime, request, pageSize) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = await runtime.answerAppQuery({
+      ...request,
+      page: { size: pageSize, cursor },
+    });
+    assert.notEqual(answer.outcome, SemanticRuntimeAnswerOutcome.Error);
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
+}

@@ -1,4 +1,5 @@
 import type ts from 'typescript';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { RegistrationAdmissionObservation } from '../registration/registration-observation.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
@@ -42,6 +43,8 @@ export class ConfigurationRecognitionOpen {
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
     readonly node: ts.Node,
+    /** Lower-level producer reasons that caused this configuration seam, when available. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 }
 

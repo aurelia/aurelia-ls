@@ -167,6 +167,7 @@ const emptyExpectedSemanticEffectObservationSnapshot = {
   serviceInteractionBindings: [],
   compiledResources: 0,
   templateDiagnostics: [],
+  observationIssues: [],
   runtimeControllers: [],
   runtimeWatchers: [],
   runtimeWatcherObservedDependencies: [],
@@ -2724,7 +2725,7 @@ assert.ok(
   ) === true,
   'Expected text-input readiness to use row-local facet narrowing.',
 );
-const sourceLowerableControlTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
+const sourceLowerableControlTargetCatalogAnswer = answerPagedSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.TargetCatalog,
   targetCatalog: {
     targetKinds: [AppBuilderOntologyRowKind.ControlPattern],
@@ -4341,7 +4342,7 @@ assert.match(
   'Expected compact/default target catalog display text to disclose that request-field detail rows were omitted.',
 );
 
-const controlPatternTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
+const controlPatternTargetCatalogAnswer = answerPagedSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.TargetCatalog,
   targetCatalog: {
     targetKinds: [AppBuilderOntologyRowKind.ControlPattern],
@@ -4696,7 +4697,7 @@ assert.deepEqual(
   'Expected target catalog request-field summary to preserve surface-scoped required field names.',
 );
 
-const sourcePlanPreviewTargetCatalogAnswer = answerSemanticRuntimeAppBuilderQuery({
+const sourcePlanPreviewTargetCatalogAnswer = answerPagedSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.TargetCatalog,
   targetCatalog: {
     sourceLoweringSurfaceKinds: [AppBuilderSourceLoweringSurfaceKind.SourcePlanPreview],
@@ -11514,6 +11515,41 @@ console.log(JSON.stringify({
 
 function ontologyTargetKey(ref) {
   return `${ref.kind}\0${ref.domain}\0${ref.id}`;
+}
+
+function answerPagedSemanticRuntimeAppBuilderQuery(request, pageSize = request.page?.size ?? 200) {
+  const rows = [];
+  let cursor = request.page?.cursor ?? null;
+  let firstAnswer = null;
+  do {
+    const answer = answerSemanticRuntimeAppBuilderQuery({
+      ...request,
+      page: { ...(request.page ?? {}), size: pageSize, cursor },
+    });
+    assert.notEqual(answer.outcome, SemanticRuntimeAnswerOutcome.Error);
+    firstAnswer ??= answer;
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  assert.ok(firstAnswer != null);
+  return {
+    ...firstAnswer,
+    outcome: SemanticRuntimeAnswerOutcome.Hit,
+    value: {
+      ...firstAnswer.value,
+      rows,
+      ...(typeof firstAnswer.value.rowsIncluded === 'number'
+        ? { rowsIncluded: rows.length }
+        : {}),
+    },
+    page: firstAnswer.page == null
+      ? null
+      : {
+        ...firstAnswer.page,
+        nextCursor: null,
+        returnedRows: rows.length,
+      },
+  };
 }
 
 function targetInvocationRequestFieldPairs(row) {

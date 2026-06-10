@@ -210,6 +210,11 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
       const arrayCheck = [] instanceof Array;
       const hasA = "a" in { a: 1 };
       const hasMissing = "missing" in { a: 1 };
+      const titleCase = "legendary".charAt(0).toUpperCase() + "legendary".slice(1);
+      const lastLetter = "legendary".at(-1);
+      const firstCode = "legendary".charCodeAt(0);
+      const repeated = "-".repeat(3);
+      const substring = "legendary".substring(4, 1);
       const lastEven = [1, 2, 3, 4].findLast(value => value % 2 === 0);
       const lastEvenIndex = [1, 2, 3, 4].findLastIndex(value => value % 2 === 0);
       const lastTwoIndex = [1, 2, 3, 2].lastIndexOf(2);
@@ -237,6 +242,11 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
   assert.equal(result.environment.readValue('arrayCheck')?.value, true);
   assert.equal(result.environment.readValue('hasA')?.value, true);
   assert.equal(result.environment.readValue('hasMissing')?.value, false);
+  assert.equal(result.environment.readValue('titleCase')?.value, 'Legendary');
+  assert.equal(result.environment.readValue('lastLetter')?.value, 'y');
+  assert.equal(result.environment.readValue('firstCode')?.value, 'l'.charCodeAt(0));
+  assert.equal(result.environment.readValue('repeated')?.value, '---');
+  assert.equal(result.environment.readValue('substring')?.value, 'ege');
   assert.equal(result.environment.readValue('lastEven')?.value, 4);
   assert.equal(result.environment.readValue('lastEvenIndex')?.value, 3);
   assert.equal(result.environment.readValue('lastTwoIndex')?.value, 3);

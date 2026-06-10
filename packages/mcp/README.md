@@ -119,6 +119,8 @@ And small workflow prompts:
 Tool responses return short human text plus machine-readable `structuredContent` that conforms to the shared MCP output
 schema `{ tool, generatedAt, workspaceRoot, value }`. Use the direct invoker when you want the full JSON envelope printed
 in a terminal. Pass `--text` or `--output text` when the question is whether public MCP content is terse enough.
+Paged row answers are bounded by row count and estimated row JSON size; when `page.byteClamped` is true, pass the
+returned `nextCursor` for the next slice rather than treating the shorter page as missing data.
 
 Use `aurelia_workspace_overview` first on monorepos. It returns shape/analysis rollups, `defaultAppProjectKey`, and app
 candidates; project rows are opt-in and paged so large workspaces stay reviewable. Pass a selected `projectKey` or

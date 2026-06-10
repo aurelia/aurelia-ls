@@ -265,6 +265,7 @@ export class ConfigurationKernelPublication {
           seam.summary,
           source.addressHandle,
           source.evidenceHandle,
+          seam.reasonKinds,
         ),
       ],
       handle: openSeamHandle,

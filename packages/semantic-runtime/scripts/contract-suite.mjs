@@ -19,6 +19,47 @@ const contractSuites = [
   ], 'contract-evaluation-ambient-globals.mjs', 'Project-local ambient global declarations resolve as host boundaries while open-seam filters expose unresolved identifier source samples.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'api',
+    'mcp',
+    'open-seams',
+  ], 'contract-open-seam-interpretation.mjs', 'Controlled open-seam vocabulary keys carry public attempt and boundary interpretation.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'api',
+    'mcp',
+    'open-seams',
+    'source-address',
+  ], 'contract-open-seam-sites.mjs', 'Repeated evaluator derivations collapse into unique authored open-seam sites with raw-row counts.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'api',
+    'open-seams',
+    'reason-kinds',
+  ], 'contract-evaluation-open-seam-reasons.mjs', 'Evaluator-produced open seams carry reason kinds for missing identifiers, unsupported loops, and compound assignments.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'source-role',
+    'type-system',
+    'diagnostics',
+  ], 'contract-evaluation-tooling-script-source-role.mjs', 'Top-level tooling scripts stay visible to TypeScript diagnostics without entering app-world static evaluation.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'loop',
+    'mutation',
+  ], 'contract-evaluation-classic-for-loop.mjs', 'Bounded classic for loops and simple compound/update assignments reduce through StaticEvaluator guardrails.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'host-boundary',
+    'vite',
+  ], 'contract-evaluation-import-meta-boundary.mjs', 'import.meta.env reduces to host-environment boundaries while dependency-array spreads keep known entries imprecisely.'),
+  contract('resources', 'fast', [
+    'resources',
+    'host-boundary',
+    'vite',
+    'open-seams',
+  ], 'contract-resource-import-meta-dependencies.mjs', 'import.meta-dependent resource dependency spreads publish resource dependency reason kinds without evaluator syntax noise.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'class',
     'module-order',
   ], 'contract-evaluation-class-declaration-order.mjs', 'Static class property evaluation runs when the class declaration executes, after prior module const bindings are initialized.'),
@@ -156,6 +197,12 @@ const contractSuites = [
     'type-system',
     'mcp',
   ], 'contract-typescript-diagnostics.mjs', 'Ordinary TypeScript Program diagnostics exposed through focused and unified app diagnostic queries.'),
+  contract('dialog', 'fast', [
+    'dialog',
+    'configuration',
+    'di',
+    'open-seams',
+  ], 'contract-dialog-classic-with-child.mjs', 'DialogConfigurationClassic.withChild closes child resolver diagnostics without generic DI registry-body seams.'),
   contract('i18n', 'fast', [
     'i18n',
     'binding',
@@ -257,6 +304,11 @@ const contractSuites = [
     'state',
     'type-system',
   ], 'contract-template-completion-source-scope.mjs', 'Template completions spend runtime binding source scopes without leaking state-backed controller conditions into child scopes.'),
+  contract('template', 'fast', [
+    'template',
+    'completion',
+    'type-system',
+  ], 'contract-template-completion-member-metadata.mjs', 'Template completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories.'),
   contract('template', 'fast', [
     'template',
     'completion',

@@ -77,6 +77,25 @@ export interface StaticProjectEvaluationSourceFileStats {
   readonly externalSourceTextCharacters: number;
 }
 
+export const enum StaticProjectEvaluationSourceOriginKind {
+  /** The module was evaluated because boot admitted it as an app-world TS/JS source root. */
+  StaticEvaluationRoot = 'static-evaluation-root',
+  /** The module was reached through a runtime import/export edge from another evaluation root. */
+  ModuleGraphDependency = 'module-graph-dependency',
+}
+
+/** Compact query-time provenance for why one source participated in static project evaluation. */
+export class StaticProjectEvaluationSourceOrigin {
+  constructor(
+    /** Evaluation origin category for this source contribution. */
+    readonly kind: StaticProjectEvaluationSourceOriginKind,
+    /** Module key of the root that caused this contribution. */
+    readonly entryModuleKey: string,
+    /** Project-relative path for the entry source when known. */
+    readonly entrySourcePath: string | null,
+  ) {}
+}
+
 /** Static-evaluation result for one boot-admitted source file. */
 export class StaticProjectEvaluationSourceResult {
   constructor(
@@ -90,6 +109,8 @@ export class StaticProjectEvaluationSourceResult {
     readonly evaluation: StaticModuleEvaluationResult | null,
     /** Module edges left unresolved while preparing evaluation for this source. */
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
+    /** Compact reasons this source entered static project evaluation. */
+    readonly origins: readonly StaticProjectEvaluationSourceOrigin[] = [],
   ) {}
 }
 
@@ -160,6 +181,7 @@ class StaticProjectEvaluationFrame {
   private readonly sources: StaticProjectEvaluationSourceResult[] = [];
   private readonly sourceResultsByModuleKey = new Map<string, StaticProjectEvaluationSourceResult>();
   private readonly admissionsByModuleKey = new Map<string, SourceFileAdmission>();
+  private readonly originsByModuleKey = new Map<string, StaticProjectEvaluationSourceOrigin[]>();
 
   constructor(
     private readonly project: ProjectBootFrame,
@@ -209,6 +231,7 @@ class StaticProjectEvaluationFrame {
     }
 
     const moduleKey = normalizeModuleKey(admission.path);
+    this.recordSourceOrigin(moduleKey, StaticProjectEvaluationSourceOriginKind.StaticEvaluationRoot, moduleKey);
     if (this.sourceResultsByModuleKey.has(moduleKey)) {
       return;
     }
@@ -227,6 +250,7 @@ class StaticProjectEvaluationFrame {
         null,
         null,
         build.unresolvedModules,
+        this.originsForModule(moduleKey),
       ));
       return;
     }
@@ -251,6 +275,7 @@ class StaticProjectEvaluationFrame {
         record.sourceFile,
         null,
         build.unresolvedModules,
+        this.originsForModule(moduleKey),
       ));
     }
   }
@@ -280,6 +305,13 @@ class StaticProjectEvaluationFrame {
     graphRecord: EvaluationModuleRecord,
   ): void {
     const graphModuleKey = normalizeModuleKey(graphRecord.moduleKey);
+    if (graphModuleKey !== entryModuleKey) {
+      this.recordSourceOrigin(
+        graphModuleKey,
+        StaticProjectEvaluationSourceOriginKind.ModuleGraphDependency,
+        entryModuleKey,
+      );
+    }
     if (this.sourceResultsByModuleKey.has(graphModuleKey)) {
       return;
     }
@@ -295,6 +327,7 @@ class StaticProjectEvaluationFrame {
         graphRecord.sourceFile,
         null,
         graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+        this.originsForModule(graphModuleKey),
       ));
       return;
     }
@@ -311,6 +344,7 @@ class StaticProjectEvaluationFrame {
       graphRecord.sourceFile,
       evaluation,
       graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+      this.originsForModule(graphModuleKey),
     ));
   }
 
@@ -335,6 +369,55 @@ class StaticProjectEvaluationFrame {
   private publishSourceResult(source: StaticProjectEvaluationSourceResult): void {
     this.sources.push(source);
     this.sourceResultsByModuleKey.set(source.moduleKey, source);
+  }
+
+  private recordSourceOrigin(
+    moduleKey: string,
+    kind: StaticProjectEvaluationSourceOriginKind,
+    entryModuleKey: string,
+  ): void {
+    const normalizedModuleKey = normalizeModuleKey(moduleKey);
+    const normalizedEntryModuleKey = normalizeModuleKey(entryModuleKey);
+    const entrySourcePath = this.admissionsByModuleKey.get(normalizedEntryModuleKey)?.path ?? null;
+    const origins = this.originsByModuleKey.get(normalizedModuleKey) ?? [];
+    if (origins.some((origin) =>
+      origin.kind === kind && origin.entryModuleKey === normalizedEntryModuleKey
+    )) {
+      return;
+    }
+    this.originsByModuleKey.set(normalizedModuleKey, [
+      ...origins,
+      new StaticProjectEvaluationSourceOrigin(kind, normalizedEntryModuleKey, entrySourcePath),
+    ]);
+    this.refreshPublishedSourceResultOrigins(normalizedModuleKey);
+  }
+
+  private originsForModule(moduleKey: string): readonly StaticProjectEvaluationSourceOrigin[] {
+    return [...(this.originsByModuleKey.get(normalizeModuleKey(moduleKey)) ?? [])]
+      .sort((left, right) =>
+        left.kind.localeCompare(right.kind)
+        || left.entryModuleKey.localeCompare(right.entryModuleKey)
+      );
+  }
+
+  private refreshPublishedSourceResultOrigins(moduleKey: string): void {
+    const existing = this.sourceResultsByModuleKey.get(moduleKey);
+    if (existing == null) {
+      return;
+    }
+    const refreshed = new StaticProjectEvaluationSourceResult(
+      existing.admission,
+      existing.moduleKey,
+      existing.sourceFile,
+      existing.evaluation,
+      existing.unresolvedModules,
+      this.originsForModule(moduleKey),
+    );
+    const index = this.sources.indexOf(existing);
+    if (index !== -1) {
+      this.sources[index] = refreshed;
+    }
+    this.sourceResultsByModuleKey.set(moduleKey, refreshed);
   }
 }
 

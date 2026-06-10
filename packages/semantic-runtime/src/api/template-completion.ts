@@ -564,7 +564,7 @@ function semanticTemplateCompletionDisplayText(
   }
   if (value.candidates.length > 0) {
     lines.push(`Candidates: ${value.candidates.slice(0, TEMPLATE_DISPLAY_LIST_LIMIT).map((candidate) =>
-      `${candidate.name} (${candidate.candidateKind}/${candidate.sourceKind})`
+      `${candidate.name} (${candidate.candidateKind}/${candidate.sourceKind}${templateCompletionMemberFactDisplay(candidate)})`
     ).join('; ')}${value.candidates.length > TEMPLATE_DISPLAY_LIST_LIMIT ? `; +${value.candidates.length - TEMPLATE_DISPLAY_LIST_LIMIT} more` : ''}.`);
   }
   lines.push('Next: use aurelia_template_cursor_info at the same cursor when selected member, bindable, owner type, or cursor diagnostics are needed.');
@@ -2337,12 +2337,18 @@ function templateCompletionCandidateRow(
   candidate: TemplateCompletionCandidate,
   includeHandles: boolean,
 ): SemanticTemplateCompletionCandidateRow {
+  const memberFacts = candidate.typeMemberFacts;
   return {
     candidateKind: candidate.candidateKind,
     name: candidate.name,
     sourceKind: candidate.sourceKind,
     summary: candidate.summary,
     typeDisplay: candidate.typeReference?.display ?? null,
+    memberKind: memberFacts?.memberKind ?? null,
+    memberVisibility: memberFacts?.visibilityKind ?? null,
+    memberIsOptional: memberFacts?.isOptional ?? null,
+    memberIsReadonly: memberFacts?.isReadonly ?? null,
+    aureliaHookKind: memberFacts?.aureliaHookKind ?? null,
     ...(includeHandles ? {
       handles: {
         productHandle: candidate.productHandle,
@@ -2351,4 +2357,15 @@ function templateCompletionCandidateRow(
       },
     } : {}),
   };
+}
+
+function templateCompletionMemberFactDisplay(
+  candidate: SemanticTemplateCompletionCandidateRow,
+): string {
+  const parts = [
+    candidate.memberVisibility == null ? null : `visibility=${candidate.memberVisibility}`,
+    candidate.memberKind == null ? null : `memberKind=${candidate.memberKind}`,
+    candidate.aureliaHookKind == null ? null : `aureliaHook=${candidate.aureliaHookKind}`,
+  ].filter((part): part is string => part != null);
+  return parts.length === 0 ? '' : `; ${parts.join(', ')}`;
 }

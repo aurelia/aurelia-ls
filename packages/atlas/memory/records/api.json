@@ -51,7 +51,9 @@
         "mcp",
         "lsp",
         "app-opening",
-        "app-builder"
+        "app-builder",
+        "open-seams",
+        "evaluation"
       ],
       "summary": "SemanticRuntime and SemanticApp are intentionally the in-process boot/open-app facade, not a second materialization layer.",
       "rationale": "The API README explicitly keeps runtime.ts as the boot/app facade while pushing public contracts, row projections, and query-family answerers into focused modules. Future authoring or LSP expansion should preserve that boundary rather than letting runtime.ts become another private summary table.",
@@ -62,11 +64,25 @@
         "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
         "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
         "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
+        "Keep app-query catalog group filters discoverable from likely user vocabulary. Open-seam queries remain canonically grouped under diagnostics, but `group: \"open-seams\"` is a supported alias for rows with `supportsOpenSeamFilters` so MCP users can find the site/summary/raw drill-down path without knowing the diagnostic grouping first.",
         "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
         "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
         "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
-        "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams` and `OpenSeamSummary` should accept sourceFile/openSeamKindKey/openSeamReasonKind filters, and continuations should preserve those filters when moving between cluster and raw rows."
+        "When AppOverview or another default overview shows breakdowns derived from a paged row family, label them as samples. Global totals may be shown as totals, but boundary/source/reason breakdowns from the returned `open-seam-sites` page must not read as full-app distributions.",
+        "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams`, `OpenSeamSummary`, and `OpenSeamSites` should accept sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filters, and continuations plus query-claim identity should preserve those filters when moving between site, cluster, and raw rows.",
+        "Open-seam raw, summary, site, and overview displays should prefer authored `path:line:column` samples when source ranges are available. Byte-offset labels are acceptable as structured source-reference identity, but first-read text should not force users or AIs to translate offsets before acting.",
+        "`OpenSeamSummary` should distinguish raw derivation row counts from `uniqueSiteCount`. Cluster queries are often the first drill-down an MCP user tries, and raw counts alone can make repeated evaluator derivations look like hundreds of independent user problems.",
+        "Open-seam rows are not diagnostics. Public MCP/IDE surfaces should project factual `attempt` and `boundary` interpretation from the controlled seam vocabulary so large clusters explain which semantic operation hit which boundary without inventing confidence, severity, or adapter-local classifications.",
+        "Default public seam overview should prefer `open-seam-sites` over raw rows: repeated evaluator derivations can create many raw seams at one authored span, so first-read answers must distinguish unique authored sites from raw derivation rows, include attempt/boundary/reason-kind summaries, and preserve raw rows only as drill-down detail.",
+        "Open-seam site rows should join factual application topology roles when available. `sourceRole=app-source` is boot/admission evidence; `applicationFileRoles` such as component-source, entrypoint, route-source, service-source, state-source, or model-source give public answers better context without turning seams into severity or actionability labels.",
+        "Open-seam site rows should also join compact static-evaluation origins when available. `staticEvaluationOrigins` explains whether the source was a direct app-source evaluation root, a module-graph dependency from another root, or both; this is factual context, not severity or actionability.",
+        "Use `pressure:app-api -- --query open-seam-sites` as the broad fixture canary for unique seam-site totals. The pressure harness should treat intentional non-app fixture roots as skipped, not failures, so fixture collection shape does not hide real app-world seam pressure.",
+        "Named MCP open-seam overview may treat `sourceFilePath` as a row filter when explicit `sourceFile` is absent. Generic app-query should keep `sourceFilePath` as project/app selection and `sourceFile` as the row filter so the public envelope remains precise.",
+        "Source-role open-seam filtering is factual boot/admission evidence, not severity, priority, or suppression policy. Use it to drill into app-source/tooling-script/generated/declaration/external pressure while keeping higher-level actionability decisions out of the MCP adapter.",
+        "MCP text previews are part of the trust surface, not decoration: bounded row previews should preserve identity fields, source labels, and source spans even when structuredContent carries the full row payload.",
+        "Public row pagination is bounded by both row count and estimated row JSON payload size. If dense row families make structuredContent large, improve or reuse `pageRows(...)` and `SemanticRuntimePageResult` payload-budget metadata instead of hiding rows in the MCP adapter.",
+        "Treat `partial` as a normal successful answer state for dense row families. Contracts, MCP tools, IDE clients, and fixture verifiers that need complete row sets must walk `page.nextCursor` to exhaustion instead of assuming one large `page.size` request returns all rows."
       ],
       "anchors": [
         {
@@ -101,12 +117,71 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/open-seam-projections.ts",
           "symbolName": "openSeamSummaryRows",
-          "summary": "Open-seam clustering keeps sample sources so large seam counts have source-backed drill-down affordances."
+          "summary": "Open-seam clustering keeps raw counts, unique site counts, sample sources, and sample source ranges so large seam counts have source-backed drill-down affordances."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-projections.ts",
+          "symbolName": "openSeamSiteRows",
+          "summary": "Open-seam site projection groups raw derivation rows by authored source span and seam kind, with application-role and static-evaluation-origin context, for public MCP/IDE trust surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-interpretation.ts",
+          "symbolName": "semanticOpenSeamAttemptForKind",
+          "summary": "Controlled open-seam vocabulary interpretation for public attempted-operation and boundary projections."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
           "summary": "Contract proving filtered open-seam summary/raw rows and app overview expose concrete source samples."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-interpretation",
+          "summary": "Contract proving every controlled open-seam vocabulary key has a public attempt and boundary interpretation."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-sites",
+          "summary": "Contract proving repeated evaluator derivations collapse into unique authored open-seam sites while raw-row counts, source-role filters, application file roles, static-evaluation origins, line/column sample displays, source-role-preserving continuations, and the `group=open-seams` catalog alias remain visible."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --query open-seam-sites",
+          "summary": "Broad fixture pressure canary for unique authored open-seam sites, raw-row coverage, and skipped non-app fixture roots."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+          "summary": "Contract proving evaluator-produced seam rows and public seam-site projections expose machine-readable reason kinds."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
+          "summary": "Contract proving diagnostics-visible tooling scripts do not inflate app-world open-seam overviews."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-import-meta-dependencies",
+          "summary": "Contract proving resource dependency open seams expose resource-specific reason kinds without evaluator syntax noise."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving MCP strict envelopes, row-count and byte-budget page clamps, source-preserving row previews, cursor vocabulary, and error-remedy text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/answer-helpers.ts",
+          "symbolName": "pageRows",
+          "summary": "Public row pagination helper with row-count and estimated row JSON payload bounds."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimePageResult",
+          "summary": "Public page metadata including row-count clamp and row payload budget fields."
         },
         {
           "kind": "source",
@@ -220,7 +295,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-05"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -438,7 +513,7 @@
         "Rely on semantic-runtime's default `openApp()` runtime-topology tier and query-catalog minimum-depth rows before asking for binding-observation.",
         "When topology-depth selected app opening is still slow, inspect template compilation/runtime-analysis timings first; runtime rendering and scope construction can dominate before binding-observation products are even requested.",
         "Use semantic-runtime `pressure:app-api` project-key or project-root filters for selected-app profiling before adding a one-off probe.",
-        "Use `aurelia_analysis_cache_overview` while hand-testing long-lived MCP sessions; request kernel breakdowns when the question is what the session is retaining, and clear the session when reclaiming memory because app records currently live in the workspace kernel.",
+        "Use `aurelia_analysis_cache_overview` while hand-testing long-lived MCP sessions; request kernel breakdowns when the question is what the session is retaining, and use `aurelia_clear_analysis_cache` to clear app epochs. Do not describe this as clearing the whole runtime session: boot/source-discovery workspace kernel records and preserved TypeScript dependency/lib SourceFiles may intentionally remain.",
         "For one-off routed MCP-style calls, use `answerAppQuery(...)` / `answerAppQueries(...)` with `appRetention='dispose-app'` and `typeSystemDependencyCacheClearPolicy` so app-world products, nested app query claims, and dependency SourceFile cache disposal are recorded on the runtime query claim.",
         "Interpret RSS and rssOther together with heap-total, heap-used, dependency-cache counters, V8 heap statistics, and query-claim net kernel deltas. V8 can retain process heap capacity after semantic products and dependency SourceFiles have been reclaimed.",
         "Profile app-world construction by phase before refactoring; likely owners include SemanticRuntime.openApp, AureliaAppWorldProjectConstructionFrame, TypeSystemProject, template runtime analysis, and query-depth policy.",
@@ -469,6 +544,17 @@
           "filePath": "packages/mcp/src/session-registry.ts",
           "symbolName": "SemanticRuntimeSessionRegistry",
           "summary": "Long-lived MCP session registry that now forwards semantic-runtime cache overview."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/session-registry.ts",
+          "symbolName": "SemanticRuntimeSessionRegistry.clearAnalysisCache",
+          "summary": "MCP cache-clear aggregation that distinguishes disposed app epochs from retained workspace-kernel session state and dependency-cache preserve policy."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving cache-clear display and structured results explain remaining app epochs, retained workspace-kernel records, and dependency-cache preserve policy."
         },
         {
           "kind": "doc",

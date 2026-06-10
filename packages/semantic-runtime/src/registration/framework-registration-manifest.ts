@@ -82,6 +82,13 @@ interface FrameworkRegistrationDescriptor {
   readonly capabilities: readonly FrameworkRegistrationCapability[];
 }
 
+export interface FrameworkRegistrationExportEntry {
+  /** Runtime export name, including aliases, that refers to a known framework registration package. */
+  readonly exportName: string;
+  /** Framework registration package carried by this runtime export. */
+  readonly kind: FrameworkRegistrationKind;
+}
+
 const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor[] = [
   {
     kind: FrameworkRegistrationKind.StandardConfiguration,
@@ -262,6 +269,7 @@ const descriptorsByKind = new Map<FrameworkRegistrationKind, FrameworkRegistrati
 );
 
 const frameworkRegistrationKindsByModule = buildKindsByModule(frameworkRegistrationDescriptors);
+const frameworkRegistrationExportEntriesByModule = buildExportEntriesByModule(frameworkRegistrationDescriptors);
 
 export function frameworkRegistrationDescriptorForKind(
   kind: FrameworkRegistrationKind,
@@ -277,6 +285,12 @@ export function frameworkRegistrationKindsForModule(
   moduleName: string,
 ): readonly FrameworkRegistrationKind[] | null {
   return frameworkRegistrationKindsByModule.get(moduleName) ?? null;
+}
+
+export function frameworkRegistrationExportEntriesForModule(
+  moduleName: string,
+): readonly FrameworkRegistrationExportEntry[] | null {
+  return frameworkRegistrationExportEntriesByModule.get(moduleName) ?? null;
 }
 
 export function frameworkRegistrationKindForRuntimeExportName(
@@ -350,6 +364,25 @@ function buildKindsByModule(
         mutable.set(moduleName, kinds);
       }
       kinds.push(descriptor.kind);
+    }
+  }
+  return mutable;
+}
+
+function buildExportEntriesByModule(
+  descriptors: readonly FrameworkRegistrationDescriptor[],
+): ReadonlyMap<string, readonly FrameworkRegistrationExportEntry[]> {
+  const mutable = new Map<string, FrameworkRegistrationExportEntry[]>();
+  for (const descriptor of descriptors) {
+    for (const moduleName of descriptor.moduleNames) {
+      let entries = mutable.get(moduleName);
+      if (entries == null) {
+        entries = [];
+        mutable.set(moduleName, entries);
+      }
+      for (const exportName of frameworkRegistrationDescriptorExportNames(descriptor)) {
+        entries.push({ exportName, kind: descriptor.kind });
+      }
     }
   }
   return mutable;

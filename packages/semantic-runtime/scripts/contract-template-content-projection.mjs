@@ -26,15 +26,15 @@ const instructions = app.emission.templates.resources
   .flatMap((resource) => resource.compilation.compiledTemplate.instructions);
 const instructionSequences = app.emission.templates.resources
   .flatMap((resource) => resource.compilation.compiledTemplate.instructionSequences);
-const taskCardInstructions = instructions.filter((instruction) =>
+const sampleCardInstructions = instructions.filter((instruction) =>
   instruction instanceof HydrateElementInstruction
-  && instruction.elementName === 'task-card'
+  && instruction.elementName === 'sample-card'
 );
-const projectedTaskCardInstructions = taskCardInstructions.filter((instruction) =>
+const projectedSampleCardInstructions = sampleCardInstructions.filter((instruction) =>
   instruction.projectionInstructionSequences.some((projection) => projection.slotName === 'default')
 );
 const projectedSequenceHandles = new Set(
-  projectedTaskCardInstructions.flatMap((instruction) =>
+  projectedSampleCardInstructions.flatMap((instruction) =>
     instruction.projectionInstructionSequences.map((projection) => projection.instructionSequenceProductHandle)
   ),
 );
@@ -46,8 +46,8 @@ const failures = [];
 if (openSeams.some((row) => row.seamKindKey === 'compiler.open-content-projection')) {
   failures.push('Expected custom-element child projection compilation to close without compiler.open-content-projection seams.');
 }
-if (projectedTaskCardInstructions.length < 2) {
-  failures.push(`Expected both task-card usages to carry default projection sequences, observed ${projectedTaskCardInstructions.length}.`);
+if (projectedSampleCardInstructions.length < 2) {
+  failures.push(`Expected both sample-card usages to carry default projection sequences, observed ${projectedSampleCardInstructions.length}.`);
 }
 if (materializedProjectionSequences.length !== projectedSequenceHandles.size) {
   failures.push(
@@ -63,8 +63,8 @@ if (failures.length > 0) {
   console.log(JSON.stringify({
     ok: true,
     summary: {
-      taskCardInstructions: taskCardInstructions.length,
-      projectedTaskCardInstructions: projectedTaskCardInstructions.length,
+      sampleCardInstructions: sampleCardInstructions.length,
+      projectedSampleCardInstructions: projectedSampleCardInstructions.length,
       projectionSequences: materializedProjectionSequences.length,
     },
   }, null, 2));

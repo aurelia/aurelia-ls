@@ -4,10 +4,14 @@ import { EvaluationOpenSeamKind } from './seams.js';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
+  EvaluationArrayUncertaintyKind,
   EvaluationFunctionValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
   EvaluationValueKind,
+  evaluationArrayBoundarySpreadUncertainty,
+  mergeEvaluationArrayUncertainties,
+  type EvaluationArrayUncertainty,
   type EvaluationUnknownValue,
   type EvaluationValue,
 } from './values.js';
@@ -53,29 +57,40 @@ export function evaluateStaticArrayLiteral(
 ): EvaluationValue {
   const elements: EvaluationArrayElement[] = [];
   let mayHaveUnknownElements = false;
+  const uncertainties: EvaluationArrayUncertainty[] = [];
   for (const element of literal.elements) {
     if (ts.isOmittedExpression(element)) {
       mayHaveUnknownElements = true;
+      uncertainties.push({
+        kind: EvaluationArrayUncertaintyKind.OmittedElement,
+        node: element,
+      });
       continue;
     }
     if (ts.isSpreadElement(element)) {
       const spread = host.evaluateExpression(element.expression, environment, moduleKey, depth + 1);
       if (spread.kind === EvaluationValueKind.BoundaryValue) {
         mayHaveUnknownElements = true;
+        uncertainties.push(evaluationArrayBoundarySpreadUncertainty(spread, element));
         continue;
       }
       if (spread.kind === EvaluationValueKind.Array) {
         elements.push(...spread.elements);
         mayHaveUnknownElements ||= spread.mayHaveUnknownElements;
+        uncertainties.push(...spread.uncertainties);
         continue;
       }
       mayHaveUnknownElements = true;
+      uncertainties.push({
+        kind: EvaluationArrayUncertaintyKind.NonArraySpread,
+        node: element,
+      });
       host.open(EvaluationOpenSeamKind.DynamicMutation, 'Array spread did not reduce to a known array.', element, moduleKey);
       continue;
     }
     elements.push(new EvaluationArrayElement(host.evaluateExpression(element, environment, moduleKey, depth + 1), element));
   }
-  return new EvaluationArrayValue(elements, mayHaveUnknownElements, literal);
+  return new EvaluationArrayValue(elements, mayHaveUnknownElements, literal, false, mergeEvaluationArrayUncertainties(uncertainties));
 }
 
 export function evaluateStaticObjectLiteral(

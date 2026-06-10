@@ -1,5 +1,7 @@
+import path from 'node:path';
 import ts from 'typescript';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
+import { buildProjectCompilerOptionsResult } from '../boot/project-compiler-options.js';
 import {
   SourceFileRole,
   SourceLanguage,
@@ -26,13 +28,14 @@ export class StaticEvaluationAmbientGlobalDeclarations {
 }
 
 /**
- * Read ambient `declare const/let/var` globals from project `.d.ts` files for static evaluation.
+ * Read ambient value globals from project `.d.ts` files and TypeScript libs for static evaluation.
  */
 export function readStaticEvaluationAmbientGlobalDeclarations(
   project: ProjectBootFrame,
   readSourceFile: (moduleKey: string) => ts.SourceFile | null,
 ): StaticEvaluationAmbientGlobalDeclarations {
   const names = new Set<string>();
+  collectCompilerOptionAmbientGlobalNames(project, names);
   for (const admission of project.sourceFiles) {
     if (!isAmbientDeclarationAdmission(admission)) {
       continue;
@@ -72,11 +75,11 @@ function collectSourceFileAmbientGlobalNames(
   names: Set<string>,
 ): void {
   if (!ts.isExternalModule(sourceFile)) {
-    collectAmbientVariableNames(sourceFile.statements, names);
+    collectAmbientValueNames(sourceFile.statements, names);
   }
   for (const statement of sourceFile.statements) {
     if (isDeclareGlobalStatement(statement)) {
-      collectAmbientVariableNames(statement.body.statements, names);
+      collectAmbientValueNames(statement.body.statements, names);
     }
   }
 }
@@ -91,18 +94,86 @@ function isDeclareGlobalStatement(
     && ts.isModuleBlock(statement.body);
 }
 
-function collectAmbientVariableNames(
+function collectCompilerOptionAmbientGlobalNames(
+  project: ProjectBootFrame,
+  names: Set<string>,
+): void {
+  const options = buildProjectCompilerOptionsResult(project.rootDir, [project.workspaceRootDir]).options;
+  if (options.noLib === true) {
+    return;
+  }
+  const defaultLibFilePath = ts.getDefaultLibFilePath(options);
+  const libDirectory = path.dirname(defaultLibFilePath);
+  const entries = options.lib == null || options.lib.length === 0
+    ? [defaultLibFilePath]
+    : options.lib.map((lib) => resolveCompilerLibFileName(libDirectory, lib));
+  const visited = new Set<string>();
+  for (const entry of entries) {
+    collectCompilerLibAmbientGlobalNames(entry, names, visited);
+  }
+}
+
+function collectCompilerLibAmbientGlobalNames(
+  fileName: string,
+  names: Set<string>,
+  visited: Set<string>,
+): void {
+  const normalized = normalizeAmbientLibFileName(fileName);
+  if (visited.has(normalized)) {
+    return;
+  }
+  visited.add(normalized);
+  const text = ts.sys.readFile(fileName);
+  if (text == null) {
+    return;
+  }
+  const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+  collectAmbientValueNames(sourceFile.statements, names);
+  const directory = path.dirname(fileName);
+  for (const reference of sourceFile.libReferenceDirectives) {
+    collectCompilerLibAmbientGlobalNames(resolveCompilerLibFileName(directory, reference.fileName), names, visited);
+  }
+}
+
+function resolveCompilerLibFileName(
+  libDirectory: string,
+  lib: string,
+): string {
+  const normalized = lib.toLowerCase();
+  const fileName = normalized.startsWith('lib.') && normalized.endsWith('.d.ts')
+    ? normalized
+    : `lib.${normalized.replace(/\.d\.ts$/u, '')}.d.ts`;
+  return path.join(libDirectory, fileName);
+}
+
+function normalizeAmbientLibFileName(fileName: string): string {
+  const resolved = path.resolve(fileName).replace(/\\/g, '/');
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function collectAmbientValueNames(
   statements: ts.NodeArray<ts.Statement>,
   names: Set<string>,
 ): void {
   for (const statement of statements) {
-    if (!ts.isVariableStatement(statement)) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          names.add(declaration.name.text);
+        }
+      }
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
-      if (ts.isIdentifier(declaration.name)) {
-        names.add(declaration.name.text);
-      }
+    if (ts.isFunctionDeclaration(statement) && statement.name != null) {
+      names.add(statement.name.text);
+      continue;
+    }
+    if (ts.isClassDeclaration(statement) && statement.name != null) {
+      names.add(statement.name.text);
+      continue;
+    }
+    if (ts.isEnumDeclaration(statement)) {
+      names.add(statement.name.text);
     }
   }
 }

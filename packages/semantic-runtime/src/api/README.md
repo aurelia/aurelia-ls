@@ -313,13 +313,23 @@ shapes; exact follow-up navigation should use handles instead of cursor text. A 
 when the returned page has a `nextCursor`; a caller that drains all pages should see a final `hit`, even when the last
 page is smaller than the total row count. Cursor-scoped template completion answers may carry an opaque continuation
 cursor from the completion inquiry because the candidate set is not a durable row table.
-`OpenSeamSummary` reads the same unpaged seam row set as `OpenSeams`, then clusters by seam kind and reason-kind
-signature. Use it before raw seams when repeated runtime-dependent facts would otherwise make the first page look like
-many unrelated issues. Both raw seam and summary answers own compact `displayText`: raw rows report seam-kind and
-reason-kind rollups plus a few source-backed samples, while summary rows report dominant clusters, source-file
-coverage, and sample locations. `OpenSeams` and `OpenSeamSummary` accept `sourceFile`, `openSeamKindKey`, and
-`openSeamReasonKind` so a large cluster count always has a direct drill-down path. Public adapters should forward that
-text before asking for handle detail.
+Paged row tables are bounded by row count and by estimated UTF-8 JSON size for the returned row array. Dense families
+such as binding observed-dependency rows can hit the payload budget before they hit the row-count clamp; in that case
+the page returns fewer rows, sets `byteClamped: true`, reports `estimatedRowsJsonBytes` and `maxRowsJsonBytes`, and
+still provides `nextCursor` when more rows are available. Public adapters should treat this as pagination, not lossy
+truncation. Callers that need complete row families should drain `nextCursor`; `partial` is a successful bounded page
+state for dense answers.
+`OpenSeamSites` reads the same unpaged seam row set as `OpenSeams`, then groups repeated derivations by authored
+source span and seam kind. Use it before raw seams or kind summaries when a large app reports hundreds of seams: one
+authored expression can produce many raw evaluator rows after callback/intrinsic expansion, and the public first read
+should say "two authored sites covering six raw rows" rather than making derivation count look like problem count.
+`OpenSeamSummary` remains the kind/reason cluster view for understanding dominant seam families after the site-level
+problem count is clear. Raw seam, site, and summary answers all own compact `displayText`: raw rows report seam-kind
+and reason-kind rollups plus a few source-backed samples, site rows report unique authored locations with raw-row and
+variant counts, while summary rows report dominant clusters, source-file coverage, and sample locations. `OpenSeams`,
+`OpenSeamSites`, and `OpenSeamSummary` accept `sourceFile`, `openSeamKindKey`, and `openSeamReasonKind` so a large
+cluster count always has a direct drill-down path. Public adapters should forward that text before asking for handle
+detail.
 `AppOverview` is the compact app-opening answer for MCP and other AI callers. It composes summary, topology counts,
 diagnostic clusters, and open-seam clusters without making adapters reconstruct that answer locally. The topology child read uses a compact summary projection instead of
 asking the full `AppTopology` row DTO and summarizing afterward. Call `AppTopology` directly when row families or
@@ -370,6 +380,10 @@ const unresolvedModules = app.ask({ kind: SemanticAppQueryKind.UnresolvedModules
 const topology = app.ask({ kind: SemanticAppQueryKind.AppTopology });
 const openSeamSummary = app.ask({
   kind: SemanticAppQueryKind.OpenSeamSummary,
+  page: { size: 20 },
+});
+const openSeamSites = app.ask({
+  kind: SemanticAppQueryKind.OpenSeamSites,
   page: { size: 20 },
 });
 const stateStores = app.ask({ kind: SemanticAppQueryKind.StateStores });
@@ -1084,6 +1098,15 @@ semantic gap.
 opening another project should not make seam rows bleed into the first app answer. The projection includes source-
 addressed seams owned by the app's admitted/evaluated sources plus emission-local DI, template, runtime rendering,
 observer, value-channel, and data-flow seams that may not have a precise authored address yet.
+`OpenSeamSites` is the default public trust surface for these rows. It keeps raw seam rows available for detail but
+groups them by exact source path/span plus seam kind, then reports `rawRowCount`, `variantCount`, attempt kinds,
+boundary kinds, reason kinds, and the best source range that can be calculated at query time. This grouping is
+answer-local and does not add durable kernel records; it exists because kernel records intentionally preserve
+derivation-level detail while MCP/IDE first reads need authored-site counts.
+`OpenSeamSummary` remains the family-cluster view, but its samples should be just as actionable as site rows: keep
+`sampleSources` for source-reference identity and use `sampleSourceSites` when text or UI needs authored
+`path:line:column` locations. Summary rows also carry `uniqueSiteCount`, so cluster displays can distinguish raw
+derivation amplification from the number of authored sites that need inspection.
 Rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
 when one coherent seam has adjacent contributing source sites. Pressure scripts should aggregate the typed reason kinds
 when present, reserving summary text for human inspection and raw-detail debugging. For example, a router resource whose
@@ -1101,7 +1124,9 @@ co-located `load` custom attribute, while `router-href-click-interception-target
 that must be compared with the runtime window name. In both cases, `HrefCustomAttribute.valueChanged(...)` still needs
 the runtime value to decide whether to write the raw URL or generate an internal router URL. Dynamic href seams keep the
 href value as the primary seam source, while `reasonSources` can point the target-open reason at the authored `target`
-attribute.
+attribute. Public reason-source rows should carry `sourceRange` when the reason source resolves to authored text, so
+repair, hover, and MCP drill-down consumers do not have to retranslate byte offsets or conflate the reason site with the
+primary seam site.
 Authoring orientation lifts that into runtime boundary and intent rows on repair clusters. The important distinction is
 whether the boundary is router href classification, static route instruction closure, or binding-source runtime value,
 and whether the next operation needs href ownership intent, an explicit external-href declaration, a static navigation

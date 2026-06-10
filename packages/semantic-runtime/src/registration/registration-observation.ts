@@ -3,6 +3,7 @@ import type {
   AddressHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type {
   RegistrationAdmissionKind,
@@ -99,6 +100,8 @@ export class RegistrationRecognitionOpen {
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
     readonly node: ts.Node,
+    /** Lower-level producer reasons that caused this registration seam, when available. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 }
 

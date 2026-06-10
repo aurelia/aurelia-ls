@@ -1,4 +1,7 @@
 import {
+  EvaluationArrayElement,
+  EvaluationArrayUncertaintyKind,
+  EvaluationArrayValue,
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
@@ -9,6 +12,8 @@ import {
   EvaluationStringPatternValue,
   EvaluationStringValue,
   EvaluationValueKind,
+  evaluationValuesEqual,
+  mergeEvaluationArrayUncertainties,
   type EvaluationValue,
 } from './values.js';
 
@@ -18,12 +23,14 @@ import {
  * This is used when semantic-runtime intentionally does not materialize every runtime instance, such as repeated
  * template views or speculative branches with a dynamic condition. The result must stay safe: exact values are kept
  * only when every lane agrees, string-like lanes become a dynamic string pattern, object lanes keep only common
- * properties, and unrelated lanes fall back to a binding-scope boundary value.
+ * properties, arrays keep common prefix elements plus compact membership uncertainty, and unrelated lanes fall back
+ * to a binding-scope boundary value.
  */
 export function representativeEvaluationValues(
   values: readonly EvaluationValue[],
   path: string,
   sourceLabel: string | null,
+  sourceBoundaryKind: EvaluationBoundaryKind | null = null,
 ): EvaluationValue | null {
   if (values.length === 0) {
     return null;
@@ -35,13 +42,17 @@ export function representativeEvaluationValues(
   if (same != null) {
     return same;
   }
-  const stringLike = representativeStringLikeValue(values, `${path}.*`, sourceLabel);
+  const stringLike = representativeStringLikeValue(values, `${path}.*`, sourceLabel, sourceBoundaryKind);
   if (stringLike != null) {
     return stringLike;
   }
   const objectProperties = objectPropertyMaps(values);
   if (objectProperties != null) {
-    return representativeObjectValue(objectProperties, path, sourceLabel);
+    return representativeObjectValue(objectProperties, path, sourceLabel, sourceBoundaryKind);
+  }
+  const arrayValues = evaluationArrayValues(values);
+  if (arrayValues != null) {
+    return representativeArrayValue(arrayValues, path, sourceLabel, sourceBoundaryKind);
   }
   return new EvaluationBoundaryValue(
     EvaluationBoundaryKind.BindingScope,
@@ -79,6 +90,7 @@ function representativeStringLikeValue(
   values: readonly EvaluationValue[],
   path: string,
   sourceLabel: string | null,
+  sourceBoundaryKind: EvaluationBoundaryKind | null,
 ): EvaluationValue | null {
   const ranges: StringLikeRange[] = [];
   for (const value of values) {
@@ -94,7 +106,7 @@ function representativeStringLikeValue(
   return new EvaluationStringPatternValue(
     [prefix, suffix],
     [new EvaluationStringPatternHole(new EvaluationBoundaryValue(
-      EvaluationBoundaryKind.BindingScope,
+      sourceBoundaryKind ?? EvaluationBoundaryKind.BindingScope,
       sourceLabel == null ? path : `${path}:${sourceLabel}`,
       values[0]?.node ?? null,
     ))],
@@ -129,11 +141,12 @@ function representativeObjectValue(
   propertyMaps: readonly ReadonlyMap<string, EvaluationObjectProperty>[],
   path: string,
   sourceLabel: string | null,
+  sourceBoundaryKind: EvaluationBoundaryKind | null,
 ): EvaluationBoundaryObjectValue {
   const properties = new Map<string, EvaluationObjectProperty>();
   for (const name of commonPropertyNames(propertyMaps)) {
     const values = propertyMaps.map((propertyMap) => propertyMap.get(name)!.value);
-    const propertyValue = representativeEvaluationValues(values, `${path}.${name}`, sourceLabel)
+    const propertyValue = representativeEvaluationValues(values, `${path}.${name}`, sourceLabel, sourceBoundaryKind)
       ?? new EvaluationBoundaryValue(EvaluationBoundaryKind.BindingScope, `${path}.${name}`, propertyMaps[0]?.get(name)?.node ?? null);
     const node = propertyMaps[0]?.get(name)?.node ?? values[0]?.node ?? null;
     if (node == null) {
@@ -146,6 +159,40 @@ function representativeObjectValue(
     sourceLabel == null ? path : `${path}:${sourceLabel}`,
     properties,
     null,
+  );
+}
+
+function representativeArrayValue(
+  values: readonly EvaluationArrayValue[],
+  path: string,
+  sourceLabel: string | null,
+  sourceBoundaryKind: EvaluationBoundaryKind | null,
+): EvaluationArrayValue {
+  const elements: EvaluationArrayElement[] = [];
+  const shortest = Math.min(...values.map((value) => value.elements.length));
+  for (let index = 0; index < shortest; index += 1) {
+    const first = values[0]!.elements[index]!;
+    if (!values.every((value) => evaluationValuesEqual(value.elements[index]!.value, first.value))) {
+      break;
+    }
+    elements.push(new EvaluationArrayElement(first.value, first.expression));
+  }
+  const mayHaveUnknownElements = values.some((value) => value.mayHaveUnknownElements)
+    || values.some((value) => value.elements.length !== elements.length);
+  const mayHaveUnknownOrder = values.some((value) => value.mayHaveUnknownOrder);
+  return new EvaluationArrayValue(
+    elements,
+    mayHaveUnknownElements,
+    values[0]?.node ?? null,
+    mayHaveUnknownOrder,
+    mergeEvaluationArrayUncertainties(...values, mayHaveUnknownElements
+        ? [{
+            kind: EvaluationArrayUncertaintyKind.ConditionalBranch,
+            node: values[0]?.node ?? null,
+            boundaryKind: sourceBoundaryKind ?? undefined,
+            boundaryPath: sourceLabel ?? path,
+          }]
+      : []),
   );
 }
 
@@ -165,6 +212,19 @@ function objectPropertyMaps(
     return null;
   }
   return maps;
+}
+
+function evaluationArrayValues(
+  values: readonly EvaluationValue[],
+): readonly EvaluationArrayValue[] | null {
+  const arrays: EvaluationArrayValue[] = [];
+  for (const value of values) {
+    if (value.kind !== EvaluationValueKind.Array) {
+      return null;
+    }
+    arrays.push(value);
+  }
+  return arrays;
 }
 
 function commonPropertyNames(

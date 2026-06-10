@@ -19,8 +19,9 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview'),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
-  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by sourceFile, openSeamKindKey, or openSeamReasonKind to inspect a cluster.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
-  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; filter by sourceFile, openSeamKindKey, or openSeamReasonKind before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction; filter by sourceFile, openSeamKindKey, openSeamReasonKind, or sourceRole to inspect a cluster.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeamSummary, 'diagnostics', 'Open seam clusters grouped by seam kind and reason-kind signature; filter by sourceFile, openSeamKindKey, openSeamReasonKind, or sourceRole before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
+  queryRow(SemanticAppQueryKind.OpenSeamSites, 'diagnostics', 'Open seam sites grouped by authored source span and seam kind; filter by sourceFile, sourceRole, openSeamKindKey, or openSeamReasonKind before paging raw seams.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsOpenSeamFilters: true }),
   queryRow(SemanticAppQueryKind.AppDiagnostics, 'diagnostics', 'Unified app diagnostics across TypeScript, modeled Aurelia issue lanes, and template diagnostics; optionally narrowed to one source file.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.AppDiagnosticSummary, 'diagnostics', 'Diagnostic clusters grouped by domain, kind, authority, severity, framework code, and owning query; explicit diagnostic projections include TypeScript diagnostics.', 'summary-row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection' }),
   queryRow(SemanticAppQueryKind.TypeScriptDiagnostics, 'diagnostics', 'Ordinary TypeScript project diagnostics from the semantic-runtime Program/tsconfig epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsSourceFile: true, materializationPolicy: 'query-type-projection' }),
@@ -87,7 +88,7 @@ export function readSemanticAppQueryCatalog(
     `${left.group}:${left.queryKind}`.localeCompare(`${right.group}:${right.queryKind}`)
   );
   const rows = allRows.filter((row) =>
-    (request.group == null || row.group === request.group)
+    (request.group == null || semanticAppQueryCatalogGroupMatches(row, request.group))
     && (request.queryKind == null || row.queryKind === request.queryKind)
   );
   return answer(
@@ -129,7 +130,7 @@ function appQueryCatalogDisplayText(
     lines.push('Router: start with router-overview before paging route, viewport, recognizer, or navigation row tables.');
   }
   if (rows.some((row) => row.supportsOpenSeamFilters)) {
-    lines.push('Open seams: open-seams and open-seam-summary accept sourceFile, openSeamKindKey, and openSeamReasonKind filters for cluster drill-down.');
+    lines.push('Open seams: open-seams, open-seam-summary, and open-seam-sites accept sourceFile, sourceRole, openSeamKindKey, and openSeamReasonKind filters for drill-down.');
   }
   if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
     lines.push('Type/cursor projection: cursor-locus and diagnostic projection queries may do answer-time TypeChecker work; request them only when the locus needs it.');
@@ -177,6 +178,7 @@ export function semanticAppQueryCatalogShape(
     ...(query.kind !== SemanticAppQueryKind.AppOverview || query.openSeamPageSize == null ? {} : { openSeamPageSize: query.openSeamPageSize }),
     ...(row.supportsOpenSeamFilters && query.openSeamKindKey != null ? { openSeamKindKey: query.openSeamKindKey } : {}),
     ...(row.supportsOpenSeamFilters && query.openSeamReasonKind != null ? { openSeamReasonKind: query.openSeamReasonKind } : {}),
+    ...(row.supportsOpenSeamFilters && query.sourceRole != null ? { sourceRole: query.sourceRole } : {}),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
     ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
@@ -232,6 +234,16 @@ function queryRow(
 
 function supportsContinuationIntentFilter(_queryKind: SemanticAppQueryKind): boolean {
   return true;
+}
+
+function semanticAppQueryCatalogGroupMatches(
+  row: SemanticAppQueryCatalogRow,
+  group: string,
+): boolean {
+  if (row.group === group) {
+    return true;
+  }
+  return group === 'open-seams' && row.supportsOpenSeamFilters;
 }
 
 function groupRows(rows: readonly SemanticAppQueryCatalogRow[]): SemanticAppQueryCatalogResult['groups'] {

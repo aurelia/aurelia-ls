@@ -1,4 +1,5 @@
 import type ts from 'typescript';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 
@@ -46,6 +47,8 @@ export class EvaluationOpenSeam {
     readonly node: ts.Node,
     /** Module key whose evaluation produced the seam. */
     readonly moduleKey: string,
+    /** Machine-readable lower-level reasons already known by the evaluator producer. */
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {
     this.sourceFile = node.getSourceFile();
   }

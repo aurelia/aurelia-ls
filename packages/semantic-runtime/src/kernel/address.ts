@@ -32,6 +32,8 @@ export const enum SourceFileRole {
   ExampleSource = 'example-source',
   /** Build, lint, test-runner, bundler, or workspace tooling configuration. */
   ToolingConfig = 'tooling-config',
+  /** Build or maintenance script source that needs checker diagnostics but not app-world evaluation. */
+  ToolingScript = 'tooling-script',
   /** Type declaration source used by the checker but not evaluated as runtime code. */
   Declaration = 'declaration',
   /** Non-declaration source observed through dependency/checker surfaces but not admitted as project source. */

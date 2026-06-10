@@ -35,6 +35,9 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
+  OpenSeamReasonKind,
+} from '../kernel/open-seam.js';
+import {
   recordsForSourceOpenSeam,
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
@@ -47,6 +50,7 @@ import {
 } from '../evaluation/ts-syntax.js';
 import {
   EvaluationValueKind,
+  evaluationArrayUncertaintySummaries,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
@@ -1222,6 +1226,7 @@ export class ResourceDefinitionConverger {
       start: span.start,
       end: span.end,
       evidenceRoles: [EvidenceRole.Diagnostic],
+      reasonKinds: open.reasonKinds,
     });
   }
 }
@@ -1665,7 +1670,11 @@ function readResourceDependencies(
   if (value.kind !== EvaluationValueKind.Array) {
     return new ResourceDependenciesRead(
       [],
-      convergenceOpenForRead('Resource dependencies did not close to a static array.', read),
+      convergenceOpenForRead(
+        'Resource dependencies did not close to a static array.',
+        read,
+        [OpenSeamReasonKind.ResourceDefinitionDependenciesOpen],
+      ),
     );
   }
 
@@ -1686,18 +1695,36 @@ function readResourceDependencies(
         dependencies.push(styleRegistryTarget);
         continue;
       }
-      appendConvergenceOpen(open, 'Resource dependency entry did not close to a static class or function.', element.expression);
+      appendConvergenceOpen(
+        open,
+        'Resource dependency entry did not close to a static class or function.',
+        element.expression,
+        [OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen],
+      );
       continue;
     }
     const target = dependencyReferenceForFunction(element.value);
     if (target.identityHandle == null && target.localName == null) {
-      appendConvergenceOpen(open, 'Resource dependency entry did not expose a usable target name.', element.expression);
+      appendConvergenceOpen(
+        open,
+        'Resource dependency entry did not expose a usable target name.',
+        element.expression,
+        [OpenSeamReasonKind.ResourceDefinitionDependencyEntryOpen],
+      );
       continue;
     }
     dependencies.push(target);
   }
   if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
-    appendConvergenceOpen(open, 'Resource dependencies include open spread, hole, or unknown-order entries.', value.node);
+    const summaries = evaluationArrayUncertaintySummaries(value);
+    appendConvergenceOpen(
+      open,
+      summaries.length === 0
+        ? 'Resource dependencies include open spread, hole, or unknown-order entries.'
+        : `Resource dependencies include open entries: ${summaries.join('; ')}.`,
+      value.node,
+      [OpenSeamReasonKind.ResourceDefinitionDependenciesOpen],
+    );
   }
   return new ResourceDependenciesRead(dependencies, open);
 }

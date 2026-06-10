@@ -53,10 +53,7 @@ const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
 
-const runtimeControllers = app.ask({
-  kind: SemanticAppQueryKind.RuntimeControllers,
-  page: { size: 100 },
-}).value.rows;
+const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeControllers, 100);
 const resource = app.emission.templates.resources[0] ?? null;
 const overlayEmission = resource == null
   ? null
@@ -352,10 +349,7 @@ async function readVirtualRepeatProbe() {
   const app = await runtime.openApp({
     analysisDepth: 'binding-observation',
   });
-  const runtimeControllers = app.ask({
-    kind: SemanticAppQueryKind.RuntimeControllers,
-    page: { size: 100 },
-  }).value.rows;
+  const runtimeControllers = collectAppRows(app, SemanticAppQueryKind.RuntimeControllers, 100);
   const resource = app.emission.templates.resources[0] ?? null;
   if (resource == null) {
     return {
@@ -402,6 +396,20 @@ function virtualRepeatControllerCount(runtimeControllers) {
     && row.childViewRenderingState === 'expanded-aggregate'
     && row.hasScope === true
   ).length;
+}
+
+function collectAppRows(app, kind, pageSize) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = app.ask({
+      kind,
+      page: { size: pageSize, cursor },
+    });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }
 
 function branchScopeSlotDisplays(resource) {

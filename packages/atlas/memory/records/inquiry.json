@@ -16,6 +16,8 @@
       "guidance": [
         "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
         "The product-handle completion answer should spend supplied handles and report missing inputs; cursor member-owner derivation belongs in TemplateCompletionCursorContextBuilder where runtime-analysis expression world and rendered binding source context are available.",
+        "Top-level template completion candidates should reuse BindingContextSlot target handles and TypeMember hot details for member kind, visibility, readonly/optional, and known Aurelia hook-category metadata. Do not add a completion-local TypeChecker member enumeration path for this.",
+        "`$this.` member-access completion is covered for the parser-owned awaiting-member-name frontier by using the frontier owner expression when no completed binding AST exists. If a similar completion reports missing `expression-member-owner` or `member-owner-type`, route through shared cursor/member-owner projection and binding-scope selection rather than inventing lookup in the answer mapper.",
         "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
         "Plain static attribute values may classify as attribute-value sites without a TemplateValueSite product; that is an expected empty completion surface, not an attribute-value-site missing input.",
         "If another LSP-like feature needs similar cursor context, consider extracting a shared cursor-context substrate before duplicating this builder."
@@ -33,6 +35,11 @@
           "lensId": "atlas.memory",
           "projection": "next",
           "summary": "Use memory:next to discover active cursor/inquiry pressure before adding answer-local heuristics."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-member-metadata",
+          "summary": "Contract proving public completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories."
         }
       ],
       "liveChecks": [
@@ -45,7 +52,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-01"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "intent:lsp-edit-affordance-substrate",
@@ -507,6 +514,7 @@
         "Keep app-builder/generated fixtures and contrastive analysis fixtures distinct so app-builder output quality and analyzer robustness can both be checked.",
         "Treat auLink as framework grounding, not behavior coverage. A link can show where semantic-runtime should mirror Aurelia; a contract should show what an answer or fixture must prove.",
         "Give query/inquiry contracts cost and retention expectations when the consumer is MCP, LSP, diagnostics, app-builder, AOT, or another profile with different budget needs.",
+        "When a contract asserts complete public row families, drain `page.nextCursor` to exhaustion. Dense rows can be byte-clamped before the requested row count, so `partial` is a successful page state rather than a failed query.",
         "Prefer a fast route-health/schema lane, a route-scoped semantic lane, a selected framework-corpus witness lane, and a slower confidence lane over one mandatory all-in suite.",
         "Use `pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --list` or a route/domain filter before manually assembling contract scripts. The current suite is a first harness, not the final Atlas-selected contract algebra; it keeps child output compact on success and exposes `--verbose` for debugging."
       ],

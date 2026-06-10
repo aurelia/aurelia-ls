@@ -3,6 +3,8 @@ import type ts from 'typescript';
 import {
   EvaluationArrayElement,
   EvaluationArrayValue,
+  mergeEvaluationArrayUncertainties,
+  type EvaluationArrayUncertainty,
   type EvaluationValue,
 } from './values.js';
 import { stringCoercionText } from './value-coercion.js';
@@ -30,7 +32,14 @@ export function evaluationArrayConcat(
       elements.push(new EvaluationArrayElement(value, node));
     }
   }
-  return new EvaluationArrayValue(elements, mayHaveUnknownElements, node, mayHaveUnknownOrder);
+  const arrayArguments = argumentValues.filter((value): value is EvaluationArrayValue => value.kind === 'array');
+  return new EvaluationArrayValue(
+    elements,
+    mayHaveUnknownElements,
+    node,
+    mayHaveUnknownOrder,
+    mergeEvaluationArrayUncertainties(receiver, ...arrayArguments),
+  );
 }
 
 /** Slices an evaluator-local Array while preserving unknown membership/order metadata. */
@@ -45,6 +54,7 @@ export function evaluationArraySlice(
     receiver.mayHaveUnknownElements,
     node,
     receiver.mayHaveUnknownOrder,
+    receiver.uncertainties,
   );
 }
 
@@ -52,19 +62,25 @@ export function evaluationArraySlice(
 export function flattenEvaluationArrayElements(
   elements: readonly EvaluationArrayElement[],
   depth: number,
-): { readonly elements: readonly EvaluationArrayElement[]; readonly mayHaveUnknownElements: boolean } {
+): {
+  readonly elements: readonly EvaluationArrayElement[];
+  readonly mayHaveUnknownElements: boolean;
+  readonly uncertainties: readonly EvaluationArrayUncertainty[];
+} {
   const flattened: EvaluationArrayElement[] = [];
   let mayHaveUnknownElements = false;
+  const uncertainties: EvaluationArrayUncertainty[] = [];
   for (const element of elements) {
     if (depth > 0 && element.value.kind === 'array') {
       const child = flattenEvaluationArrayElements(element.value.elements, depth - 1);
       flattened.push(...child.elements);
       mayHaveUnknownElements ||= element.value.mayHaveUnknownElements || child.mayHaveUnknownElements;
+      uncertainties.push(...mergeEvaluationArrayUncertainties(element.value, child.uncertainties));
       continue;
     }
     flattened.push(element);
   }
-  return { elements: flattened, mayHaveUnknownElements };
+  return { elements: flattened, mayHaveUnknownElements, uncertainties: mergeEvaluationArrayUncertainties(uncertainties) };
 }
 
 /** Flattens an evaluator-local Array while preserving receiver unknown metadata. */
@@ -79,6 +95,7 @@ export function evaluationArrayFlat(
     receiver.mayHaveUnknownElements || flattened.mayHaveUnknownElements,
     node,
     receiver.mayHaveUnknownOrder,
+    mergeEvaluationArrayUncertainties(receiver, flattened.uncertainties),
   );
 }
 
@@ -92,6 +109,7 @@ export function evaluationArrayToReversed(
     receiver.mayHaveUnknownElements,
     node,
     receiver.mayHaveUnknownOrder || receiver.mayHaveUnknownElements,
+    receiver.uncertainties,
   );
 }
 
@@ -112,6 +130,7 @@ export function evaluationArrayToSpliced(
     receiver.mayHaveUnknownElements || insertedMayHaveUnknownElements,
     node,
     receiver.mayHaveUnknownOrder || insertedMayHaveUnknownOrder,
+    receiver.uncertainties,
   );
 }
 
@@ -129,6 +148,7 @@ export function evaluationArrayWith(
     receiver.mayHaveUnknownElements,
     node,
     receiver.mayHaveUnknownOrder,
+    receiver.uncertainties,
   );
 }
 

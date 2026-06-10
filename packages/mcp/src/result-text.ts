@@ -84,14 +84,21 @@ function semanticAnswerPageText(value: unknown): string | null {
   const clamped = value.clamped === true && typeof value.requestedSize === 'number' && typeof value.maxSize === 'number'
     ? ` Clamped requested size ${value.requestedSize} to max ${value.maxSize}.`
     : '';
+  const byteClamped = value.byteClamped === true
+    && typeof value.estimatedRowsJsonBytes === 'number'
+    && typeof value.maxRowsJsonBytes === 'number'
+    ? ` Row payload budget stopped this page at ~${value.estimatedRowsJsonBytes} JSON byte(s) of max ${value.maxRowsJsonBytes}.`
+    : '';
   if (returned == null && size == null && nextCursor == null) {
-    return clamped.length === 0 ? null : `Page:${clamped}`;
+    const text = `${clamped}${byteClamped}`;
+    return text.length === 0 ? null : `Page:${text}`;
   }
   return [
     `Page: returned ${returned ?? '?'}${total == null ? '' : ` of ${total}`} row(s)`,
     size == null ? '' : ` at size ${size}`,
     nextCursor == null ? '.' : `; nextCursor=${nextCursor}.`,
     clamped,
+    byteClamped,
   ].join('');
 }
 
@@ -112,11 +119,17 @@ function semanticAnswerRowPreview(value: unknown): string | null {
 }
 
 const ROW_PREVIEW_KEYS = [
+  'id',
+  'title',
+  'label',
   'queryKind',
   'kind',
+  'seamKindKey',
   'domain',
   'severity',
   'name',
+  'source',
+  'target',
   'sourceName',
   'targetName',
   'definitionName',
@@ -124,10 +137,16 @@ const ROW_PREVIEW_KEYS = [
   'route',
   'path',
   'filePath',
+  'rawRowCount',
+  'variantCount',
+  'attemptKinds',
+  'boundaryKinds',
+  'reasonKinds',
   'expression',
   'sourceExpression',
   'targetExpression',
   'message',
+  'sampleSummary',
   'summary',
 ] as const;
 
@@ -149,16 +168,94 @@ function compactRowPreviewText(row: Record<string, unknown>): string {
 }
 
 function compactRowField(key: string, value: unknown): string | null {
-  if (!isCompactScalar(value)) {
+  const rendered = compactRowFieldValue(value);
+  if (rendered == null) {
     return null;
   }
-  const rendered = String(value);
-  const compact = rendered.length > 80 ? `${rendered.slice(0, 77)}...` : rendered;
+  const compact = compactRenderedRowField(key, rendered);
   return `${key}=${compact}`;
+}
+
+function compactRenderedRowField(key: string, rendered: string): string {
+  const maxLength = rowFieldMaxLength(key);
+  if (rendered.length <= maxLength) {
+    return rendered;
+  }
+  if (isPathLikeRowField(key, rendered)) {
+    return compactPathLikeField(rendered, maxLength);
+  }
+  return `${rendered.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function rowFieldMaxLength(key: string): number {
+  switch (key) {
+    case 'message':
+    case 'sampleSummary':
+    case 'summary':
+      return 160;
+    case 'source':
+    case 'target':
+    case 'path':
+    case 'filePath':
+      return 120;
+    default:
+      return 80;
+  }
+}
+
+function isPathLikeRowField(key: string, rendered: string): boolean {
+  return key === 'source'
+    || key === 'target'
+    || key === 'path'
+    || key === 'filePath'
+    || rendered.includes('/')
+    || rendered.includes('\\');
+}
+
+function compactPathLikeField(rendered: string, maxLength: number): string {
+  const normalized = rendered.replaceAll('\\', '/');
+  const markerIndex = normalized.lastIndexOf('@');
+  const suffix = markerIndex >= 0 ? normalized.slice(markerIndex) : '';
+  const pathPart = markerIndex >= 0 ? normalized.slice(0, markerIndex) : normalized;
+  const prefix = '.../';
+  const availablePath = maxLength - prefix.length - suffix.length;
+  if (availablePath <= 8) {
+    return `${prefix}${normalized.slice(-(maxLength - prefix.length))}`;
+  }
+  return `${prefix}${pathPart.slice(-availablePath)}${suffix}`;
 }
 
 function isCompactScalar(value: unknown): value is string | number | boolean {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function compactRowFieldValue(value: unknown): string | null {
+  if (isCompactScalar(value)) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const compactValues = value
+      .map(compactRowFieldValue)
+      .filter((text): text is string => text != null)
+      .slice(0, 4);
+    if (compactValues.length === 0) {
+      return null;
+    }
+    return compactValues.length < value.length
+      ? `[${compactValues.join('|')}|+${value.length - compactValues.length}]`
+      : `[${compactValues.join('|')}]`;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (typeof value.label === 'string') {
+    return value.label;
+  }
+  if (typeof value.path === 'string') {
+    const start = typeof value.start === 'number' ? `@${value.start}` : '';
+    return `${value.path}${start}`;
+  }
+  return null;
 }
 
 function semanticAnswerContinuationText(value: Record<string, unknown>): string | null {

@@ -142,6 +142,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
       diagnosticProjection: input.diagnosticProjection ?? undefined,
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
+      sourceRole: input.sourceRole ?? undefined,
     });
   }
 
@@ -202,12 +203,14 @@ export class AureliaMcpSemanticRuntimeAdapter {
 
   async openSeamOverview(input: AureliaMcpOpenSeamOverviewInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     return this.answerAppQuery(aureliaMcpToolNames.openSeamOverview, input, {
-      kind: SemanticAppQueryKind.OpenSeamSummary,
+      kind: SemanticAppQueryKind.OpenSeamSites,
       page: input.page ?? { size: 20 },
       detail: input.detail ?? undefined,
-      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile'),
+      sourceFile: normalizedSourceFileInput(input.sourceFile, 'sourceFile')
+        ?? normalizedSourceFilePathInput(input.sourceFilePath),
       openSeamKindKey: input.openSeamKindKey ?? undefined,
       openSeamReasonKind: input.openSeamReasonKind ?? undefined,
+      sourceRole: input.sourceRole ?? undefined,
     });
   }
 
@@ -326,6 +329,12 @@ function normalizedSourceFileInput(
   return {
     filePath: value.filePath,
   };
+}
+
+function normalizedSourceFilePathInput(
+  value: string | null | undefined,
+): { readonly filePath: string } | undefined {
+  return value == null ? undefined : { filePath: value };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

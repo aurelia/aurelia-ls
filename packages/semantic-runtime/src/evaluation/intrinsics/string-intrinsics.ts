@@ -21,15 +21,20 @@ import {
 
 /** String prototype methods recognized as static evaluator host boundaries. */
 export const staticStringPrototypeBoundaryMethods: ReadonlySet<string> = new Set([
+  'at',
+  'charAt',
+  'charCodeAt',
   'endsWith',
   'includes',
   'indexOf',
   'localeCompare',
+  'repeat',
   'replace',
   'replaceAll',
   'slice',
   'split',
   'startsWith',
+  'substring',
   'toLowerCase',
   'toUpperCase',
   'trim',
@@ -96,6 +101,93 @@ export function evaluateStringTransform(
     case 'trim':
       return new EvaluationStringValue(receiver.value.trim(), call);
   }
+}
+
+export function evaluateStringAt(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  operation: 'at' | 'charAt' | 'charCodeAt',
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, operation, call);
+  }
+  if (receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown(`String.${operation} receiver did not reduce to a known string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const index = readStringIndexArgument(call, environment, moduleKey, depth + 1, host, operation === 'at' ? null : 0);
+  if (index == null) {
+    return host.unknown(`String.${operation} index did not reduce to a static number.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const resolved = index < 0 ? receiver.value.length + index : index;
+  if (operation === 'charCodeAt') {
+    const code = resolved < 0 || resolved >= receiver.value.length
+      ? Number.NaN
+      : receiver.value.charCodeAt(resolved);
+    return new EvaluationNumberValue(code, call);
+  }
+  if (operation === 'at') {
+    const value = receiver.value.at(index);
+    return value == null ? EvaluationUndefined : new EvaluationStringValue(value, call);
+  }
+  return new EvaluationStringValue(
+    resolved < 0 || resolved >= receiver.value.length ? '' : receiver.value.charAt(resolved),
+    call,
+  );
+}
+
+export function evaluateStringRepeat(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'repeat', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown('String.repeat receiver did not reduce to a known string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const count = readStringRepeatCount(call, environment, moduleKey, depth + 1, host);
+  if (count == null) {
+    return host.unknown('String.repeat count did not reduce to a static non-negative finite integer.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  if (count > 1_000) {
+    return host.unknown('String.repeat count exceeds static evaluator guardrail.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  return new EvaluationStringValue(receiver.value.repeat(count), call);
+}
+
+export function evaluateStringSubstring(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, 'substring', call);
+  }
+  if (receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown('String.substring receiver did not reduce to a known string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const start = readStringSubstringBound(call.arguments[0] ?? null, environment, moduleKey, depth + 1, host, 0);
+  const end = readStringSubstringBound(call.arguments[1] ?? null, environment, moduleKey, depth + 1, host, receiver.value.length);
+  if (start == null || end == null) {
+    return host.unknown('String.substring bounds did not reduce to static numbers.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const left = Math.min(start, end);
+  const right = Math.max(start, end);
+  return new EvaluationStringValue(receiver.value.substring(left, right), call);
 }
 
 export function evaluateStringPredicate(
@@ -259,6 +351,73 @@ export function replaceString(
 export function readStringSplitLimit(value: EvaluationValue): number | undefined | null {
   if (value.kind === EvaluationValueKind.Undefined) {
     return undefined;
+  }
+  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
+    return null;
+  }
+  return Math.max(0, Math.trunc(value.value));
+}
+
+function readStringIndexArgument(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  missingValue: number | null,
+): number | null {
+  const argument = call.arguments[0] ?? null;
+  if (argument == null) {
+    return missingValue;
+  }
+  if (ts.isSpreadElement(argument)) {
+    return null;
+  }
+  const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+  if (value.kind === EvaluationValueKind.Undefined && missingValue != null) {
+    return missingValue;
+  }
+  return value.kind === EvaluationValueKind.Number && Number.isFinite(value.value)
+    ? Math.trunc(value.value)
+    : null;
+}
+
+function readStringRepeatCount(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): number | null {
+  const argument = call.arguments[0] ?? null;
+  if (argument == null || ts.isSpreadElement(argument)) {
+    return null;
+  }
+  const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
+    return null;
+  }
+  const count = Math.trunc(value.value);
+  return count < 0 ? null : count;
+}
+
+function readStringSubstringBound(
+  expression: ts.Expression | null,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  missingValue: number,
+): number | null {
+  if (expression == null) {
+    return missingValue;
+  }
+  if (ts.isSpreadElement(expression)) {
+    return null;
+  }
+  const value = host.evaluateExpression(expression, environment, moduleKey, depth + 1);
+  if (value.kind === EvaluationValueKind.Undefined) {
+    return 0;
   }
   if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
     return null;

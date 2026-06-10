@@ -78,6 +78,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'issues',
   'patterns',
   'relatedInformation',
+  'relatedSources',
   'component',
   'fallback',
   'routeConfigContext',

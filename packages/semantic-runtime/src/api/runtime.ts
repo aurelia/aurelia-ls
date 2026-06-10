@@ -137,6 +137,11 @@ import {
   type SemanticRuntimeMemoryDelta,
 } from '../telemetry/memory.js';
 import {
+  AuthoredSourceTextCache,
+  authoredSourceHostPathCandidates,
+  authoredSourcePositionForOffset,
+} from '../kernel/authored-source-text.js';
+import {
   readBindingDataFlowRows,
   readBindingDataFlowSummary,
   readBindingObservedDependencySummary,
@@ -187,8 +192,11 @@ import {
   readRuntimeEffectRows,
 } from './observation-projections.js';
 import {
+  openSeamSiteRows,
   openSeamSummaryRows,
   readAppOpenSeams,
+  semanticOpenSeamAttemptForRow,
+  semanticOpenSeamBoundaryForRow,
 } from './open-seam-projections.js';
 import {
   readResourceDefinitionRows,
@@ -278,9 +286,12 @@ import {
   type SemanticI18nTranslationBindingsResult,
   type SemanticI18nTranslationKeysResult,
   type SemanticOpenSeamRow,
+  type SemanticOpenSeamSiteRow,
+  type SemanticOpenSeamSitesResult,
   type SemanticOpenSeamSummaryRow,
   type SemanticOpenSeamSummaryResult,
   type SemanticOpenSeamsResult,
+  type SemanticSourceRange,
   type SemanticComputedObservationDefinitionsResult,
   type SemanticComputedObserverObservedDependenciesResult,
   type SemanticComputedObserverSourcesResult,
@@ -320,6 +331,9 @@ import {
   type SemanticTypeScriptDiagnosticsResult,
   type SemanticTypeScriptDiagnosticSummaryResult,
 } from './contracts.js';
+import type {
+  ApplicationFileRole,
+} from '../application/topology.js';
 import type {
   SemanticRuntimeDetailDensityRow,
   SemanticRuntimeCountRow,
@@ -1857,7 +1871,7 @@ function semanticRuntimeAnalysisCacheClearDisplayText(
   value: Omit<SemanticRuntimeAnalysisCacheClearResult, 'displayText'>,
 ): string {
   const lines = [
-    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} kernel record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
+    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} app-epoch kernel record(s); workspace kernel retains ${value.workspaceKernel.totalRecords} boot/source-discovery record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
     `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
     `TypeScript dependency cache cleared: ${value.clearedTypeSystemDependencySourceFiles} file(s), ${value.clearedTypeSystemDependencySourceTextCharacters} source-text character(s), nodeModules=${value.clearedTypeSystemDependencyNodeModuleSourceFiles}, defaultLibraries=${value.clearedTypeSystemDependencyDefaultLibrarySourceFiles}, externalDeclarations=${value.clearedTypeSystemDependencyExternalDeclarationSourceFiles}.`,
   ];
@@ -1943,38 +1957,96 @@ function openSeamsDisplayText(
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
     lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
+    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.attempt.kind))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.boundary.kind))}.`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
     lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(rows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
-    lines.push(`Samples: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} at ${semanticSourceReferenceDisplay(row.source)}: ${trimDisplayLine(row.summary)}`
-    ).join(' | ')}.`);
-    lines.push('Next: add openSeamKindKey, openSeamReasonKind, sourceFile, or detail=handles when an exact runtime boundary needs follow-up.');
+    lines.push(`Samples: ${semanticOpenSeamRowSampleDisplays(rows).join(' | ')}.`);
+    lines.push('Next: add sourceFile, sourceRole, openSeamKindKey, openSeamReasonKind, or detail=handles when an exact runtime boundary needs follow-up.');
   }
   return lines.join('\n');
+}
+
+function semanticOpenSeamRowSampleDisplays(
+  rows: readonly SemanticOpenSeamRow[],
+): readonly string[] {
+  const samples: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const display = `${row.seamKindKey} (${row.attempt.kind}/${row.boundary.kind}) at ${semanticOpenSeamRowSourceDisplay(row)}: ${trimDisplayLine(row.summary)}`;
+    const key = `${row.seamKindKey}\0${semanticOpenSeamRowSourceDisplay(row)}\0${row.summary}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    samples.push(display);
+    if (samples.length >= RUNTIME_DISPLAY_SAMPLE_LIMIT) {
+      break;
+    }
+  }
+  return samples;
 }
 
 function openSeamSummaryDisplayText(
   rows: readonly SemanticOpenSeamSummaryRow[],
   totalOpenSeamRows: number,
+  totalOpenSeamSites: number,
   filter: SemanticOpenSeamQueryFilter = {},
 ): string {
   const filterText = semanticOpenSeamFilterDisplayText(filter);
-  const lines = [`Open seam clusters: returned ${rows.length} cluster(s) covering ${totalOpenSeamRows} open semantic seam(s)${filterText}.`];
+  const lines = [`Open seam clusters: returned ${rows.length} cluster(s) covering ${totalOpenSeamRows} raw open seam row(s) across ${totalOpenSeamSites} unique authored site(s)${filterText}.`];
   if (totalOpenSeamRows === 0) {
     lines.push('Pressure: no open semantic seams in this app emission.');
   } else {
+    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.attempt.kind))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.boundary.kind))}.`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountSemanticRoleRows(rows.flatMap((row) => row.sourceRoles)))}.`);
     lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
-      `${row.seamKindKey} x${row.count} (${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSources.map(semanticSourceReferenceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
+      `${row.seamKindKey} raw=${row.count} sites=${row.uniqueSiteCount} (${row.attempt.kind}/${row.boundary.kind}; ${runtimeListDisplay(row.reasonKinds)}) at ${runtimeListDisplay(row.sampleSourceSites.map(semanticOpenSeamSummarySampleSourceDisplay))}: ${trimDisplayLine(row.sampleSummary)}`
     ).join(' | ')}.`);
     lines.push(`Source-file coverage: ${rows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
-    lines.push('Next: page raw open-seams with the selected openSeamKindKey/openSeamReasonKind and optional sourceFile filter to inspect exact occurrences.');
+    lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filter to inspect exact occurrences.');
   }
   return lines.join('\n');
+}
+
+function openSeamSitesDisplayText(
+  rows: readonly SemanticOpenSeamSiteRow[],
+  totalOpenSeamRows: number,
+  totalOpenSeamSites: number,
+  filter: SemanticOpenSeamQueryFilter = {},
+): string {
+  const filterText = semanticOpenSeamFilterDisplayText(filter);
+  const lines = [`Open seam sites: returned ${rows.length} of ${totalOpenSeamSites} unique authored site(s) covering ${totalOpenSeamRows} raw open seam row(s)${filterText}.`];
+  if (totalOpenSeamRows === 0) {
+    lines.push('Pressure: no open semantic seams in this app emission.');
+  } else {
+    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
+    lines.push(`Attempt kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.attemptKinds))}.`);
+    lines.push(`Boundary kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.boundaryKinds))}.`);
+    lines.push(`Source roles: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.sourceRole ?? 'unknown'))}.`);
+    lines.push(`Application roles: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.applicationFileRoles))}.`);
+    lines.push(`Static evaluation origins: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, openSeamStaticEvaluationOriginKinds))}.`);
+    lines.push(`Reason kinds: ${runtimeCountMapDisplay(runtimeCountValuesFromMany(rows, (row) => row.reasonKinds))}.`);
+    lines.push(`Sites: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+      `${row.seamKindKey} raw=${row.rawRowCount} variants=${row.variantCount} (${runtimeListDisplay(row.attemptKinds)}/${runtimeListDisplay(row.boundaryKinds)}; ${runtimeListDisplay(row.reasonKinds)}; sourceRole=${row.sourceRole ?? 'unknown'}; appRoles=${runtimeListDisplay(row.applicationFileRoles)}; evalOrigins=${runtimeListDisplay(openSeamStaticEvaluationOriginKinds(row))}) at ${semanticOpenSeamSiteSourceDisplay(row)}: ${trimDisplayLine(row.sampleSummary)}`
+    ).join(' | ')}.`);
+    lines.push('Next: page raw open-seams with the selected sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind when one site needs derivation-level inspection.');
+  }
+  return lines.join('\n');
+}
+
+function openSeamStaticEvaluationOriginKinds(
+  row: SemanticOpenSeamSiteRow,
+): readonly string[] {
+  return [...new Set(row.staticEvaluationOrigins.map((origin) => origin.kind))].sort();
 }
 
 interface SemanticOpenSeamQueryFilter {
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
   readonly openSeamKindKey?: string | null;
   readonly openSeamReasonKind?: string | null;
+  readonly sourceRole?: string | null;
 }
 
 function semanticOpenSeamRowMatchesFilter(
@@ -1983,6 +2055,7 @@ function semanticOpenSeamRowMatchesFilter(
 ): boolean {
   return (filter.openSeamKindKey == null || row.seamKindKey === filter.openSeamKindKey)
     && (filter.openSeamReasonKind == null || row.reasonKinds.some((reason) => reason === filter.openSeamReasonKind))
+    && (filter.sourceRole == null || row.sourceRole === filter.sourceRole)
     && (filter.sourceFile?.filePath == null || semanticOpenSeamRowMatchesSourceFile(row, filter.sourceFile.filePath));
 }
 
@@ -2005,12 +2078,82 @@ function semanticSourceReferenceMatchesFilePath(
     || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
 }
 
+function sourceRoleForAppSourceReference(
+  projectKey: string,
+  sources: readonly ProjectBootFrame['sourceFiles'][number][],
+  source: SemanticSourceReference | null,
+): SemanticOpenSeamRow['sourceRole'] {
+  if (source == null) {
+    return null;
+  }
+  const sourcePath = source.path;
+  if (sourcePath != null) {
+    const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, sourcePath)) ?? null;
+    if (admission != null) {
+      return admission.role;
+    }
+  }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
+      ? source.sourceFileRole
+      : SourceFileRole.ExternalSource;
+  }
+  if (source.sourceFileRole != null) {
+    return source.sourceFileRole;
+  }
+  return sourceRoleForAppSourceReference(projectKey, sources, source.anchor ?? null);
+}
+
+function staticEvaluationSourceLookupPaths(
+  source: StaticProjectEvaluationResult['sources'][number],
+): readonly string[] {
+  return [...new Set([
+    source.admission.path,
+    source.sourceFile?.fileName ?? null,
+  ].filter((value): value is string => value != null && value.length > 0))];
+}
+
+function compactStaticEvaluationOriginsByKind(
+  origins: SemanticOpenSeamSiteRow['staticEvaluationOrigins'],
+): SemanticOpenSeamSiteRow['staticEvaluationOrigins'] {
+  const byKind = new Map<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins'][number]>();
+  for (const origin of origins) {
+    if (!byKind.has(origin.kind)) {
+      byKind.set(origin.kind, origin);
+    }
+  }
+  return [...byKind.values()].sort((left, right) => left.kind.localeCompare(right.kind));
+}
+
+function runtimeCountSemanticRoleRows(
+  rows: readonly { readonly role: string; readonly count: number }[],
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.role, (counts.get(row.role) ?? 0) + row.count);
+  }
+  return counts;
+}
+
+function exactSourceReference(
+  source: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  if (source == null) {
+    return null;
+  }
+  if (source.path != null && source.start != null && source.end != null) {
+    return source;
+  }
+  return exactSourceReference(source.anchor ?? null);
+}
+
 function semanticOpenSeamFilterDisplayText(
   filter: SemanticOpenSeamQueryFilter,
 ): string {
   const parts = [
     filter.openSeamKindKey == null ? null : `kind=${filter.openSeamKindKey}`,
     filter.openSeamReasonKind == null ? null : `reason=${filter.openSeamReasonKind}`,
+    filter.sourceRole == null ? null : `sourceRole=${filter.sourceRole}`,
     filter.sourceFile?.filePath == null ? null : `sourceFile=${filter.sourceFile.filePath}`,
   ].filter((part): part is string => part != null);
   return parts.length === 0 ? '' : ` for ${parts.join(', ')}`;
@@ -2031,6 +2174,38 @@ function semanticSourceReferenceDisplay(
       ? source.path
       : `${source.path}@${source.start}`;
   return anchor == null ? label : `${label} -> ${anchor}`;
+}
+
+function semanticOpenSeamSiteSourceDisplay(
+  row: SemanticOpenSeamSiteRow,
+): string {
+  return semanticSourceReferenceRangeDisplay(row.source, row.sourceRange);
+}
+
+function semanticOpenSeamSummarySampleSourceDisplay(
+  row: SemanticOpenSeamSummaryRow['sampleSourceSites'][number],
+): string {
+  return semanticSourceReferenceRangeDisplay(row.source, row.sourceRange);
+}
+
+function semanticOpenSeamRowSourceDisplay(
+  row: SemanticOpenSeamRow,
+): string {
+  return semanticSourceReferenceRangeDisplay(row.source, row.sourceRange);
+}
+
+function semanticSourceReferenceRangeDisplay(
+  source: SemanticSourceReference | null,
+  sourceRange: SemanticSourceRange | null,
+): string {
+  const exact = exactSourceReference(source);
+  if (exact?.path != null && sourceRange != null) {
+    return `${exact.path}:${sourceRange.start.line + 1}:${sourceRange.start.character + 1}`;
+  }
+  const base = semanticSourceReferenceDisplay(source);
+  return sourceRange == null
+    ? base
+    : `${base}:${sourceRange.start.line + 1}:${sourceRange.start.character + 1}`;
 }
 
 function appDiagnosticsDisplayText(
@@ -2088,6 +2263,19 @@ function runtimeCountValues<TRow>(
   for (const row of rows) {
     const value = read(row);
     if (value != null) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function runtimeCountValuesFromMany<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => readonly string[],
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const value of read(row)) {
       counts.set(value, (counts.get(value) ?? 0) + 1);
     }
   }
@@ -2164,6 +2352,8 @@ export class SemanticApp {
   readonly queryClaims: QueryClaimGraph;
   private readonly queryClaimsByProfile = new Map<SemanticRuntimeInquiryProfile, QueryClaimGraph>();
   private readonly activeInquiryProfileStack: SemanticRuntimeInquiryProfile[] = [];
+  private applicationFileRolesByPathCache: ReadonlyMap<string, readonly ApplicationFileRole[]> | null = null;
+  private staticEvaluationOriginsByPathCache: ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> | null = null;
   readonly templateQueries: SemanticAppTemplateQueries;
 
   constructor(
@@ -2296,6 +2486,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.openSeams(query.page, query.detail, query));
       case SemanticAppQueryKind.OpenSeamSummary:
         return answerCurrentQuery(() => this.openSeamSummary(query.page, query.detail, query));
+      case SemanticAppQueryKind.OpenSeamSites:
+        return answerCurrentQuery(() => this.openSeamSites(query.page, query.detail, query));
       case SemanticAppQueryKind.AppDiagnostics:
         return answerCurrentQuery(() => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
@@ -2673,6 +2865,7 @@ export class SemanticApp {
       sourceFile: filter.sourceFile,
       openSeamKindKey: filter.openSeamKindKey,
       openSeamReasonKind: filter.openSeamReasonKind,
+      sourceRole: filter.sourceRole,
     });
     if (claimed != null) {
       return claimed;
@@ -2702,19 +2895,68 @@ export class SemanticApp {
       sourceFile: filter.sourceFile,
       openSeamKindKey: filter.openSeamKindKey,
       openSeamReasonKind: filter.openSeamReasonKind,
+      sourceRole: filter.sourceRole,
     });
     if (claimed != null) {
       return claimed;
     }
     const seamRows = this.openSeamRows(detail, filter);
-    const rows = openSeamSummaryRows(seamRows);
+    const sourceTextCache = new AuthoredSourceTextCache('');
+    const rows = openSeamSummaryRows(
+      seamRows,
+      (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
+    );
+    const siteRows = openSeamSiteRows(
+      seamRows,
+      (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
+    );
     const paged = pageRows(rows, page);
     return answer(
       outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamRows.length} open semantic seam(s).`,
+      `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamRows.length} raw open seam row(s) across ${siteRows.length} unique authored site(s).`,
       {
         totalOpenSeamRows: seamRows.length,
-        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length, filter),
+        totalOpenSeamSites: siteRows.length,
+        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length, siteRows.length, filter),
+        rows: paged.rows,
+      },
+      paged.page,
+    );
+  }
+
+  openSeamSites(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    filter: SemanticOpenSeamQueryFilter = {},
+  ): SemanticRuntimeAnswer<SemanticOpenSeamSitesResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticOpenSeamSitesResult>({
+      kind: SemanticAppQueryKind.OpenSeamSites,
+      page,
+      detail,
+      sourceFile: filter.sourceFile,
+      openSeamKindKey: filter.openSeamKindKey,
+      openSeamReasonKind: filter.openSeamReasonKind,
+      sourceRole: filter.sourceRole,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const seamRows = this.openSeamRows(detail, filter);
+    const sourceTextCache = new AuthoredSourceTextCache('');
+    const rows = openSeamSiteRows(
+      seamRows,
+      (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
+      (source) => this.applicationFileRolesForSourceReference(source),
+      (source) => this.staticEvaluationOriginsForSourceReference(source),
+    );
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} open seam site(s) covering ${seamRows.length} raw open semantic seam row(s).`,
+      {
+        totalOpenSeamRows: seamRows.length,
+        totalOpenSeamSites: rows.length,
+        displayText: openSeamSitesDisplayText(paged.rows, seamRows.length, rows.length, filter),
         rows: paged.rows,
       },
       paged.page,
@@ -2726,34 +2968,132 @@ export class SemanticApp {
     filter: SemanticOpenSeamQueryFilter = {},
   ): readonly SemanticOpenSeamRow[] {
     const handles = includeHandles(detail);
+    const sourceTextCache = new AuthoredSourceTextCache('');
     return readAppOpenSeams(this.emission, this.runtime.workspace.store)
-      .map((seam): SemanticOpenSeamRow => ({
-        seamKindKey: seam.seamKindKey,
-        summary: seam.summary,
-        reasonKinds: seam.reasonKinds,
-        reasonSources: seam.reasonSources.map((source) => ({
-          reasonKind: source.reasonKind,
-          summary: source.summary,
-          source: describeAddress(this.runtime.workspace.store, source.addressHandle),
+      .map((seam): SemanticOpenSeamRow => {
+        const source = describeAddress(this.runtime.workspace.store, seam.addressHandle);
+        return {
+          seamKindKey: seam.seamKindKey,
+          summary: seam.summary,
+          attempt: semanticOpenSeamAttemptForRow(seam),
+          boundary: semanticOpenSeamBoundaryForRow(seam),
+          reasonKinds: seam.reasonKinds,
+          reasonSources: seam.reasonSources.map((reasonSource) => {
+            const reasonSourceReference = describeAddress(this.runtime.workspace.store, reasonSource.addressHandle);
+            return {
+              reasonKind: reasonSource.reasonKind,
+              summary: reasonSource.summary,
+              source: reasonSourceReference,
+              sourceRange: this.sourceRangeForSourceReference(reasonSourceReference, sourceTextCache),
+              ...(handles ? {
+                handles: {
+                  addressHandle: reasonSource.addressHandle,
+                  evidenceHandle: reasonSource.evidenceHandle ?? null,
+                },
+              } : {}),
+            };
+          }),
+          source,
+          sourceRange: this.sourceRangeForSourceReference(source, sourceTextCache),
+          sourceRole: this.openSeamSourceRole(source),
           ...(handles ? {
             handles: {
-              addressHandle: source.addressHandle,
-              evidenceHandle: source.evidenceHandle ?? null,
+              handle: seam.handle,
+              addressHandle: seam.addressHandle,
             },
           } : {}),
-        })),
-        source: describeAddress(this.runtime.workspace.store, seam.addressHandle),
-        ...(handles ? {
-          handles: {
-            handle: seam.handle,
-            addressHandle: seam.addressHandle,
-          },
-        } : {}),
-      }))
+        };
+      })
       .filter((row) => semanticOpenSeamRowMatchesFilter(row, filter))
       .sort((left, right) =>
         `${left.seamKindKey}:${left.summary}`.localeCompare(`${right.seamKindKey}:${right.summary}`)
       );
+  }
+
+  private openSeamSourceRole(source: SemanticSourceReference | null): SemanticOpenSeamRow['sourceRole'] {
+    return sourceRoleForAppSourceReference(this.project.projectKey, this.project.sourceFiles, source);
+  }
+
+  private applicationFileRolesForSourceReference(
+    source: SemanticSourceReference | null,
+  ): readonly ApplicationFileRole[] {
+    const exact = exactSourceReference(source);
+    if (exact?.path == null) {
+      return [];
+    }
+    const rolesByPath = this.applicationFileRolesByPath();
+    for (const [path, roles] of rolesByPath) {
+      if (sourcePathMatchesFileName(path, exact.path) || sourcePathMatchesFileName(exact.path, path)) {
+        return roles;
+      }
+    }
+    return [];
+  }
+
+  private applicationFileRolesByPath(): ReadonlyMap<string, readonly ApplicationFileRole[]> {
+    if (this.applicationFileRolesByPathCache != null) {
+      return this.applicationFileRolesByPathCache;
+    }
+    const topology = readSemanticApplicationTopology(this.runtime.workspace.store, this.emission, false);
+    this.applicationFileRolesByPathCache = new Map(topology.files.map((file) => [file.path, file.roles]));
+    return this.applicationFileRolesByPathCache;
+  }
+
+  private staticEvaluationOriginsForSourceReference(
+    source: SemanticSourceReference | null,
+  ): SemanticOpenSeamSiteRow['staticEvaluationOrigins'] {
+    const exact = exactSourceReference(source);
+    if (exact?.path == null) {
+      return [];
+    }
+    const originsByPath = this.staticEvaluationOriginsByPath();
+    for (const [path, origins] of originsByPath) {
+      if (sourcePathMatchesFileName(path, exact.path) || sourcePathMatchesFileName(exact.path, path)) {
+        return origins;
+      }
+    }
+    return [];
+  }
+
+  private staticEvaluationOriginsByPath(): ReadonlyMap<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']> {
+    if (this.staticEvaluationOriginsByPathCache != null) {
+      return this.staticEvaluationOriginsByPathCache;
+    }
+    const originsByPath = new Map<string, SemanticOpenSeamSiteRow['staticEvaluationOrigins']>();
+    for (const source of this.emission.evaluation.sources) {
+      const origins = compactStaticEvaluationOriginsByKind(source.origins.map((origin) => ({
+        kind: origin.kind,
+        entryModuleKey: origin.entryModuleKey,
+        entrySourcePath: origin.entrySourcePath,
+      })));
+      for (const path of staticEvaluationSourceLookupPaths(source)) {
+        originsByPath.set(path, origins);
+      }
+    }
+    this.staticEvaluationOriginsByPathCache = originsByPath;
+    return this.staticEvaluationOriginsByPathCache;
+  }
+
+  private sourceRangeForSourceReference(
+    source: SemanticSourceReference | null,
+    sourceTextCache: AuthoredSourceTextCache,
+  ): SemanticSourceRange | null {
+    const exact = exactSourceReference(source);
+    if (exact?.path == null || exact.start == null || exact.end == null) {
+      return null;
+    }
+    const authoredSource = sourceTextCache.readFirst(authoredSourceHostPathCandidates(
+      this.runtime.workspace.rootDir,
+      this.project.rootDir,
+      exact.path,
+    ));
+    if (authoredSource == null) {
+      return null;
+    }
+    return {
+      start: authoredSourcePositionForOffset(authoredSource, exact.start),
+      end: authoredSourcePositionForOffset(authoredSource, exact.end),
+    };
   }
 
   appDiagnostics(

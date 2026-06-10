@@ -96,10 +96,20 @@ async function readPressureForRoot(root) {
       observeContinuations(result, query.kind, answer.continuations ?? []);
     }
   } catch (error) {
+    if (isNoAureliaAppOpenError(error)) {
+      result.skippedProjects += 1;
+      increment(result.outcomes, 'skipped:no-aurelia-app');
+      return result;
+    }
     result.failures += 1;
     increment(result.outcomes, `error:${error?.name ?? 'unknown'}`);
   }
   return result;
+}
+
+function isNoAureliaAppOpenError(error) {
+  const message = error?.message ?? '';
+  return typeof message === 'string' && message.includes('no aurelia-app project was found');
 }
 
 function pressureQueries() {
@@ -113,6 +123,7 @@ function pressureQueries() {
     { kind: SemanticAppQueryKind.TemplateDiagnostics, page: { size: queryPageSize } },
     { kind: SemanticAppQueryKind.OpenSeams, page: { size: queryPageSize } },
     { kind: SemanticAppQueryKind.OpenSeamSummary, page: { size: queryPageSize } },
+    { kind: SemanticAppQueryKind.OpenSeamSites, page: { size: queryPageSize } },
     { kind: SemanticAppQueryKind.AppTopology, includeTypeSurfaces: true },
     { kind: SemanticAppQueryKind.ResourceDefinitions, page: { size: queryPageSize } },
     { kind: SemanticAppQueryKind.ResourceIssues, page: { size: queryPageSize } },

@@ -1,5 +1,6 @@
 import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
+import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
 import type {
   DiagnosticActionChangeDomain,
@@ -100,6 +101,7 @@ import type {
   EvaluationIssueSubjectKind,
 } from '../evaluation/evaluation-issue.js';
 import type {
+  StaticProjectEvaluationSourceOriginKind,
   StaticProjectEvaluationSourceFileStats,
 } from '../evaluation/project-evaluation.js';
 import type {
@@ -222,6 +224,7 @@ import type {
 } from '../type-system/diagnostics.js';
 import type {
   CheckerTypeMemberKind,
+  CheckerTypeMemberVisibilityKind,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -308,6 +311,7 @@ export const enum SemanticAppQueryKind {
   UnresolvedModules = 'unresolved-modules',
   OpenSeams = 'open-seams',
   OpenSeamSummary = 'open-seam-summary',
+  OpenSeamSites = 'open-seam-sites',
   AppDiagnostics = 'app-diagnostics',
   AppDiagnosticSummary = 'app-diagnostic-summary',
   TypeScriptDiagnostics = 'typescript-diagnostics',
@@ -382,6 +386,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.UnresolvedModules,
   SemanticAppQueryKind.OpenSeams,
   SemanticAppQueryKind.OpenSeamSummary,
+  SemanticAppQueryKind.OpenSeamSites,
   SemanticAppQueryKind.AppDiagnostics,
   SemanticAppQueryKind.AppDiagnosticSummary,
   SemanticAppQueryKind.TypeScriptDiagnostics,
@@ -593,6 +598,8 @@ export interface SemanticAppQuery {
   readonly openSeamKindKey?: OpenSeam['seamKindKey'] | string | null;
   /** Open-seam query filter by reason kind, such as `missing-static-value`. */
   readonly openSeamReasonKind?: OpenSeamReasonKind | `${OpenSeamReasonKind}` | string | null;
+  /** Open-seam query filter by source admission role, such as `app-source` or `tooling-script`. */
+  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | string | null;
   /** RouterOverview samples several independent route row families; defaults to zero sample rows. */
   readonly rowPageSize?: number | null;
   /** Source cursor used by cursor-scoped authoring queries such as template completions. */
@@ -741,7 +748,7 @@ export interface SemanticAppQueryCatalogRow {
   readonly supportsPaging: boolean;
   readonly supportsDetail: boolean;
   readonly supportsSourceFile: boolean;
-  /** Whether open-seam queries accept `openSeamKindKey`/`openSeamReasonKind` filters. */
+  /** Whether open-seam queries accept seam kind, reason kind, and source-role filters. */
   readonly supportsOpenSeamFilters: boolean;
   readonly supportsDiagnosticProjection: boolean;
   /** Whether `continuationIntents` can narrow returned continuation rows without changing query identity. */
@@ -833,6 +840,12 @@ export interface SemanticRuntimePageResult {
   readonly maxSize?: number;
   /** True when size is smaller than the caller-requested page size. */
   readonly clamped?: boolean;
+  /** Estimated UTF-8 JSON bytes for the returned row array. */
+  readonly estimatedRowsJsonBytes?: number;
+  /** Maximum estimated row JSON bytes used when this page stopped before `size` by payload budget. */
+  readonly maxRowsJsonBytes?: number;
+  /** True when row selection stopped before `size` because the public row payload budget was reached. */
+  readonly byteClamped?: boolean;
 }
 
 export interface SemanticRuntimeSourceCursorInput {
@@ -1219,7 +1232,7 @@ export interface SemanticAppOverviewResult {
   readonly summary: SemanticRuntimeAnswer<SemanticAppSummary>;
   readonly topology: SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>;
   readonly diagnostics: SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
-  readonly openSeams: SemanticRuntimeAnswer<SemanticOpenSeamSummaryResult>;
+  readonly openSeams: SemanticRuntimeAnswer<SemanticOpenSeamSitesResult>;
 }
 
 export interface SemanticAppOverviewCollectionSummary {
@@ -1418,19 +1431,72 @@ export interface SemanticUnresolvedModulesResult {
 export interface SemanticOpenSeamRow {
   readonly seamKindKey: OpenSeam['seamKindKey'];
   readonly summary: string;
+  readonly attempt: SemanticOpenSeamAttempt;
+  readonly boundary: SemanticOpenSeamBoundary;
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly reasonSources: readonly SemanticOpenSeamReasonSource[];
   readonly source: SemanticSourceReference | null;
+  readonly sourceRange: SemanticSourceRange | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
   readonly handles?: {
     readonly handle: OpenSeam['handle'];
     readonly addressHandle: AddressHandle | null;
   };
 }
 
+export const enum SemanticOpenSeamAttemptKind {
+  /** Static module evaluation tried to reduce source enough for Aurelia recognition without executing the app. */
+  StaticModuleEvaluation = 'static-module-evaluation',
+  /** Resource recognition tried to close authored custom-element, custom-attribute, value-converter, binding-behavior, or template-controller metadata. */
+  ResourceRecognition = 'resource-recognition',
+  /** Registration recognition tried to classify DI/resource registration source expressions. */
+  RegistrationRecognition = 'registration-recognition',
+  /** Configuration recognition tried to close app/plugin configuration contributions. */
+  ConfigurationRecognition = 'configuration-recognition',
+  /** DI world construction tried to spend recognized registrations into container effects. */
+  DiWorldConstruction = 'di-world-construction',
+  /** Router analysis tried to materialize route, viewport, instruction, or recognition state. */
+  RouterMaterialization = 'router-materialization',
+  /** Template compilation or rendering analysis tried to lower HTML/compiler products into runtime semantics. */
+  TemplateCompilationRendering = 'template-compilation-rendering',
+  /** Runtime binding analysis tried to close target access, value channel, source operation, or data flow. */
+  BindingRuntimeAnalysis = 'binding-runtime-analysis',
+  /** TypeChecker projection tried to close a type/member surface without guessing. */
+  TypeCheckerProjection = 'type-checker-projection',
+  /** A semantic product pass reached a boundary that is not yet classified more narrowly. */
+  SemanticProductMaterialization = 'semantic-product-materialization',
+}
+
+export const enum SemanticOpenSeamBoundaryKind {
+  /** A value or fact needed by static analysis was absent from the current modeled environment. */
+  StaticEnvironmentGap = 'static-environment-gap',
+  /** Closing the fact would require executing user/runtime behavior that semantic-runtime should not guess. */
+  RuntimeExecutionBoundary = 'runtime-execution-boundary',
+  /** The source construct is legal, but this substrate has not modeled its semantics yet. */
+  UnsupportedSubstrate = 'unsupported-substrate',
+  /** Analysis stopped at an explicit recursion, statement, or budget guardrail. */
+  AnalysisGuardrail = 'analysis-guardrail',
+  /** A TypeChecker-backed projection could not close a type/member surface without guessing. */
+  TypeCheckerProjectionBoundary = 'type-checker-projection-boundary',
+  /** Framework-shaped materialization reached a legal but still-open semantic boundary. */
+  FrameworkSemanticBoundary = 'framework-semantic-boundary',
+}
+
+export interface SemanticOpenSeamAttempt {
+  readonly kind: SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`;
+  readonly summary: string;
+}
+
+export interface SemanticOpenSeamBoundary {
+  readonly kind: SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`;
+  readonly summary: string;
+}
+
 export interface SemanticOpenSeamReasonSource {
   readonly reasonKind: OpenSeamReasonKind | `${OpenSeamReasonKind}`;
   readonly summary: string;
   readonly source: SemanticSourceReference | null;
+  readonly sourceRange: SemanticSourceRange | null;
   readonly handles?: {
     readonly addressHandle: AddressHandle | null;
     readonly evidenceHandle: OpenSeam['evidenceHandle'];
@@ -1444,17 +1510,84 @@ export interface SemanticOpenSeamsResult {
 
 export interface SemanticOpenSeamSummaryRow {
   readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly attempt: SemanticOpenSeamAttempt;
+  readonly boundary: SemanticOpenSeamBoundary;
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly count: number;
+  readonly uniqueSiteCount: number;
   readonly sourceFileCount: number;
+  readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly sampleSummary: string;
   readonly sampleSources: readonly SemanticSourceReference[];
+  readonly sampleSourceSites: readonly SemanticOpenSeamSummarySampleSourceRow[];
+}
+
+export interface SemanticOpenSeamSummarySampleSourceRow {
+  readonly source: SemanticSourceReference;
+  readonly sourceRange: SemanticSourceRange | null;
 }
 
 export interface SemanticOpenSeamSummaryResult {
   readonly totalOpenSeamRows: number;
+  readonly totalOpenSeamSites: number;
   readonly displayText: string;
   readonly rows: readonly SemanticOpenSeamSummaryRow[];
+}
+
+export interface SemanticSourcePosition {
+  /** Zero-based authored source line, matching TypeScript and semantic-runtime cursor coordinates. */
+  readonly line: number;
+  /** Zero-based authored source character, matching TypeScript and semantic-runtime cursor coordinates. */
+  readonly character: number;
+}
+
+export interface SemanticSourceRange {
+  /** Zero-based start position for an exact authored span. */
+  readonly start: SemanticSourcePosition;
+  /** Zero-based end position for an exact authored span. */
+  readonly end: SemanticSourcePosition;
+}
+
+export interface SemanticOpenSeamSiteVariantRow {
+  readonly attempt: SemanticOpenSeamAttempt;
+  readonly boundary: SemanticOpenSeamBoundary;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly rawRowCount: number;
+  readonly sampleSummary: string;
+}
+
+export interface SemanticOpenSeamStaticEvaluationOriginRow {
+  /** Why static project evaluation included the source that owns this seam site. */
+  readonly kind: StaticProjectEvaluationSourceOriginKind | `${StaticProjectEvaluationSourceOriginKind}`;
+  /** Module key for the entry source that contributed this origin. */
+  readonly entryModuleKey: string;
+  /** Project-relative entry source path when it belongs to the booted project frame. */
+  readonly entrySourcePath: string | null;
+}
+
+export interface SemanticOpenSeamSiteRow {
+  /** Stable answer-local key for one authored seam site; not a durable kernel identity. */
+  readonly siteKey: string;
+  readonly seamKindKey: OpenSeam['seamKindKey'];
+  readonly source: SemanticSourceReference | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | string | null;
+  readonly applicationFileRoles: readonly (ApplicationFileRole | `${ApplicationFileRole}`)[];
+  readonly staticEvaluationOrigins: readonly SemanticOpenSeamStaticEvaluationOriginRow[];
+  readonly sourceRange: SemanticSourceRange | null;
+  readonly rawRowCount: number;
+  readonly variantCount: number;
+  readonly attemptKinds: readonly (SemanticOpenSeamAttemptKind | `${SemanticOpenSeamAttemptKind}`)[];
+  readonly boundaryKinds: readonly (SemanticOpenSeamBoundaryKind | `${SemanticOpenSeamBoundaryKind}`)[];
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly sampleSummary: string;
+  readonly variantSamples: readonly SemanticOpenSeamSiteVariantRow[];
+}
+
+export interface SemanticOpenSeamSitesResult {
+  readonly totalOpenSeamRows: number;
+  readonly totalOpenSeamSites: number;
+  readonly displayText: string;
+  readonly rows: readonly SemanticOpenSeamSiteRow[];
 }
 
 export interface SemanticEvaluationIssueRow {
@@ -2974,11 +3107,25 @@ export interface SemanticTemplateCompletionCandidateRow {
   readonly sourceKind: TemplateCompletionCandidateSourceKind | `${TemplateCompletionCandidateSourceKind}`;
   readonly summary: string | null;
   readonly typeDisplay: string | null;
+  readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly memberVisibility: CheckerTypeMemberVisibilityKind | `${CheckerTypeMemberVisibilityKind}` | null;
+  readonly memberIsOptional: boolean | null;
+  readonly memberIsReadonly: boolean | null;
+  readonly aureliaHookKind: SemanticTemplateCompletionAureliaHookKind | `${SemanticTemplateCompletionAureliaHookKind}` | null;
   readonly handles?: {
     readonly productHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
+}
+
+export const enum SemanticTemplateCompletionAureliaHookKind {
+  /** Member name matches a custom-element/controller lifecycle hook such as attached or binding. */
+  ComponentLifecycle = 'component-lifecycle',
+  /** Member name matches a router viewport/component hook such as canLoad or load. */
+  RouterLifecycle = 'router-lifecycle',
+  /** Member name matches an app-task phase hook such as hydrating or activated. */
+  AppTaskLifecycle = 'app-task-lifecycle',
 }
 
 export interface SemanticTemplateCompletionFrontierRow {

@@ -1383,6 +1383,9 @@ function openSeamReasonKindsForDataFlow(
     ...(target.valueChannel?.openReasonKinds ?? []),
     ...openSeamReasonKindsForExpressionOpen(dataFlow.sourceTypeOpenKind, dataFlow.sourceTypeOpenReason),
   ];
+  if (reasons.length === 0 && dataFlow.openReason != null) {
+    reasons.push(OpenSeamReasonKind.BindingSourceUnsupportedExpression);
+  }
   return [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
 }
 

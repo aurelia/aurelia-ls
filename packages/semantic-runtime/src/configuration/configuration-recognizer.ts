@@ -960,6 +960,7 @@ function evaluationRegistryOpenSeams(
     KernelVocabulary.Registration.OpenStrategy.key,
     seam.summary,
     seam.node ?? argument,
+    seam.reasonKinds,
   ));
 }
 
@@ -1004,6 +1005,7 @@ function plainClassSelfRegistrationArgument(
       KernelVocabulary.Registration.OpenValueExpression.key,
       seam.summary,
       seam.node ?? argument,
+      seam.reasonKinds,
     )),
   );
 }
@@ -1222,6 +1224,7 @@ function openObjectMapRegistrationArgument(
         KernelVocabulary.Registration.OpenValueExpression.key,
         seam.summary,
         seam.node ?? argument,
+        seam.reasonKinds,
       )),
   );
 }
@@ -1687,7 +1690,7 @@ function registrationObservationForAppTask(
       FrameworkRegistrationKind.AppTask,
     ),
     [],
-    appTask.openSeams.map((seam) => new RegistrationRecognitionOpen(seam.openKind, seam.summary, seam.node)),
+    appTask.openSeams.map((seam) => new RegistrationRecognitionOpen(seam.openKind, seam.summary, seam.node, seam.reasonKinds)),
   );
 }
 
@@ -2453,6 +2456,7 @@ function evaluationOpenSeams(
     KernelVocabulary.Configuration.OpenConfigurationOption.key,
     seam.summary,
     seam.node ?? expression,
+    seam.reasonKinds,
   ));
 }
 

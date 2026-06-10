@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   EvaluationRead,
   readStaticStringArrayValue,
@@ -25,29 +26,33 @@ export class ConvergenceOpen {
   constructor(
     readonly summary: string,
     readonly node: ts.Node,
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 }
 
 export function convergenceOpenForNode(
   summary: string,
   node: ts.Node | null | undefined,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): readonly ConvergenceOpen[] {
-  return node == null ? [] : [new ConvergenceOpen(summary, node)];
+  return node == null ? [] : [new ConvergenceOpen(summary, node, reasonKinds)];
 }
 
 export function nullableConvergenceOpenForNode(
   summary: string,
   node: ts.Node | null | undefined,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): ConvergenceOpen | null {
-  return convergenceOpenForNode(summary, node)[0] ?? null;
+  return convergenceOpenForNode(summary, node, reasonKinds)[0] ?? null;
 }
 
 export function appendConvergenceOpen(
   opens: ConvergenceOpen[],
   summary: string,
   node: ts.Node | null | undefined,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): void {
-  const open = nullableConvergenceOpenForNode(summary, node);
+  const open = nullableConvergenceOpenForNode(summary, node, reasonKinds);
   if (open != null) {
     opens.push(open);
   }
@@ -56,15 +61,17 @@ export function appendConvergenceOpen(
 export function convergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): readonly ConvergenceOpen[] {
-  return convergenceOpenForNode(summary, read?.node ?? read?.value?.node);
+  return convergenceOpenForNode(summary, read?.node ?? read?.value?.node, reasonKinds);
 }
 
 export function nullableConvergenceOpenForRead(
   summary: string,
   read: EvaluationRead<EvaluationValue> | null,
+  reasonKinds: readonly OpenSeamReasonKind[] = [],
 ): ConvergenceOpen | null {
-  return convergenceOpenForRead(summary, read)[0] ?? null;
+  return convergenceOpenForRead(summary, read, reasonKinds)[0] ?? null;
 }
 
 export function readStaticClassProperty(

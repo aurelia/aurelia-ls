@@ -37,6 +37,13 @@ import {
   RegistryBodyKind,
   RegistryBodyReference,
 } from '../registration/registration-reference.js';
+import {
+  frameworkRegistrationDescriptorForKind,
+  frameworkRegistrationExportEntriesForModule,
+  frameworkRegistrationKindForExportName,
+  frameworkRegistrationKindsForModule,
+  frameworkRegistrationKindSupportsChainMethod,
+} from '../registration/framework-registration-manifest.js';
 
 const APP_TASK_MODULES = new Set([
   'aurelia',
@@ -160,19 +167,16 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       return resolveValue;
     }
 
-    if (
-      ts.isPropertyAccessExpression(expression)
-      && (expression.name.text === 'customize' || expression.name.text === 'withChild')
-    ) {
+    if (ts.isPropertyAccessExpression(expression)) {
       const checkpoint = host.checkpoint();
       const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
       const frameworkKind = aureliaFrameworkRegistrationKindForEvaluationValue(receiver);
-      if (frameworkKind === FrameworkRegistrationKind.DialogConfiguration) {
-        return dialogConfigurationObject(call);
+      if (frameworkKind != null && frameworkRegistrationKindSupportsChainMethod(frameworkKind, expression.name.text)) {
+        return frameworkRegistrationObject(frameworkKind, call);
       }
       const callee = host.evaluateExpression(expression, environment, moduleKey, depth + 1);
       if (isSyntheticDialogConfigurationChainFunction(callee, expression.name.text)) {
-        return dialogConfigurationObject(call);
+        return frameworkRegistrationObject(FrameworkRegistrationKind.DialogConfiguration, call);
       }
       host.restore(checkpoint);
     }
@@ -190,7 +194,7 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       ts.isIdentifier(expression)
       && isDialogConfigurationFactoryIdentifier(expression)
     ) {
-      return dialogConfigurationObject(call);
+      return frameworkRegistrationObject(FrameworkRegistrationKind.DialogConfiguration, call);
     }
 
     if (isAliasedResourcesRegistryCall(expression)) {
@@ -315,6 +319,10 @@ export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueRe
     _fromModuleKey: string,
     entry: EvaluationImportEntry,
   ): EvaluationValue | null {
+    const frameworkRegistration = frameworkRegistrationExternalImportValue(entry);
+    if (frameworkRegistration != null) {
+      return frameworkRegistration;
+    }
     if (entry.importKind !== EvaluationImportKind.Named) {
       return null;
     }
@@ -333,13 +341,47 @@ export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueRe
   },
 };
 
-function dialogConfigurationObject(node: ts.Node): EvaluationObjectValue {
+function frameworkRegistrationExternalImportValue(
+  entry: EvaluationImportEntry,
+): EvaluationValue | null {
+  const exportEntries = frameworkRegistrationExportEntriesForModule(entry.moduleSpecifier);
+  if (exportEntries == null) {
+    return null;
+  }
+  if (entry.importKind === EvaluationImportKind.Namespace) {
+    return new EvaluationBoundaryObjectValue(
+      EvaluationBoundaryKind.ExternalModule,
+      `namespace import '${entry.moduleSpecifier}'`,
+      new Map(exportEntries.map((exportEntry) => [
+        exportEntry.exportName,
+        new EvaluationObjectProperty(
+          exportEntry.exportName,
+          frameworkRegistrationObject(exportEntry.kind, entry.node),
+          entry.node,
+        ),
+      ])),
+      entry.node,
+    );
+  }
+  if (entry.importKind !== EvaluationImportKind.Named || entry.exportName == null) {
+    return null;
+  }
+  const moduleKinds = frameworkRegistrationKindsForModule(entry.moduleSpecifier);
+  const frameworkKind = moduleKinds == null
+    ? null
+    : frameworkRegistrationKindForExportName(entry.exportName, moduleKinds);
+  return frameworkKind == null
+    ? null
+    : frameworkRegistrationObject(frameworkKind, entry.node);
+}
+
+function frameworkRegistrationObject(kind: FrameworkRegistrationKind, node: ts.Node): EvaluationObjectValue {
+  const descriptor = frameworkRegistrationDescriptorForKind(kind);
   const value = new EvaluationObjectValue(new Map([
     objectProperty('register'),
-    objectProperty('customize'),
-    objectProperty('withChild'),
+    ...descriptor.chainMethods.map((methodName) => objectProperty(methodName)),
   ]), false, node);
-  frameworkRegistrationKindsByObject.set(value, FrameworkRegistrationKind.DialogConfiguration);
+  frameworkRegistrationKindsByObject.set(value, kind);
   return value;
 }
 
@@ -436,7 +478,7 @@ function aliasedResourcesRegistryAliasArgumentsClosed(
   return true;
 }
 
-function objectProperty(name: 'register' | 'customize' | 'withChild'): [string, EvaluationObjectProperty] {
+function objectProperty(name: string): [string, EvaluationObjectProperty] {
   const value = syntheticFunctions.get(name) ?? syntheticFunctions.get('register')!;
   return [name, new EvaluationObjectProperty(name, value, value.declaration)];
 }

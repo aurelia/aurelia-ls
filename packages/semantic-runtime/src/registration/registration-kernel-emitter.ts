@@ -509,6 +509,7 @@ class RegistrationAdmissionSupportMaterializer {
         start: seam.node.getStart(context.sourceFile),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
+        reasonKinds: seam.reasonKinds,
         includeProvenanceRecord: true,
       })),
     );

@@ -3,6 +3,7 @@ import {
   InquiryPageRequest,
   PUBLIC_INQUIRY_DEFAULT_PAGE_SIZE,
   PUBLIC_INQUIRY_MAX_PAGE_SIZE,
+  PUBLIC_INQUIRY_MAX_PAGE_ROW_JSON_BYTES,
 } from '../inquiry/page.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
@@ -54,18 +55,27 @@ export function pageRows<TRow>(
   const cursor = page?.cursor ?? null;
   const start = cursor == null ? 0 : cursorStart(cursor, rows.length);
   const safeStart = start < 0 ? rows.length : start;
-  const selected = rows.slice(safeStart, safeStart + size);
-  const nextCursor = selected.length > 0 && safeStart + selected.length < rows.length
-    ? `${PAGE_CURSOR_AFTER_PREFIX}${safeStart + selected.length - 1}`
+  const pageWindow = rows.slice(safeStart, safeStart + size);
+  const selected = rowsWithinEstimatedJsonByteBudget(pageWindow, PUBLIC_INQUIRY_MAX_PAGE_ROW_JSON_BYTES);
+  const byteClamped = selected.rows.length < pageWindow.length;
+  const nextCursor = selected.rows.length > 0 && safeStart + selected.rows.length < rows.length
+    ? `${PAGE_CURSOR_AFTER_PREFIX}${safeStart + selected.rows.length - 1}`
     : null;
   return {
-    rows: selected,
+    rows: selected.rows,
     page: {
       size,
       cursor,
       nextCursor,
-      returnedRows: selected.length,
+      returnedRows: selected.rows.length,
       totalRows: rows.length,
+      estimatedRowsJsonBytes: selected.estimatedRowsJsonBytes,
+      ...(byteClamped
+        ? {
+          maxRowsJsonBytes: PUBLIC_INQUIRY_MAX_PAGE_ROW_JSON_BYTES,
+          byteClamped: true,
+        }
+        : {}),
       ...(requestedSize === size
         ? {}
         : {
@@ -96,4 +106,44 @@ function cursorStart(
     return Number.isFinite(offset) ? offset + 1 : rowCount;
   }
   return rowCount;
+}
+
+function rowsWithinEstimatedJsonByteBudget<TRow>(
+  rows: readonly TRow[],
+  maxBytes: number,
+): {
+  readonly rows: readonly TRow[];
+  readonly estimatedRowsJsonBytes: number;
+} {
+  if (rows.length === 0) {
+    return {
+      rows,
+      estimatedRowsJsonBytes: 2,
+    };
+  }
+
+  const selected: TRow[] = [];
+  let estimatedBytes = 2;
+  for (const row of rows) {
+    const rowBytes = estimatedJsonBytes(row);
+    const separatorBytes = selected.length === 0 ? 0 : 1;
+    if (selected.length > 0 && estimatedBytes + separatorBytes + rowBytes > maxBytes) {
+      break;
+    }
+    selected.push(row);
+    estimatedBytes += separatorBytes + rowBytes;
+    if (estimatedBytes > maxBytes) {
+      break;
+    }
+  }
+
+  return {
+    rows: selected,
+    estimatedRowsJsonBytes: estimatedBytes,
+  };
+}
+
+function estimatedJsonBytes(value: unknown): number {
+  const json = JSON.stringify(value);
+  return json == null ? 0 : new TextEncoder().encode(json).byteLength;
 }

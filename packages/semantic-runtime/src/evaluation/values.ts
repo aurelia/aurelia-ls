@@ -179,10 +179,33 @@ export class EvaluationArrayElement {
   ) {}
 }
 
+export const enum EvaluationArrayUncertaintyKind {
+  /** Array membership depends on a boundary value such as host environment, external module, or binding scope state. */
+  BoundarySpread = 'boundary-spread',
+  /** Array membership depends on a dynamic conditional branch whose chosen lane is not statically known. */
+  ConditionalBranch = 'conditional-branch',
+  /** Array membership includes an elision hole, so the evaluator cannot treat every slot as an authored element. */
+  OmittedElement = 'omitted-element',
+  /** Array membership depends on a spread value that did not reduce to an evaluator-local Array. */
+  NonArraySpread = 'non-array-spread',
+  /** Array order depends on an operation that could not be reduced to exact static ordering. */
+  UnknownOrder = 'unknown-order',
+}
+
+export interface EvaluationArrayUncertainty {
+  readonly kind: EvaluationArrayUncertaintyKind;
+  readonly node: ts.Node | null;
+  readonly boundaryKind?: EvaluationBoundaryKind;
+  readonly boundaryPath?: string;
+}
+
+const emptyEvaluationArrayUncertainties: readonly EvaluationArrayUncertainty[] = [];
+
 /** Array value with element-level evaluator values. */
 export class EvaluationArrayValue {
   readonly kind = EvaluationValueKind.Array;
   readonly elements: EvaluationArrayElement[];
+  uncertainties: readonly EvaluationArrayUncertainty[];
 
   constructor(
     /** Concrete element values in array order. */
@@ -193,13 +216,29 @@ export class EvaluationArrayValue {
     readonly node: ts.Node | null = null,
     /** Whether membership is known but order was affected by an unclosed ordering operation. */
     public mayHaveUnknownOrder: boolean = false,
+    /** Compact local reasons for unknown membership/order, kept out of durable kernel records. */
+    uncertainties: readonly EvaluationArrayUncertainty[] = emptyEvaluationArrayUncertainties,
   ) {
     this.elements = [...elements];
+    this.uncertainties = uncertainties.length === 0
+      ? emptyEvaluationArrayUncertainties
+      : uniqueEvaluationArrayUncertainties(uncertainties);
   }
 
   /** Mark the array as having element membership or values that static evaluation could not close. */
-  markUnknownElements(): void {
+  markUnknownElements(uncertainty: EvaluationArrayUncertainty | null = null): void {
     this.mayHaveUnknownElements = true;
+    if (uncertainty != null) {
+      this.appendUncertainty(uncertainty);
+    }
+  }
+
+  /** Mark the array as having an ordering operation that static evaluation could not close. */
+  markUnknownOrder(uncertainty: EvaluationArrayUncertainty | null = null): void {
+    this.mayHaveUnknownOrder = true;
+    if (uncertainty != null) {
+      this.appendUncertainty(uncertainty);
+    }
   }
 
   /** Replace known element order after a mutating array operation such as sort. */
@@ -210,6 +249,98 @@ export class EvaluationArrayValue {
     this.elements.splice(0, this.elements.length, ...elements);
     this.mayHaveUnknownOrder ||= mayHaveUnknownOrder;
   }
+
+  private appendUncertainty(
+    uncertainty: EvaluationArrayUncertainty,
+  ): void {
+    if (this.uncertainties === emptyEvaluationArrayUncertainties) {
+      this.uncertainties = [];
+    }
+    appendEvaluationArrayUncertainty(this.uncertainties as EvaluationArrayUncertainty[], uncertainty);
+  }
+}
+
+export function evaluationArrayBoundarySpreadUncertainty(
+  value: EvaluationBoundaryValue,
+  node: ts.Node | null,
+): EvaluationArrayUncertainty {
+  return {
+    kind: EvaluationArrayUncertaintyKind.BoundarySpread,
+    node,
+    boundaryKind: value.boundaryKind,
+    boundaryPath: value.path,
+  };
+}
+
+export function evaluationArrayUncertaintySummaries(
+  value: EvaluationArrayValue,
+): readonly string[] {
+  return value.uncertainties.map((uncertainty) => {
+    switch (uncertainty.kind) {
+      case EvaluationArrayUncertaintyKind.BoundarySpread:
+        return uncertainty.boundaryPath == null
+          ? 'membership depends on a boundary spread'
+          : `membership depends on boundary spread ${uncertainty.boundaryPath}`;
+      case EvaluationArrayUncertaintyKind.ConditionalBranch:
+        return uncertainty.boundaryPath == null
+          ? 'membership depends on a dynamic conditional branch'
+          : `membership depends on conditional branch ${uncertainty.boundaryPath}`;
+      case EvaluationArrayUncertaintyKind.OmittedElement:
+        return 'membership includes an elision hole';
+      case EvaluationArrayUncertaintyKind.NonArraySpread:
+        return 'membership depends on a spread value that did not reduce to an array';
+      case EvaluationArrayUncertaintyKind.UnknownOrder:
+        return 'ordering depends on an operation the evaluator could not close';
+    }
+  });
+}
+
+export function mergeEvaluationArrayUncertainties(
+  ...sources: readonly (EvaluationArrayValue | readonly EvaluationArrayUncertainty[])[]
+): readonly EvaluationArrayUncertainty[] {
+  const uncertainties: EvaluationArrayUncertainty[] = [];
+  for (const source of sources) {
+    const sourceUncertainties = source instanceof EvaluationArrayValue
+      ? source.uncertainties
+      : source;
+    for (const uncertainty of sourceUncertainties) {
+      appendEvaluationArrayUncertainty(uncertainties, uncertainty);
+    }
+  }
+  return uncertainties;
+}
+
+function uniqueEvaluationArrayUncertainties(
+  uncertainties: readonly EvaluationArrayUncertainty[],
+): EvaluationArrayUncertainty[] {
+  const unique: EvaluationArrayUncertainty[] = [];
+  for (const uncertainty of uncertainties) {
+    appendEvaluationArrayUncertainty(unique, uncertainty);
+  }
+  return unique;
+}
+
+function appendEvaluationArrayUncertainty(
+  target: EvaluationArrayUncertainty[],
+  uncertainty: EvaluationArrayUncertainty,
+): void {
+  const key = evaluationArrayUncertaintyKey(uncertainty);
+  if (target.some((entry) => evaluationArrayUncertaintyKey(entry) === key)) {
+    return;
+  }
+  target.push(uncertainty);
+}
+
+function evaluationArrayUncertaintyKey(
+  uncertainty: EvaluationArrayUncertainty,
+): string {
+  return [
+    uncertainty.kind,
+    uncertainty.boundaryKind ?? '',
+    uncertainty.boundaryPath ?? '',
+    uncertainty.node?.pos ?? '',
+    uncertainty.node?.end ?? '',
+  ].join(':');
 }
 
 /** Set value with evaluator-local element membership. */

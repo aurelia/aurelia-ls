@@ -97,6 +97,7 @@ const semanticAppQuerySchema = z.object({
   openSeamPageSize: z.number().int().positive().nullable().optional(),
   openSeamKindKey: z.string().nullable().optional(),
   openSeamReasonKind: z.string().nullable().optional(),
+  sourceRole: z.string().nullable().optional(),
   rowPageSize: z.number().int().nonnegative().nullable().optional(),
   cursor: cursorSchema.nullable().optional(),
   sourceFile: sourceFileSchema.nullable().optional(),
@@ -175,6 +176,7 @@ export const appQueryInputSchema = {
   sourceFile: sourceFileSchema.nullable().optional(),
   openSeamKindKey: z.string().nullable().optional(),
   openSeamReasonKind: z.string().nullable().optional(),
+  sourceRole: z.string().nullable().optional(),
 } as const;
 
 export const appQueryBatchInputSchema = {
@@ -203,6 +205,7 @@ export const openSeamOverviewInputSchema = {
   sourceFile: sourceFileSchema.nullable().optional(),
   openSeamKindKey: z.string().nullable().optional(),
   openSeamReasonKind: z.string().nullable().optional(),
+  sourceRole: z.string().nullable().optional(),
 } as const;
 
 export const appDiagnosticsInputSchema = {

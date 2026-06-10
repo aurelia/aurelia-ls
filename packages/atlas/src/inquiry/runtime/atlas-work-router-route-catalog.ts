@@ -3903,7 +3903,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     title: "MCP Developer Preview Shell",
     summary:
       "Keep the public MCP package as a thin, restart-tolerant shell over current semantic-runtime analysis APIs while future generation grows through app-builder.",
-    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router"],
+    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router", "evaluation", "open-seams"],
     roles: ["orient", "analyze", "verify", "document"],
     terms: [
       "mcp shell",
@@ -3924,6 +3924,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "mcp analysis cache",
       "aurelia_analysis_cache_overview",
       "clear analysis cache",
+      "aurelia_clear_analysis_cache",
+      "cache clear preserve policy",
+      "typeSystemDependencyCacheClearPolicy preserve",
+      "app epoch kernel record",
+      "workspace kernel boot source discovery",
+      "retained workspace kernel records",
       "workspace overview",
       "aurelia_workspace_overview",
       "app overview",
@@ -3952,12 +3958,54 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "mcp hand-test",
       "mcp restart",
       "mcp token economy",
+      "MCP structuredContent token budget",
+      "row payload budget",
+      "byteClamped",
+      "estimatedRowsJsonBytes",
+      "maxRowsJsonBytes",
+      "pageRows payload budget",
       "mcp clean code",
+      "MCP row preview",
+      "row preview source labels",
+      "structuredContent text preview",
+      "diagnostic text preview source span",
       "mcp open seam drill-down",
       "open seam filters",
+      "open seam sites",
+      "open seam source line column",
+      "open seam summary sampleSourceSites",
+      "open seam sample source ranges",
+      "open seam summary uniqueSiteCount",
+      "raw seam count inflated",
+      "raw seam rows",
+      "unique authored seam site",
+      "derivation row amplification",
       "unresolved identifier seam",
       "vite injected variable",
       "declare const build variable",
+      "sourceFilePath seam filter",
+      "scripts app-source seam noise",
+      "scripts folder app-source static evaluation seams",
+      ".mjs tooling script seam noise",
+      "source role app-world evaluation split",
+      "open seam application file role",
+      "open seam application topology role",
+      "open seam static evaluation origin",
+      "static evaluation source origin",
+      "static-evaluation-root",
+      "module-graph-dependency",
+      "tooling-script source role",
+      "tooling script TypeScript diagnostics",
+      "checker inclusion app-world evaluation split",
+      "evaluator open seam reason kinds",
+      "static-evaluation-identifier-not-in-environment",
+      "static-evaluation-unsupported-loop-statement",
+      "static-evaluation-unsupported-compound-assignment",
+      "String.charAt unresolved property seam",
+      "String.repeat unresolved property seam",
+      "browser API host boundary seam",
+      "document adoptedStyleSheets dynamic mutation",
+      "CSSStyleSheet replaceSync dynamic call",
       "idiomatic Aurelia code",
       "low boilerplate Aurelia",
       "core observation MCP",
@@ -3972,9 +4020,24 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Local MCP setup should route to the package shell and semantic-runtime API facade, not to old au-mcp mapping concepts.",
       },
       {
+        query: "analysis cache clear disposed zero but overview retains workspace kernel records",
+        summary:
+          "MCP cache-clear wording should route to the session-registry/runtime retention contract: app-epoch disposal, retained boot/source-discovery workspace kernel records, and TypeScript dependency-cache preserve policy are separate concepts.",
+      },
+      {
         query: "mcp workspace overview app overview diagnostic overview router overview structured content",
         summary:
           "MCP tool-shape work should route through the public shell, compact semantic-runtime projections, and explicit paging affordances.",
+      },
+      {
+        query: "MCP row preview source labels structuredContent text preview",
+        summary:
+          "MCP result text should preserve bounded row identity, source labels, and source spans so compact answers remain actionable even when full rows live in structuredContent.",
+      },
+      {
+        query: "MCP structuredContent too large dense row family byteClamped",
+        summary:
+          "Dense row-family payload pressure should route to semantic-runtime public pageRows byte-budget metadata and nextCursor pagination, not MCP-local row hiding.",
       },
       {
         query: "mcp exposes ordinary typescript diagnostics with aurelia diagnostics",
@@ -3984,7 +4047,77 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "mcp reports many open seams unresolved identifiers without locations",
         summary:
-          "Open-seam release hardening should route to semantic-runtime OpenSeams/OpenSeamSummary filters, source samples, continuations, and API displayText before adapter-local formatting.",
+          "Open-seam release hardening should route to semantic-runtime OpenSeamSites before raw rows, preserve raw derivation counts for drill-down, keep source samples/ranges/sourceRole and reason filters/continuations visible, and avoid adapter-local classification.",
+      },
+      {
+        query: "open seam summary raw rows show byte offsets instead of line column",
+        summary:
+          "Public seam answers should prefer authored path:line:column samples when source ranges are available; raw rows, site rows, summary clusters, app overview, and MCP text previews should not force users to translate byte offsets.",
+      },
+      {
+        query: "open seam summary raw count inflated needs unique site count",
+        summary:
+          "OpenSeamSummary should expose both raw derivation counts and unique authored site counts so repeated evaluator derivations do not read as hundreds of independent user problems.",
+      },
+      {
+        query: "app overview open seam boundaries looked like global counts but were sampled",
+        summary:
+          "Paged overview breakdowns should be labeled as samples unless they are computed from a complete row family or a dedicated summary query.",
+      },
+      {
+        query: "app query catalog group open-seams returned no rows",
+        summary:
+          "Open-seam catalog discovery should keep diagnostics as the canonical group while supporting `group=open-seams` as an alias for rows with supportsOpenSeamFilters.",
+      },
+      {
+        query: "mcp open seam overview sourceFilePath ignored source file filter",
+        summary:
+          "Named open-seam MCP tools may fall back from sourceFilePath to sourceFile for row filtering, while generic app-query keeps sourceFilePath as project/app selection and sourceFile as the explicit row filter.",
+      },
+      {
+        query: "scripts folder app-source static evaluation open seams",
+        summary:
+          "Script/tooling seam noise should route to the source-admission split between checker/project inclusion and Aurelia app-world evaluation eligibility; top-level TS/JS tooling scripts are diagnostics-visible `tooling-script` sources, not MCP-local filters.",
+      },
+      {
+        query: ".mjs tooling script app-world open seams",
+        summary:
+          "Top-level .mjs scripts under scripts/tools/tooling should stay diagnostics-visible through the checker while remaining outside app-world open-seam projections.",
+      },
+      {
+        query: "open seam reasonKinds missing identifier unsupported loop compound assignment",
+        summary:
+          "Reason-kind gaps should route to evaluator producer threading and kernel open-seam publication, not display-text parsing or MCP adapter classification.",
+      },
+      {
+        query: "open seam sourceRole filter continuation query identity",
+        summary:
+          "Source-role open-seam filters should route through SemanticAppQuery, catalog shaping, query-claim identity, continuations, MCP schemas, and contract-open-seam-sites rather than transport-local filtering.",
+      },
+      {
+        query: "open seam app-source count needs component model service route context",
+        summary:
+          "Open-seam site context should join factual application topology roles such as component-source, entrypoint, route-source, service-source, state-source, and model-source instead of treating app-source as a priority or severity label.",
+      },
+      {
+        query: "open seam site needs why static evaluation included this source",
+        summary:
+          "Open-seam site context should route through StaticProjectEvaluationSourceOrigin so direct app-source roots and module-graph dependencies stay visible without adding kernel records or MCP-local heuristics.",
+      },
+      {
+        query: "open seam empty reasonKinds public site rows binding data flow parser expression",
+        summary:
+          "Public open-seam sites with prose open reasons but empty reasonKinds should route to the producer bridge such as binding-data-flow openSeamReasonKindsForDataFlow, not display heuristics.",
+      },
+      {
+        query: "String.charAt String.repeat unresolved property open seam",
+        summary:
+          "Common deterministic string intrinsic seams should route to evaluation/intrinsics/string-intrinsics.ts and expression-global-intrinsics coverage before adding public-display filters.",
+      },
+      {
+        query: "browser API host boundary dynamic call mutation seam flood",
+        summary:
+          "Ordinary browser host-boundary calls and writes should remain boundary propagation; seam floods here should first check ambient globals, boundary call/write contracts, source roles, and downstream product consumers before trying to model the DOM.",
       },
       {
         query: "vite define injected variable declare const unresolved identifier",
@@ -4078,11 +4211,75 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/api/open-seam-projections.ts",
+        symbolName: "openSeamSiteRows",
+        role: "grounding",
+        summary:
+          "Open-seam site rows group raw derivation rows by authored source span and seam kind, with application topology role and static-evaluation-origin context, for first-read MCP/IDE trust surfaces.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/open-seam-interpretation.ts",
+        symbolName: "semanticOpenSeamAttemptForKind",
+        role: "grounding",
+        summary:
+          "Open-seam vocabulary interpretation maps seam kinds to factual attempted semantic operation and boundary kind for MCP/IDE trust surfaces.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
         symbolName: "readStaticEvaluationAmbientGlobalDeclarations",
         role: "grounding",
         summary:
-          "Project .d.ts ambient globals become host-environment boundaries before unresolved-identifier seams are emitted.",
+          "Effective TypeScript lib and project .d.ts ambient globals become host-environment boundaries before unresolved-identifier seams are emitted.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/seams.ts",
+        symbolName: "EvaluationOpenSeam",
+        role: "grounding",
+        summary:
+          "Evaluator-local seam carrier that preserves producer reason kinds until kernel open-seam publication.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/evaluator.ts",
+        symbolName: "evaluationOpenSeamDefaultReasonKinds",
+        role: "grounding",
+        summary:
+          "Default evaluator seam-kind to reason-kind mapping for public seam-site explanations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+        symbolName: "StaticProjectEvaluationSourceOrigin",
+        role: "grounding",
+        summary:
+          "Compact static-evaluation source-origin contribution rows for direct app-source roots and module graph dependencies.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+        symbolName: "isStaticEvaluationAdmission",
+        role: "grounding",
+        summary:
+          "Static app-world evaluation currently admits only TS/JS app-source; future source-role work should split checker inclusion from app-world eligibility.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/source-classification.ts",
+        symbolName: "inferSourceFileRole",
+        role: "grounding",
+        summary:
+          "Boot source-role classifier that separates top-level tooling scripts from app-world sources.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/address.ts",
+        symbolName: "SourceFileRole.ToolingScript",
+        role: "grounding",
+        summary:
+          "Source role for build or maintenance scripts that need checker diagnostics but not app-world evaluation.",
       },
       {
         kind: "source",
@@ -4131,6 +4328,41 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Contract proving MCP forwards semantic-runtime app-query continuations and app-builder detail requests without adapter-local projection.",
       },
       {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-interpretation",
+        role: "supporting",
+        summary:
+          "Contract proving every controlled open-seam vocabulary key has a public attempt and boundary interpretation.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-sites",
+        role: "supporting",
+        summary:
+          "Contract proving repeated evaluator derivations collapse into unique authored open-seam sites with raw-row counts, source-role filters, application-role context, static-evaluation origins, source-role-preserving continuations, and the group=open-seams catalog alias.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
+        role: "supporting",
+        summary:
+          "Contract proving top-level tooling scripts, including .mjs scripts, stay visible to TypeScript diagnostics without entering app-world static evaluation.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-global-intrinsics",
+        role: "supporting",
+        summary:
+          "Contract proving standard globals and deterministic string/array intrinsics close without unresolved property seams.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+        role: "supporting",
+        summary:
+          "Contract proving evaluator-produced seam rows carry public reason kinds for missing identifiers, unsupported loops, and compound assignments.",
+      },
+      {
         kind: "memory",
         domains: ["semantic-runtime", "app-builder", "ontology"],
         role: "supporting",
@@ -4142,7 +4374,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "MCP is a public API shell; semantic-runtime owns product concepts and query results.",
       "Atlas remains the internal development navigation layer and should not be required for end-user MCP operation.",
       "App generation must be exposed through app-builder's semantic-runtime facade, not transport-local recipe or source-plan policy.",
-      "Large diagnostic or seam counts are not useful unless the same semantic-runtime answer family exposes source samples, filters, and follow-up queries.",
+      "Large diagnostic or seam counts are not useful unless the same semantic-runtime answer family exposes source samples, filters, attempt/boundary interpretation, unique authored sites, raw-row drill-down counts, and follow-up queries.",
+      "Source-file roles should not conflate TypeScript checker inclusion with Aurelia app-world static evaluation eligibility; scripts/tools may need diagnostics without producing app-world seam pressure.",
+      "Static-evaluation origin explains why a source participated in app-world evaluation; it is factual context, not a severity or actionability label.",
+      "Reason-kind vocabulary should be threaded from semantic-runtime producers into public rows; MCP must not infer reason kinds from summaries.",
     ],
     cautions: [
       "Do not reintroduce removed recipe/guidance tools just to make old prompts work.",
@@ -7916,6 +8151,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "scope slot projection",
       "runtime binding context",
       "template completion source scope",
+      "template completion member metadata",
+      "completion member visibility",
+      "completion member kind",
+      "aurelia hook completion",
+      "aureliaHookKind",
+      "memberVisibility",
       "template completion runtime analysis expression world",
       "template diagnostics runtime analysis expression world",
       "state binding completion scope",
@@ -7940,6 +8181,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "template completion source scope state binding expression world",
         summary:
           "Template completion and weak-member diagnostics should spend runtime-analysis expression-world state and rendered binding source-scope projection during cursor-context member-owner derivation.",
+      },
+      {
+        query: "template completion private method lifecycle hook member visibility",
+        summary:
+          "Top-level template completion member facts should come from BindingContextSlot target handles plus TypeMember hot details before answer-local ranking or filtering is considered.",
+      },
+      {
+        query: "$this member access completion missing member owner type",
+        summary:
+          "`$this.` awaiting-member-name completion is covered through parser frontier owner fallback; related gaps should still route through shared binding-scope and member-owner projection, not public row shaping.",
       },
       {
         query: "template expression projection value converter binding behavior parent this overlay",
@@ -8054,6 +8305,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "pressure",
         summary:
           "Public completion canary for state-bound source scope without child-scope leakage.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-member-metadata",
+        role: "pressure",
+        summary:
+          "Public completion canary for checker member kind, visibility, readonly/optional flags, and Aurelia hook categories.",
       },
       {
         kind: "source",
@@ -8484,6 +8742,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Program-node remap",
       "TypeScript diagnostic source role",
       "diagnostic source role",
+      "tooling-script source role",
+      "tooling script diagnostics",
+      "checker inclusion app-world evaluation split",
       "dependency declarations",
       "node_modules declarations",
       "TypeScript diagnostics",
@@ -9802,6 +10063,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "source expression slot projector",
       "binding-source-slot-no-static-value",
       "cursor member owner",
+      "$this member owner",
+      "$this member access completion",
+      "completion missing member owner type",
       "completion query",
       "diagnostic probe",
     ],
@@ -9847,6 +10111,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "member owner projector",
         summary:
           "Cursor/member-owner projection belongs to the shared projector, not one-off inquiry code.",
+      },
+      {
+        query: "$this completion missing expression-member-owner member-owner-type",
+        summary:
+          "`$this.` awaiting-member-name completion is contract-covered through frontier owner fallback; similar failures should still be debugged as shared member-owner/source-scope selection pressure before changing completion DTO mapping.",
       },
       {
         query: "expression member selected member missing owner type missing slot type",
@@ -10376,6 +10645,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "validation-container",
       "ValidationContainerCustomElement",
       "resource open seam",
+      "resource.open-definition-field",
+      "resource-definition-dependencies-open",
+      "import.meta env dependencies",
+      "Vite import.meta dependencies",
+      "dependency spread open seam",
       "resource alias claim",
       "resource source address",
       "AuthoredSourceTextCache external template",
@@ -10409,6 +10683,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Framework configuration-time resource definitions are resource convergence/admission visibility work.",
       },
+      {
+        query: "import.meta.env resource dependencies spread resource.open-definition-field",
+        summary:
+          "Vite/build-environment dependency spreads should route through evaluator host-boundary syntax and resource dependency reason kinds, not generic evaluator unsupported-expression cleanup.",
+      },
     ],
     coverage: [
       {
@@ -10428,6 +10707,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Definition convergence orchestrator and product publication boundary.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-import-meta-dependencies",
+        role: "supporting",
+        summary:
+          "Contract proving import.meta-dependent dependency spreads publish resource dependency reason kinds without evaluator syntax noise.",
       },
       {
         kind: "source",
@@ -10778,11 +11064,52 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "synthetic evaluation context",
       "evaluation.unsupported-expression",
       "unsupported expression",
+      "evaluator open seam reason kinds",
+      "EvaluationOpenSeam reasonKinds",
+      "static-evaluation-identifier-not-in-environment",
+      "static-evaluation-unsupported-loop-statement",
+      "static-evaluation-unsupported-compound-assignment",
+      "classic for loop static evaluator",
+      "bounded for loop evaluator",
+      "compound assignment static evaluator",
+      "update expression static evaluator",
+      "import.meta static evaluator",
+      "import.meta.env host boundary",
+      "Vite import.meta env",
+      "String.charAt",
+      "String.charCodeAt",
+      "String.at",
+      "String.substring",
+      "String.repeat",
+      "string intrinsic seam",
+      "browser API host boundary",
+      "browser game host boundary",
+      "game simulation seam noise",
+      "requestAnimationFrame",
+      "localStorage",
+      "WebGL",
+      "AudioContext",
+      "Math.max join repeat simulation",
+      "host boundary dynamic call",
+      "host boundary dynamic mutation",
+      "document adoptedStyleSheets",
+      "CSSStyleSheet replaceSync",
       "external-module-value",
       "external module value",
       "di.open-registry-body",
       "registry body",
       "IRegistry registration body",
+      "DialogConfigurationClassic.withChild",
+      "DialogConfigurationClassic const wrapper",
+      "DialogConfigurationClassic factory wrapper",
+      "DialogConfigurationClassic namespace import",
+      "framework registration external import wrapper",
+      "frameworkRegistrationExternalImportValue",
+      "frameworkRegistrationExportEntriesForModule",
+      "frameworkRegistrationKindSupportsChainMethod",
+      "DialogConfiguration withChild",
+      "child dialog configuration",
+      "dialog child resolver",
       "module loader",
       "ModuleLoader",
       "IModuleLoader",
@@ -10801,6 +11128,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "string relational operator source-value",
       "relational operator source-value boundary",
       "Array.toSorted source-value closure",
+      "EvaluationArrayValue uncertainties",
+      "array uncertainty provenance",
+      "array unknown membership provenance",
+      "conditional branch array representative",
+      "representativeEvaluationValues conditional arrays",
+      "import.meta conditional dependency spread",
       "evaluateAureliaResolveCall",
       "aureliaResolveDirectKey",
       "evaluateAureliaResolveDirectClassKey",
@@ -10877,9 +11210,58 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Unsupported expression seams should start at evaluator/world-construction substrate, not surface patches.",
       },
       {
+        query:
+          "EvaluationOpenSeam reasonKinds missing identifier unsupported loop compound assignment",
+        summary:
+          "Evaluator open-seam reason gaps should be fixed where StaticEvaluator creates seams, then carried through kernel publication into public rows.",
+      },
+      {
+        query:
+          "classic for loop compound assignment update expression evaluator seam noise",
+        summary:
+          "Bounded classic for loops and simple compound/update assignments should route to StaticEvaluator statement/mutation support before becoming public open-seam pressure.",
+      },
+      {
+        query: "import.meta.env host boundary evaluator unsupported expression",
+        summary:
+          "import.meta syntax should route to StaticEvaluator host-environment boundary support before downstream resource or configuration consumers classify the remaining build-environment uncertainty.",
+      },
+      {
+        query:
+          "EvaluationArrayValue uncertainties import.meta conditional branch resource dependencies",
+        summary:
+          "Conditional array/resource dependency uncertainty should route through representative evaluator values and array uncertainty provenance before resource convergence publishes the remaining open definition field.",
+      },
+      {
+        query: "String.charAt String.repeat unresolved property seam",
+        summary:
+          "Common string method seam noise should route through the shared string intrinsic implementation and expression-global-intrinsics contract, not MCP display filtering.",
+      },
+      {
+        query: "browser API host boundary dynamic call mutation seam",
+        summary:
+          "Host-environment browser/game calls and writes should propagate boundary values; if animation-frame, storage, keyboard, WebGL, or AudioContext usage publishes generic dynamic seams, inspect evaluator boundary call/write handling before adding DOM-specific modeling.",
+      },
+      {
+        query: "game simulation Math.max join repeat classic for loop seam noise",
+        summary:
+          "Deterministic simulation helpers should route to shared evaluator intrinsics and bounded-loop support before becoming public seam noise.",
+      },
+      {
         query: "di.open-registry-body",
         summary:
           "Open DI registry-body seams should route through evaluator/DI/world admission.",
+      },
+      {
+        query: "DialogConfigurationClassic.withChild di.open-registry-body",
+        summary:
+          "Valid dialog child configuration should close through framework registration effects, including named/namespace import const and local factory wrappers; remaining registry-body seams need a richer cross-project registry reproducer before DI publication changes.",
+      },
+      {
+        query:
+          "framework registration external import wrapper DialogConfigurationClassic const factory namespace import",
+        summary:
+          "Framework configuration imports that preserve a known FrameworkRegistrationKind should be synthesized in the evaluator external-import resolver before DI world construction sees them.",
       },
       {
         query: "aliasedResourcesRegistry IRegistry module loader",
@@ -10915,11 +11297,77 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/seams.ts",
+        symbolName: "EvaluationOpenSeam",
+        role: "primary",
+        summary:
+          "Evaluator-local seam carrier that preserves producer reason kinds until kernel open-seam publication.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+        role: "supporting",
+        summary:
+          "Contract proving core evaluator seam producers carry public reason kinds.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-classic-for-loop",
+        role: "supporting",
+        summary:
+          "Contract proving bounded classic for loops and simple compound/update assignments reduce through StaticEvaluator guardrails.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-import-meta-boundary",
+        role: "supporting",
+        summary:
+          "Contract proving import.meta.env reduces to host-environment boundaries without evaluator syntax seams.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
+        role: "supporting",
+        summary:
+          "Contract proving declared ambient/browser globals, browser-game host-boundary operations, and deterministic simulation helpers avoid unresolved identifiers and generic dynamic-call/dynamic-mutation seams.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-global-intrinsics",
+        role: "supporting",
+        summary:
+          "Contract proving deterministic standard string and array intrinsics close without unresolved property seams.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:dialog-classic-with-child",
+        role: "supporting",
+        summary:
+          "Contract proving valid DialogConfigurationClassic.withChild registration does not emit dialog issues, DI issues, or open seam sites.",
+      },
+      {
+        kind: "source",
         filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
         symbolName: "aureliaStaticEvaluationRuntimeHost",
         role: "primary",
         summary:
           "Aurelia runtime host intrinsics for app admission, including browser ambient boundaries and narrow ambient resolve(ClassKey) closure.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "aureliaExternalEvaluationValueResolver",
+        role: "primary",
+        summary:
+          "External import resolver that must synthesize known framework registration values for const/factory wrapper evaluation before DI publication.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "frameworkRegistrationExternalImportValue",
+        role: "supporting",
+        summary:
+          "Maps named and namespace framework imports to evaluator-local framework-registration objects without generic DI seam suppression.",
       },
       {
         kind: "source",
@@ -11018,6 +11466,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Known framework configuration and registration bundles such as StandardConfiguration are declared here as discoverable capabilities, not one-off evaluator cases.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
+        symbolName: "frameworkRegistrationExportEntriesForModule",
+        role: "grounding",
+        summary:
+          "Module/export view over framework registration descriptors used by evaluator import synthesis for named, alias, and namespace imports.",
       },
       {
         kind: "source",
@@ -11232,6 +11689,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "registration",
       "configuration",
       "field-provenance",
+      "open-seam",
+      "diagnostics",
     ],
     roles: ["orient", "analyze", "refactor", "verify"],
     terms: [
@@ -11250,6 +11709,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "provenance pressure",
       "product architecture field provenance",
       "evidence record",
+      "open seam reason provenance handoff",
+      "open seam producer coverage",
+      "open seam public quality",
+      "open seam raw derivation unique authored sites",
+      "open seam public projection producer coverage",
+      "open seam reason provenance public projection",
+      "open seam empty reasonKinds producer coverage",
+      "open seam reasonKinds product boundary",
+      "configuration registration reasonKinds handoff",
+      "ConfigurationRecognitionOpen reasonKinds",
+      "RegistrationRecognitionOpen reasonKinds",
       "materialized product",
       "ProductDetailCatalog",
       "product details",
@@ -11266,6 +11736,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "configuration kernel publication provenance",
         summary:
           "Configuration publication and provenance pressure should not disappear into evaluator/world-construction.",
+      },
+      {
+        query: "configuration registration reasonKinds product boundary handoff",
+        summary:
+          "Open-seam reason provenance carried through configuration/registration carriers should route to kernel publication/provenance before adding display classifiers.",
+      },
+      {
+        query: "open seam reason provenance public projection producer coverage",
+        summary:
+          "Open-seam public projection gaps should route through producer publication coverage before adding MCP display heuristics.",
       },
       {
         query: "product architecture field provenance pressure",
@@ -12586,6 +13066,155 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.inquiry-query-claim-graph",
       "diagnostics.framework-error-grounding",
       "semantic-runtime.app-builder-pattern-ontology",
+    ],
+  },
+  {
+    id: "semantic-runtime.dialog-source-diagnostics",
+    title: "Dialog Source Diagnostics",
+    summary:
+      "Route @aurelia/dialog source diagnostics and valid DialogConfiguration child-registration closure through dialog issue materialization and DI registration effects.",
+    domains: ["semantic-runtime", "dialog", "diagnostics", "framework-errors", "di", "configuration"],
+    roles: ["orient", "analyze", "verify", "document"],
+    terms: [
+      "dialog source diagnostics",
+      "DialogSourceIssueMaterializer",
+      "DialogFrameworkErrorCode",
+      "DialogConfiguration",
+      "DialogConfigurationClassic",
+      "DialogConfigurationClassic.withChild",
+      "DialogConfigurationClassic const wrapper",
+      "DialogConfigurationClassic factory wrapper",
+      "DialogConfigurationClassic namespace import",
+      "DialogConfigurationStandard.withChild",
+      "DialogConfiguration withChild",
+      "child dialog settings",
+      "child dialog resolver",
+      "IDialogService.child",
+      "DialogService.child",
+      "AUR0903",
+      "AUR0904",
+      "AUR0910",
+      "dialog_settings_invalid",
+      "dialog_no_empty_default_configuration",
+      "dialog_child_settings_not_found",
+      "di.open-registry-body dialog",
+      "framework registration external import wrapper",
+      "frameworkRegistrationExternalImportValue",
+      "frameworkRegistrationExportEntriesForModule",
+    ],
+    queryCanaries: [
+      {
+        query: "AUR0903 dialog settings invalid",
+        summary:
+          "Invalid static dialog settings should route through source-backed dialog diagnostics and framework error grounding.",
+      },
+      {
+        query: "DialogConfigurationClassic.withChild IDialogService.child",
+        summary:
+          "Valid child dialog configuration should be proved by the positive dialog fixture before adding diagnostics or DI seam suppression.",
+      },
+      {
+        query: "DialogConfigurationClassic.withChild di.open-registry-body",
+        summary:
+          "A registry-body seam on valid dialog child configuration is either stale output or an uncovered registry shape beyond the covered direct, namespace, const, and local factory forms.",
+      },
+      {
+        query:
+          "DialogConfigurationClassic const wrapper factory wrapper namespace import frameworkRegistrationExternalImportValue",
+        summary:
+          "Dialog configuration wrappers should route through evaluator external-import framework registration synthesis before dialog diagnostics or DI seam policy changes.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/dialog/dialog-source-issue-materializer.ts",
+        symbolName: "DialogSourceIssueMaterializer",
+        role: "primary",
+        summary:
+          "Source-backed dialog issue materializer for the currently exact @aurelia/dialog source diagnostics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/dialog/framework-error-code.ts",
+        symbolName: "DialogFrameworkErrorCode",
+        role: "supporting",
+        summary:
+          "Exact @aurelia/dialog framework error code links owned by semantic-runtime diagnostics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
+        symbolName: "frameworkRegistrationManifestEntries",
+        role: "supporting",
+        summary:
+          "Framework registration manifest descriptor for DialogConfiguration and withChild chain methods.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
+        symbolName: "frameworkRegistrationExportEntriesForModule",
+        role: "supporting",
+        summary:
+          "Framework registration export entries keep named and namespace dialog configuration imports evaluable through wrappers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/aurelia-evaluation-runtime.ts",
+        symbolName: "frameworkRegistrationExternalImportValue",
+        role: "supporting",
+        summary:
+          "Evaluator import synthesis for framework-registration values used by const/factory wrapper dialog configuration forms.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/di/world-constructor.ts",
+        symbolName: "frameworkRegistrationEffectsCloseRegistryBody",
+        role: "supporting",
+        summary:
+          "DI registry-body closure predicate that admits framework registration effects such as DialogConfiguration.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/dialog-source-errors",
+        role: "pressure",
+        summary:
+          "Pressure fixture for source-backed AUR0903/AUR0904/AUR0910 dialog diagnostics.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:dialog-classic-with-child",
+        role: "pressure",
+        summary:
+          "Contract proving direct, namespace, const, and local factory DialogConfigurationClassic.withChild registration stays free of dialog issues, DI issues, and open seam sites.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "dialog", "framework-errors", "diagnostics"],
+        role: "grounding",
+        summary:
+          "Durable dialog memory separates exact source diagnostics from deferred dialog runtime/lifecycle substrate.",
+      },
+    ],
+    authority: [
+      "@aurelia/dialog framework source and exact AUR09xx error code usage.",
+      "Source-backed semantic-runtime dialog issue products and focused pressure fixtures.",
+      "DI registration effects only for framework-shaped dialog configuration bodies.",
+    ],
+    cautions: [
+      "Do not suppress di.open-registry-body generically when a richer dialog registry wrapper shape needs reproduction.",
+      "Do not claim dialog lifecycle, renderer, or async activation codes through the source diagnostics lane.",
+      "Do not turn valid DialogConfiguration.withChild calls into diagnostics or open-seam pressure.",
+    ],
+    nextQuestions: [
+      "Is this an exact source-authored dialog diagnostic, a valid configuration closure, or a deeper runtime/lifecycle question?",
+      "Does the app shape use a direct DialogConfiguration chain or a wrapper/imported registry value?",
+      "Can the issue be isolated in a dialog pressure fixture before broad DI publication changes?",
+    ],
+    relatedRouteIds: [
+      "diagnostics.framework-error-grounding",
+      "semantic-runtime.evaluator.world-construction",
+      "semantic-runtime.kernel-publication.provenance",
     ],
   },
   {

@@ -53,6 +53,9 @@ export function inferSourceFileRole(path: string): SourceFileRole {
   if (isToolingConfigPath(baseName)) {
     return SourceFileRole.ToolingConfig;
   }
+  if (isToolingScriptPath(segments, language)) {
+    return SourceFileRole.ToolingScript;
+  }
   if (baseName === 'package.json') {
     return SourceFileRole.PackageManifest;
   }
@@ -120,4 +123,15 @@ function isToolingConfigPath(baseName: string): boolean {
     baseName === 'nx.json' ||
     baseName === 'turbo.json'
   );
+}
+
+function isToolingScriptPath(
+  segments: readonly string[],
+  language: SourceLanguage,
+): boolean {
+  if (language !== SourceLanguage.TypeScript && language !== SourceLanguage.JavaScript) {
+    return false;
+  }
+  return segments.length > 1
+    && (segments[0] === 'scripts' || segments[0] === 'tools' || segments[0] === 'tooling');
 }

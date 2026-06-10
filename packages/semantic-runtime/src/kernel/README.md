@@ -247,6 +247,8 @@ locally minting parallel address/evidence/provenance/open-seam envelopes. When t
 machine-readable reason, pass it through the shared primitive as `reasonKinds`; source precision and repair intent
 should travel together. If only one reason inside a multi-reason seam has a distinct source site, such as router href
 target-open pressure from a neighboring `target` attribute, attach a `reasonSources` row instead of splitting the seam.
+Kernel reason sources carry address/evidence handles, not authored line tables. API projections should derive
+`sourceRange` query-time from those handles when a public answer needs line/column locations.
 
 `issue-publication.ts` is the shared publication primitive for source-backed diagnostics that are themselves modeled as
 semantic products. Use it when a domain issue needs the standard evidence, provenance, identity, materialized-product,

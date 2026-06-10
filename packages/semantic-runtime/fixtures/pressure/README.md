@@ -174,6 +174,11 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   Aurelia infers the source expression from the authored target name while target-property mapping remains separate. It
   preserves framework compiler behavior such as `minlength.bind` reading `minlength` even when the DOM target property
   maps to `minLength`.
+- `configuration-open-seam-reasons` captures a framework configuration option whose value expression stays open during
+  static evaluation. It preserves the reason-provenance handoff from evaluator seams into configuration open seams so
+  public `open-seam-sites` rows do not lose lower-level reason kinds at the product boundary.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:configuration-open-seam-reasons` is the focused semantic
+  contract for this handoff.
 - `observable-decorator-contexts` captures valid field `@observable` carriers next to invalid class, method, getter,
   and auto-accessor decorator forms. It preserves runtime `invalid_observable_decorator_usage` / `AUR0224` pressure in
   the observation source-issue lane without treating `@observable` as resource metadata.
@@ -295,6 +300,10 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   synthetic-view scope, preserve getter observed-dependency provenance, and then stop at a controller-level
   `recursive-hydration-boundary` instead of opening an unbounded render seam. It is covered by
   `contract:recursive-rendering`.
+- `resource-import-meta-dependencies` captures a Vite-style `import.meta.env.DEV` dependency spread in custom-element
+  metadata. It preserves the split between evaluator syntax support and resource convergence: `import.meta.env.*`
+  stays a host-environment boundary, known dependency entries remain visible, and the optional spread is reported as a
+  resource dependency open seam with `resource-definition-dependencies-open` rather than evaluator syntax noise.
 - `runtime-html-spread-renderer-errors` captures a valid custom-element bindable spread beside `$element.spread` on the
   same custom element. It preserves the `SpreadValueRenderer` dispatch failure for `spreading_invalid_target` /
   `AUR0820` without making invalid spread targets part of generated recommendable generators.
@@ -356,6 +365,10 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   `template`, and resolving a child dialog service key that has no visible `withChild(...)` settings registration. It
   preserves dialog `AUR0904`, `AUR0903`, and `AUR0910` pressure without making recommendable generators emit invalid
   dialog configuration or service calls.
+- `dialog-classic-with-child` captures valid `DialogConfigurationClassic.withChild(...)` registration with a matching
+  child `IDialogService` resolver, including direct, namespace, const, and local factory wrapper registration forms. It
+  preserves the positive side of dialog child settings and generic DI registry-body seams so app-health output does not
+  imply valid child dialog configuration is an analyzer problem.
 - `sanitize-value-converter-default` captures the built-in `sanitize` value converter used without an app-provided
   `ISanitizer` resolver. It preserves the runtime-html default sanitizer `method_not_implemented` / `AUR0099` path
   without making recommendable generators rely on the throwing default sanitizer.

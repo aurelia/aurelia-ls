@@ -1,0 +1,11 @@
+{
+  "name": "resource-import-meta-dependencies",
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "aurelia": "2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -6,6 +6,8 @@ import { AureliaMcpSemanticRuntimeAdapter } from '../out/runtime-adapter.js';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
 const fixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form');
+const openSeamSitesFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/evaluation-open-seam-sites');
+const typescriptDiagnosticsFixtureRoot = path.join(repoRoot, 'packages/semantic-runtime/fixtures/pressure/typescript-project-diagnostics');
 
 const child = spawn(process.execPath, [serverPath], {
   cwd: repoRoot,
@@ -45,6 +47,9 @@ try {
   await verifyToolSurfaceBudget();
   await verifyStrictTopLevelEnvelope();
   await verifyPageClampAndTextPreview();
+  await verifyAnalysisCacheClearVocabulary();
+  await verifyDiagnosticTextPreviewIdentity();
+  await verifyOpenSeamSitesPreview();
   await verifyCursorVocabulary();
   await verifyMissingWorkspaceRoot();
   await verifyInvalidProjectKeyRemedy();
@@ -97,9 +102,73 @@ async function verifyPageClampAndTextPreview() {
   expect(page?.size === 200, 'Oversized pages should be clamped to 200 rows.');
   expect(page?.requestedSize === 100000, 'Clamped pages should retain the caller-requested size.');
   expect(page?.clamped === true, 'Clamped pages should report clamped=true.');
+  expect(page?.byteClamped === true, 'Dense row families should stop before 200 rows when the public row payload budget is reached.');
+  expect(page?.returnedRows < 200, 'Dense row payload budget should reduce returnedRows below the row-count clamp.');
+  expect(typeof page?.nextCursor === 'string', 'Byte-clamped dense row pages should still provide a next cursor.');
+  expect(page?.estimatedRowsJsonBytes <= page?.maxRowsJsonBytes, 'Byte-clamped page should report an estimated row payload within the public budget.');
   const text = resultText(response);
   expect(text.includes('Clamped requested size 100000 to max 200'), 'Text content should mention page-size clamping.');
+  expect(text.includes('Row payload budget stopped this page'), 'Text content should mention byte-budget pagination.');
   expect(text.includes('Rows:'), 'Text content should include a bounded row preview for row answers.');
+}
+
+async function verifyAnalysisCacheClearVocabulary() {
+  await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    appRetention: 'retain-app',
+  });
+  const overviewBefore = await callTool('aurelia_analysis_cache_overview', {
+    workspaceRoot: fixtureRoot,
+  });
+  const beforeValue = overviewBefore.result?.structuredContent?.value;
+  const beforeSession = beforeValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  expect(beforeSession?.analysisCache?.value?.cachedAppCount >= 1, 'Retained app overview should create at least one cached app epoch for cache-clear testing.');
+
+  const cleared = await callTool('aurelia_clear_analysis_cache', {
+    workspaceRoot: fixtureRoot,
+  });
+  const clearValue = cleared.result?.structuredContent?.value;
+  expect(clearValue?.remainingCachedApps === 0, 'Cache clear should report zero remaining app epochs for the selected fixture session.');
+  expect(typeof clearValue?.retainedWorkspaceKernelRecords === 'number', 'Cache clear should expose retained workspace kernel records explicitly.');
+  const clearText = resultText(cleared);
+  expect(clearText.includes('app-epoch kernel record'), 'Cache-clear text should distinguish app-epoch kernel disposal from session kernel retention.');
+  expect(clearText.includes('boot/source-discovery'), 'Cache-clear text should explain retained workspace-kernel records.');
+  expect(clearText.includes('preserve policy keeps warm TypeScript dependency/lib source files'), 'Cache-clear text should explain the default dependency cache policy.');
+
+  const overviewAfter = await callTool('aurelia_analysis_cache_overview', {
+    workspaceRoot: fixtureRoot,
+  });
+  const afterValue = overviewAfter.result?.structuredContent?.value;
+  const afterSession = afterValue?.sessions?.find((session) => session.workspaceRoot === fixtureRoot);
+  expect(afterSession?.analysisCache?.value?.cachedAppCount === 0, 'Analysis-cache overview should agree that selected app epochs were cleared.');
+}
+
+async function verifyDiagnosticTextPreviewIdentity() {
+  const response = await callTool('aurelia_app_query', {
+    workspaceRoot: typescriptDiagnosticsFixtureRoot,
+    queryKind: 'typescript-diagnostics',
+    page: { size: 3 },
+  });
+  const text = resultText(response);
+  expect(text.includes('typescript-project-diagnostics-state.ts@49..56'), 'Diagnostic row previews should preserve source filename and span in text.');
+  expect(text.includes('Type \'number\' is not assignable to type \'string\'.'), 'Diagnostic row previews should include actionable message text.');
+}
+
+async function verifyOpenSeamSitesPreview() {
+  const response = await callTool('aurelia_open_seam_overview', {
+    workspaceRoot: openSeamSitesFixtureRoot,
+    sourceFilePath: 'src/app.ts',
+    openSeamKindKey: 'evaluation.unresolved-identifier',
+    page: { size: 10 },
+  });
+  const value = response.result?.structuredContent?.value?.value;
+  expect(value?.totalOpenSeamSites === 2, 'Open-seam overview should report unique authored seam sites, not only raw rows.');
+  expect(value?.totalOpenSeamRows === 6, 'Open-seam overview should preserve the raw derivation row count.');
+  const text = resultText(response);
+  expect(text.includes('unique authored site(s)'), 'Open-seam overview text should explain site-level grouping.');
+  expect(text.includes('raw=3'), 'Open-seam overview text should show raw rows covered by each site.');
+  expect(text.includes('src/app.ts:4:48') && text.includes('src/app.ts:5:48'), 'Open-seam overview text should include authored line/column samples.');
+  expect(!text.includes('\0'), 'Open-seam row preview should not leak opaque NUL-delimited keys.');
 }
 
 async function verifyCursorVocabulary() {

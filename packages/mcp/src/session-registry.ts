@@ -68,21 +68,32 @@ export class SemanticRuntimeSessionRegistry {
       (total, session) => total + (session.analysisCacheClear?.value.clearedTypeSystemDependencySourceTextCharacters ?? 0),
       0,
     );
+    const remainingCachedApps = sessions.reduce(
+      (total, session) => total + (session.analysisCacheClear?.value.remainingCachedApps ?? 0),
+      0,
+    );
+    const retainedWorkspaceKernelRecords = sessions.reduce(
+      (total, session) => total + (session.analysisCacheClear?.value.workspaceKernel.totalRecords ?? 0),
+      0,
+    );
     const valueWithoutDisplayText: Omit<SemanticRuntimeSessionRegistryClearResult, 'displayText'> = {
       totalSessions: this.sessions.size,
       matchingSessions: sessions.length,
       typeSystemDependencyCacheClearPolicy: request.typeSystemDependencyCacheClearPolicy ?? 'preserve',
       disposedCachedApps,
       disposedKernelRecords,
+      remainingCachedApps,
+      retainedWorkspaceKernelRecords,
       clearedTypeSystemDependencySourceFiles,
       clearedTypeSystemDependencySourceTextCharacters,
       sessions,
       summary:
         `Cleared analysis cache for ${sessions.length} semantic-runtime session(s), ` +
-        `disposing ${disposedCachedApps} cached app epoch(s), ${disposedKernelRecords} kernel record(s), and ` +
+        `disposing ${disposedCachedApps} cached app epoch(s), ${disposedKernelRecords} app-epoch kernel record(s), and ` +
         `${clearedTypeSystemDependencySourceFiles} TypeScript dependency cache file(s) ` +
         `(${clearedTypeSystemDependencySourceTextCharacters} source-text character(s)) using policy ` +
-        `'${request.typeSystemDependencyCacheClearPolicy ?? 'preserve'}'.`,
+        `'${request.typeSystemDependencyCacheClearPolicy ?? 'preserve'}'; ${remainingCachedApps} app epoch(s) and ` +
+        `${retainedWorkspaceKernelRecords} workspace kernel record(s) remain in the selected runtime session(s).`,
     };
     return {
       ...valueWithoutDisplayText,
@@ -153,6 +164,8 @@ export interface SemanticRuntimeSessionRegistryClearResult {
   readonly typeSystemDependencyCacheClearPolicy: NonNullable<SemanticRuntimeAnalysisCacheClearRequest['typeSystemDependencyCacheClearPolicy']>;
   readonly disposedCachedApps: number;
   readonly disposedKernelRecords: number;
+  readonly remainingCachedApps: number;
+  readonly retainedWorkspaceKernelRecords: number;
   readonly clearedTypeSystemDependencySourceFiles: number;
   readonly clearedTypeSystemDependencySourceTextCharacters: number;
   readonly sessions: readonly SemanticRuntimeSessionClearSummary[];
@@ -188,8 +201,9 @@ function semanticRuntimeSessionRegistryClearDisplayText(
   value: Omit<SemanticRuntimeSessionRegistryClearResult, 'displayText'>,
 ): string {
   const lines = [
-    `MCP analysis cache clear: ${value.matchingSessions} matching session(s) out of ${value.totalSessions}; disposed ${value.disposedCachedApps} app epoch(s), ${value.disposedKernelRecords} kernel record(s), and ${value.clearedTypeSystemDependencySourceFiles} dependency source-file cache file(s).`,
-    `Dependency clear policy: ${value.typeSystemDependencyCacheClearPolicy}; source-text characters cleared=${value.clearedTypeSystemDependencySourceTextCharacters}.`,
+    `MCP analysis cache clear: ${value.matchingSessions} matching session(s) out of ${value.totalSessions}; disposed ${value.disposedCachedApps} app epoch(s), ${value.disposedKernelRecords} app-epoch kernel record(s), and ${value.clearedTypeSystemDependencySourceFiles} dependency source-file cache file(s).`,
+    `Remaining in selected session(s): ${value.remainingCachedApps} app epoch(s), ${value.retainedWorkspaceKernelRecords} workspace kernel record(s). Workspace kernel records are boot/source-discovery state, not cached app epochs.`,
+    `Dependency clear policy: ${value.typeSystemDependencyCacheClearPolicy}; source-text characters cleared=${value.clearedTypeSystemDependencySourceTextCharacters}. The default preserve policy keeps warm TypeScript dependency/lib source files.`,
   ];
   const clearLines = value.sessions
     .map((session) => firstSessionAnswerDisplayLine(session.analysisCacheClear))

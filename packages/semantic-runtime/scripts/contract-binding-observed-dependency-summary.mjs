@@ -25,7 +25,7 @@ const app = await runtime.openApp({
 const summary = app.bindingObservedDependencySummary({ size: 20 }).value;
 const stateOnlyAnswer = app.bindingObservedDependencySummary({ size: 0 });
 const stateOnlySummary = stateOnlyAnswer.value;
-const raw = app.bindingObservedDependencies({ size: 500 }).value;
+const rawRows = collectPagedRows((page) => app.bindingObservedDependencies(page));
 const failures = [];
 
 const sourceState = summary.memberSourceStateRows.find((row) => row.observedMemberSourceState === 'source');
@@ -47,8 +47,8 @@ const repeatLocalRead = summary.rows.find((row) =>
   && row.observedMemberSourceState === 'source'
 );
 
-if (summary.totalRows !== raw.rows.length) {
-  failures.push(`Expected summary totalRows (${summary.totalRows}) to match raw row count (${raw.rows.length}).`);
+if (summary.totalRows !== rawRows.length) {
+  failures.push(`Expected summary totalRows (${summary.totalRows}) to match raw row count (${rawRows.length}).`);
 }
 if (summary.summaryRows < 1) {
   failures.push('Expected at least one observed-dependency summary row.');
@@ -126,4 +126,15 @@ function assertAtLeast(actual, expected, message) {
   if (actual < expected) {
     failures.push(message);
   }
+}
+
+function collectPagedRows(readPage) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = readPage({ size: 200, cursor });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }

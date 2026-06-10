@@ -23,12 +23,14 @@
         "StaticEvaluator handles closed try/catch/finally completion flow. Catch bindings are temporary evaluator bindings and shadowing an existing binding remains an explicit unsupported-binding-pattern seam until nested lexical catch environments are modeled.",
         "Atlas framework effect tracing now binds destructured variable, parameter, callback, and for-of names as lexical flow facts with destructured paths; if ordinary object/array destructuring reappears as an unsupported-binding-pattern seam, improve the tracer rather than filtering that seam downstream.",
         "Guardrails belong on StaticEvaluationPolicy; speculative intrinsic attempts should checkpoint/restore seams and guardrail counters so abandoned callback evaluation degrades to imprecise values instead of poisoning the module.",
+        "Bounded classic `for` loops with evaluator-known conditions and incrementors belong in StaticEvaluator alongside for-of/for-in. Simple numeric/string compound assignments and ++/-- update expressions should spend the shared assignment-target and operator reducers before becoming dynamic-mutation seams.",
         "Use IntrinsicCallbackFrame for callback-bearing standard intrinsics so callback budget, checkpoint lifetime, and abandoned-seam restoration remain one evaluator primitive instead of per-method guardrail loops.",
         "Collection callback budget exhaustion should usually return imprecise evaluator values such as unknown membership/order; emit product-specific open seams later only when a consumer needs exact membership or order.",
-        "Standard object/array/string/promise intrinsics such as Object.keys/values/entries/fromEntries, Array.from, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/sort, array push/pop/shift/unshift/splice/reverse/fill mutation, string split/replace/replaceAll, and Promise.resolve belong behind evaluation/intrinsics.ts, with implementations split under evaluation/intrinsics/ by ECMAScript family and shared callback guardrails.",
+        "Standard object/array/string/promise intrinsics such as Object.keys/values/entries/fromEntries, Array.from, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/sort, array push/pop/shift/unshift/splice/reverse/fill mutation, string split/replace/replaceAll/charAt/charCodeAt/at/substring/repeat, and Promise.resolve belong behind evaluation/intrinsics.ts, with implementations split under evaluation/intrinsics/ by ECMAScript family and shared callback guardrails.",
         "Static evaluator intrinsics are not a parallel TypeScript standard library. Add standard behavior only when a semantic-runtime consumer needs deterministic source-value closure; TypeScript remains the authority for checker-backed stdlib declarations, generics, overloads, and library member surfaces.",
         "Date construction follows the same intrinsic boundary. `new Date('YYYY-MM-DD')`, timezone-qualified ISO strings, and numeric epochs can close as evaluator-local Date values for app-world/source-value consumers; `new Date()`, local-time constructor overloads, and arbitrary host parsing stay runtime-open.",
         "Mutating array intrinsics must update the evaluator-local receiver and carry membership/order imprecision on EvaluationArrayValue; do not return detached arrays or add feature-local array mutation shortcuts in recognizers.",
+        "EvaluationArrayValue carries compact membership/order imprecision plus evaluator-local `uncertainties` for boundary spreads, conditional branches, elision holes, non-array spreads, and unknown ordering. The empty uncertainty case shares a singleton so exact arrays stay cheap; consumers that need public explanations such as `dependencies` being open because an `import.meta.env` conditional spread controlled optional entries should spend those evaluator-owned uncertainties instead of guessing from syntax or MCP display text.",
         "Binding patterns belong in evaluator environment construction. Variable declarations, function/constructor parameters, defaults, rest bindings, and loop declaration initializers should bind environment cells before recognizers inspect evaluated values.",
         "Property and element access belong in evaluation/property-access.ts. Reuse readStaticOwnProperty, writeStaticOwnProperty, evaluateStaticPropertyValue/evaluateStaticElementValue, and the host-neutral readStaticValueProperty/readStaticValueElement helpers for recognizers, binding-source reads, or follow-up expression reads instead of duplicating object/module/array/string/RegExp/getter access semantics.",
         "Array prototype boundary recognition in evaluation/property-access.ts should spend expression/array-method-semantics.ts rather than maintaining a second native Array method list; the descriptor is the joined authority for TypeChecker projection, source-value reduction, connectable observation, and static host prototype boundaries.",
@@ -38,8 +40,10 @@
         "CommonJS carrier semantics belong in evaluation/commonjs.ts. StaticEvaluator materializes authored exports/module carriers there and StaticModuleGraphEvaluator reads export/require values through the same substrate.",
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
         "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; `evaluateAureliaResolveCall(...)` owns that narrow path through `aureliaResolveDirectKey(...)` and `evaluateAureliaResolveDirectClassKey(...)`. Registered/interface DI keys join through RuntimeBindingSourceActivationContext.resolveCallFrame(...) and active-container resolver lookup when a modeled container is available, not through the generic evaluator.",
-        "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams.",
-        "Project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
+        "Browser ambient globals such as document, window, self, customElements, and console are Aurelia host-runtime boundary values during app admission. Keep them in aureliaStaticEvaluationRuntimeHost so app setup expressions remain host-dependent boundaries instead of unresolved-identifier seams, and keep ordinary host-boundary method calls/property writes such as animation-frame, storage, keyboard event, WebGL, and AudioContext usage as boundary propagation rather than generic dynamic-call/dynamic-mutation seam sites.",
+        "Effective TypeScript lib ambient value declarations and project-local `.d.ts` ambient `declare const/let/var` globals, including `declare global` module declarations, are host-environment boundary values for static evaluation. Keep this in StaticProjectEvaluationPass via ambient-globals.ts so browser/stdlib names and Vite/build-time injected variables stop producing unresolved-identifier seams without pretending their literal values are statically known.",
+        "`import.meta` is a host-environment boundary object. `import.meta.env.*` should be legal evaluator syntax that carries host/bundler dependency forward to consumers such as resource convergence without becoming an evaluator unsupported-expression seam.",
+        "Evaluator open-seam reason kinds are producer-owned. `EvaluationOpenSeam` now carries compact producer reason kinds through `EvaluationKernelEmitter` into kernel open seams for core evaluator lanes such as missing identifiers, unsupported loops, and unsupported compound assignments; expand producer threading at the seam creation point rather than parsing summaries or stamping broad display heuristics.",
         "Primitive operator value algebra belongs in evaluation/operators.ts instead of bottom-of-evaluator helper islands. Loose == and != must model primitive/nullish ECMAScript equality instead of aliasing strict equality; this keeps common guards such as value == null aligned across StaticEvaluator and binding-source value reads.",
         "Relational operator reduction should close the deterministic numeric and string comparison lanes shared by StaticEvaluator and binding-source source-value callbacks. Leave mixed coercion or host-object comparison open until a consumer proves that broader ECMAScript coercion subset is needed.",
         "Representative evaluator values belong in evaluation/representative-values.ts. Repeated views and speculative conditionals should share the same conservative summary policy: unanimous exact values stay exact, string-like branches become string patterns, common object fields survive, and unrelated lanes become binding-scope boundaries."
@@ -108,12 +112,50 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/ambient-globals.ts",
           "symbolName": "readStaticEvaluationAmbientGlobalDeclarations",
-          "summary": "Project-local `.d.ts` ambient global reader for build-time/host-injected values exposed as host-environment boundaries."
+          "summary": "Effective TypeScript lib and project-local `.d.ts` ambient global reader for host/browser/build-time values exposed as host-environment boundaries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/boundary-open-reason.ts",
+          "symbolName": "openSeamReasonKindForEvaluationBoundary",
+          "summary": "Bridge from evaluator boundary values to open-seam reason vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/seams.ts",
+          "symbolName": "EvaluationOpenSeam",
+          "summary": "Evaluator-local seam carrier now preserves producer reason kinds until kernel publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "symbolName": "evaluationOpenSeamDefaultReasonKinds",
+          "summary": "Default evaluator seam-kind to open-seam-reason mapping used before producer-specific reasons are compacted."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+          "summary": "Contract proving evaluator-produced open seams carry reason kinds for missing identifiers, unsupported loops, and compound assignments."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-classic-for-loop",
+          "summary": "Contract proving bounded classic for loops and simple compound/update assignments reduce through StaticEvaluator guardrails."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-import-meta-boundary",
+          "summary": "Contract proving import.meta.env reduces to host-environment boundaries without evaluator syntax seams."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:expression-global-intrinsics",
+          "summary": "Contract proving standard globals and deterministic string/array intrinsics close without unresolved property seams."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
-          "summary": "Contract proving declared ambient globals do not become unresolved identifiers while missing globals remain source-filterable open seams."
+          "summary": "Contract proving declared ambient/browser globals, browser-game host-boundary operations, and deterministic simulation helpers do not become unresolved identifiers or generic dynamic-call/dynamic-mutation seams while missing globals remain source-filterable."
         },
         {
           "kind": "source",
@@ -160,6 +202,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/intrinsics/promise-intrinsics.ts",
           "summary": "Promise intrinsic implementation family, including fulfillment-lane preservation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/intrinsics/string-intrinsics.ts",
+          "summary": "String intrinsic implementation family, including boundary method recognition and deterministic charAt/charCodeAt/at/substring/repeat closure."
         },
         {
           "kind": "source",
@@ -228,7 +275,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:static-module-graph-evaluator",
@@ -372,8 +419,11 @@
       "guidance": [
         "Start at StaticProjectEvaluationFrame when app-source admission, linked source admission, unresolved module capture, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
         "Keep StaticProjectEvaluationPass as a small facade over the per-run frame unless a new public evaluation mode needs a distinct entry point.",
-        "Keep source roles authoritative: tests, declarations, templates, styles, manifests, and tooling configs should not enter app-world static evaluation by accident.",
+        "Keep source roles authoritative: tests, declarations, templates, styles, manifests, tooling scripts, and tooling configs should not enter app-world static evaluation by accident.",
+        "Keep checker/project inclusion separate from Aurelia app-world evaluation eligibility. Top-level TS/JS tooling scripts, including `.mjs`, are `tooling-script` sources: they remain visible to ordinary TypeScript diagnostics without producing app-world static evaluation seams. Do not force them through `app-source` merely to keep checker visibility.",
         "Use the source composition profile to separate app-authored sources from linked source-shipped packages before deciding whether a broad evaluated-source count is an admission bug or legitimate framework/plugin pressure.",
+        "Static project evaluation source results carry compact source-origin contributions. Preserve both `static-evaluation-root` and `module-graph-dependency` when a source is directly discovered as app-source and also reached through startup/import graph evaluation.",
+        "Public open-seam context should consume those source origins query-time instead of adding durable kernel records or MCP-local source-origin guesses.",
         "If a downstream materializer needs another evaluation loop, inspect whether it should consume StaticProjectEvaluationResult instead."
       ],
       "anchors": [
@@ -386,8 +436,43 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationSourceOrigin",
+          "summary": "Compact in-memory source-origin contribution row for direct static-evaluation roots and module graph dependencies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
           "symbolName": "StaticProjectEvaluationFrame",
           "summary": "Per-run project evaluation work frame and profile assembly owner."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
+          "symbolName": "inferSourceFileRole",
+          "summary": "Boot source-role classifier that separates top-level tooling scripts from app-world sources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-classification.ts",
+          "symbolName": "isToolingScriptPath",
+          "summary": "Top-level scripts/tools/tooling TS/JS/.mjs classifier for diagnostics-visible tooling scripts that should not enter app-world evaluation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/address.ts",
+          "symbolName": "SourceFileRole",
+          "summary": "Source-role enum containing ToolingScript for build or maintenance scripts that need checker diagnostics but not app-world evaluation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject.readProgramSourceFileRole",
+          "summary": "Checker-owned source role bridge that should remain compatible with future project-inclusion versus app-world-evaluation split."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
+          "summary": "Contract proving top-level tooling scripts, including `.mjs`, keep TypeScript diagnostics while staying out of app-world open-seam sites."
         },
         {
           "kind": "source",
@@ -405,7 +490,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:evaluation-module-loader",

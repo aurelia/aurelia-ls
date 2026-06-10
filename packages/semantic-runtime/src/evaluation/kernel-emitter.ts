@@ -62,6 +62,7 @@ export class EvaluationKernelEmitter {
       openKind: seam.seamKind,
       summary: seam.summary,
       evidenceRoles: [EvidenceRole.Diagnostic],
+      reasonKinds: seam.reasonKinds,
       includeProvenanceRecord: true,
     }).records;
   }

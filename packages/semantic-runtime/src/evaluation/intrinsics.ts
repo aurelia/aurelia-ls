@@ -63,10 +63,13 @@ import { evaluateRegExpCall, evaluateRegExpConstructor } from './intrinsics/rege
 import { evaluateCallArgumentValues } from './intrinsics/shared.js';
 import {
   evaluateStringCall,
+  evaluateStringAt,
   evaluateStringLocaleCompare,
   evaluateStringPredicate,
   evaluateStringReplace,
+  evaluateStringRepeat,
   evaluateStringSplit,
+  evaluateStringSubstring,
   evaluateStringTransform,
 } from './intrinsics/string-intrinsics.js';
 import { EvaluationOpenSeamKind } from './seams.js';
@@ -316,6 +319,16 @@ function evaluatePrototypeIntrinsicCall(
       return evaluateArraySplice(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'slice':
       return evaluateArrayOrStringSlice(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'at':
+      return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'at');
+    case 'charAt':
+      return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'charAt');
+    case 'charCodeAt':
+      return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'charCodeAt');
+    case 'repeat':
+      return evaluateStringRepeat(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'substring':
+      return evaluateStringSubstring(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'toUpperCase':
       return evaluateStringTransform(call, receiverExpression, environment, moduleKey, depth + 1, host, 'toUpperCase');
     case 'toLowerCase':

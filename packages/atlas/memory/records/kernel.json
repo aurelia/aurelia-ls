@@ -140,7 +140,12 @@
       "guidance": [
         "Treat `OpenSeam.addressHandle` as the primary unresolved seam site, not proof that every `reasonKind` came from the same source span.",
         "When a repair or diagnostic needs to act on one reason inside a multi-reason seam, use `OpenSeam.reasonSources` and API `reasonSources` rows before adding feature-local evidence tables.",
+        "API `reasonSources` rows should carry query-time `sourceRange` when their address resolves to authored text. Keep line/column derivation out of durable kernel records; the kernel owns address/evidence handles and the API owns public location projection.",
         "Keep compact open-seam summaries stable for routing, but preserve exact reason-level provenance through structured rows when the product needs edit targets or hover explanation.",
+        "Producer-owned reason kinds should be carried into OpenSeam at publication time. Static evaluator seams now prove this path through `EvaluationOpenSeam.reasonKinds`; extend producer threading before adding downstream classifiers.",
+        "When one semantic layer wraps lower-level open seams into a higher product boundary, carry existing `reasonKinds` through the intermediate carrier before publication. `ConfigurationRecognitionOpen` and `RegistrationRecognitionOpen` preserve evaluator reasons for this purpose; add producer-specific reason taxonomy only when the higher layer owns a genuinely new reason.",
+        "Public open-seam site rows should not expose empty `reasonKinds` when the producer has already emitted a prose open reason. The current pressure-fixture census found and closed the binding-data-flow parser-open gap through `binding-source-unsupported-expression`; repeat this producer-level audit before adding display heuristics.",
+        "Public summary answers should distinguish raw derivation row counts from unique authored seam-site counts structurally, not only in prose. Raw `open-seams` display samples should dedupe repeated derivation rows for breadth while preserving raw structured rows for deep inspection.",
         "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
         "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
       ],
@@ -156,6 +161,43 @@
           "filePath": "packages/semantic-runtime/src/kernel/source-open-seam.ts",
           "symbolName": "recordsForSourceOpenSeam",
           "summary": "Shared source-backed open-seam publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/seams.ts",
+          "symbolName": "EvaluationOpenSeam",
+          "summary": "Evaluator-local seam carrier that preserves producer reason kinds until kernel publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+          "symbolName": "openSeamReasonKindsForDataFlow",
+          "summary": "Binding data-flow seam reason bridge; malformed or incomplete parser expressions fall back to binding-source-unsupported-expression instead of empty public reason sets."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-public-quality",
+          "summary": "Broad pressure-fixture sweep for public open-seam trust: raw/site/summary totals, reasonKinds, source ranges, static-evaluation origin uniqueness, and paging completeness."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-sites",
+          "summary": "Contract proving repeated derivation rows collapse into unique authored sites while summary totals, raw display samples, source roles, application roles, static-evaluation origins, reason filters, and continuations stay public."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+          "summary": "Contract proving evaluator-produced open seams preserve reason kinds through public seam projections."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:configuration-open-seam-reasons",
+          "summary": "Contract proving evaluator reason kinds survive the configuration product-boundary handoff."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:router-dynamic-pattern",
+          "summary": "Contract proving router dynamic href reasonSources preserve source-bearing reason provenance and authored source ranges."
         },
         {
           "kind": "source",
@@ -188,7 +230,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:product-detail-catalog",

@@ -360,19 +360,24 @@ async function readFixtureRows(fixtureName) {
       kind: 'binding-data-flow-summary',
       page: { size: 0 },
     }).value,
-    valueChannels: app.ask({
-      kind: 'binding-value-channels',
-      page: { size: 1000 },
-    }).value.rows,
-    dataFlows: app.ask({
-      kind: 'binding-data-flows',
-      page: { size: 1000 },
-    }).value.rows,
-    templateDiagnostics: app.ask({
-      kind: 'template-diagnostics',
-      page: { size: 1000 },
-    }).value.rows,
+    valueChannels: collectAppRows(app, 'binding-value-channels'),
+    dataFlows: collectAppRows(app, 'binding-data-flows'),
+    templateDiagnostics: collectAppRows(app, 'template-diagnostics'),
   };
+}
+
+function collectAppRows(app, kind) {
+  const rows = [];
+  let cursor = null;
+  do {
+    const answer = app.ask({
+      kind,
+      page: { size: 200, cursor },
+    });
+    rows.push(...answer.value.rows);
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
 }
 
 function expectValueChannel(fixtureName, summary, expected) {

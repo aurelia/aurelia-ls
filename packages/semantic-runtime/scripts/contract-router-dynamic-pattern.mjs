@@ -247,6 +247,9 @@ if (unresolvedVendorModuleDiagnostic != null) {
 if (targetOpenReasonSource == null || targetOpenReasonSource.source == null) {
   failures.push('Expected router href target-open reason to preserve a source-bearing reasonSource row.');
 }
+if (targetOpenReasonSource?.sourceRange == null || targetOpenReasonSource.sourceRange.start.line < 0 || targetOpenReasonSource.sourceRange.start.character < 0) {
+  failures.push(`Expected router href target-open reason source to preserve an authored source range, observed ${JSON.stringify(targetOpenReasonSource)}.`);
+}
 if (explicitExternalHrefOpenSeam != null) {
   failures.push('Expected explicit external dynamic href values to bypass router instruction open seams.');
 }
@@ -258,6 +261,7 @@ const summary = {
   targetOpenReasonSource: targetOpenReasonSource == null ? null : {
     reasonKind: targetOpenReasonSource.reasonKind,
     hasSource: targetOpenReasonSource.source != null,
+    sourceRange: targetOpenReasonSource.sourceRange,
   },
   expectedEffects: expectedEffects.length,
   verification: verification.effectResults.map((result) => ({

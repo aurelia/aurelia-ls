@@ -49,6 +49,17 @@ export const enum CheckerTypeMemberKind {
   IndexSignature = 'index-signature',
 }
 
+export const enum CheckerTypeMemberVisibilityKind {
+  /** TypeScript declaration is public or has no explicit accessibility modifier. */
+  Public = 'public',
+  /** TypeScript declaration is protected. */
+  Protected = 'protected',
+  /** TypeScript declaration is private or uses a private identifier. */
+  Private = 'private',
+  /** Visibility could not be recovered from the projected checker member. */
+  Unknown = 'unknown',
+}
+
 export const enum CheckerIndexedAccessKeyKind {
   String = 'string',
   Number = 'number',

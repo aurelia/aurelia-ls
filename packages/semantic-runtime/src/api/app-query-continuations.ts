@@ -979,14 +979,38 @@ function addIssueContinuations(
   if (query.kind === SemanticAppQueryKind.OpenSeamSummary) {
     seeds.push(
       inspect(
+        'Group open seams by unique authored source site before paging raw derivations.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+        InquiryEvidenceState.Open,
+      ),
+      inspect(
         'Page raw open seam rows behind the summary.',
         rowQuery(SemanticAppQueryKind.OpenSeams, query, page),
         InquiryEvidenceState.Open,
       ),
     );
   }
+  if (query.kind === SemanticAppQueryKind.OpenSeamSites) {
+    seeds.push(
+      inspect(
+        'Page raw open seam rows behind the selected authored sites.',
+        rowQuery(SemanticAppQueryKind.OpenSeams, query, page),
+        InquiryEvidenceState.Open,
+      ),
+      orient(
+        'Group open seams by seam kind and reason signature.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
+        InquiryEvidenceState.Open,
+      ),
+    );
+  }
   if (query.kind === SemanticAppQueryKind.OpenSeams) {
     seeds.push(
+      orient(
+        'Group repeated derivation rows by unique authored source site.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+        InquiryEvidenceState.Open,
+      ),
       orient(
         'Group open seams before choosing a narrower follow-up.',
         rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
@@ -1297,7 +1321,7 @@ function diagnosticProjectionFromQuery(
 function openSeamFilterFromQuery(
   kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
   query: SemanticAppQuery,
-): Pick<SemanticAppQuery, 'sourceFile' | 'openSeamKindKey' | 'openSeamReasonKind'> {
+): Pick<SemanticAppQuery, 'sourceFile' | 'openSeamKindKey' | 'openSeamReasonKind' | 'sourceRole'> {
   if (!semanticAppQueryCatalogRow(kind).supportsOpenSeamFilters) {
     return {};
   }
@@ -1305,6 +1329,7 @@ function openSeamFilterFromQuery(
     ...(query.sourceFile == null ? {} : { sourceFile: query.sourceFile }),
     ...(query.openSeamKindKey == null ? {} : { openSeamKindKey: query.openSeamKindKey }),
     ...(query.openSeamReasonKind == null ? {} : { openSeamReasonKind: query.openSeamReasonKind }),
+    ...(query.sourceRole == null ? {} : { sourceRole: query.sourceRole }),
   };
 }
 
