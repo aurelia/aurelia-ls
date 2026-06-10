@@ -3858,7 +3858,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:trackable-method-observation",
         role: "supporting",
         summary:
-          "Focused observation contract over binding-owned @computed/@astTrack trackable method dependency rows.",
+          "Focused observation contract over binding-owned @computed/@astTrack trackable method dependency rows and non-trackable template method call warnings.",
       },
       {
         kind: "script",
@@ -6649,7 +6649,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         pathPrefix: "packages/semantic-runtime/fixtures/pressure/trackable-method-dependencies",
         role: "pressure",
         summary:
-          "Pressure fixture for binding-owned @computed/@astTrack trackable method dependency rows and explicit-vs-proxy execution.",
+          "Pressure fixture for binding-owned @computed/@astTrack trackable method dependency rows, explicit-vs-proxy execution, and non-trackable template method call warnings.",
       },
       {
         kind: "path",

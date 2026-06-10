@@ -33,6 +33,8 @@ export enum ExpectedSemanticEffectObservationSurface {
   TemplateCompilations = 'template-compilations',
   /** Template diagnostic rows. */
   TemplateDiagnostics = 'template-diagnostics',
+  /** Observation issue rows. */
+  ObservationIssues = 'observation-issues',
   /** Runtime controller rows. */
   RuntimeControllers = 'runtime-controllers',
   /** Runtime watcher rows. */
@@ -203,6 +205,13 @@ export const EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS: readonly ExpectedSem
     'The reopened app should expose template diagnostic rows.',
     [ExpectedSemanticEffectObservationSurface.TemplateDiagnostics],
     [SemanticAppQueryKind.TemplateDiagnostics],
+  ),
+  descriptor(
+    ExpectedSemanticEffectKind.ObservationIssue,
+    'Observation Issue',
+    'The reopened app should expose observation issue rows.',
+    [ExpectedSemanticEffectObservationSurface.ObservationIssues],
+    [SemanticAppQueryKind.ObservationIssues],
   ),
   descriptor(
     ExpectedSemanticEffectKind.RuntimeController,

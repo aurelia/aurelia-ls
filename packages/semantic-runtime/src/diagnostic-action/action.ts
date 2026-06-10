@@ -199,6 +199,7 @@ export function diagnosticActionKindForDiagnosticSuggestion(
     case 'register-resource':
     case 'resolve-runtime-boundary':
     case 'configure-node-observer':
+    case 'make-method-trackable':
       return DiagnosticActionKind.ResolveRuntimeBoundary;
     case 'remove-duplicate-binding-behavior':
     case 'use-assignable-expression':

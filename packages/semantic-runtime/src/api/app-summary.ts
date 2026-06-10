@@ -29,6 +29,7 @@ interface AppSummaryEvaluationCounts {
   readonly evaluatedSources: number;
   readonly unresolvedModuleEdges: number;
   readonly evaluationIssues: number;
+  readonly observationIssues: number;
 }
 
 interface AppSummaryRouterCounts {
@@ -165,6 +166,7 @@ function evaluationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppS
     evaluatedSources: emission.evaluation.readEvaluatedSources().length,
     unresolvedModuleEdges: emission.evaluation.readUnresolvedModules().length,
     evaluationIssues: emission.evaluationIssues.readIssues().length,
+    observationIssues: emission.observation.readIssues().length,
   };
 }
 

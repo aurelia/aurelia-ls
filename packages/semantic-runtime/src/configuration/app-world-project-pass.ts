@@ -182,6 +182,9 @@ import {
   ObservableDecoratorIssueMaterializer,
 } from '../observation/observable-decorator-issues.js';
 import {
+  NonTrackableTemplateMethodCallIssueMaterializer,
+} from '../observation/non-trackable-template-method-call-issues.js';
+import {
   mergeObservationSourceIssueProjectResults,
   type ObservationSourceIssueProjectResult,
 } from '../observation/observation-source-issues.js';
@@ -195,6 +198,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'module-loader-issues'
   | 'framework-api-issues'
   | 'observation-source-issues'
+  | 'binding-observation-issues'
   | 'computed-observation-definitions'
   | 'computed-observer-sources'
   | 'runtime-effects'
@@ -362,7 +366,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const evaluation = this.evaluateProject();
     const typeSystem = this.buildTypeSystem(evaluation);
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
-    const observation = this.materializeObservationSourceIssues(typeSystem);
+    const sourceObservation = this.materializeObservationSourceIssues(typeSystem);
     const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
     const computedObserverSources = this.materializeComputedObserverSources(typeSystem);
     const runtimeEffects = this.materializeRuntimeEffects(typeSystem);
@@ -390,6 +394,8 @@ class AureliaAppWorldProjectConstructionFrame {
     const dialog = this.materializeDialogSourceIssues(typeSystem);
     const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
     const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
+    const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
+    const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
     const routeInstructions = this.materializeRouteInstructions(
@@ -491,6 +497,15 @@ class AureliaAppWorldProjectConstructionFrame {
         new ComputedDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
         new ObservableDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
       ])
+    );
+  }
+
+  private materializeBindingObservationIssues(
+    typeSystem: TypeSystemProject,
+    templates: TemplateCompilationProjectEmission,
+  ): ObservationSourceIssueProjectResult {
+    return this.measure('binding-observation-issues', () =>
+      new NonTrackableTemplateMethodCallIssueMaterializer(this.store).materialize(this.project, typeSystem, templates)
     );
   }
 

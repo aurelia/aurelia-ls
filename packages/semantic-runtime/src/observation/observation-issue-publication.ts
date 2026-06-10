@@ -51,6 +51,8 @@ export class ObservationIssuePublisher {
     message: string,
     frameworkErrorCode: ObservationFrameworkErrorCode | null,
     sourceAddressHandle: AddressHandle | null,
+    relatedSourceAddressHandles: readonly AddressHandle[] = [],
+    subjectName: string | null = null,
   ): ObservationIssuePublication {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
@@ -69,6 +71,8 @@ export class ObservationIssuePublisher {
       message,
       frameworkErrorCode,
       sourceAddressHandle,
+      relatedSourceAddressHandles,
+      subjectName,
       [],
     );
     return new ObservationIssuePublication(

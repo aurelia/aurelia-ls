@@ -1313,6 +1313,7 @@ export interface SemanticAppSummary {
   readonly evaluatedSources: number;
   readonly unresolvedModuleEdges: number;
   readonly evaluationIssues: number;
+  readonly observationIssues: number;
   readonly resourceDefinitions: number;
   readonly routerOptions: number;
   readonly routeConfigs: number;
@@ -1705,11 +1706,15 @@ export interface SemanticObservationIssueRow {
   readonly frameworkErrorCode: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly message: string;
+  readonly subjectName: string | null;
   readonly source: SemanticSourceReference | null;
+  readonly relatedSources: readonly SemanticSourceReference[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
   };
 }
 
@@ -3108,6 +3113,7 @@ export type SemanticTemplateCursorSuggestionKind =
   | 'align-assignment-type'
   | 'make-source-writable'
   | 'use-assignable-expression'
+  | 'make-method-trackable'
   | 'configure-node-observer'
   | 'inspect-owner-type';
 

@@ -34,6 +34,8 @@ export class TrackableMethodDependenciesApp {
     value: 3,
   };
 
+  comparisonTarget = 'p1';
+
   @computed
   featuredProductNames(): string {
     return this.products
@@ -75,5 +77,9 @@ export class TrackableMethodDependenciesApp {
 
   ordinaryCounterLabel(): string {
     return this.ordinaryCounter.value.toString();
+  }
+
+  someCheck(value: string): boolean {
+    return this.comparisonTarget === value;
   }
 }

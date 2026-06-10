@@ -28,6 +28,7 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly serviceInteractionBindings: readonly object[];
   readonly compiledResources: number;
   readonly templateDiagnostics: ExpectedSemanticEffectObservableRows;
+  readonly observationIssues: ExpectedSemanticEffectObservableRows;
   readonly runtimeControllers: ExpectedSemanticEffectObservableRows;
   readonly runtimeWatchers: ExpectedSemanticEffectObservableRows;
   readonly runtimeWatcherObservedDependencies: ExpectedSemanticEffectObservableRows;
@@ -137,6 +138,7 @@ const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKin
   [ExpectedSemanticEffectKind.ExternalTemplate]: (snapshot) => snapshot.components
     .filter((component) => readPath(component, 'template.source') != null),
   [ExpectedSemanticEffectKind.TemplateDiagnostic]: (snapshot) => snapshot.templateDiagnostics,
+  [ExpectedSemanticEffectKind.ObservationIssue]: (snapshot) => snapshot.observationIssues,
   [ExpectedSemanticEffectKind.RuntimeController]: (snapshot) => snapshot.runtimeControllers,
   [ExpectedSemanticEffectKind.RuntimeWatcher]: (snapshot) => snapshot.runtimeWatchers,
   [ExpectedSemanticEffectKind.RuntimeWatcherObservedDependency]: (snapshot) => snapshot.runtimeWatcherObservedDependencies,

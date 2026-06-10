@@ -66,6 +66,8 @@ export enum ExpectedSemanticEffectKind {
   TemplateCompilation = 'template-compilation',
   /** The reopened app should expose template diagnostic rows. */
   TemplateDiagnostic = 'template-diagnostic',
+  /** The reopened app should expose observation issue rows. */
+  ObservationIssue = 'observation-issue',
   /** The reopened app should expose runtime controller/hydration facts. */
   RuntimeController = 'runtime-controller',
   /** The reopened app should expose controller-owned runtime watcher facts. */

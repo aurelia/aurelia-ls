@@ -636,6 +636,7 @@
         "Semantic-runtime now publishes binding-owned RuntimeBindingObservedDependency products from RuntimeBindingDataFlowMaterializer for source-to-target expression evaluation. Use binding-observed-dependencies when authoring, diagnostics, or repair planning need concrete AccessScope/AccessMember/AccessKeyed, collection-call, or callback-local member dependency rows. Template collection-read rows are decided from the CallMember owner site so contextual arrow callback locals participate; array calls stay visible while string/object method-name false positives are rejected when checker facts are visible.",
         "Use binding-observed-dependency-summary before raw binding-observed-dependencies when an MCP/LSP answer only needs compact source-side observation evidence. The summary groups dependency kind, binding kind, source root, member/method/key samples, observed member kind, and observedMemberSourceState so direct state/domain reads can be distinguished from repeat locals, option locals, runtime-scope names, temporary collection values, and open scopes without paging every dependency row.",
         "Binding-owned method calls follow the framework `astEvaluate` split: ordinary method calls expose the called method plus receiver/argument template reads, while only @computed/@astTrack trackable methods add method-declaration dependency rows. Do not treat undecorated domain method bodies as hidden observed dependencies; use direct template expressions, getters, checked/model channels, or explicit trackable methods when the UI needs those inner reads to drive updates.",
+        "Semantic-runtime publishes `non-trackable-template-method-call` ObservationIssue warnings when a template calls an undecorated Program-owned method whose body has direct `this.*` reads. This is a valid-code observation hazard, not a framework error: keep it in observation issues/app diagnostics, with the template call as the primary source, method/body reads as related sources, and a `make-method-trackable` suggestion targeting observer configuration rather than pretending an edit has already been safely applied. This slice is intentionally bounded to direct body reads; transitive helper calls and external method bodies remain future observation-hardening pressure.",
         "Semantic-runtime now publishes ComputedObservationDefinition products for valid @computed getter and trackable-method declarations. Use computed-observation-definitions when authoring needs explicit/proxy-auto dependency declaration facts, including dependency-function counts, not invalid decorator diagnostics.",
         "Semantic-runtime now publishes controller-owned ComputedWatcher and ExpressionWatcher products from resource definition.watches. Use runtime-watchers when authoring, diagnostics, or fixture pressure needs the runtime controller admission lane for @watch/static watches.",
         "ExpressionWatcher products now publish runtime-watcher-observed-dependencies by reusing the binding-owned astEvaluate connectable dependency collector. Use those rows when @watch/static watch guidance needs concrete AccessScope/AccessMember/AccessKeyed or collection-call dependency facts.",
@@ -834,6 +835,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/non-trackable-template-method-call-issues.ts",
+          "symbolName": "NonTrackableTemplateMethodCallIssueMaterializer",
+          "summary": "ObservationIssue warning materializer for template calls into undecorated methods whose bodies read unobserved `this.*` state."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
           "symbolName": "distinctRuntimeObservedDependencyDrafts",
           "summary": "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts."
@@ -1028,6 +1035,13 @@
           "minMethodCount": 6
         },
         {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/observation/non-trackable-template-method-call-issues.ts",
+          "className": "NonTrackableTemplateMethodCallIssueMaterializer",
+          "minLineCount": 100,
+          "minMethodCount": 4
+        },
+        {
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/controller-projections.ts",
           "symbolName": "readRuntimeWatcherObservedDependencyRows"
@@ -1048,7 +1062,7 @@
       ],
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-20"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "frontier:computed-observer-source-projection",
@@ -1946,7 +1960,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-02"
+      "updatedAt": "2026-06-10"
     },
     {
       "id": "reuse:observation-source-issues",
@@ -1958,11 +1972,12 @@
         "diagnostics",
         "type-system"
       ],
-      "summary": "Observation source issues own framework observation errors that arise from authored TypeScript shapes before template binding or resource convergence.",
-      "rationale": "The runtime @astTrack, @computed, and @observable decorators throw from observation code, even on ordinary classes. Semantic-runtime models those as observation-owned source issues rather than squeezing them into resource metadata, template diagnostics, or API-level wording.",
+      "summary": "Observation issues own framework observation errors and valid-code observation hazards that belong below app diagnostics.",
+      "rationale": "The runtime @astTrack, @computed, and @observable decorators throw from observation code, even on ordinary classes. Binding observation can also identify valid TypeScript/Aurelia code that will not update as intended, such as template calls into undecorated methods with hidden `this.*` reads. Semantic-runtime models both as observation-owned issues rather than squeezing them into resource metadata, template diagnostics, or API-level wording.",
       "guidance": [
         "Start here when a framework error row comes from observation-authored TypeScript such as @astTrack or @observable decorator context rather than from a template binding target.",
         "As of 2026-05-14, non-method @astTrack targets spend runtime ast_track_decorator_not_a_method / AUR0117; invalid @observable forms spend runtime invalid_observable_decorator_usage / AUR0224; invalid @computed(...) non-getter/non-method targets spend runtime-html computed_not_getter / AUR0228.",
+        "As of 2026-06-10, non-trackable template method calls publish semantic-runtime-product warning rows with issueKind `non-trackable-template-method-call` after binding data-flow observed-dependency materialization. The warning is source-backed at the template call, includes related sources for the called Program-owned method and direct hidden body reads, and carries a `make-method-trackable` suggestion; a future code-action/edit surface must still decide the exact source edit. Do not treat this as complete transitive method-body analysis yet.",
         "Keep import/decorator recognition exact and source-grounded; broaden the shared import-binding helper before adding local alias readers.",
         "Publish ObservationIssue products low in the observation substrate, then let app diagnostics and repair planning consume those rows.",
         "Do not claim framework-error authority from API wording. Check the Aurelia framework usage row and add exact links only where the source-level observation path is modeled."
@@ -1993,6 +2008,12 @@
           "filePath": "packages/semantic-runtime/src/observation/computed-decorator-issues.ts",
           "symbolName": "ComputedDecoratorIssueMaterializer",
           "summary": "Observation-owned materializer for source-level @computed decorator issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/non-trackable-template-method-call-issues.ts",
+          "symbolName": "NonTrackableTemplateMethodCallIssueMaterializer",
+          "summary": "Observation-owned materializer for valid-code template method call observation warnings."
         },
         {
           "kind": "source",
@@ -2047,6 +2068,11 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/non-trackable-template-method-call-issues.ts",
+          "symbolName": "NonTrackableTemplateMethodCallIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/observable-decorator-recognition.ts",
           "symbolName": "readInvalidObservableDecoratorSites"
         },
@@ -2057,7 +2083,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-06-10"
     }
   ]
 }

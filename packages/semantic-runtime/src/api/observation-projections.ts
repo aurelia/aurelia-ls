@@ -1,6 +1,9 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { ObservationIssue } from '../observation/observation-issue.js';
+import {
+  ObservationIssueKind,
+  type ObservationIssue,
+} from '../observation/observation-issue.js';
 import type { ComputedObservationDefinition } from '../observation/computed-observation.js';
 import type {
   ComputedObserverObservedDependency,
@@ -323,15 +326,58 @@ function observationIssueRow(
     issueKind: issue.issueKind,
     diagnosticAuthority: issue.frameworkErrorCode == null ? 'semantic-runtime-product' : 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
-    severity: 'error',
+    severity: observationIssueSeverity(issue),
     message: issue.message,
+    subjectName: issue.subjectName,
     source: describeAddress(store, issue.sourceAddressHandle),
+    relatedSources: issue.relatedSourceAddressHandles
+      .map((addressHandle) => describeAddress(store, addressHandle))
+      .filter((source) => source != null),
+    suggestion: observationIssueSuggestion(store, issue),
     ...(handles ? {
       handles: {
         productHandle: issue.productHandle,
         identityHandle: issue.identityHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
+        relatedSourceAddressHandles: issue.relatedSourceAddressHandles,
       },
     } : {}),
   };
+}
+
+function observationIssueSeverity(
+  issue: ObservationIssue,
+): SemanticObservationIssueRow['severity'] {
+  switch (issue.issueKind) {
+    case ObservationIssueKind.NonTrackableTemplateMethodCall:
+      return 'warning';
+    default:
+      return 'error';
+  }
+}
+
+function observationIssueSuggestion(
+  store: KernelStore,
+  issue: ObservationIssue,
+): SemanticObservationIssueRow['suggestion'] {
+  switch (issue.issueKind) {
+    case ObservationIssueKind.NonTrackableTemplateMethodCall:
+      return {
+        suggestionKind: 'make-method-trackable',
+        actionKind: 'configure-observer',
+        actionTarget: {
+          targetKind: 'observer-config',
+          source: describeAddress(store, issue.relatedSourceAddressHandles[0] ?? null),
+          memberName: issue.subjectName,
+          typeDisplay: null,
+        },
+        summary: 'Make the called method trackable with @computed/@astTrack, convert it to an observable getter, or bind the dependency directly.',
+        targetMemberName: issue.subjectName,
+        ownerTypeDisplay: null,
+        valueTypeDisplay: null,
+        valueTypeSource: null,
+      };
+    default:
+      return null;
+  }
 }
