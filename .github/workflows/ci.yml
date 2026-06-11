@@ -30,12 +30,12 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.5.2
           run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
@@ -197,6 +197,61 @@ jobs:
           file-coverage-mode: changes
           name: Tests
 
+  mcp-preview:
+    name: MCP Preview Pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
+
+      - name: Probe source stdio MCP
+        run: pnpm --filter @aurelia-ls/mcp probe:stdio
+
+      - name: Check MCP surface contracts
+        run: pnpm --filter @aurelia-ls/mcp contract:adversarial-surface
+
+      - name: Check MCP continuation pass-through
+        run: pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through
+
+      - name: Pack MCP preview tarball
+        run: pnpm --filter @aurelia-ls/mcp release:pack
+
+      - name: Probe release tarball
+        run: pnpm --filter @aurelia-ls/mcp probe:release-tarball
+
+      - name: Probe project-local install
+        run: pnpm --filter @aurelia-ls/mcp probe:project-local-install
+
+      - name: Upload MCP preview tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurelia-ls-mcp-preview
+          path: packages/mcp/.release/*.tgz
+          if-no-files-found: error
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
@@ -213,12 +268,12 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.5.2
           run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
