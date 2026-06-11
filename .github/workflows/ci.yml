@@ -50,10 +50,10 @@ jobs:
         run: pnpm --filter @aurelia-ls/semantic-runtime build
 
       - name: Check public query/type-system contracts
-        run: pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route diagnostics --route inquiry --route kernel --route type-system --skip-build
+        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build
 
       - name: Check open-seam release contracts
-        run: pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
+        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
 
   mcp-preview:
     name: MCP Preview Pack
