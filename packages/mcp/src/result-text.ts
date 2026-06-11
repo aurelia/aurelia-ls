@@ -272,8 +272,7 @@ function semanticAnswerContinuationText(value: Record<string, unknown>): string 
   if (!Array.isArray(value.continuations) || value.continuations.length === 0) {
     return null;
   }
-  const rows = value.continuations
-    .filter(isRecord)
+  const rows = orderedContinuationRows(value.continuations)
     .slice(0, 4)
     .map(compactContinuationText);
   const remaining = value.continuations.length - rows.length;
@@ -298,7 +297,7 @@ function nestedSemanticAnswerContinuationText(value: unknown): string | null {
       : typeof child.index === 'number'
         ? `#${child.index}`
         : 'child';
-    for (const continuation of continuations.filter(isRecord).slice(0, 2)) {
+    for (const continuation of orderedContinuationRows(continuations).slice(0, 2)) {
       rows.push(`${label} -> ${compactContinuationText(continuation)}`);
       if (rows.length >= 4) {
         return `Child continuations: ${rows.join('; ')}; +more.`;
@@ -306,6 +305,24 @@ function nestedSemanticAnswerContinuationText(value: unknown): string | null {
     }
   }
   return rows.length === 0 ? null : `Child continuations: ${rows.join('; ')}.`;
+}
+
+function orderedContinuationRows(rows: readonly unknown[]): Record<string, unknown>[] {
+  return rows
+    .filter(isRecord)
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) =>
+      continuationTextPriority(left.row) - continuationTextPriority(right.row)
+      || left.index - right.index
+    )
+    .map((entry) => entry.row);
+}
+
+function continuationTextPriority(row: Record<string, unknown>): number {
+  // Public DTO wire value from InquiryContinuationKind.NextPage. The page line
+  // already exposes nextCursor, so compact text should lead with semantic
+  // follow-ups such as summaries/sites before repeating the same query.
+  return row.kind === 'next-page' ? 10 : 0;
 }
 
 function compactContinuationText(row: Record<string, unknown>): string {

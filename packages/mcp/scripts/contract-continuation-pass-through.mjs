@@ -29,6 +29,43 @@ expect(
   'single app-query text should expose compact continuation targets without requiring structured JSON inspection.',
 );
 
+const syntheticNextPageFirstText = aureliaMcpResultText({
+  tool: 'aurelia_app_query',
+  value: {
+    summary: 'Synthetic continuation ordering probe.',
+    continuations: [
+      {
+        kind: 'next-page',
+        rationale: 'Continue paging this query with the next cursor.',
+        targetQueryKind: 'open-seams',
+        targetQuery: { kind: 'open-seams', page: { cursor: 'after:0', size: 1 } },
+        intents: ['inspect'],
+        cost: 'free',
+        evidence: { evidenceState: 'not-required', coverage: 'partial-known-gaps', sourcePrecision: 'not-required' },
+        blockers: [],
+      },
+      {
+        kind: 'follow-query',
+        rationale: 'Group open seams before choosing a narrower follow-up.',
+        targetQueryKind: 'open-seam-summary',
+        targetQuery: { kind: 'open-seam-summary', page: { size: 1 } },
+        intents: ['orient', 'inspect'],
+        cost: 'free',
+        evidence: { evidenceState: 'open', coverage: 'partial-known-gaps', sourcePrecision: 'exact-authored-span' },
+        blockers: [],
+      },
+    ],
+  },
+});
+expect(
+  syntheticNextPageFirstText.includes('Continuations: open-seam-summary'),
+  'MCP compact continuation text should not hide semantic follow-ups behind next-page rows.',
+);
+expect(
+  syntheticNextPageFirstText.indexOf('open-seam-summary') < syntheticNextPageFirstText.indexOf('open-seams'),
+  'MCP compact continuation text should order semantic follow-ups before next-page rows.',
+);
+
 const diagnosticFiltered = await adapter.appQuery({
   workspaceRoot: fixtureRoot,
   storeKey: 'mcp-contract-continuation-pass-through-filtered',
