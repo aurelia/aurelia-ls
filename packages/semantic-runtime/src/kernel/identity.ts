@@ -399,6 +399,25 @@ export class ConfigurationIdentity {
   ) {}
 }
 
+/** Identity for framework capability admission, demand, or availability products. */
+export class FrameworkIdentity {
+  /** String discriminator for serialized framework identity records. */
+  readonly kind = 'framework-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a template attribute, configuration step, or resource. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the authored capability use or framework admission boundary. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Stable capability, package, or framework-registration label. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
 /** Identity for router configuration and navigation products. */
 export class RouterIdentity {
   /** String discriminator for serialized router identity records. */
@@ -649,6 +668,7 @@ export type SemanticIdentity =
   | EvaluationIdentity
   | ObservationIdentity
   | ConfigurationIdentity
+  | FrameworkIdentity
   | RouterIdentity
   | RouteRecognizerIdentity
   | I18nIdentity

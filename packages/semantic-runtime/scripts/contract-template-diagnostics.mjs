@@ -18,6 +18,10 @@ const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressur
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
 const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
+const unregisteredShorthandFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-shorthand-syntax');
+const unregisteredPluginSyntaxFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-syntax');
+const unregisteredPluginResourcesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-resources');
+const registeredPluginCapabilitiesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/registered-plugin-capabilities');
 
 const contracts = [
   await verifyFixture(
@@ -358,6 +362,170 @@ const contracts = [
           effectFilter('missingInput', 'runtime-controller:AUR0755'),
         ],
         'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    unregisteredShorthandFixtureRoot,
+    'template-diagnostics-contract:unregistered-shorthand',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unregistered shorthand attributes should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'runtime-html.short-hand-binding-syntax'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.absent(
+        'Unregistered shorthand should remain inert and not produce event-handler value channels.',
+        'binding-value-channel',
+        'template',
+        null,
+        [
+          effectFilter('channelKind', 'event-handler-invocation'),
+        ],
+      ),
+      ExpectedSemanticEffect.absent(
+        'Unregistered shorthand should remain inert and not produce raw-property value channels.',
+        'binding-value-channel',
+        'template',
+        null,
+        [
+          effectFilter('channelKind', 'raw-property'),
+        ],
+      ),
+    ],
+  ),
+  await verifyFixture(
+    unregisteredPluginSyntaxFixtureRoot,
+    'template-diagnostics-contract:unregistered-plugin-syntax',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unregistered i18n syntax attributes should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'i18n.translation-syntax'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Unregistered state syntax attributes should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'state.binding-syntax'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    unregisteredPluginResourcesFixtureRoot,
+    'template-diagnostics-contract:unregistered-plugin-resources',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unregistered router resource elements and attributes should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'router.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Unregistered validation-html resources should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        3,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'validation-html.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Unregistered i18n expression resources should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'i18n.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Unregistered state expression resources should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'state.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Unregistered UI virtualization resources should surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'ui-virtualization.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionTarget.targetKind', 'framework-capability'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    registeredPluginCapabilitiesFixtureRoot,
+    'template-diagnostics-contract:registered-plugin-capabilities',
+    [
+      ExpectedSemanticEffect.absent(
+        'Registered plugin syntax and resources should not surface capability-registration diagnostics.',
+        'template-diagnostic',
+        'template',
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+        ],
       ),
     ],
   ),

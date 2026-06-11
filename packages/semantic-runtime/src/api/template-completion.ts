@@ -50,6 +50,11 @@ import type { RuntimeValueConverterIssue } from '../template/runtime-value-conve
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import type { RouterIssueModel } from '../router/model.js';
+import {
+  FrameworkCapabilityAdmissionState,
+  FrameworkCapabilityDemandSiteKind,
+  type FrameworkCapabilityDemand,
+} from '../framework/capability-demand.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import { TemplateProductDetails } from '../template/product-details.js';
@@ -127,6 +132,7 @@ import {
   runtimeValueConverterIssueDiagnostic,
   runtimeControllerIssueDiagnostic,
   routerIssueDiagnostic,
+  frameworkCapabilityDemandDiagnostic,
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
 import {
@@ -291,6 +297,7 @@ function readTemplateCursorInfoValue(
           ],
         ),
         ...bindingSourceAssignmentDiagnostics,
+        ...frameworkCapabilityDemandCursorDiagnostics(store, emission, readContext.selection, cursorOffset),
         ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
         ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
       ],
@@ -381,6 +388,27 @@ function templateCompilerIssueCursorDiagnostics(
       source,
       issue.severity,
     )];
+  });
+}
+
+function frameworkCapabilityDemandCursorDiagnostics(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  cursorOffset: number | null,
+): readonly SemanticTemplateCursorDiagnosticRow[] {
+  if (cursorOffset == null) {
+    return [];
+  }
+  return frameworkCapabilityDemandsForSelection(emission, selection).flatMap((demand) => {
+    if (demand.admissionState === FrameworkCapabilityAdmissionState.Admitted) {
+      return [];
+    }
+    const source = describeAddress(store, demand.sourceAddressHandle);
+    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+      return [];
+    }
+    return [frameworkCapabilityDemandDiagnostic(demand, source)];
   });
 }
 
@@ -753,6 +781,7 @@ export function readTemplateDiagnosticRows(
     .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
   const rows = [
     ...selections.flatMap((selection) => expressionParseDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => frameworkCapabilityDemandDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => templateCompilerIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => runtimeControllerIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => runtimeRendererIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
@@ -1326,6 +1355,39 @@ function templateCompilerIssueDiagnosticRowsForSelection(
   });
 }
 
+function frameworkCapabilityDemandDiagnosticRowsForSelection(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return frameworkCapabilityDemandsForSelection(emission, selection).flatMap((demand) => {
+    if (demand.admissionState === FrameworkCapabilityAdmissionState.Admitted) {
+      return [];
+    }
+    const source = describeAddress(store, demand.sourceAddressHandle);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = frameworkCapabilityDemandDiagnostic(demand, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: templateCompletionSiteKindForFrameworkCapabilityDemand(demand),
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
 function runtimeControllerIssueDiagnosticRowsForSelection(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
@@ -1550,6 +1612,31 @@ function templateCompilerIssues(
     ...resource.compilation.bindingCommandLowering.issues,
     ...resource.compilation.compiledTemplate.issues,
   ];
+}
+
+function frameworkCapabilityDemandsForSelection(
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+): readonly FrameworkCapabilityDemand[] {
+  const definitionProductHandle = selection.resource.compilation.definition.productHandle;
+  return emission.capabilityDemands.readDemands().filter((demand) =>
+    demand.resourceDefinitionProductHandle === definitionProductHandle
+  );
+}
+
+function templateCompletionSiteKindForFrameworkCapabilityDemand(
+  demand: FrameworkCapabilityDemand,
+): TemplateCompletionSiteKind {
+  switch (demand.siteKind) {
+    case FrameworkCapabilityDemandSiteKind.TemplateElement:
+      return TemplateCompletionSiteKind.ElementName;
+    case FrameworkCapabilityDemandSiteKind.TemplateAttribute:
+      return TemplateCompletionSiteKind.AttributeName;
+    case FrameworkCapabilityDemandSiteKind.TemplateValueConverter:
+      return TemplateCompletionSiteKind.ExpressionValueConverter;
+    case FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior:
+      return TemplateCompletionSiteKind.ExpressionBindingBehavior;
+  }
 }
 
 function sourceReferenceForRuntimeControllerIssue(

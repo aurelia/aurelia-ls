@@ -3263,6 +3263,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'expression-runtime-evaluation-error'
   | 'expression-parse-error'
   | 'template-compiler-error'
+  | 'framework-capability-not-registered'
   | 'runtime-controller-framework-error'
   | 'runtime-renderer-framework-error'
   | 'runtime-binding-framework-error'
@@ -3294,6 +3295,7 @@ export type SemanticTemplateCursorSuggestionKind =
   | 'use-safe-destructuring-source'
   | 'fix-expression-syntax'
   | 'fix-template-syntax'
+  | 'register-framework-capability'
   | 'fix-router-instruction'
   | 'declare-explicit-member'
   | 'declare-assignable-member'
@@ -3318,6 +3320,7 @@ export type SemanticTemplateCursorSuggestionActionKind =
   | 'configure-observer'
   | 'rewrite-expression'
   | 'rewrite-template-syntax'
+  | 'register-framework-capability'
   | 'inspect-owner-type';
 
 export type SemanticTemplateCursorSuggestionValueTypeSource =
@@ -3330,6 +3333,7 @@ export type SemanticTemplateCursorSuggestionActionTargetKind =
   | 'service'
   | 'runtime-boundary'
   | 'observer-config'
+  | 'framework-capability'
   | 'owner-type'
   | 'scope-slot'
   | 'expression'

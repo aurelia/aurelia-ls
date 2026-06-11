@@ -270,6 +270,7 @@ const descriptorsByKind = new Map<FrameworkRegistrationKind, FrameworkRegistrati
 
 const frameworkRegistrationKindsByModule = buildKindsByModule(frameworkRegistrationDescriptors);
 const frameworkRegistrationExportEntriesByModule = buildExportEntriesByModule(frameworkRegistrationDescriptors);
+const frameworkRegistrationKindsByCapability = buildKindsByCapability(frameworkRegistrationDescriptors);
 
 export function frameworkRegistrationDescriptorForKind(
   kind: FrameworkRegistrationKind,
@@ -337,6 +338,21 @@ export function frameworkRegistrationCapabilitiesForKind(
   return frameworkRegistrationDescriptorForKind(kind).capabilities;
 }
 
+export function frameworkRegistrationKindsForCapability(
+  capability: FrameworkRegistrationCapability,
+): readonly FrameworkRegistrationKind[] {
+  return frameworkRegistrationKindsByCapability.get(capability) ?? [];
+}
+
+export function frameworkRegistrationModuleNamesForCapability(
+  capability: FrameworkRegistrationCapability,
+): readonly string[] {
+  return uniqueStrings(
+    frameworkRegistrationKindsForCapability(capability)
+      .flatMap((kind) => frameworkRegistrationDescriptorForKind(kind).moduleNames),
+  );
+}
+
 export function frameworkRegistrationKindCarriesCapability(
   kind: FrameworkRegistrationKind,
   capability: FrameworkRegistrationCapability,
@@ -388,6 +404,23 @@ function buildExportEntriesByModule(
   return mutable;
 }
 
+function buildKindsByCapability(
+  descriptors: readonly FrameworkRegistrationDescriptor[],
+): ReadonlyMap<FrameworkRegistrationCapability, readonly FrameworkRegistrationKind[]> {
+  const mutable = new Map<FrameworkRegistrationCapability, FrameworkRegistrationKind[]>();
+  for (const descriptor of descriptors) {
+    for (const capability of descriptor.capabilities) {
+      let kinds = mutable.get(capability);
+      if (kinds == null) {
+        kinds = [];
+        mutable.set(capability, kinds);
+      }
+      kinds.push(descriptor.kind);
+    }
+  }
+  return mutable;
+}
+
 function frameworkRegistrationDescriptorExportNames(
   descriptor: FrameworkRegistrationDescriptor,
 ): readonly string[] {
@@ -399,4 +432,8 @@ function hasFrameworkRegistrationKind(
   kind: FrameworkRegistrationKind,
 ): boolean {
   return 'has' in exports ? exports.has(kind) : exports.includes(kind);
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

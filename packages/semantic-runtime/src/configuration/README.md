@@ -222,6 +222,13 @@ treated as complete compiler-world services.
 Known framework registration spreads such as `...ShortHandBindingSyntax` are modeled separately from registry bodies.
 They produce framework-registration admissions rather than pretending the spread itself is an `IRegistry`.
 
+Template-authored capability demand is not itself configuration admission. When an app uses known built-in syntax,
+plugin resources, value converters, or binding behaviors without admitting the matching configuration or registration
+group, semantic-runtime publishes `framework.capability-demand` products from the template/app-world join and projects
+unmet demands as `framework-capability-not-registered` diagnostics. Those products join to this registration manifest
+and to manifest/import availability evidence so callers can distinguish "register the available capability" from "no
+local package evidence yet" without inferring configuration from raw source names.
+
 Evaluated object values that expose a `register` method are classified as IRegistry-shaped admissions. Imported or
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable
 `register` member. That checker lane mirrors Aurelia's runtime `isRegistry` branch without executing arbitrary package

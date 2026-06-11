@@ -1,0 +1,14 @@
+<button load="orders">Orders</button>
+<au-viewport></au-viewport>
+
+<ul>
+  <li virtual-repeat.for="item of items">${item}</li>
+</ul>
+
+<validation-container>
+  <div validation-errors.bind="errors"></div>
+</validation-container>
+
+<p>${labelKey | t}</p>
+<input value.bind="displayName & validate">
+<section textcontent.bind="dashboardState & state"></section>

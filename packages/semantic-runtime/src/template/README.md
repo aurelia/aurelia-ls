@@ -597,6 +597,17 @@ The attribute parser is a machine, not just a bag of patterns. Materializers sho
 compiled pattern, score, and interpretation-cache boundaries because autocomplete and diagnostics need to know whether
 an attribute failed matching, matched a pattern, or reached an opaque handler.
 
+Authored framework capability demand is separate from parser success. Optional syntax such as runtime-html
+`ShortHandBindingSyntax` may be visible in source (`@click`, `:value`) while the current app-world compiler world has
+not admitted the matching framework registration. Plugin-owned syntax, resource tags/attributes, value converters, and
+binding behaviors can also be authored while their package is available but their configuration is not registered.
+`framework/capability-demand-materializer.ts` owns that cross-cutting fact after template compilation: it records the
+authored demand, effective admission state, package/import availability evidence, and a registration-capability fix
+path while public diagnostics project only unmet demands. The producer should read built-in syntax groups, built-in
+resource catalog identity, expression AST resource tails, and compiler-world visible-resource lookup; do not teach
+`AttributeSyntax` or attribute classification to reinterpret unregistered shorthand as a binding. Runtime semantics
+remain inert until the capability is registered.
+
 Expression parser integration is intentionally by product handle here. The current expression parser predates the
 kernel and should stay on a short leash: value-site ownership, binding-command preprocessing, multi-binding splitting,
 and lowering belong above it unless runtime expression-parser semantics prove otherwise. Parser results are currently

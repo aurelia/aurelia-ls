@@ -191,6 +191,12 @@ import {
 import {
   evaluateAndEmitAureliaProject,
 } from './aurelia-project-evaluation.js';
+import {
+  FrameworkCapabilityDemandMaterializer,
+} from '../framework/capability-demand-materializer.js';
+import type {
+  FrameworkCapabilityDemandProjectResult,
+} from '../framework/capability-demand.js';
 
 export type AureliaAppWorldProjectPhaseName =
   | 'static-evaluation'
@@ -224,6 +230,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'state-store-lookup-issues'
   | 'app-world-composition'
   | 'template-compilation'
+  | 'framework-capability-demands'
   | 'route-runtime-topology'
   | 'route-instruction-materialization'
   | 'route-recognition-materialization'
@@ -310,6 +317,8 @@ export class AureliaAppWorldProjectEmission {
     readonly appWorld: AureliaAppWorldEmission,
     /** Template compiler front-door and downstream rendering/scope products for compiler-visible custom elements. */
     readonly templates: TemplateCompilationProjectEmission,
+    /** Authored framework capability uses joined to app admission and package/import availability evidence. */
+    readonly capabilityDemands: FrameworkCapabilityDemandProjectResult,
     /** Router RouteContext/viewport/agent topology discovered after route configs and runtime rendering are known. */
     readonly routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
     /** Router ViewportInstructionTree products created from router resources before route-tree compilation. */
@@ -394,6 +403,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const dialog = this.materializeDialogSourceIssues(typeSystem);
     const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
     const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
+    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates);
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
@@ -454,6 +464,7 @@ class AureliaAppWorldProjectConstructionFrame {
       dialog,
       appWorld,
       templates,
+      capabilityDemands,
       routeRuntimeTopology,
       routeInstructions,
       routeRecognition,
@@ -506,6 +517,19 @@ class AureliaAppWorldProjectConstructionFrame {
   ): ObservationSourceIssueProjectResult {
     return this.measure('binding-observation-issues', () =>
       new NonTrackableTemplateMethodCallIssueMaterializer(this.store).materialize(this.project, typeSystem, templates)
+    );
+  }
+
+  private materializeFrameworkCapabilityDemands(
+    typeSystem: TypeSystemProject,
+    templates: TemplateCompilationProjectEmission,
+  ): FrameworkCapabilityDemandProjectResult {
+    return this.measure('framework-capability-demands', () =>
+      new FrameworkCapabilityDemandMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+        templates,
+      )
     );
   }
 

@@ -493,6 +493,11 @@ multi-binding props, matching Aurelia's custom-attribute grammar; sibling HTML a
 not treated as portal bindables. Runtime binding diagnostics also include i18n `TranslationBinding` lifecycle products:
 missing `t`/`t.bind` keys (`AUR4000`), duplicate `t-params.bind` on the same translated element (`AUR4001`), and
 dynamic key expressions whose checker type is definitely not string-compatible (`AUR4002`).
+Unmet framework capability demands surface as `framework-capability-not-registered` rows rather than generic
+`template-compiler-error` rows. The producer currently covers runtime-html shorthand syntax, i18n/state plugin syntax,
+router/validation-html/ui-virtualization built-in resources, and expression-owned value-converter/binding-behavior
+resources. Authored sites remain inert or unresolved when their framework capability is not registered, while the
+diagnostic suggestion targets the framework capability and includes manifest/import availability evidence when present.
 Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
 runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
 behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.

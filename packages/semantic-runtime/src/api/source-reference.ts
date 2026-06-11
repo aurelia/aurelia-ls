@@ -424,6 +424,7 @@ function identityReferenceLabel(identity: SemanticIdentity): string {
     case 'evaluation-identity':
     case 'observation-identity':
     case 'configuration-identity':
+    case 'framework-identity':
     case 'router-identity':
     case 'route-recognizer-identity':
     case 'i18n-identity':

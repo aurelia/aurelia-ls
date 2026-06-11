@@ -11136,6 +11136,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "custom configuration bundle",
       "custom bundle",
       "StandardConfiguration",
+      "framework capability demand",
+      "capability demand",
+      "unregistered shorthand syntax",
+      "ShortHandBindingSyntax",
+      "framework-capability-not-registered",
+      "unregistered plugin syntax",
+      "unregistered plugin resources",
+      "router.default-resources",
+      "i18n.translation-syntax",
+      "i18n.default-resources",
+      "state.binding-syntax",
+      "state.default-resources",
+      "validation-html.default-resources",
+      "ui-virtualization.default-resources",
+      "au-viewport",
+      "load attribute",
+      "virtual-repeat",
+      "validation-errors",
+      "value converter capability demand",
+      "binding behavior capability demand",
       "bundle admission",
       "environment",
       "ModuleEnvironmentRecord",
@@ -11246,6 +11266,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "StandardConfiguration",
         summary:
           "StandardConfiguration is a bundle-discovery canary for framework admission, not a special-case ceiling.",
+      },
+      {
+        query:
+          "unregistered shorthand syntax ShortHandBindingSyntax framework capability demand",
+        summary:
+          "Authored optional syntax should route through semantic-runtime capability-demand products plus registration/package evidence, not parser-only or binding-scope patches.",
       },
       {
         query: "custom configuration bundle",
@@ -11567,6 +11593,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Module/export view over framework registration descriptors used by evaluator import synthesis for named, alias, and namespace imports.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
+        symbolName: "FrameworkCapabilityDemandMaterializer",
+        role: "primary",
+        summary:
+          "Publishes authored framework capability demands from compiled syntax, resource, and expression sites, joining app-world admission with manifest/import availability evidence.",
       },
       {
         kind: "source",
@@ -13125,7 +13160,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics",
         role: "pressure",
         summary:
-          "Focused semantic contract for weak-owner diagnostics, source routes, and binding-assignment repair targets.",
+          "Focused semantic contract for weak-owner diagnostics, source routes, binding-assignment repair targets, and framework capability-demand canaries.",
       },
       {
         kind: "path",

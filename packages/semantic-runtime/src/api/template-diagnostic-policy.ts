@@ -57,6 +57,13 @@ import {
 } from '../observation/framework-error-code.js';
 import type { RouterIssueModel } from '../router/model.js';
 import {
+  FrameworkCapabilityAvailabilityState,
+  FrameworkCapabilityDemandKind,
+  FrameworkCapabilityDemandSiteKind,
+  type FrameworkCapabilityDemand,
+} from '../framework/capability-demand.js';
+import { traceNameForFrameworkRegistrationKind } from '../registration/framework-registration-manifest.js';
+import {
   CheckerExpressionTypeOpenKind,
   type CheckerExpressionTypeOpenSubject,
 } from '../type-system/expression-type-evaluation.js';
@@ -634,6 +641,46 @@ export function templateCompilerErrorDiagnostic(
       targetMemberName: null,
       ownerTypeDisplay: null,
       valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+export function frameworkCapabilityDemandDiagnostic(
+  demand: FrameworkCapabilityDemand,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  const capabilityLabel = frameworkCapabilityDemandLabel(demand);
+  const moduleName = demand.recommendedModuleName ?? demand.candidateModuleNames[0] ?? null;
+  const availabilitySummary = demand.availabilityState === FrameworkCapabilityAvailabilityState.EvidenceFound
+    ? `Availability evidence was found for ${moduleName ?? 'a candidate package'}.`
+    : 'No local manifest or import evidence was found for a package that provides this capability.';
+  return {
+    diagnosticKind: 'framework-capability-not-registered',
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    severity: 'error',
+    summary: `${frameworkCapabilityDemandSiteLabel(demand)} "${demand.authoredName}" uses ${capabilityLabel}, but that framework capability is not registered in this app world.`,
+    missingInput: demand.requiredCapability,
+    missingInputs: [demand.requiredCapability],
+    source,
+    selectedMemberName: demand.authoredName,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'register-framework-capability',
+      actionKind: 'register-framework-capability',
+      actionTarget: suggestionActionTarget(
+        'framework-capability',
+        source,
+        demand.requiredCapability,
+        moduleName,
+      ),
+      summary: `${frameworkCapabilityRegistrationSuggestion(demand, moduleName)} ${availabilitySummary}`,
+      targetMemberName: demand.requiredCapability,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: moduleName,
       valueTypeSource: null,
     },
   };
@@ -1585,6 +1632,75 @@ function ownerTypeOrExpressionActionTarget(
   return ownerSource == null
     ? suggestionActionTarget('expression', expressionSource, memberName, memberOwnerType?.display ?? null)
     : suggestionActionTarget('owner-type', ownerSource, memberName, memberOwnerType?.display ?? null);
+}
+
+function frameworkCapabilityDemandLabel(demand: FrameworkCapabilityDemand): string {
+  switch (demand.demandKind) {
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingSyntax:
+      return 'Aurelia default attribute binding syntax';
+    case FrameworkCapabilityDemandKind.RuntimeHtmlShortHandBindingSyntax:
+      return 'Aurelia shorthand binding syntax';
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingLanguage:
+      return 'Aurelia default binding commands';
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultResources:
+      return 'Aurelia runtime-html default resources';
+    case FrameworkCapabilityDemandKind.I18nDefaultResources:
+      return 'Aurelia i18n default resources';
+    case FrameworkCapabilityDemandKind.I18nTranslationSyntax:
+      return 'Aurelia i18n translation syntax';
+    case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
+      return 'Aurelia validation-html default resources';
+    case FrameworkCapabilityDemandKind.RouterDefaultResources:
+      return 'Aurelia router default resources';
+    case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
+      return 'Aurelia UI virtualization default resources';
+    case FrameworkCapabilityDemandKind.StateDefaultResources:
+      return 'Aurelia state default resources';
+    case FrameworkCapabilityDemandKind.StateBindingSyntax:
+      return 'Aurelia state binding syntax';
+  }
+}
+
+function frameworkCapabilityDemandSiteLabel(demand: FrameworkCapabilityDemand): string {
+  switch (demand.siteKind) {
+    case FrameworkCapabilityDemandSiteKind.TemplateElement:
+      return 'Element';
+    case FrameworkCapabilityDemandSiteKind.TemplateAttribute:
+      return 'Attribute';
+    case FrameworkCapabilityDemandSiteKind.TemplateValueConverter:
+      return 'Value converter';
+    case FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior:
+      return 'Binding behavior';
+  }
+}
+
+function frameworkCapabilityRegistrationSuggestion(
+  demand: FrameworkCapabilityDemand,
+  moduleName: string | null,
+): string {
+  const registrationNames = demand.requiredRegistrationKinds.map(traceNameForFrameworkRegistrationKind);
+  const registrationName = registrationNames.length === 0
+    ? 'a provider for this capability'
+    : registrationNames.join(' or ');
+  switch (demand.demandKind) {
+    case FrameworkCapabilityDemandKind.RuntimeHtmlShortHandBindingSyntax:
+      return moduleName == null
+        ? 'Register ShortHandBindingSyntax with the app container.'
+        : `Register ShortHandBindingSyntax from ${moduleName} with the app container.`;
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingSyntax:
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultBindingLanguage:
+    case FrameworkCapabilityDemandKind.RuntimeHtmlDefaultResources:
+    case FrameworkCapabilityDemandKind.I18nDefaultResources:
+    case FrameworkCapabilityDemandKind.I18nTranslationSyntax:
+    case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
+    case FrameworkCapabilityDemandKind.RouterDefaultResources:
+    case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
+    case FrameworkCapabilityDemandKind.StateDefaultResources:
+    case FrameworkCapabilityDemandKind.StateBindingSyntax:
+      return moduleName == null
+        ? `Register ${registrationName} with the app container.`
+        : `Register ${registrationName} from ${moduleName} with the app container.`;
+  }
 }
 
 function suggestionActionTarget(

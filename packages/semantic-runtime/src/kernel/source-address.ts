@@ -88,6 +88,7 @@ export function isSemanticIdentityRecord(record: KernelStoreRecord): record is S
     case 'evaluation-identity':
     case 'observation-identity':
     case 'configuration-identity':
+    case 'framework-identity':
     case 'router-identity':
     case 'route-recognizer-identity':
     case 'i18n-identity':
@@ -304,6 +305,7 @@ function identityDirectSourceAddressHandles(identity: SemanticIdentity): readonl
     case 'evaluation-identity':
     case 'observation-identity':
     case 'configuration-identity':
+    case 'framework-identity':
     case 'router-identity':
     case 'route-recognizer-identity':
     case 'i18n-identity':
@@ -349,6 +351,7 @@ function identityOwnerAnchorHandles(identity: SemanticIdentity): readonly Source
     case 'resource-product-identity':
     case 'observation-identity':
     case 'configuration-identity':
+    case 'framework-identity':
     case 'router-identity':
     case 'route-recognizer-identity':
     case 'i18n-identity':

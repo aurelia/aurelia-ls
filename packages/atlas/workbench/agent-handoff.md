@@ -125,6 +125,17 @@ pnpm --filter @aurelia-ls/atlas self-check
   spend on backing lens rows/source anchors, and `--projection=grounding` with
   `--groundingStrength=corpus-backed` before deriving app-builder or MCP policy
   from the terrain. Grounding is factual; it is not a downstream policy decision.
+  Semantic-runtime owns app-local authored capability truth through
+  `framework.capability-demand` products. Treat Atlas capability rows as
+  navigation/coverage memory, then verify concrete app truth through
+  semantic-runtime demand, registration admission, and package/import evidence.
+  The current release canary is broader than runtime-html shorthand syntax:
+  unregistered `@event` / `:property`, i18n/state plugin syntax, router /
+  validation-html / ui-virtualization resource tags or attributes, and i18n /
+  validation-html / state expression resources should become
+  `framework-capability-not-registered` diagnostics when the matching
+  capability is not admitted, not generic compiler errors or silent plain
+  attributes.
 - The session daemon is compatibility-profiled. Normal repo sessions and
   clean-room external-root sessions write separate manifests under
   `.temp/atlas/session/profiles/<compatibility-key>/`, and the client caches the

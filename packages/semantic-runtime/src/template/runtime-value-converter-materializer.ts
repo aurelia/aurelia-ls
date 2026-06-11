@@ -23,8 +23,7 @@ import {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  type ExpressionAstNode,
-  ValueConverterExpression,
+  type ValueConverterExpression,
 } from '../expression/ast.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { BuiltInValueConverterName } from '../resources/built-in-resources.js';
@@ -55,6 +54,9 @@ import {
 import {
   effectivePropertyBindingMode,
 } from './runtime-binding-mode-behavior.js';
+import {
+  valueConverterExpressions,
+} from './binding-behavior-expression.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
@@ -336,22 +338,6 @@ function recordsForIssue(
       provenanceHandle,
     ),
   ];
-}
-
-function valueConverterExpressions(expression: ExpressionAstNode): readonly ValueConverterExpression[] {
-  switch (expression.$kind) {
-    case 'ValueConverter':
-      return [
-        expression,
-        ...valueConverterExpressions(expression.expression),
-      ];
-    case 'BindingBehavior':
-      return valueConverterExpressions(expression.expression);
-    case 'Interpolation':
-      return expression.expressions.flatMap((part) => valueConverterExpressions(part));
-    default:
-      return [];
-  }
 }
 
 function valueConverterApplicationPhasesForBinding(

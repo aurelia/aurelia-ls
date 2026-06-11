@@ -23,6 +23,23 @@ export function bindingBehaviorExpressions(expression: ExpressionAstNode): reado
   return [];
 }
 
+/** Walk a runtime-accepted expression from each value-converter chain outward to inward. */
+export function valueConverterExpressions(expression: ExpressionAstNode): readonly ValueConverterExpression[] {
+  switch (expression.$kind) {
+    case 'ValueConverter':
+      return [
+        expression,
+        ...valueConverterExpressions(expression.expression),
+      ];
+    case 'BindingBehavior':
+      return valueConverterExpressions(expression.expression);
+    case 'Interpolation':
+      return expression.expressions.flatMap((part) => valueConverterExpressions(part));
+    default:
+      return [];
+  }
+}
+
 export function staticStringLiteralExpression(expression: IsAssign | null | undefined): string | null {
   return expression instanceof PrimitiveLiteralExpression && typeof expression.value === 'string'
     ? expression.value

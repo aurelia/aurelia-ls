@@ -327,6 +327,16 @@ export const KernelProductKinds = {
       'A source-backed configuration or framework-service customization issue discovered before app-world construction.',
     ),
   },
+  Framework: {
+
+    /** Product kind for an authored framework capability use joined to admission and availability evidence. */
+    CapabilityDemand: defineVocabulary(
+      KernelVocabularyNamespace.Framework,
+      'capability-demand',
+      KernelVocabularySlot.ProductKind,
+      'An authored use of a framework capability, joined to app-world admission state and package/import availability evidence.',
+    ),
+  },
   Router: {
 
     /** Product kind for RouterOptions after RouterConfiguration defaults and customize contributions converge. */
