@@ -818,13 +818,15 @@
         "semantic-runtime",
         "typescript"
       ],
-      "summary": "The MCP preview release uses a generated GitHub Release tarball that bundles semantic-runtime and leaves TypeScript as a project-visible peer.",
-      "rationale": "npm publishing is intentionally out of scope for the first preview, and monorepo git installs would force every user into workspace build mechanics. A generated two-file tarball keeps the workspace package private, inlines the workspace-only semantic-runtime dependency, and lets TypeScript resolve from the install/project context so diagnostic behavior can agree with the user's app.",
+      "summary": "The MCP preview release uses a generated GitHub Release tarball installed project-locally for trusted diagnostics, with direct URL npx reserved for quick trials.",
+      "rationale": "npm publishing is intentionally out of scope for the first preview, and monorepo git installs would force every user into workspace build mechanics. A generated two-file tarball keeps the workspace package private and inlines the workspace-only semantic-runtime dependency. Because au-mcp statically imports TypeScript, the trusted diagnostic path is installing the tarball as a dev dependency in the app so Node resolves the peer TypeScript package from the project-local install context.",
       "guidance": [
         "Use `pnpm --filter @aurelia-ls/mcp release:pack` to build the staged tarball; do not mutate `packages/mcp/package.json` into a publishable manifest.",
         "Keep the artifact to `au-mcp.js` plus generated `package.json`; if assets become necessary, re-check the bundle safety premise before shipping.",
         "Keep TypeScript external as a peer dependency and back the supported range with semantic-runtime compatibility contracts.",
+        "Recommend project-local dev-dependency install for serious analysis so TypeScript diagnostics can report `relation=same-package`; document direct URL npx only as a quick trial path.",
         "Use `pnpm --filter @aurelia-ls/mcp probe:release-tarball` before uploading a GitHub Release asset; after upload, run one hosted-URL npx smoke before sharing install docs.",
+        "Use `pnpm --filter @aurelia-ls/mcp probe:project-local-install` to prove the trusted install path resolves TypeScript from the consuming project.",
         "Do not add npm publish scripts or registry credential assumptions until the release mechanism is deliberately changed."
       ],
       "anchors": [
@@ -839,9 +841,14 @@
           "summary": "Clean-temp install smoke for the generated tarball."
         },
         {
+          "kind": "source",
+          "filePath": "packages/mcp/scripts/probe-project-local-install.mjs",
+          "summary": "Project-local install smoke that proves same-package TypeScript resolution through the public MCP diagnostics query."
+        },
+        {
           "kind": "doc",
           "path": "packages/mcp/RELEASE.md",
-          "summary": "Temporary GitHub Release tarball runbook and install snippets."
+          "summary": "Temporary GitHub Release tarball runbook with project-local trusted install and direct npx trial guidance."
         }
       ],
       "liveChecks": [
@@ -852,6 +859,10 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/mcp/scripts/probe-release-tarball.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/mcp/scripts/probe-project-local-install.mjs"
         }
       ],
       "createdAt": "2026-06-11",

@@ -54,10 +54,15 @@ once release staging exists:
 ```powershell
 pnpm --filter @aurelia-ls/mcp release:pack
 pnpm --filter @aurelia-ls/mcp probe:release-tarball
+pnpm --filter @aurelia-ls/mcp probe:project-local-install
 ```
 
 See [RELEASE.md](./RELEASE.md) for the temporary GitHub Release tarball flow and
-install snippets.
+install snippets. For diagnostics that should agree with a project-local
+TypeScript install, use the project-local dev-dependency path rather than direct
+URL `npx`; public TypeScript diagnostic answers report whether the analyzer and
+workspace TypeScript packages are `same-package`, `same-version-different-package`,
+`different-version`, or `workspace-not-found`.
 
 Large app-world opens can require more than Node's default heap while semantic-runtime performance work is still in
 flux. For local MCP client registration, prefer launching with an explicit heap budget:

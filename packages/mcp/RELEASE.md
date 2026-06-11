@@ -34,7 +34,48 @@ gh release create mcp-v0.1.0-preview.1 packages/mcp/.release/aurelia-ls-mcp-0.1.
 
 Do not add npm publish steps to this flow yet.
 
-## Trial Install
+## Recommended Project-Local Install
+
+For diagnostic-authoritative preview use, install the tarball as a dev
+dependency in the Aurelia app being analyzed:
+
+```powershell
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+```
+
+Then configure the MCP server from that project:
+
+```json
+{
+  "mcpServers": {
+    "aurelia": {
+      "command": "node",
+      "args": ["./node_modules/@aurelia-ls/mcp/au-mcp.js"]
+    }
+  }
+}
+```
+
+If the MCP client does not launch servers with the project as its working
+directory, use the absolute path to `node_modules/@aurelia-ls/mcp/au-mcp.js`
+instead. This local install path is preferred because `au-mcp` statically
+imports TypeScript, and Node resolves that import from the package install
+context. Installing inside the app makes the analyzer TypeScript package line up
+with the app's own TypeScript package when the peer dependency is satisfied.
+
+When asking an AI to set this up, the useful instruction is:
+
+```text
+Install the Aurelia MCP preview tarball as a dev dependency in this project, then configure the MCP server to run node ./node_modules/@aurelia-ls/mcp/au-mcp.js from the project root. After setup, call aurelia_app_query with queryKind=typescript-diagnostic-summary and confirm the TypeScript relation is same-package.
+```
+
+Run the local-install smoke before treating this path as release-ready:
+
+```powershell
+pnpm --filter @aurelia-ls/mcp probe:project-local-install
+```
+
+## Quick Trial Install
 
 Use the release asset URL directly in an MCP client config:
 
@@ -49,29 +90,15 @@ Use the release asset URL directly in an MCP client config:
 }
 ```
 
-Run the client inside the Aurelia project being analyzed. Package managers walk
-up from bare directories, so launching from an unrelated folder can make the
-temporary install resolve dependencies in the wrong place.
+Direct URL `npx` is convenient for smoke testing, but it installs the server in
+a temporary package-manager context. TypeScript diagnostics may therefore
+reflect that temporary install context unless the MCP-reported TypeScript
+environment says `relation=same-package`. Prefer the project-local install path
+for serious diagnostics, app repair, or release acceptance.
 
-## Project-Local Install
-
-For faster startup and a stable local copy, install the same asset in the
-project and call the installed bin:
-
-```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
-```
-
-```json
-{
-  "mcpServers": {
-    "aurelia": {
-      "command": "npx",
-      "args": ["au-mcp"]
-    }
-  }
-}
-```
+Do not recommend global installs for ordinary preview users. A global install
+can be useful for maintainers, but it is easy to mistake global TypeScript
+resolution for project-local `tsc` behavior.
 
 Each preview release uses a new tag and asset URL. Update configs to the new URL
 after each release so npx caches cannot serve a stale build.

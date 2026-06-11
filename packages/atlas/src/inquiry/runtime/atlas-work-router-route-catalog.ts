@@ -3918,6 +3918,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "mcp release asset",
       "release asset URL",
       "npx release asset",
+      "project-local MCP install",
+      "project-local dev dependency",
+      "trusted MCP install path",
+      "probe project local install",
       "au-mcp release pack",
       "probe release tarball",
       "packaged au-mcp bin",
@@ -3927,6 +3931,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "TypeScript external peer",
       "typescript peer dependency",
       "typescript environment fidelity",
+      "same-package TypeScript relation",
+      "same-version-different-package TypeScript relation",
       "analyzer TypeScript version",
       "workspace TypeScript version",
       "serverInfo release version",
@@ -4100,6 +4106,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Temporary MCP release work should route to the generated tarball mechanism: semantic-runtime bundled, public dependencies external, workspace package private, no npm publish path.",
       },
       {
+        query: "mcp project local install typescript same package relation",
+        summary:
+          "Trusted MCP diagnostic setup should route to project-local dev-dependency install and the project-local install smoke, while direct URL npx stays a quick trial path.",
+      },
+      {
         query: "mcp packaged au-mcp bin serverInfo version mismatch",
         summary:
           "Packaged MCP smoke should verify the installed bin layout and the injected serverInfo version, not only the source checkout stdio probe.",
@@ -4270,6 +4281,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Clean-temp packaged install smoke for the GitHub Release tarball shape.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/mcp/scripts/probe-project-local-install.mjs",
+        role: "primary",
+        summary:
+          "Project-local install smoke proving the public diagnostics query reports same-package TypeScript resolution.",
       },
       {
         kind: "source",

@@ -860,13 +860,14 @@
         "mcp",
         "api"
       ],
-      "summary": "TypeScript diagnostic-facing answers should surface the analyzer TypeScript version, workspace TypeScript version, and mismatch state from one shared environment projection.",
-      "rationale": "External MCP testing showed that TypeScript version skew can produce trusted-looking but false diagnostic queues. Semantic-runtime now reads the analyzer package version and the workspace-visible TypeScript package version from the TypeSystemProject epoch and projects that fact through app overview and diagnostics answers so users and AIs can see when analysis ran under a different TypeScript than the app.",
+      "summary": "TypeScript diagnostic-facing answers should surface analyzer/workspace TypeScript package versions, paths, and same-package relation from one shared environment projection.",
+      "rationale": "External MCP testing showed that TypeScript resolution skew can produce trusted-looking but false diagnostic queues. Semantic-runtime now reads the analyzer package version/path and the workspace-visible TypeScript package version/path from the TypeSystemProject epoch and projects that fact through app overview and diagnostics answers so users and AIs can see whether analysis ran from the same TypeScript package as the app, from a same-version different package, from a different version, or without a visible workspace TypeScript package.",
       "guidance": [
         "Use `readTypeSystemTypeScriptEnvironment` from the TypeSystemProject builder profile when a public answer needs TypeScript version fidelity; do not add adapter-local package reads.",
-        "Use `semanticTypeScriptEnvironmentSummary` and `semanticTypeScriptEnvironmentDisplayText` for public API/MCP projection so mismatch wording stays consistent across app overview, app diagnostics, and TypeScript diagnostic answers.",
+        "Use `semanticTypeScriptEnvironmentSummary` and `semanticTypeScriptEnvironmentDisplayText` for public API/MCP projection so TypeScript package-relation wording stays consistent across app overview, app diagnostics, and TypeScript diagnostic answers.",
         "Keep generated MCP release manifests using TypeScript as an external peer; change the peer range only after running the alternate-version compatibility contract.",
-        "Use `contract:typescript-program-fidelity` and `contract:typescript-5-compat` before changing Program construction, compiler options, release packaging, or diagnostic projection policy."
+        "For trusted MCP diagnostics, prefer project-local dev-dependency install and verify `relation=same-package`; direct URL npx and global installs may report same-version different-package or different-version depending on package-manager resolution.",
+        "Use `contract:typescript-program-fidelity`, `contract:typescript-5-compat`, and the MCP `probe:project-local-install` before changing Program construction, compiler options, release packaging, or diagnostic projection policy."
       ],
       "anchors": [
         {
@@ -896,6 +897,11 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-program-fidelity",
           "summary": "Program/tsconfig fidelity contract for direct tsc parity on node type pressure."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp probe:project-local-install",
+          "summary": "MCP project-local install smoke proving same-package TypeScript resolution through the public diagnostics query."
         }
       ],
       "liveChecks": [

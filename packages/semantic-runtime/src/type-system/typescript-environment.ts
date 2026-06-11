@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
@@ -7,10 +7,12 @@ const requireFromThisModule = createRequire(import.meta.url);
 
 /** Relationship between the TypeScript module used by semantic-runtime and the app workspace's visible TypeScript package. */
 export enum TypeSystemTypeScriptVersionRelation {
-  /** The workspace TypeScript package was found and has the same version as the analyzer module. */
-  Match = 'match',
-  /** The workspace TypeScript package was found but differs from the analyzer module. */
-  Mismatch = 'mismatch',
+  /** The analyzer and workspace resolve to the same TypeScript package.json path. */
+  SamePackage = 'same-package',
+  /** The analyzer and workspace resolve different TypeScript packages with the same version. */
+  SameVersionDifferentPackage = 'same-version-different-package',
+  /** The workspace TypeScript package was found but has a different version from the analyzer module. */
+  DifferentVersion = 'different-version',
   /** No workspace TypeScript package was found by walking upward from the project/workspace roots. */
   WorkspaceNotFound = 'workspace-not-found',
 }
@@ -37,12 +39,42 @@ export function readTypeSystemTypeScriptEnvironment(
   return {
     analyzer,
     workspace,
-    versionRelation: workspace == null
-      ? TypeSystemTypeScriptVersionRelation.WorkspaceNotFound
-      : workspace.version === analyzer.version
-        ? TypeSystemTypeScriptVersionRelation.Match
-        : TypeSystemTypeScriptVersionRelation.Mismatch,
+    versionRelation: typeScriptVersionRelation(analyzer, workspace),
   };
+}
+
+function typeScriptVersionRelation(
+  analyzer: TypeSystemTypeScriptPackageSummary,
+  workspace: TypeSystemTypeScriptPackageSummary | null,
+): TypeSystemTypeScriptVersionRelation {
+  if (workspace == null) {
+    return TypeSystemTypeScriptVersionRelation.WorkspaceNotFound;
+  }
+  if (
+    analyzer.packageJsonPath != null
+    && workspace.packageJsonPath != null
+    && normalizeComparablePackagePath(analyzer.packageJsonPath) === normalizeComparablePackagePath(workspace.packageJsonPath)
+  ) {
+    return TypeSystemTypeScriptVersionRelation.SamePackage;
+  }
+  return workspace.version === analyzer.version
+    ? TypeSystemTypeScriptVersionRelation.SameVersionDifferentPackage
+    : TypeSystemTypeScriptVersionRelation.DifferentVersion;
+}
+
+function normalizeComparablePackagePath(packageJsonPath: string): string {
+  const normalized = readRealPackagePath(packageJsonPath);
+  return process.platform === 'win32'
+    ? normalized.toLowerCase()
+    : normalized;
+}
+
+function readRealPackagePath(packageJsonPath: string): string {
+  try {
+    return realpathSync.native(packageJsonPath);
+  } catch {
+    return path.resolve(packageJsonPath);
+  }
 }
 
 function readAnalyzerTypeScriptPackage(): TypeSystemTypeScriptPackageSummary {
