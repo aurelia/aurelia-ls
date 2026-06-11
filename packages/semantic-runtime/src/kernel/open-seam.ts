@@ -92,6 +92,30 @@ export const enum OpenSeamReasonKind {
   RouterRedirectTargetOpen = 'router-redirect-target-open',
   /** Spread hydration could not close the binding/context needed to expand spread entries. */
   SpreadHydrationContextOpen = 'spread-hydration-context-open',
+  /** DI world construction could not find the target container for a registration step. */
+  DiRegistrationContainerOpen = 'di-registration-container-open',
+  /** DI world construction could not find the admitted registration product referenced by configuration. */
+  DiRegistrationAdmissionOpen = 'di-registration-admission-open',
+  /** DI world construction could not close the DI key required to publish a container slot. */
+  DiRegistrationKeyOpen = 'di-registration-key-open',
+  /** DI world construction reached a registration strategy that has no modeled container effect yet. */
+  DiRegistrationStrategyOpen = 'di-registration-strategy-open',
+  /** DI world construction could not publish a resolver or resource slot from an otherwise recognized admission. */
+  DiRegistrationPublicationOpen = 'di-registration-publication-open',
+  /** DI world construction reached an IRegistry body whose effects have not been interpreted. */
+  DiRegistryBodyOpen = 'di-registry-body-open',
+  /** DI world construction could not close resource definition facts needed to publish resource slots. */
+  DiResourceSlotOpen = 'di-resource-slot-open',
+  /** Registration recognition could not close the DI key expression. */
+  RegistrationKeyOpen = 'registration-key-open',
+  /** Registration recognition could not close the registered value expression. */
+  RegistrationValueOpen = 'registration-value-open',
+  /** Registration recognition could not classify a registration strategy. */
+  RegistrationStrategyOpen = 'registration-strategy-open',
+  /** Registration recognition reached a spread argument or spread member. */
+  RegistrationSpreadOpen = 'registration-spread-open',
+  /** Registration recognition could not close an alias target. */
+  RegistrationAliasTargetOpen = 'registration-alias-target-open',
 }
 
 export interface OpenSeamReasonSource {

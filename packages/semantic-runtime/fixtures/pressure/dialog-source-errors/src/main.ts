@@ -20,6 +20,10 @@ export class DialogSourceErrorsApp {
   openWithoutComponentOrTemplate(): void {
     void this.dialogService.open({});
   }
+
+  openConfiguredChildWithoutComponentOrTemplate(): void {
+    void this.configuredChildDialogService.open({ model: { source: 'configured-child' } });
+  }
 }
 
 new Aurelia()

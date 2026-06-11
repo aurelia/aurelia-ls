@@ -33,6 +33,10 @@ import {
   type TypeSystemOverlaySourceSegment,
 } from './overlay.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
+import {
+  readTypeSystemTypeScriptEnvironment,
+  type TypeSystemTypeScriptEnvironment,
+} from './typescript-environment.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -97,6 +101,7 @@ export interface TypeSystemProgramSourceFileGroupStats {
 export interface TypeSystemProjectProfile {
   readonly totalMilliseconds: number;
   readonly phases: readonly TypeSystemProjectPhaseTiming[];
+  readonly typeScript: TypeSystemTypeScriptEnvironment;
   readonly compilerOptions: TypeSystemProjectCompilerOptionsProfile;
   readonly hostSourceFileCache: TypeSystemCompilerHostSourceFileCacheStats;
   readonly programRootFiles: TypeSystemProgramSourceFileStats;
@@ -604,6 +609,7 @@ export class TypeSystemProjectBuilder {
       {
         totalMilliseconds: performance.now() - started,
         phases,
+        typeScript: readTypeSystemTypeScriptEnvironment(project.rootDir, project.workspaceRootDir),
         compilerOptions: typeSystemProjectCompilerOptionsProfile(options),
         hostSourceFileCache: diffCompilerHostSourceFileCacheStats(
           sharedCompilerHostSourceFileCache.snapshot(),

@@ -16,6 +16,11 @@ const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
 const profile = app.cacheSummary(8, false).profile;
+const overview = app.ask({
+  kind: SemanticAppQueryKind.AppOverview,
+  diagnosticPageSize: 0,
+  openSeamPageSize: 0,
+}).value;
 
 const summary = app.ask({
   kind: SemanticAppQueryKind.TypeScriptDiagnosticSummary,
@@ -80,9 +85,40 @@ const overlayDiagnostic = diagnostics.rows.find((row) =>
   row.source?.path.includes('/.semantic-runtime/overlays/') === true
   || row.source?.path.includes('\\.semantic-runtime\\overlays\\') === true
 );
+const expectedTypeScriptVersion = profile.typeScript.analyzer.version;
 
 if (ts2322Diagnostic == null) {
   failures.push('Expected TypeScript diagnostics to include TS2322 in the project-local state source file.');
+}
+if (expectedTypeScriptVersion == null || expectedTypeScriptVersion.length === 0) {
+  failures.push('Expected app profile to expose the analyzer TypeScript version.');
+}
+if (summary.typeScript.analyzer.version !== expectedTypeScriptVersion) {
+  failures.push(`Expected TypeScript diagnostic summary to expose analyzer version ${expectedTypeScriptVersion}, observed ${summary.typeScript.analyzer.version}.`);
+}
+if (diagnostics.typeScript.analyzer.version !== expectedTypeScriptVersion) {
+  failures.push(`Expected TypeScript diagnostics to expose analyzer version ${expectedTypeScriptVersion}, observed ${diagnostics.typeScript.analyzer.version}.`);
+}
+if (!summary.displayText.includes(`TypeScript: analyzer=${expectedTypeScriptVersion}`)) {
+  failures.push('Expected TypeScript diagnostic summary display text to name the analyzer TypeScript version.');
+}
+if (!diagnostics.displayText.includes(`TypeScript: analyzer=${expectedTypeScriptVersion}`)) {
+  failures.push('Expected TypeScript diagnostics display text to name the analyzer TypeScript version.');
+}
+if (appDiagnosticSummary.typeScript?.analyzer.version !== expectedTypeScriptVersion) {
+  failures.push('Expected unified diagnostic summary to carry the TypeScript analyzer version when TypeScript diagnostics are included.');
+}
+if (!appDiagnosticSummary.displayText.includes(`TypeScript: analyzer=${expectedTypeScriptVersion}`)) {
+  failures.push('Expected unified diagnostic summary display text to name the analyzer TypeScript version.');
+}
+if (availableProductsSummary.typeScript !== null) {
+  failures.push('Expected available-products diagnostic projection to omit the TypeScript environment summary.');
+}
+if (overview.typeScript.analyzer.version !== expectedTypeScriptVersion) {
+  failures.push('Expected app overview to expose the TypeScript analyzer version.');
+}
+if (!overview.displayText.includes(`TypeScript: analyzer=${expectedTypeScriptVersion}`)) {
+  failures.push('Expected app overview display text to name the analyzer TypeScript version.');
 }
 if (ts2322Diagnostic?.sourceRole !== 'app-source') {
   failures.push(`Expected project-local TS2322 diagnostics to carry app-source role, observed ${ts2322Diagnostic?.sourceRole ?? 'missing'}.`);
@@ -184,6 +220,7 @@ if (failures.length > 0) {
         .filter((row) => row.diagnosticDomain === 'typescript')
         .reduce((total, row) => total + row.count, 0),
       overlayRootSources: profile.programRootFiles.overlaySources,
+      typeScriptRelation: summary.typeScript.versionRelation,
     },
   }, null, 2));
 }

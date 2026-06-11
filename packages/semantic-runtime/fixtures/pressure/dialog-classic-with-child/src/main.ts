@@ -39,19 +39,19 @@ export class DialogClassicWithChildApp {
   }
 
   openChildDialog(): void {
-    void this.childDialogService.open({ component: () => ChildDialog });
+    void this.childDialogService.open({ model: { source: 'direct-child' } });
   }
 
   openNamespaceChildDialog(): void {
-    void this.namespaceChildDialogService.open({ component: () => ChildDialog });
+    void this.namespaceChildDialogService.open({ model: { source: 'namespace-child' } });
   }
 
   openConstChildDialog(): void {
-    void this.constChildDialogService.open({ component: () => ChildDialog });
+    void this.constChildDialogService.open({ model: { source: 'const-child' } });
   }
 
   openFactoryChildDialog(): void {
-    void this.factoryChildDialogService.open({ component: () => ChildDialog });
+    void this.factoryChildDialogService.open({ model: { source: 'factory-child' } });
   }
 }
 

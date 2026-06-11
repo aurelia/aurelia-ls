@@ -1,6 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   EvidenceKind,
@@ -253,6 +254,7 @@ export function recordsForDiOpenSeam(
   seamKindKey: OpenSeamKindKey,
   summary: string,
   addressHandle: AddressHandle | null,
+  reasonKinds: readonly OpenSeamReasonKind[],
 ): {
   readonly records: readonly KernelStoreRecord[];
   readonly seam: OpenSeam;
@@ -260,7 +262,7 @@ export function recordsForDiOpenSeam(
   const evidenceHandle = store.handles.evidence(local);
   const provenanceHandle = store.handles.provenance(local);
   const seamHandle = store.handles.openSeam(local);
-  const seam = new OpenSeam(seamHandle, seamKindKey, summary, addressHandle, evidenceHandle);
+  const seam = new OpenSeam(seamHandle, seamKindKey, summary, addressHandle, evidenceHandle, reasonKinds);
   return {
     records: [
       new EvidenceRecord(
@@ -297,6 +299,7 @@ export class DiRegistryPublicationMaterializer {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'ParameterizedRegistry admission did not expose a closed registry lookup key.',
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistrationKeyOpen],
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -310,6 +313,7 @@ export class DiRegistryPublicationMaterializer {
       KernelVocabulary.Di.OpenRegistryBody.key,
       summaryForParameterizedRegistryResult(registryResult?.state ?? RegistryRegistrationState.Open),
       admission.sourceAddressHandle,
+      [OpenSeamReasonKind.DiRegistryBodyOpen],
     );
     records.push(
       ...this.recordsForParameterizedRegistryProduct(local, container, admission, registry, provenanceHandle, [seam.seam.handle]),
@@ -335,6 +339,7 @@ export class DiRegistryPublicationMaterializer {
         KernelVocabulary.Di.OpenRegistryBody.key,
         openSummary,
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistryBodyOpen],
       );
     const records: KernelStoreRecord[] = [
       ...this.recordsForRegistryProduct(

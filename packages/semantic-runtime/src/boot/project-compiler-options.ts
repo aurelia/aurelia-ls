@@ -237,7 +237,7 @@ function defaultProjectCompilerOptions(
     allowArbitraryExtensions: true,
     checkJs: false,
     experimentalDecorators: false,
-    ignoreDeprecations: '6.0',
+    ...defaultIgnoreDeprecationsOption(),
     jsx: ts.JsxEmit.Preserve,
     lib: [
       'lib.es2024.d.ts',
@@ -256,6 +256,13 @@ function defaultProjectCompilerOptions(
         paths,
       }),
   };
+}
+
+function defaultIgnoreDeprecationsOption(): Pick<ts.CompilerOptions, 'ignoreDeprecations'> {
+  const major = Number(ts.versionMajorMinor.split('.')[0] ?? '0');
+  return major >= 6
+    ? { ignoreDeprecations: '6.0' }
+    : {};
 }
 
 function discoverAureliaTypePaths(rootDir: string, discoveryRoots: readonly string[]): Record<string, string[]> {

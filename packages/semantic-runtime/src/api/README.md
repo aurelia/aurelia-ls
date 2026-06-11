@@ -818,8 +818,10 @@ errors, warnings, and messages when the unified app diagnostic rows point at `di
 Rows keep TypeScript's optional diagnostic `source` label separate from semantic-runtime's boot-admitted
 `sourceRole`. The latter is threaded from source discovery/admission, so public adapters can distinguish app-source,
 test-source, tooling-config, declaration, and other project roles without guessing from file names or shelling out to
-another checker process. Summary rows retain source-role counts for the same reason: a repair assistant can prioritize
-app-source errors while still reporting test/config pressure honestly.
+another checker process. Source roles are still discovery/admission hints, not reachability proof: a nested folder such
+as `src/tools` may remain `app-source` if the project can import it at runtime. Summary rows retain source-role counts
+for the same reason: a repair assistant can prioritize app-source errors while still reporting test/config pressure
+honestly.
 Unified app diagnostics also preserve source-file ownership for non-ordinary diagnostic lanes. `SemanticSourceReference`
 rows expose `sourceWorkspaceKey` and `sourceFileRole`; if a template overlay maps back to a source owned by another
 project or by a dependency path such as `node_modules`, the unified row reports `external-source` instead of treating

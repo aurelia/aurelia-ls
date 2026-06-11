@@ -9,7 +9,10 @@ publishes `DialogIssue` products and app diagnostics linked to exact Aurelia fra
 ## Claimed Authorities
 
 - `AUR0903` / `dialog_settings_invalid`: `DialogService.open(...)` receives a static object literal settings value whose
-  `component` and `template` properties are both absent or nullish.
+  `component` and `template` properties are both absent or nullish, and every statically visible merge layer
+  (`IDialogGlobalSettings`, receiver base settings, and call settings) jointly lacks component/template. Visible child
+  services configured through `withChild(...)` or `createChild(...)` suppress this claim when their base settings provide
+  component/template; unknown receiver/base provenance is not a positive AUR0903 claim.
 - `AUR0904` / `dialog_no_empty_default_configuration`: bare `DialogConfiguration` is registered without a
   renderer-providing `customize(...)` call.
 - `AUR0910` / `dialog_child_settings_not_found`: a `DialogService.child(...)` or `IDialogService.child(...)` resolver

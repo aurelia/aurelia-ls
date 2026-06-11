@@ -186,6 +186,11 @@ import {
   readSemanticTypeScriptDiagnosticSummary,
 } from './typescript-diagnostics.js';
 import {
+  semanticTypeScriptEnvironmentDisplayText,
+  semanticTypeScriptEnvironmentFromProfile,
+  semanticTypeScriptEnvironmentSummary,
+} from './typescript-environment.js';
+import {
   readConfigurationIssueRows,
 } from './configuration-projections.js';
 import {
@@ -2291,8 +2296,12 @@ function semanticSourceReferenceRangeDisplay(
 function appDiagnosticsDisplayText(
   rows: readonly SemanticAppDiagnosticRow[],
   totalRows: number,
+  typeScript: SemanticAppDiagnosticsResult['typeScript'],
 ): string {
   const lines = [`Diagnostics: returned ${rows.length} of ${totalRows} row(s).`];
+  if (typeScript != null) {
+    lines.push(semanticTypeScriptEnvironmentDisplayText(typeScript));
+  }
   if (totalRows === 0) {
     lines.push('Pressure: no app diagnostics in this locus.');
   } else {
@@ -2317,8 +2326,12 @@ function includeTypeScriptDiagnostics(query: Pick<SemanticAppQuery, 'diagnosticP
 function appDiagnosticSummaryDisplayText(
   rows: readonly SemanticAppDiagnosticSummaryRow[],
   totalDiagnosticRows: number,
+  typeScript: SemanticAppDiagnosticSummaryResult['typeScript'],
 ): string {
   const lines = [`Diagnostic clusters: returned ${rows.length} cluster(s) covering ${totalDiagnosticRows} diagnostic row(s).`];
+  if (typeScript != null) {
+    lines.push(semanticTypeScriptEnvironmentDisplayText(typeScript));
+  }
   if (totalDiagnosticRows === 0) {
     lines.push('Pressure: no app diagnostics in this locus.');
   } else {
@@ -2476,6 +2489,7 @@ export class SemanticApp {
         templatePhases: semanticRuntimeAggregatedPhaseTimingSummaries(this.emission.templates.profile.phases, rowLimit),
         templateRuntimePhases: semanticRuntimeTemplateRuntimePhaseTimingSummaries(this.emission, rowLimit),
         templateExpressionTypeCache: semanticRuntimeTemplateExpressionTypeCacheSummary(this.emission),
+        typeScript: semanticTypeScriptEnvironmentFromProfile(this.emission.typeSystem.profile.typeScript),
         compilerOptions: this.emission.typeSystem.profile.compilerOptions,
         hostSourceFileCache: this.emission.typeSystem.profile.hostSourceFileCache,
         programRootFiles: this.emission.typeSystem.profile.programRootFiles,
@@ -2937,6 +2951,7 @@ export class SemanticApp {
       (query) => this.ask(query),
       request,
       () => this.appTopologySummary(),
+      () => semanticTypeScriptEnvironmentSummary(this.emission.typeSystem),
     );
   }
 
@@ -3246,11 +3261,15 @@ export class SemanticApp {
     const detail = appQuery.detail ?? SemanticRuntimeDetail.Compact;
     const rows = this.appDiagnosticRowsForQuery(appQuery, detail);
     const paged = pageRows(rows, appQuery.page);
+    const typeScript = includeTypeScriptDiagnostics(appQuery)
+      ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
+      : null;
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic row(s).`,
       {
-        displayText: appDiagnosticsDisplayText(paged.rows, rows.length),
+        displayText: appDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
+        typeScript,
         rows: paged.rows,
       },
       paged.page,
@@ -3272,12 +3291,16 @@ export class SemanticApp {
     const diagnosticRows = this.appDiagnosticRowsForQuery(appQuery, detail);
     const rows = appDiagnosticSummaryRows(diagnosticRows);
     const paged = pageRows(rows, appQuery.page);
+    const typeScript = includeTypeScriptDiagnostics(appQuery)
+      ? semanticTypeScriptEnvironmentSummary(this.emission.typeSystem)
+      : null;
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
       {
         totalDiagnosticRows: diagnosticRows.length,
-        displayText: appDiagnosticSummaryDisplayText(paged.rows, diagnosticRows.length),
+        displayText: appDiagnosticSummaryDisplayText(paged.rows, diagnosticRows.length, typeScript),
+        typeScript,
         rows: paged.rows,
       },
       paged.page,

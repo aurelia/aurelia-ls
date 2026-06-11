@@ -28,6 +28,8 @@ export const staticStringPrototypeBoundaryMethods: ReadonlySet<string> = new Set
   'includes',
   'indexOf',
   'localeCompare',
+  'padEnd',
+  'padStart',
   'repeat',
   'replace',
   'replaceAll',
@@ -163,6 +165,41 @@ export function evaluateStringRepeat(
     return host.unknown('String.repeat count exceeds static evaluator guardrail.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
   return new EvaluationStringValue(receiver.value.repeat(count), call);
+}
+
+export function evaluateStringPad(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  operation: 'padStart' | 'padEnd',
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, operation, call);
+  }
+  if (receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown(`String.${operation} receiver did not reduce to a known string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const targetLength = readStringPadTargetLength(call, environment, moduleKey, depth + 1, host);
+  if (targetLength == null) {
+    return host.unknown(`String.${operation} target length did not reduce to a static finite number.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  if (targetLength > 1_000) {
+    return host.unknown(`String.${operation} target length exceeds static evaluator guardrail.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  const fillText = readStringPadFillText(call, environment, moduleKey, depth + 1, host);
+  if (fillText == null) {
+    return host.unknown(`String.${operation} fill string did not reduce to a static primitive.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  return new EvaluationStringValue(
+    operation === 'padStart'
+      ? receiver.value.padStart(targetLength, fillText)
+      : receiver.value.padEnd(targetLength, fillText),
+    call,
+  );
 }
 
 export function evaluateStringSubstring(
@@ -399,6 +436,42 @@ function readStringRepeatCount(
   }
   const count = Math.trunc(value.value);
   return count < 0 ? null : count;
+}
+
+function readStringPadTargetLength(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): number | null {
+  const argument = call.arguments[0] ?? null;
+  if (argument == null || ts.isSpreadElement(argument)) {
+    return null;
+  }
+  const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+  if (value.kind !== EvaluationValueKind.Number || !Number.isFinite(value.value)) {
+    return null;
+  }
+  return Math.max(0, Math.trunc(value.value));
+}
+
+function readStringPadFillText(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): string | null {
+  const argument = call.arguments[1] ?? null;
+  if (argument == null) {
+    return ' ';
+  }
+  if (ts.isSpreadElement(argument)) {
+    return null;
+  }
+  const value = host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+  return stringCoercionText(value);
 }
 
 function readStringSubstringBound(

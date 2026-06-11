@@ -36,6 +36,13 @@ const contractSuites = [
     'open-seams',
     'reason-kinds',
   ], 'contract-evaluation-open-seam-reasons.mjs', 'Evaluator-produced open seams carry reason kinds for missing identifiers, unsupported loops, and compound assignments.'),
+  contract('di', 'fast', [
+    'di',
+    'registration',
+    'api',
+    'open-seams',
+    'reason-kinds',
+  ], 'contract-di-registration-open-reasons.mjs', 'Open registration seams carry machine-readable reasons through registration and DI public rows.'),
   contract('evaluation', 'fast', [
     'evaluation',
     'source-role',
@@ -215,6 +222,17 @@ const contractSuites = [
     'di',
     'open-seams',
   ], 'contract-dialog-classic-with-child.mjs', 'DialogConfigurationClassic.withChild closes child resolver diagnostics without generic DI registry-body seams.'),
+  contract('dialog', 'fast', [
+    'dialog',
+    'diagnostics',
+    'configuration',
+    'di',
+  ], 'contract-dialog-source-errors.mjs', 'Dialog source diagnostics claim only visible merged settings errors and child-key misses.'),
+  contract('fetch-client', 'fast', [
+    'fetch-client',
+    'diagnostics',
+    'configuration',
+  ], 'contract-fetch-client-source-errors.mjs', 'Fetch-client source diagnostics cover closed invalid configure, header, and retry-interceptor shapes.'),
   contract('i18n', 'fast', [
     'i18n',
     'binding',

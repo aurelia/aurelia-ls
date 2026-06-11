@@ -214,6 +214,8 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
       const lastLetter = "legendary".at(-1);
       const firstCode = "legendary".charCodeAt(0);
       const repeated = "-".repeat(3);
+      const paddedStart = "7".padStart(3, "0");
+      const paddedEnd = "7".padEnd(3);
       const substring = "legendary".substring(4, 1);
       const lastEven = [1, 2, 3, 4].findLast(value => value % 2 === 0);
       const lastEvenIndex = [1, 2, 3, 4].findLastIndex(value => value % 2 === 0);
@@ -246,6 +248,8 @@ function assertStaticEvaluatorSharesGlobalIntrinsics() {
   assert.equal(result.environment.readValue('lastLetter')?.value, 'y');
   assert.equal(result.environment.readValue('firstCode')?.value, 'l'.charCodeAt(0));
   assert.equal(result.environment.readValue('repeated')?.value, '---');
+  assert.equal(result.environment.readValue('paddedStart')?.value, '007');
+  assert.equal(result.environment.readValue('paddedEnd')?.value, '7  ');
   assert.equal(result.environment.readValue('substring')?.value, 'ege');
   assert.equal(result.environment.readValue('lastEven')?.value, 4);
   assert.equal(result.environment.readValue('lastEvenIndex')?.value, 3);

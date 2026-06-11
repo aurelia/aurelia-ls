@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowArbitraryExtensions": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "paths": {
+      "@aurelia/*": ["../../../../../aurelia/packages/*/dist/types/index.d.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -3903,7 +3903,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     title: "MCP Developer Preview Shell",
     summary:
       "Keep the public MCP package as a thin, restart-tolerant shell over current semantic-runtime analysis APIs while future generation grows through app-builder.",
-    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router", "evaluation", "open-seams"],
+    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router", "evaluation", "open-seams", "release", "typescript"],
     roles: ["orient", "analyze", "verify", "document"],
     terms: [
       "mcp shell",
@@ -3911,6 +3911,25 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "au-mcp",
       "mcp developer preview",
       "developer preview shell",
+      "mcp preview release",
+      "mcp release tarball",
+      "release tarball",
+      "GitHub Release tarball",
+      "mcp release asset",
+      "release asset URL",
+      "npx release asset",
+      "au-mcp release pack",
+      "probe release tarball",
+      "packaged au-mcp bin",
+      "generated release manifest",
+      "release package manifest",
+      "semantic-runtime bundled",
+      "TypeScript external peer",
+      "typescript peer dependency",
+      "typescript environment fidelity",
+      "analyzer TypeScript version",
+      "workspace TypeScript version",
+      "serverInfo release version",
       "public mcp api",
       "mcp public api",
       "thin mcp shell",
@@ -4076,6 +4095,21 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Diagnostics hardening should route through semantic-runtime query families and MCP pass-through, not adapter-local TypeScript checks.",
       },
       {
+        query: "mcp release tarball github release npx install",
+        summary:
+          "Temporary MCP release work should route to the generated tarball mechanism: semantic-runtime bundled, public dependencies external, workspace package private, no npm publish path.",
+      },
+      {
+        query: "mcp packaged au-mcp bin serverInfo version mismatch",
+        summary:
+          "Packaged MCP smoke should verify the installed bin layout and the injected serverInfo version, not only the source checkout stdio probe.",
+      },
+      {
+        query: "typescript peer dependency analyzer workspace version mismatch",
+        summary:
+          "TypeScript diagnostics and release manifest work should route through semantic-runtime TypeScript environment fidelity and the alternate-version compatibility contracts.",
+      },
+      {
         query: "mcp reports many open seams unresolved identifiers without locations",
         summary:
           "Open-seam release hardening should route to semantic-runtime OpenSeamSites before raw rows, preserve raw derivation counts for drill-down, keep source samples/ranges/sourceRole and reason filters/continuations visible, and avoid adapter-local classification.",
@@ -4224,6 +4258,36 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "MCP resource registration surface for stable read-only semantic slices.",
       },
       {
+        kind: "path",
+        pathPrefix: "packages/mcp/esbuild.mjs",
+        role: "primary",
+        summary:
+          "Release tarball staging script; keeps the workspace manifest private while generating the two-file preview artifact.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/mcp/scripts/probe-release-tarball.mjs",
+        role: "primary",
+        summary:
+          "Clean-temp packaged install smoke for the GitHub Release tarball shape.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/typescript-environment.ts",
+        symbolName: "semanticTypeScriptEnvironmentSummary",
+        role: "grounding",
+        summary:
+          "Public TypeScript environment projection used by MCP-facing app overview and diagnostics envelopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/typescript-environment.ts",
+        symbolName: "readTypeSystemTypeScriptEnvironment",
+        role: "grounding",
+        summary:
+          "TypeSystemProject-owned analyzer/workspace TypeScript version reader for diagnostic fidelity.",
+      },
+      {
         kind: "source",
         filePath: "packages/semantic-runtime/src/api/runtime.ts",
         symbolName: "SemanticRuntime",
@@ -4359,6 +4423,27 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Public package boundary, local invocation commands, and thin-shell constraints.",
       },
       {
+        kind: "doc",
+        path: "packages/mcp/RELEASE.md",
+        role: "primary",
+        summary:
+          "Temporary MCP GitHub Release tarball runbook and install snippets.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp release:pack",
+        role: "supporting",
+        summary:
+          "Builds the generated release tarball with semantic-runtime bundled and TypeScript external.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp probe:release-tarball",
+        role: "supporting",
+        summary:
+          "Installs the generated tarball in a clean temp project and verifies the packaged MCP server.",
+      },
+      {
         kind: "script",
         command: "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
         role: "supporting",
@@ -4378,6 +4463,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Pre-release orientation packet that defines the golden path and onboarding contracts.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-5-compat",
+        role: "supporting",
+        summary:
+          "Alternate TypeScript compatibility contract backing the release peer dependency range.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-program-fidelity",
+        role: "supporting",
+        summary:
+          "Program and tsconfig fidelity contract comparing semantic-runtime TypeScript diagnostics with direct tsc pressure.",
       },
       {
         kind: "script",

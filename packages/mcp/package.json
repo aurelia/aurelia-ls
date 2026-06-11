@@ -20,6 +20,8 @@
     "dev:invoke": "node ./out/dev/invoke.js",
     "dev:prompt": "node ./out/dev/prompt.js",
     "probe:stdio": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node scripts/probe-stdio.mjs",
+    "release:pack": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node esbuild.mjs",
+    "probe:release-tarball": "node scripts/probe-release-tarball.mjs",
     "smoke:postinstall": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node scripts/probe-stdio.mjs",
     "contract:continuation-pass-through": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node scripts/contract-continuation-pass-through.mjs",
     "contract:adversarial-surface": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node scripts/contract-adversarial-surface.mjs"

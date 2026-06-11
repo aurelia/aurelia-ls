@@ -65,6 +65,7 @@ import {
   evaluateStringCall,
   evaluateStringAt,
   evaluateStringLocaleCompare,
+  evaluateStringPad,
   evaluateStringPredicate,
   evaluateStringReplace,
   evaluateStringRepeat,
@@ -327,6 +328,9 @@ function evaluatePrototypeIntrinsicCall(
       return evaluateStringAt(call, receiverExpression, environment, moduleKey, depth + 1, host, 'charCodeAt');
     case 'repeat':
       return evaluateStringRepeat(call, receiverExpression, environment, moduleKey, depth + 1, host);
+    case 'padStart':
+    case 'padEnd':
+      return evaluateStringPad(call, receiverExpression, environment, moduleKey, depth + 1, host, methodName);
     case 'substring':
       return evaluateStringSubstring(call, receiverExpression, environment, moduleKey, depth + 1, host);
     case 'toUpperCase':

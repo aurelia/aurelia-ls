@@ -16,11 +16,15 @@ export * from './router-overview.js';
 export * from './source-reference.js';
 export * from './state-projections.js';
 export * from './template-completion.js';
+export * from './typescript-environment.js';
 export * from './typescript-diagnostics.js';
 export * from '../inquiry/continuation-intent.js';
 export {
   InquiryContinuationKind,
 } from '../inquiry/answer.js';
+export {
+  TypeSystemTypeScriptVersionRelation,
+} from '../type-system/typescript-environment.js';
 export type {
   InquiryContinuationKindValue,
 } from '../inquiry/answer.js';

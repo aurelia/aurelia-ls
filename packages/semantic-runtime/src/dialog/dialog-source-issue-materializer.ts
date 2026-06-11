@@ -84,6 +84,18 @@ type StaticDialogChildKey =
   | string
   | 'dynamic';
 
+/** Static merge-layer state visible for a DialogService receiver before per-call open settings are applied. */
+enum DialogServiceBaseSettingsState {
+  /** Root/default service path where global settings cannot provide component/template and no base settings are visible. */
+  RootNoBase = 'root-no-base',
+  /** Base settings are statically known to provide component or template. */
+  ValidBaseSettings = 'valid-base-settings',
+  /** Base settings are statically known to provide neither component nor template. */
+  InvalidBaseSettings = 'invalid-base-settings',
+  /** Receiver/base settings are dialog-shaped but not statically closed enough for a positive AUR0903 claim. */
+  Unknown = 'unknown',
+}
+
 interface DialogSourceRead {
   readonly source: ProjectBootFrame['sourceFiles'][number];
   readonly sourceFile: ts.SourceFile;
@@ -101,13 +113,13 @@ interface DialogReadContext {
   readonly bindings: SourceImportBindings;
   readonly kernelBindings: SourceImportBindings;
   readonly roots: DialogServiceRootSet;
-  readonly childSettingsKeys: ReadonlySet<string>;
+  readonly childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>;
   readonly sites: DialogIssueSourceSite[];
 }
 
 interface DialogServiceRootSet {
-  readonly services: ReadonlySet<string>;
-  readonly instanceServiceMembers: ReadonlySet<string>;
+  readonly services: ReadonlyMap<string, DialogServiceBaseSettingsState>;
+  readonly instanceServiceMembers: ReadonlyMap<string, DialogServiceBaseSettingsState>;
 }
 
 interface DialogIssueSourceSite extends SourceSpanSite {
@@ -188,7 +200,7 @@ function readDialogIssueSourceSites(
       kernelBindings,
     }];
   });
-  const childSettingsKeys = readDialogChildSettingsKeys(reads);
+  const childSettingsStates = readDialogChildSettingsStates(reads);
   return reads.flatMap((read) => {
     const context: DialogReadContext = {
       project,
@@ -199,8 +211,8 @@ function readDialogIssueSourceSites(
       checker: typeSystem.checker,
       bindings: read.bindings,
       kernelBindings: read.kernelBindings,
-      roots: readDialogServiceRoots(read.sourceFile, read.bindings),
-      childSettingsKeys,
+      roots: readDialogServiceRoots(read.sourceFile, read.bindings, childSettingsStates),
+      childSettingsStates,
       sites: [],
     };
     visitDialogSourceNode(context, read.sourceFile);
@@ -273,7 +285,7 @@ function readDialogChildSettingsIssues(
     }
     const keyExpression = childCall.arguments[0] ?? null;
     const key = readStaticDialogChildKey(keyExpression);
-    if (key === 'dynamic' || context.childSettingsKeys.has(key)) {
+    if (key === 'dynamic' || context.childSettingsStates.has(key)) {
       continue;
     }
     context.sites.push(sourceSiteForNode(
@@ -297,11 +309,18 @@ function readDialogServiceOpenIssues(
   if (!ts.isPropertyAccessExpression(call.expression) || call.expression.name.text !== 'open') {
     return;
   }
-  if (!expressionIsDialogServiceRoot(context, call.expression.expression)) {
+  const receiverBaseState = readDialogServiceBaseSettingsState(context, call.expression.expression);
+  if (receiverBaseState == null) {
     return;
   }
   const settings = call.arguments[0] ?? null;
   if (settings == null || !dialogSettingsObjectIsStaticallyInvalid(settings)) {
+    return;
+  }
+  if (
+    receiverBaseState === DialogServiceBaseSettingsState.ValidBaseSettings
+    || receiverBaseState === DialogServiceBaseSettingsState.Unknown
+  ) {
     return;
   }
   context.sites.push(sourceSiteForNode(
@@ -320,24 +339,32 @@ function readDialogServiceOpenIssues(
 function readDialogServiceRoots(
   sourceFile: ts.SourceFile,
   bindings: SourceImportBindings,
+  childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>,
 ): DialogServiceRootSet {
-  const services = new Set<string>();
-  const instanceServiceMembers = new Set<string>();
+  const services = new Map<string, DialogServiceBaseSettingsState>();
+  const instanceServiceMembers = new Map<string, DialogServiceBaseSettingsState>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsDialogServiceTyped(node, bindings) || expressionCreatesDialogServiceRoot(node.initializer ?? null, bindings)) {
-        services.add(node.name.text);
+      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
+      if (initializerState != null) {
+        services.set(node.name.text, initializerState);
+      } else if (nodeIsDialogServiceTyped(node, bindings)) {
+        services.set(node.name.text, DialogServiceBaseSettingsState.Unknown);
       }
     } else if (ts.isPropertyDeclaration(node)) {
       const name = readPropertyName(node.name);
-      if (name != null && (nodeIsDialogServiceTyped(node, bindings) || expressionCreatesDialogServiceRoot(node.initializer ?? null, bindings))) {
-        instanceServiceMembers.add(name);
+      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
+      if (name != null && initializerState != null) {
+        instanceServiceMembers.set(name, initializerState);
+      } else if (name != null && nodeIsDialogServiceTyped(node, bindings)) {
+        instanceServiceMembers.set(name, DialogServiceBaseSettingsState.Unknown);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsDialogServiceTyped(node, bindings) || expressionCreatesDialogServiceRoot(node.initializer ?? null, bindings)) {
-        services.add(node.name.text);
+      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
+      if (initializerState != null || nodeIsDialogServiceTyped(node, bindings)) {
+        services.set(node.name.text, initializerState ?? DialogServiceBaseSettingsState.Unknown);
         if (isParameterProperty(node)) {
-          instanceServiceMembers.add(node.name.text);
+          instanceServiceMembers.set(node.name.text, initializerState ?? DialogServiceBaseSettingsState.Unknown);
         }
       }
     }
@@ -350,43 +377,86 @@ function readDialogServiceRoots(
   };
 }
 
-function expressionIsDialogServiceRoot(
+function readDialogServiceBaseSettingsState(
   context: DialogReadContext,
   expression: ts.Expression,
-): boolean {
+): DialogServiceBaseSettingsState | null {
   const current = unwrapExpression(expression);
-  if (expressionCreatesDialogServiceRoot(current, context.bindings)) {
-    return true;
+  const created = expressionDialogServiceBaseSettingsState(current, context.bindings, context.childSettingsStates);
+  if (created != null) {
+    return created;
   }
   if (ts.isIdentifier(current)) {
-    return context.roots.services.has(current.text) || typeLooksLikeDialogService(context, current);
+    return context.roots.services.get(current.text)
+      ?? (typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null);
   }
   if (
     ts.isPropertyAccessExpression(current)
     && current.expression.kind === ts.SyntaxKind.ThisKeyword
   ) {
-    return context.roots.instanceServiceMembers.has(current.name.text) || typeLooksLikeDialogService(context, current);
+    return context.roots.instanceServiceMembers.get(current.name.text)
+      ?? (typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null);
   }
-  return typeLooksLikeDialogService(context, current);
+  return typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
 }
 
-function expressionCreatesDialogServiceRoot(
+function expressionDialogServiceBaseSettingsState(
   expression: ts.Expression | null,
   bindings: SourceImportBindings,
-): boolean {
+  childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>,
+): DialogServiceBaseSettingsState | null {
   if (expression == null) {
-    return false;
+    return null;
   }
   const current = unwrapExpression(expression);
   if (
     ts.isNewExpression(current)
     && readImportedExportName(current.expression, bindings, new Set(['DialogService'])) === 'DialogService'
   ) {
-    return true;
+    return readDialogServiceConstructorBaseSettingsState(current);
   }
-  return ts.isCallExpression(current)
-    && current.arguments[0] != null
-    && readImportedExportName(current.arguments[0], bindings, DIALOG_SERVICE_EXPORTS) != null;
+  if (!ts.isCallExpression(current)) {
+    return null;
+  }
+  const childResolver = current.arguments[0] == null
+    ? null
+    : readDialogChildResolverCall(current.arguments[0], bindings);
+  if (childResolver != null) {
+    const key = readStaticDialogChildKey(childResolver.arguments[0] ?? null);
+    return key === 'dynamic'
+      ? DialogServiceBaseSettingsState.Unknown
+      : childSettingsStates.get(key) ?? DialogServiceBaseSettingsState.Unknown;
+  }
+  if (current.arguments[0] != null && readImportedExportName(current.arguments[0], bindings, DIALOG_SERVICE_EXPORTS) != null) {
+    return DialogServiceBaseSettingsState.RootNoBase;
+  }
+  if (ts.isPropertyAccessExpression(current.expression) && current.expression.name.text === 'createChild') {
+    return dialogSettingsExpressionBaseState(current.arguments[0] ?? null);
+  }
+  return null;
+}
+
+function readDialogServiceConstructorBaseSettingsState(
+  expression: ts.NewExpression,
+): DialogServiceBaseSettingsState {
+  return expression.arguments?.[2] == null
+    ? DialogServiceBaseSettingsState.RootNoBase
+    : dialogSettingsExpressionBaseState(expression.arguments[2]);
+}
+
+function dialogSettingsExpressionBaseState(
+  expression: ts.Expression | null,
+): DialogServiceBaseSettingsState {
+  if (expression == null) {
+    return DialogServiceBaseSettingsState.InvalidBaseSettings;
+  }
+  const current = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(current)) {
+    return DialogServiceBaseSettingsState.Unknown;
+  }
+  return dialogSettingsObjectIsStaticallyInvalid(current)
+    ? DialogServiceBaseSettingsState.InvalidBaseSettings
+    : DialogServiceBaseSettingsState.ValidBaseSettings;
 }
 
 function nodeIsDialogServiceTyped(
@@ -432,10 +502,10 @@ function dialogConfigurationExpressionIsEmptyDefault(
   return false;
 }
 
-function readDialogChildSettingsKeys(
+function readDialogChildSettingsStates(
   reads: readonly DialogSourceRead[],
-): ReadonlySet<string> {
-  const keys = new Set<string>();
+): ReadonlyMap<string, DialogServiceBaseSettingsState> {
+  const states = new Map<string, DialogServiceBaseSettingsState>();
   for (const read of reads) {
     const visit = (node: ts.Node): void => {
       if (
@@ -446,14 +516,80 @@ function readDialogChildSettingsKeys(
       ) {
         const key = readStaticDialogChildKey(node.arguments[0] ?? null);
         if (key !== 'dynamic') {
-          keys.add(key);
+          mergeDialogChildSettingsState(
+            states,
+            key,
+            readDialogChildSettingsBaseState(node.arguments[1] ?? null),
+          );
         }
       }
       ts.forEachChild(node, visit);
     };
     visit(read.sourceFile);
   }
-  return keys;
+  return states;
+}
+
+function mergeDialogChildSettingsState(
+  states: Map<string, DialogServiceBaseSettingsState>,
+  key: string,
+  next: DialogServiceBaseSettingsState,
+): void {
+  const current = states.get(key);
+  if (current == null || current === next) {
+    states.set(key, next);
+    return;
+  }
+  if (
+    current === DialogServiceBaseSettingsState.ValidBaseSettings
+    || next === DialogServiceBaseSettingsState.ValidBaseSettings
+  ) {
+    states.set(key, DialogServiceBaseSettingsState.ValidBaseSettings);
+    return;
+  }
+  if (
+    current === DialogServiceBaseSettingsState.Unknown
+    || next === DialogServiceBaseSettingsState.Unknown
+  ) {
+    states.set(key, DialogServiceBaseSettingsState.Unknown);
+    return;
+  }
+  states.set(key, DialogServiceBaseSettingsState.InvalidBaseSettings);
+}
+
+function readDialogChildSettingsBaseState(
+  expression: ts.Expression | null,
+): DialogServiceBaseSettingsState {
+  const returned = readDialogSettingsProviderReturnExpression(expression);
+  return returned == null
+    ? DialogServiceBaseSettingsState.Unknown
+    : dialogSettingsExpressionBaseState(returned);
+}
+
+function readDialogSettingsProviderReturnExpression(
+  expression: ts.Expression | null,
+): ts.Expression | null {
+  if (expression == null) {
+    return null;
+  }
+  const current = unwrapExpression(expression);
+  if (ts.isArrowFunction(current)) {
+    if (ts.isBlock(current.body)) {
+      return readSingleReturnedExpression(current.body);
+    }
+    return current.body;
+  }
+  if (ts.isFunctionExpression(current)) {
+    return readSingleReturnedExpression(current.body);
+  }
+  return null;
+}
+
+function readSingleReturnedExpression(
+  block: ts.Block,
+): ts.Expression | null {
+  const returns = block.statements.filter(ts.isReturnStatement);
+  return returns.length === 1 ? returns[0]?.expression ?? null : null;
 }
 
 function dialogConfigurationExpressionIsKnown(

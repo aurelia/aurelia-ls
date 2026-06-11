@@ -6,6 +6,7 @@ import {
   type SemanticAppQuery,
   type SemanticAppOverviewCollectionSummary,
   type SemanticAppDiagnosticSummaryResult,
+  type SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary,
   type SemanticAppSummary,
   type SemanticOpenSeamSitesResult,
   type SemanticRuntimeAnswer,
@@ -13,11 +14,13 @@ import {
 import { answer } from './answer-helpers.js';
 import type { SemanticApplicationTopologyResult } from './app-topology.js';
 import type { SemanticSourceReference } from './source-reference.js';
+import { semanticTypeScriptEnvironmentDisplayText } from './typescript-environment.js';
 
 export function readSemanticAppOverview(
   ask: (query: SemanticAppQuery) => SemanticRuntimeAnswer<unknown>,
   request: SemanticAppOverviewRequest = {},
   readTopologySummary?: () => SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>,
+  readTypeScriptEnvironment?: () => SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary,
 ): SemanticRuntimeAnswer<SemanticAppOverviewResult> {
   const diagnosticPageSize = request.diagnosticPageSize ?? 5;
   const openSeamPageSize = request.openSeamPageSize ?? 5;
@@ -33,13 +36,20 @@ export function readSemanticAppOverview(
     kind: SemanticAppQueryKind.OpenSeamSites,
     page: { size: openSeamPageSize },
   }) as SemanticRuntimeAnswer<SemanticOpenSeamSitesResult>;
+  const typeScript = readTypeScriptEnvironment?.() ?? {
+    analyzer: { version: 'unknown', packageJsonPath: null },
+    workspace: null,
+    versionRelation: 'workspace-not-found',
+  };
   const value: SemanticAppOverviewResult = {
     displayText: semanticAppOverviewDisplayText({
+      typeScript,
       summary,
       topology,
       diagnostics,
       openSeams,
     }),
+    typeScript,
     summary,
     topology,
     diagnostics,
@@ -86,6 +96,7 @@ function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, '
   const openSeamSites = value.openSeams.value.totalOpenSeamSites;
   const lines = [
     `App: ${app.projectKey}; analysisDepth=${app.analysisDepth}; roots=${app.appRoots}; components=${topologyCounts.components ?? 0}; routes=${topologyCounts.routes ?? app.routeConfigs}; services=${topologyCounts.services ?? 0}; stateCompositions=${topologyCounts.stateCompositions ?? 0}.`,
+    semanticTypeScriptEnvironmentDisplayText(value.typeScript),
     app.analysisDepth === 'binding-observation'
       ? `Bindings: ${app.runtimeBindings} runtime binding(s), ${app.runtimeBindingValueChannels} value channel(s), ${app.runtimeBindingDataFlows} data-flow row(s), ${app.runtimeBindingObservedDependencies} observed dependency row(s).`
       : bindingProjectionDepthText(app),

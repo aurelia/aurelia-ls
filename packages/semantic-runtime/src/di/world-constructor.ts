@@ -1,6 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import type {
-  OpenSeam,
+import {
+  OpenSeamReasonKind,
+  type OpenSeam,
 } from '../kernel/open-seam.js';
 import type {
   ClaimHandle,
@@ -688,6 +689,7 @@ export class DiWorldConstructor {
           KernelVocabulary.Di.OpenRegistrationSpending.key,
           'Configuration step admitted registrations, but DI world construction could not identify the receiving container.',
           step.sourceAddressHandle,
+          [OpenSeamReasonKind.DiRegistrationContainerOpen],
         ));
         continue;
       }
@@ -700,6 +702,7 @@ export class DiWorldConstructor {
             KernelVocabulary.Di.OpenRegistrationSpending.key,
             'Configuration step referenced a registration admission product that was not present in the configuration emission.',
             step.sourceAddressHandle,
+            [OpenSeamReasonKind.DiRegistrationAdmissionOpen],
           ));
           continue;
         }
@@ -842,6 +845,7 @@ export class DiWorldConstructor {
       KernelVocabulary.Di.OpenRegistrationSpending.key,
       summaryForOpenRegistrationAdmission(admission),
       admission.sourceAddressHandle,
+      [OpenSeamReasonKind.DiRegistrationAdmissionOpen],
     ));
   }
 
@@ -998,6 +1002,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         openSummary,
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistryBodyOpen],
       ));
     }
   }
@@ -1135,6 +1140,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resolver admission could not produce a container slot because the admitted DI key stayed open.',
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistrationKeyOpen],
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -1147,6 +1153,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         `DI world construction does not yet spend ${admission.strategy} admissions into concrete container effects.`,
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistrationStrategyOpen],
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -1160,6 +1167,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resolver admission had a closed strategy but did not expose a closed DI key publication.',
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiRegistrationPublicationOpen],
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -1225,6 +1233,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resource registration admission did not resolve to a full resource definition during DI world construction.',
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiResourceSlotOpen],
       );
       return new DiResourceSlotEmission(seam.records, [], [], [seam.seam]);
     }
@@ -1257,6 +1266,7 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resource registration did not produce any runtime resource-key rows.',
         admission.sourceAddressHandle,
+        [OpenSeamReasonKind.DiResourceSlotOpen],
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);

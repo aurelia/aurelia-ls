@@ -61,6 +61,7 @@ import type {
 } from '../telemetry/memory.js';
 import type { SemanticRuntimeTelemetryOptions } from '../telemetry/options.js';
 import type { CheckerExpressionTypeEvaluationCacheStats } from '../type-system/expression-type-evaluation.js';
+import type { TypeSystemTypeScriptVersionRelation } from '../type-system/typescript-environment.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
 import type { ControllerPhase } from '../configuration/controller.js';
 import type {
@@ -1116,6 +1117,7 @@ export interface SemanticRuntimeCachedAppProfileSummary {
   readonly templatePhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly templateRuntimePhases: readonly SemanticRuntimePhaseTimingSummary[];
   readonly templateExpressionTypeCache: CheckerExpressionTypeEvaluationCacheStats | null;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary;
   readonly compilerOptions: SemanticRuntimeTypeSystemCompilerOptionsSummary;
   readonly hostSourceFileCache: SemanticRuntimeTypeSystemHostSourceFileCacheStats;
   readonly programRootFiles: SemanticRuntimeTypeSystemProgramSourceFileStats;
@@ -1163,6 +1165,17 @@ export interface SemanticRuntimeTypeSystemCompilerOptionsSummary {
   readonly pathMappingCount: number;
   readonly pathMappingTargetCount: number;
   readonly libraryFileCount: number;
+}
+
+export interface SemanticRuntimeTypeSystemTypeScriptPackageSummary {
+  readonly version: string;
+  readonly packageJsonPath: string | null;
+}
+
+export interface SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary {
+  readonly analyzer: SemanticRuntimeTypeSystemTypeScriptPackageSummary;
+  readonly workspace: SemanticRuntimeTypeSystemTypeScriptPackageSummary | null;
+  readonly versionRelation: TypeSystemTypeScriptVersionRelation | `${TypeSystemTypeScriptVersionRelation}`;
 }
 
 export interface SemanticRuntimeTypeSystemProgramSourceFileStats {
@@ -1247,6 +1260,7 @@ export interface SemanticRuntimeCacheRetentionSummary {
 
 export interface SemanticAppOverviewResult {
   readonly displayText: string;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary;
   readonly summary: SemanticRuntimeAnswer<SemanticAppSummary>;
   readonly topology: SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>;
   readonly diagnostics: SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
@@ -2048,6 +2062,7 @@ export interface SemanticAppDiagnosticRow {
 
 export interface SemanticAppDiagnosticsResult {
   readonly displayText: string;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary | null;
   readonly rows: readonly SemanticAppDiagnosticRow[];
 }
 
@@ -2068,6 +2083,7 @@ export interface SemanticAppDiagnosticSummaryRow {
 export interface SemanticAppDiagnosticSummaryResult {
   readonly totalDiagnosticRows: number;
   readonly displayText: string;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary | null;
   readonly rows: readonly SemanticAppDiagnosticSummaryRow[];
 }
 
@@ -2098,6 +2114,7 @@ export interface SemanticTypeScriptDiagnosticRow {
 
 export interface SemanticTypeScriptDiagnosticsResult {
   readonly displayText: string;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary;
   readonly rows: readonly SemanticTypeScriptDiagnosticRow[];
 }
 
@@ -2118,6 +2135,7 @@ export interface SemanticTypeScriptDiagnosticSummaryRow {
 export interface SemanticTypeScriptDiagnosticSummaryResult {
   readonly totalDiagnosticRows: number;
   readonly displayText: string;
+  readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary;
   readonly rows: readonly SemanticTypeScriptDiagnosticSummaryRow[];
 }
 

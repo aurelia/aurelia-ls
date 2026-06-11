@@ -131,6 +131,7 @@ function appQueryCatalogDisplayText(
   }
   if (rows.some((row) => row.supportsOpenSeamFilters)) {
     lines.push('Open seams: open-seams, open-seam-summary, and open-seam-sites accept sourceFile, sourceRole, openSeamKindKey, and openSeamReasonKind filters for drill-down.');
+    lines.push('Source roles are admission/classification hints from source discovery, not proof that a nested folder such as src/tools is unreachable from app runtime.');
   }
   if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
     lines.push('Type/cursor projection: cursor-locus and diagnostic projection queries may do answer-time TypeChecker work; request them only when the locus needs it.');

@@ -30,6 +30,7 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
@@ -509,7 +510,9 @@ class RegistrationAdmissionSupportMaterializer {
         start: seam.node.getStart(context.sourceFile),
         end: seam.node.end,
         evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
-        reasonKinds: seam.reasonKinds,
+        reasonKinds: seam.reasonKinds.length === 0
+          ? registrationOpenSeamReasonKinds(seam.openKind)
+          : seam.reasonKinds,
         includeProvenanceRecord: true,
       })),
     );
@@ -919,6 +922,25 @@ function openSeamsForObservation(
     ));
   }
   return seams;
+}
+
+function registrationOpenSeamReasonKinds(
+  openKind: OpenSeamKindKey,
+): readonly OpenSeamReasonKind[] {
+  switch (openKind) {
+    case KernelVocabulary.Registration.OpenKeyExpression.key:
+      return [OpenSeamReasonKind.RegistrationKeyOpen];
+    case KernelVocabulary.Registration.OpenValueExpression.key:
+      return [OpenSeamReasonKind.RegistrationValueOpen];
+    case KernelVocabulary.Registration.OpenStrategy.key:
+      return [OpenSeamReasonKind.RegistrationStrategyOpen];
+    case KernelVocabulary.Registration.OpenSpread.key:
+      return [OpenSeamReasonKind.RegistrationSpreadOpen];
+    case KernelVocabulary.Registration.OpenAliasTarget.key:
+      return [OpenSeamReasonKind.RegistrationAliasTargetOpen];
+    default:
+      return [OpenSeamReasonKind.FeatureNotYetModeled];
+  }
 }
 
 function registrationAdmissionFieldProvenance(

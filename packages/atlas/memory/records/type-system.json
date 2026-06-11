@@ -848,6 +848,70 @@
       ],
       "createdAt": "2026-05-13",
       "updatedAt": "2026-05-25"
+    },
+    {
+      "id": "reuse:typescript-environment-fidelity",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "typescript",
+        "diagnostics",
+        "mcp",
+        "api"
+      ],
+      "summary": "TypeScript diagnostic-facing answers should surface the analyzer TypeScript version, workspace TypeScript version, and mismatch state from one shared environment projection.",
+      "rationale": "External MCP testing showed that TypeScript version skew can produce trusted-looking but false diagnostic queues. Semantic-runtime now reads the analyzer package version and the workspace-visible TypeScript package version from the TypeSystemProject epoch and projects that fact through app overview and diagnostics answers so users and AIs can see when analysis ran under a different TypeScript than the app.",
+      "guidance": [
+        "Use `readTypeSystemTypeScriptEnvironment` from the TypeSystemProject builder profile when a public answer needs TypeScript version fidelity; do not add adapter-local package reads.",
+        "Use `semanticTypeScriptEnvironmentSummary` and `semanticTypeScriptEnvironmentDisplayText` for public API/MCP projection so mismatch wording stays consistent across app overview, app diagnostics, and TypeScript diagnostic answers.",
+        "Keep generated MCP release manifests using TypeScript as an external peer; change the peer range only after running the alternate-version compatibility contract.",
+        "Use `contract:typescript-program-fidelity` and `contract:typescript-5-compat` before changing Program construction, compiler options, release packaging, or diagnostic projection policy."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/typescript-environment.ts",
+          "symbolName": "readTypeSystemTypeScriptEnvironment",
+          "summary": "Shared analyzer/workspace TypeScript package-version reader."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/typescript-environment.ts",
+          "symbolName": "semanticTypeScriptEnvironmentSummary",
+          "summary": "Public API projection for TypeScript environment fidelity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/typescript-environment.ts",
+          "symbolName": "semanticTypeScriptEnvironmentDisplayText",
+          "summary": "Human-readable TypeScript mismatch warning text."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-5-compat",
+          "summary": "Alternate TypeScript 5.9 compatibility contract for release peer range evidence."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-program-fidelity",
+          "summary": "Program/tsconfig fidelity contract for direct tsc parity on node type pressure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/typescript-environment.ts",
+          "symbolName": "readTypeSystemTypeScriptEnvironment"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/typescript-environment.ts",
+          "symbolName": "semanticTypeScriptEnvironmentSummary"
+        }
+      ],
+      "createdAt": "2026-06-11",
+      "updatedAt": "2026-06-11"
     }
   ]
 }

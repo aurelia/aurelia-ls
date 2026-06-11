@@ -23,6 +23,10 @@ import {
   type SemanticTypeScriptDiagnosticSummaryRow,
 } from './contracts.js';
 import type { SemanticSourceReference } from './source-reference.js';
+import {
+  semanticTypeScriptEnvironmentDisplayText,
+  semanticTypeScriptEnvironmentSummary,
+} from './typescript-environment.js';
 
 const TYPESCRIPT_DIAGNOSTIC_DISPLAY_LIMIT = 4;
 
@@ -34,11 +38,13 @@ export function readSemanticTypeScriptDiagnostics(
 ): SemanticRuntimeAnswer<SemanticTypeScriptDiagnosticsResult> {
   const rows = readSemanticTypeScriptDiagnosticRows(typeSystem, projectKey, sourceFile);
   const paged = pageRows(rows, page);
+  const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
     outcomeForPagedRows(paged),
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic row(s).`,
     {
-      displayText: semanticTypeScriptDiagnosticsDisplayText(paged.rows, rows.length),
+      displayText: semanticTypeScriptDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
+      typeScript,
       rows: paged.rows,
     },
     paged.page,
@@ -54,12 +60,14 @@ export function readSemanticTypeScriptDiagnosticSummary(
   const diagnosticRows = readSemanticTypeScriptDiagnosticRows(typeSystem, projectKey, sourceFile);
   const rows = semanticTypeScriptDiagnosticSummaryRows(diagnosticRows);
   const paged = pageRows(rows, page);
+  const typeScript = semanticTypeScriptEnvironmentSummary(typeSystem);
   return answer(
     outcomeForPagedRows(paged),
     `Returned ${paged.rows.length} of ${rows.length} TypeScript diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
     {
       totalDiagnosticRows: diagnosticRows.length,
-      displayText: semanticTypeScriptDiagnosticSummaryDisplayText(paged.rows, diagnosticRows.length),
+      displayText: semanticTypeScriptDiagnosticSummaryDisplayText(paged.rows, diagnosticRows.length, typeScript),
+      typeScript,
       rows: paged.rows,
     },
     paged.page,
@@ -244,8 +252,12 @@ function typeScriptDiagnosticMatchesSource(
 function semanticTypeScriptDiagnosticsDisplayText(
   rows: readonly SemanticTypeScriptDiagnosticRow[],
   totalRows: number,
+  typeScript: SemanticTypeScriptDiagnosticsResult['typeScript'],
 ): string {
-  const lines = [`TypeScript diagnostics: returned ${rows.length} of ${totalRows} row(s).`];
+  const lines = [
+    `TypeScript diagnostics: returned ${rows.length} of ${totalRows} row(s).`,
+    semanticTypeScriptEnvironmentDisplayText(typeScript),
+  ];
   if (totalRows === 0) {
     lines.push('Pressure: no ordinary TypeScript diagnostics in this locus.');
   } else {
@@ -262,8 +274,12 @@ function semanticTypeScriptDiagnosticsDisplayText(
 function semanticTypeScriptDiagnosticSummaryDisplayText(
   rows: readonly SemanticTypeScriptDiagnosticSummaryRow[],
   totalDiagnosticRows: number,
+  typeScript: SemanticTypeScriptDiagnosticSummaryResult['typeScript'],
 ): string {
-  const lines = [`TypeScript diagnostic clusters: returned ${rows.length} cluster(s) covering ${totalDiagnosticRows} diagnostic row(s).`];
+  const lines = [
+    `TypeScript diagnostic clusters: returned ${rows.length} cluster(s) covering ${totalDiagnosticRows} diagnostic row(s).`,
+    semanticTypeScriptEnvironmentDisplayText(typeScript),
+  ];
   if (totalDiagnosticRows === 0) {
     lines.push('Pressure: no ordinary TypeScript diagnostics in this locus.');
   } else {

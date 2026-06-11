@@ -22,6 +22,11 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
 - `module-loader-invalid-transform-input` captures `aliasedResourcesRegistry(...)` being given a statically closed
   primitive module input. It preserves kernel `ModuleLoader` `invalid_module_transform_input` / `AUR0021` pressure in
   the evaluation issue lane without making recommendable generators emit invalid registry module inputs.
+- `di-registration-open-reasons` captures an unresolved `aurelia.register(...)` argument that produces both
+  registration-recognition and DI-world open seams. It keeps public seam rows, site rows, and summary clusters from
+  losing machine-readable reasons when a legal registration boundary remains intentionally open.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:di-registration-open-reasons` protects that release-facing
+  explanation path.
 - `computed-decorator-contexts` captures valid getter/method `@computed(...)` usage, including direct and config-object
   getter dependency functions plus `deep: true` explicit dependency keys, beside field, setter, and auto-accessor
   call-form targets. It preserves runtime `computed_not_getter` / `AUR0228` as an observation source issue while
@@ -362,13 +367,15 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   configuration.
 - `dialog-source-errors` captures source-visible @aurelia/dialog mistakes: registering bare `DialogConfiguration`
   without a renderer-providing customization, and opening a dialog with settings that provide neither `component` nor
-  `template`, and resolving a child dialog service key that has no visible `withChild(...)` settings registration. It
-  preserves dialog `AUR0904`, `AUR0903`, and `AUR0910` pressure without making recommendable generators emit invalid
-  dialog configuration or service calls.
+  `template`, opening a child dialog whose visible base settings also provide neither component nor template, and
+  resolving a child dialog service key that has no visible `withChild(...)` settings registration. It preserves dialog
+  `AUR0904`, `AUR0903`, and `AUR0910` pressure without making recommendable generators emit invalid dialog
+  configuration or service calls.
 - `dialog-classic-with-child` captures valid `DialogConfigurationClassic.withChild(...)` registration with a matching
-  child `IDialogService` resolver, including direct, namespace, const, and local factory wrapper registration forms. It
-  preserves the positive side of dialog child settings and generic DI registry-body seams so app-health output does not
-  imply valid child dialog configuration is an analyzer problem.
+  child `IDialogService` resolver, including direct, namespace, const, and local factory wrapper registration forms, and
+  child `open({ model })` calls that inherit component settings from the configured child base. It preserves the positive
+  side of dialog child settings and generic DI registry-body seams so app-health output does not imply valid child dialog
+  configuration is an analyzer problem.
 - `sanitize-value-converter-default` captures the built-in `sanitize` value converter used without an app-provided
   `ISanitizer` resolver. It preserves the runtime-html default sanitizer `method_not_implemented` / `AUR0099` path
   without making recommendable generators rely on the throwing default sanitizer.
