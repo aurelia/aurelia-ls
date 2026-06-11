@@ -161,6 +161,15 @@ export function openSeamSiteRows(
           right.rawRowCount - left.rawRowCount
           || left.sampleSummary.localeCompare(right.sampleSummary)
         );
+      const variantSamples = variants.length === 1 && variants[0]?.sampleSummary === site.sampleSummary
+        ? []
+        : variants.slice(0, 5).map((variant) => ({
+          attempt: variant.attempt,
+          boundary: variant.boundary,
+          reasonKinds: variant.reasonKinds,
+          rawRowCount: variant.rawRowCount,
+          sampleSummary: variant.sampleSummary,
+        }));
       return {
         siteKey: site.siteKey,
         seamKindKey: site.seamKindKey,
@@ -175,13 +184,7 @@ export function openSeamSiteRows(
         boundaryKinds: [...site.boundaryKinds].sort(),
         reasonKinds: [...site.reasonKinds].sort(),
         sampleSummary: site.sampleSummary,
-        variantSamples: variants.slice(0, 5).map((variant) => ({
-          attempt: variant.attempt,
-          boundary: variant.boundary,
-          reasonKinds: variant.reasonKinds,
-          rawRowCount: variant.rawRowCount,
-          sampleSummary: variant.sampleSummary,
-        })),
+        variantSamples,
       };
     })
     .sort((left, right) =>

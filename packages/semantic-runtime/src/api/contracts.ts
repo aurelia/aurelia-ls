@@ -824,6 +824,8 @@ export interface SemanticRuntimeAnswer<TValue> {
   readonly summary: string;
   readonly value: TValue;
   readonly page?: SemanticRuntimePageResult | null;
+  /** App-world depth that actually answered this query; absent for runtime-static/project-frame answers. */
+  readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
   /** Optional typed follow-up moves. Most current answers omit this until their continuation surface is explicit. */
   readonly continuations?: readonly SemanticRuntimeContinuationRow[];
   /** Optional answer-envelope telemetry, present only when a telemetry request asks the runtime to expose it. */

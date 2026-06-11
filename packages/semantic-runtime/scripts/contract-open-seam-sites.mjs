@@ -103,8 +103,8 @@ for (const row of sites.rows) {
   if (row.rawRowCount !== 3) {
     failures.push(`Expected each seam site to cover 3 raw rows, observed ${row.rawRowCount} for ${row.siteKey}.`);
   }
-  if (row.variantCount !== 1 || row.variantSamples.length !== 1) {
-    failures.push(`Expected each seam site to have one sampled variant, observed variants=${row.variantCount}, samples=${row.variantSamples.length}.`);
+  if (row.variantCount !== 1 || row.variantSamples.length !== 0) {
+    failures.push(`Expected single-variant seam sites to preserve variantCount while omitting duplicate variantSamples, observed variants=${row.variantCount}, samples=${row.variantSamples.length}.`);
   }
   if (row.source?.path?.endsWith('src/app.ts') !== true) {
     failures.push(`Expected seam site source to point at src/app.ts, observed ${JSON.stringify(row.source)}.`);

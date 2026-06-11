@@ -38,6 +38,7 @@ import {
   type AureliaMcpTemplateDiagnosticsInput,
   type AureliaMcpWorkspaceOverviewInput,
 } from './tool-contracts.js';
+import { AURELIA_MCP_ORIENTATION_RESOURCE_URI } from './orientation.js';
 import { aureliaMcpResultText, isRecord } from './result-text.js';
 
 const readOnlyClosedWorldToolAnnotations: ToolAnnotations = {
@@ -220,7 +221,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.templateCursorInfo,
     {
       title: 'Aurelia Template Cursor Info',
-      description: 'Read the semantic template site, selected resource/member, and cursor diagnostics at a source cursor.',
+      description: 'Read the semantic template site, selected resource/member, and cursor diagnostics at a source cursor. Place the cursor on the member token when you need expression-member owner type answers.',
       inputSchema: strictInputSchema(templateCursorInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -287,6 +288,12 @@ function resourceLinksForResult(value: unknown) {
     return [];
   }
   switch (value.tool) {
+    case aureliaMcpToolNames.workspaceOverview:
+    case aureliaMcpToolNames.appOverview:
+      return [
+        semanticRuntimeResourceLink('orientation'),
+        semanticRuntimeResourceLink('app-queries'),
+      ];
     case aureliaMcpToolNames.appQuery:
       return [
         semanticRuntimeResourceLink('app-queries'),
@@ -308,7 +315,16 @@ function resourceLinksForResult(value: unknown) {
   }
 }
 
-function semanticRuntimeResourceLink(view: 'app-queries' | 'app-builder') {
+function semanticRuntimeResourceLink(view: 'orientation' | 'app-queries' | 'app-builder') {
+  if (view === 'orientation') {
+    return {
+      type: 'resource_link' as const,
+      uri: AURELIA_MCP_ORIENTATION_RESOURCE_URI,
+      name: 'Aurelia MCP Orientation',
+      mimeType: 'text/markdown',
+      description: 'Golden-path orientation for fresh Aurelia MCP sessions.',
+    };
+  }
   const isAppBuilder = view === 'app-builder';
   return {
     type: 'resource_link' as const,

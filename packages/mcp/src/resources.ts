@@ -1,11 +1,23 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import process from 'node:process';
+import {
+  AURELIA_MCP_ORIENTATION_RESOURCE_TEXT,
+  AURELIA_MCP_ORIENTATION_RESOURCE_URI,
+} from './orientation.js';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 
 export function registerAureliaSemanticRuntimeResources(
   server: McpServer,
   adapter: AureliaMcpSemanticRuntimeAdapter = new AureliaMcpSemanticRuntimeAdapter(),
 ): void {
+  registerStaticTextResource(
+    server,
+    'aurelia_mcp_orientation',
+    AURELIA_MCP_ORIENTATION_RESOURCE_URI,
+    'Aurelia MCP Orientation',
+    'Golden-path orientation for fresh MCP sessions, including query sequencing, source-file scoping, analysis-depth behavior, and cursor-position guidance.',
+    AURELIA_MCP_ORIENTATION_RESOURCE_TEXT,
+  );
   registerStaticJsonResource(
     server,
     'aurelia_app_query_catalog',
@@ -21,6 +33,34 @@ export function registerAureliaSemanticRuntimeResources(
     'Aurelia App Builder Catalog',
     'Supported semantic-runtime app-builder query kinds for app-builder ontology/detail reads, recommendation policy, input readiness, source lowering, and opinionated part source lowering.',
     async () => (await adapter.appBuilderCatalog({ workspaceRoot: process.cwd() })).value,
+  );
+}
+
+function registerStaticTextResource(
+  server: McpServer,
+  name: string,
+  uri: string,
+  title: string,
+  description: string,
+  text: string,
+): void {
+  server.registerResource(
+    name,
+    uri,
+    {
+      title,
+      description,
+      mimeType: 'text/markdown',
+    },
+    async (resourceUri) => ({
+      contents: [
+        {
+          uri: resourceUri.href,
+          mimeType: 'text/markdown',
+          text,
+        },
+      ],
+    }),
   );
 }
 

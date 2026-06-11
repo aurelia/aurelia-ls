@@ -3938,6 +3938,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "aurelia_app_query_catalog",
       "aurelia_app_builder_catalog",
       "aurelia_app_builder_query",
+      "mcp orientation",
+      "MCP onboarding",
+      "MCP golden path",
+      "aurelia_mcp_orientation",
+      "aurelia://semantic-runtime/orientation",
+      "server instructions",
+      "orientation resource",
+      "schema describe sweep",
+      "tools/list described schema budget",
+      "sourceFilePath unsupported preflight",
+      "analysisDepth used",
       "app-builder MCP tool",
       "app-builder query MCP",
       "SemanticRuntimeAppBuilderQueryKind",
@@ -4028,6 +4039,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "mcp workspace overview app overview diagnostic overview router overview structured content",
         summary:
           "MCP tool-shape work should route through the public shell, compact semantic-runtime projections, and explicit paging affordances.",
+      },
+      {
+        query: "mcp orientation onboarding golden path server instructions orientation resource",
+        summary:
+          "MCP onboarding should route to the canonical orientation module shared by server instructions, prompts, and resources, with behavior claims covered by contracts.",
+      },
+      {
+        query: "tools/list huge schemas describe token budget",
+        summary:
+          "MCP schema descriptions should stay terse and measured by the adversarial surface contract; longer workflow teaching belongs in orientation resources and catalogs.",
+      },
+      {
+        query: "sourceFilePath accepted but ignored unsupported query family",
+        summary:
+          "Public MCP selectors should route through semantic-runtime unsupported preflight rather than silently accepting sourceFilePath on query families that cannot honor file scoping.",
+      },
+      {
+        query: "analysisDepth manual required but runtime auto raises query depth",
+        summary:
+          "Depth-teaching work should expose the analysisDepth actually used and describe catalog-driven auto-depth instead of teaching manual prerequisites.",
       },
       {
         query: "MCP row preview source labels structuredContent text preview",
@@ -4179,6 +4210,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
+        filePath: "packages/mcp/src/orientation.ts",
+        role: "primary",
+        summary:
+          "Canonical app-agnostic orientation module used by server instructions, prompts, and the orientation resource.",
+      },
+      {
+        kind: "source",
         filePath: "packages/mcp/src/resources.ts",
         symbolName: "registerAureliaSemanticRuntimeResources",
         role: "supporting",
@@ -4243,7 +4281,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/evaluation/evaluator.ts",
+        filePath: "packages/semantic-runtime/src/evaluation/seams.ts",
         symbolName: "evaluationOpenSeamDefaultReasonKinds",
         role: "grounding",
         summary:
@@ -4276,7 +4314,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/kernel/address.ts",
-        symbolName: "SourceFileRole.ToolingScript",
+        symbolName: "SourceFileRole",
         role: "grounding",
         summary:
           "Source role for build or maintenance scripts that need checker diagnostics but not app-world evaluation.",
@@ -4326,6 +4364,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Contract proving MCP forwards semantic-runtime app-query continuations and app-builder detail requests without adapter-local projection.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+        role: "supporting",
+        summary:
+          "Contract proving MCP startup orientation, schema budget, selector honesty, depth visibility, continuations, strict envelopes, and remedy text.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/mcp-orientation-external-findings-fable-2026-06-11.md",
+        role: "supporting",
+        summary:
+          "Pre-release orientation packet that defines the golden path and onboarding contracts.",
       },
       {
         kind: "script",

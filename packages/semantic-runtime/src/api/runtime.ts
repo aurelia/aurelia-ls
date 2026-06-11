@@ -122,6 +122,17 @@ import {
   type QueryClaimAnswerDisposalSummary,
 } from '../inquiry/query-claim-graph.js';
 import {
+  InquiryContinuationKind,
+} from '../inquiry/answer.js';
+import {
+  InquiryContinuationCost,
+  InquiryContinuationIntent,
+  InquiryEvidenceCoverage,
+  InquiryEvidenceStaleness,
+  InquiryEvidenceState,
+  InquirySourcePrecision,
+} from '../inquiry/continuation-intent.js';
+import {
   queryClaimDisposalPolicy,
   QueryClaimDisposalReason,
   type QueryClaimDisposalPolicy,
@@ -307,6 +318,7 @@ import {
   type SemanticRouterOverviewRequest,
   type SemanticRouterOverviewResult,
   type SemanticRuntimeAnswer,
+  type SemanticRuntimeContinuationRow,
   type SemanticRuntimeCompositionResult,
   type SemanticRuntimeControllerResult,
   type SemanticRuntimeWatcherObservedDependencyResult,
@@ -497,6 +509,7 @@ export class SemanticRuntime {
       `Booted ${projects.length} semantic-runtime project frame(s) with ${value.appCandidates.length} app candidate(s); returned ${pagedProjects.page.returnedRows} project row(s).`,
       value,
       pagedProjects.page,
+      semanticRuntimeSummaryContinuations(value),
     );
   }
 
@@ -1207,10 +1220,13 @@ export class SemanticRuntime {
           appProfile: includeAppProfile ? appSummary?.profile ?? null : null,
           appQueryClaimProfiles: includeAppQueryClaimProfiles ? appSummary?.queryClaimProfiles ?? [] : [],
         };
-        return answer(
-          SemanticRuntimeAnswerOutcome.Hit,
-          `Answered ${rows.length} routed app query claim(s) for '${plan.project.projectKey}' at analysisDepth='${plan.analysisDepth}'.`,
-          value,
+        return withAnswerAnalysisDepth(
+          answer(
+            SemanticRuntimeAnswerOutcome.Hit,
+            `Answered ${rows.length} routed app query claim(s) for '${plan.project.projectKey}' at analysisDepth='${plan.analysisDepth}'.`,
+            value,
+          ),
+          plan.analysisDepth,
         );
       },
     );
@@ -1811,6 +1827,69 @@ function semanticRuntimeSummaryDisplayText(input: SemanticRuntimeSummaryDisplayI
   }
   lines.push('Next: open the default app with aurelia_app_overview, or pass projectKey for a selected app candidate.');
   return lines.join('\n');
+}
+
+function semanticRuntimeSummaryContinuations(
+  value: SemanticRuntimeSummary,
+): readonly SemanticRuntimeContinuationRow[] {
+  const noAppBlockers = value.defaultAppProjectKey == null
+    ? ['No default Aurelia app candidate was discovered; select a projectKey or pass explicit projects before following this app query.']
+    : [];
+  return [
+    semanticRuntimeSummaryAppContinuation(
+      'Open the composed app overview for the default or selected app candidate.',
+      SemanticAppQueryKind.AppOverview,
+      [InquiryContinuationIntent.Orient, InquiryContinuationIntent.Inspect],
+      noAppBlockers,
+    ),
+    semanticRuntimeSummaryAppContinuation(
+      'Cluster diagnostics after the workspace/app candidate map.',
+      SemanticAppQueryKind.AppDiagnosticSummary,
+      [InquiryContinuationIntent.Diagnose],
+      noAppBlockers,
+    ),
+    semanticRuntimeSummaryAppContinuation(
+      'Group open seams before paging raw seam rows.',
+      SemanticAppQueryKind.OpenSeamSummary,
+      [InquiryContinuationIntent.Inspect, InquiryContinuationIntent.Diagnose],
+      noAppBlockers,
+    ),
+    semanticRuntimeSummaryAppContinuation(
+      'Inspect router, viewport, route-tree, and navigation shape when routing is relevant.',
+      SemanticAppQueryKind.RouterOverview,
+      [InquiryContinuationIntent.Inspect],
+      noAppBlockers,
+    ),
+  ];
+}
+
+function semanticRuntimeSummaryAppContinuation(
+  rationale: string,
+  targetQueryKind: SemanticAppQueryKind,
+  intents: readonly InquiryContinuationIntent[],
+  blockers: readonly string[],
+): SemanticRuntimeContinuationRow {
+  return {
+    kind: InquiryContinuationKind.FollowQuery,
+    rationale,
+    targetQueryKind,
+    targetQuery: {
+      kind: targetQueryKind,
+      ...(targetQueryKind === SemanticAppQueryKind.AppDiagnosticSummary
+        || targetQueryKind === SemanticAppQueryKind.OpenSeamSummary
+        ? { page: { size: 0 } }
+        : {}),
+    },
+    intents,
+    cost: InquiryContinuationCost.AppWorld,
+    evidence: {
+      evidenceState: blockers.length === 0 ? InquiryEvidenceState.Inferred : InquiryEvidenceState.Open,
+      coverage: InquiryEvidenceCoverage.PartialKnownGaps,
+      sourcePrecision: InquirySourcePrecision.NotRequired,
+      staleness: InquiryEvidenceStaleness.ProjectEpochSensitive,
+    },
+    blockers,
+  };
 }
 
 function countRowsDisplay<TRow extends { readonly count: number }>(
@@ -2693,30 +2772,33 @@ export class SemanticApp {
     const catalogRow = semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind);
     const inquiryProfile = this.inquiryProfileForQuery(query);
     const queryClaims = this.queryClaimsForProfile(inquiryProfile);
-    return filterSemanticAppQueryContinuations(
-      continuationQuery,
-      queryClaims.answer({
-        queryKind: query.kind,
-        queryKey: semanticAppQueryKey(query),
-        locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
-        epochKeys: semanticAppQueryEpochKeys(this.project.projectKey, query),
-        materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
-      }, () => {
-        this.activeInquiryProfileStack.push(inquiryProfile);
-        try {
-          return withSemanticAppQueryContinuations(
-            continuationQuery,
-            materialize(),
-            catalogRow,
-          );
-        } finally {
-          this.activeInquiryProfileStack.pop();
-        }
-      }, {
-        readKernelMarker: () => this.runtime.workspace.store.mark(),
-        readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
-        disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
-      }),
+    return withAnswerAnalysisDepth(
+      filterSemanticAppQueryContinuations(
+        continuationQuery,
+        queryClaims.answer({
+          queryKind: query.kind,
+          queryKey: semanticAppQueryKey(query),
+          locusKey: semanticAppQueryLocusKey(this.project.projectKey, query),
+          epochKeys: semanticAppQueryEpochKeys(this.project.projectKey, query),
+          materializationPolicy: semanticAppQueryMaterializationPolicy(query, catalogRow.materializationPolicy),
+        }, () => {
+          this.activeInquiryProfileStack.push(inquiryProfile);
+          try {
+            return withSemanticAppQueryContinuations(
+              continuationQuery,
+              materialize(),
+              catalogRow,
+            );
+          } finally {
+            this.activeInquiryProfileStack.pop();
+          }
+        }, {
+          readKernelMarker: () => this.runtime.workspace.store.mark(),
+          readKernelSnapshot: () => this.runtime.workspace.store.readTelemetrySnapshot(),
+          disposeKernelSince: (marker) => this.runtime.workspace.store.disposeSince(marker),
+        }),
+      ),
+      this.emission.analysisDepth,
     );
   }
 
@@ -4963,6 +5045,16 @@ function addCountRecordToMap(target: Map<string, number>, source: Readonly<Recor
 
 function countMapToRecord(source: Map<string, number>): Readonly<Record<string, number>> {
   return Object.fromEntries([...source.entries()].sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function withAnswerAnalysisDepth<TValue>(
+  result: SemanticRuntimeAnswer<TValue>,
+  analysisDepth: SemanticAppAnalysisDepth,
+): SemanticRuntimeAnswer<TValue> {
+  return {
+    ...result,
+    analysisDepth,
+  };
 }
 
 function sumSemanticRuntimeMemoryDeltas(

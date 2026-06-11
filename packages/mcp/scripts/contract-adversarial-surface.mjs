@@ -43,10 +43,16 @@ child.stderr.on('data', (chunk) => {
 });
 
 try {
-  await initialize();
+  const initializeResponse = await initialize();
+  verifyServerInstructions(initializeResponse);
+  await verifyOrientationResource();
   await verifyToolSurfaceBudget();
+  await verifyToolInputSchemaDescriptions();
   await verifyStrictTopLevelEnvelope();
   await verifyPageClampAndTextPreview();
+  await verifyWorkspaceOverviewContinuations();
+  await verifyAnalysisDepthEnvelope();
+  await verifySourceFilePathUnsupportedPreflight();
   await verifyAnalysisCacheClearVocabulary();
   await verifyDiagnosticTextPreviewIdentity();
   await verifyOpenSeamSitesPreview();
@@ -62,7 +68,7 @@ try {
 }
 
 async function initialize() {
-  await call('initialize', {
+  const response = await call('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
     clientInfo: { name: 'adversarial-contract', version: '0' },
@@ -72,13 +78,46 @@ async function initialize() {
     method: 'notifications/initialized',
     params: {},
   }) + '\n');
+  return response;
+}
+
+function verifyServerInstructions(response) {
+  const instructions = response.result?.instructions;
+  expect(typeof instructions === 'string' && instructions.includes('aurelia_workspace_overview'), 'Initialize response should include Aurelia MCP orientation instructions.');
+  expect(instructions.includes('page.size=0'), 'Server instructions should teach rollup-first page.size=0 usage.');
+  expect(instructions.includes('auto-selects') || instructions.includes('auto-satisfies'), 'Server instructions should teach analysis-depth auto-selection.');
+  expect(!containsLocalPathOrScratchReference(instructions), 'Server instructions should stay app-agnostic.');
+}
+
+async function verifyOrientationResource() {
+  const listed = await call('resources/list', {});
+  const resource = listed.result?.resources?.find((entry) => entry.uri === 'aurelia://semantic-runtime/orientation');
+  expect(resource != null, 'Orientation resource should be advertised through resources/list.');
+  const read = await call('resources/read', { uri: 'aurelia://semantic-runtime/orientation' });
+  const text = read.result?.contents?.[0]?.text;
+  expect(typeof text === 'string' && text.includes('## Golden Path'), 'Orientation resource should provide the full golden path.');
+  expect(text.includes('aurelia_app_query_catalog'), 'Orientation resource should teach catalog-first query selection.');
+  expect(text.includes('sourceFile') && text.includes('outcome=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
+  expect(!containsLocalPathOrScratchReference(text), 'Orientation resource should stay app-agnostic.');
 }
 
 async function verifyToolSurfaceBudget() {
   const response = await call('tools/list', {});
   const text = JSON.stringify(response.result);
-  expect(Buffer.byteLength(text, 'utf8') < 45_000, 'tools/list should stay below the current compact-schema budget.');
+  expect(Buffer.byteLength(text, 'utf8') < 80_000, 'tools/list should stay below the described-schema budget.');
   expect(response.result?.tools?.length === 16, 'tools/list should advertise the expected public tool count.');
+}
+
+async function verifyToolInputSchemaDescriptions() {
+  const response = await call('tools/list', {});
+  const tools = response.result?.tools ?? [];
+  for (const tool of tools) {
+    const missing = missingDescriptions(tool.inputSchema, tool.name);
+    expect(missing.length === 0, `Tool ${tool.name} has undescribed input schema field(s): ${missing.join(', ')}`);
+  }
+  const appQuery = tools.find((tool) => tool.name === 'aurelia_app_query');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
+  expect(JSON.stringify(appQuery?.inputSchema).includes('outcome=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
 }
 
 async function verifyStrictTopLevelEnvelope() {
@@ -110,6 +149,38 @@ async function verifyPageClampAndTextPreview() {
   expect(text.includes('Clamped requested size 100000 to max 200'), 'Text content should mention page-size clamping.');
   expect(text.includes('Row payload budget stopped this page'), 'Text content should mention byte-budget pagination.');
   expect(text.includes('Rows:'), 'Text content should include a bounded row preview for row answers.');
+}
+
+async function verifyWorkspaceOverviewContinuations() {
+  const response = await callTool('aurelia_workspace_overview', {
+    workspaceRoot: fixtureRoot,
+  });
+  const answer = response.result?.structuredContent?.value;
+  expect(Array.isArray(answer?.continuations), 'Workspace overview should expose structured continuations.');
+  expect(answer.continuations.some((row) => row.targetQueryKind === 'app-overview'), 'Workspace overview continuations should include app-overview.');
+  expect(answer.continuations.some((row) => row.targetQueryKind === 'app-diagnostic-summary'), 'Workspace overview continuations should include diagnostic summary.');
+}
+
+async function verifyAnalysisDepthEnvelope() {
+  const response = await callTool('aurelia_app_query', {
+    workspaceRoot: fixtureRoot,
+    queryKind: 'binding-data-flow-summary',
+    page: { size: 0 },
+  });
+  const answer = response.result?.structuredContent?.value;
+  expect(answer?.analysisDepth === 'binding-observation', `Binding data-flow summary should report binding-observation analysisDepth, observed ${answer?.analysisDepth}.`);
+  expect(resultText(response).includes('Analysis depth used: binding-observation'), 'Text preview should expose answer analysis depth.');
+}
+
+async function verifySourceFilePathUnsupportedPreflight() {
+  const response = await callTool('aurelia_app_overview', {
+    workspaceRoot: fixtureRoot,
+    sourceFilePath: 'src/app.ts',
+  });
+  const answer = response.result?.structuredContent?.value;
+  expect(answer?.outcome === 'unsupported', 'sourceFilePath on an unsupported query family should return outcome=unsupported.');
+  expect(answer?.value?.unsupportedFields?.includes('sourceFile'), 'Unsupported sourceFilePath should be normalized into the runtime sourceFile selector preflight.');
+  expect(resultText(response).includes('does not support sourceFile'), 'Unsupported sourceFilePath text should explain that the query cannot honor file scoping.');
 }
 
 async function verifyAnalysisCacheClearVocabulary() {
@@ -268,6 +339,50 @@ function call(method, params) {
 
 function resultText(response) {
   return response.result?.content?.find((entry) => entry.type === 'text')?.text ?? '';
+}
+
+function containsLocalPathOrScratchReference(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const lower = value.toLowerCase();
+  return lower.includes('.temp') || /[a-z]:[\\/]/i.test(value);
+}
+
+function missingDescriptions(schema, path) {
+  if (schema == null || typeof schema !== 'object') {
+    return [];
+  }
+  const missing = [];
+  visitJsonSchema(schema, path, missing);
+  return missing;
+}
+
+function visitJsonSchema(schema, path, missing) {
+  if (schema == null || typeof schema !== 'object') {
+    return;
+  }
+  if (schema.properties != null && typeof schema.properties === 'object') {
+    for (const [key, child] of Object.entries(schema.properties)) {
+      const childPath = `${path}.${key}`;
+      if (child == null || typeof child !== 'object' || typeof child.description !== 'string' || child.description.length === 0) {
+        missing.push(childPath);
+      }
+      visitJsonSchema(child, childPath, missing);
+    }
+  }
+  for (const key of ['items', 'additionalProperties']) {
+    const child = schema[key];
+    if (child != null && typeof child === 'object') {
+      visitJsonSchema(child, `${path}.${key}`, missing);
+    }
+  }
+  for (const key of ['anyOf', 'oneOf', 'allOf']) {
+    const entries = schema[key];
+    if (Array.isArray(entries)) {
+      entries.forEach((entry, index) => visitJsonSchema(entry, `${path}.${key}[${index}]`, missing));
+    }
+  }
 }
 
 function expect(condition, message) {

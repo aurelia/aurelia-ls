@@ -1007,13 +1007,13 @@ function addIssueContinuations(
   if (query.kind === SemanticAppQueryKind.OpenSeams) {
     seeds.push(
       orient(
-        'Group repeated derivation rows by unique authored source site.',
-        rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+        'Group open seams before choosing a narrower follow-up.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
         InquiryEvidenceState.Open,
       ),
       orient(
-        'Group open seams before choosing a narrower follow-up.',
-        rowQuery(SemanticAppQueryKind.OpenSeamSummary, query, page),
+        'Group repeated derivation rows by unique authored source site.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
         InquiryEvidenceState.Open,
       ),
     );

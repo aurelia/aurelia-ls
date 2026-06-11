@@ -128,7 +128,7 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "filePath": "packages/semantic-runtime/src/evaluation/seams.ts",
           "symbolName": "evaluationOpenSeamDefaultReasonKinds",
           "summary": "Default evaluator seam-kind to open-seam-reason mapping used before producer-specific reasons are compacted."
         },

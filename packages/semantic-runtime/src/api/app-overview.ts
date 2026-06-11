@@ -265,7 +265,7 @@ function overviewExactSourceReference(
 
 function bindingProjectionDepthText(app: SemanticAppSummary): string {
   if (app.analysisDepth === 'binding-targets') {
-    return `Bindings: ${app.runtimeBindings} runtime binding(s), ${app.runtimeBindingTargetAccesses} target access row(s); value-channel, data-flow, and observed-dependency rows require analysisDepth=binding-observation.`;
+    return `Bindings: ${app.runtimeBindings} runtime binding(s), ${app.runtimeBindingTargetAccesses} target access row(s); value-channel, data-flow, and observed-dependency queries auto-open/auto-raise to binding-observation when asked.`;
   }
-  return `Bindings: ${app.runtimeBindings} runtime binding(s); target access, value-channel, data-flow, and observed-dependency projections require analysisDepth=binding-targets or binding-observation.`;
+  return `Bindings: ${app.runtimeBindings} runtime binding(s); binding target/value-flow queries auto-open/auto-raise to binding-targets or binding-observation when asked.`;
 }

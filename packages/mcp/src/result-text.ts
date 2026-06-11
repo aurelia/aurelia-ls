@@ -48,6 +48,10 @@ function semanticAnswerDisplayText(value: unknown): string | null {
       lines.push(displayText);
     }
   }
+  const analysisDepth = semanticAnswerAnalysisDepthText(value.analysisDepth);
+  if (analysisDepth != null) {
+    lines.push(analysisDepth);
+  }
   const page = semanticAnswerPageText(value.page);
   if (page != null) {
     lines.push(page);
@@ -65,6 +69,12 @@ function semanticAnswerDisplayText(value: unknown): string | null {
     lines.push(nestedContinuations);
   }
   return lines.length === 0 ? null : lines.join('\n');
+}
+
+function semanticAnswerAnalysisDepthText(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0
+    ? `Analysis depth used: ${value}.`
+    : null;
 }
 
 function topLevelDisplayText(value: unknown): string | null {

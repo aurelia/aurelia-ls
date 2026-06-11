@@ -69,12 +69,14 @@
         "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
         "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
         "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
+        "MCP onboarding guidance should be canonical, app-agnostic, and contract-backed. Server instructions, workflow prompts, and the orientation markdown resource should share one orientation module that teaches the golden path: workspace overview, retained app overview with small samples, catalog, rollup-first summaries, focused rows/cursor, catalog-shaped file scoping, and analysis-depth auto-selection.",
         "When AppOverview or another default overview shows breakdowns derived from a paged row family, label them as samples. Global totals may be shown as totals, but boundary/source/reason breakdowns from the returned `open-seam-sites` page must not read as full-app distributions.",
         "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams`, `OpenSeamSummary`, and `OpenSeamSites` should accept sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filters, and continuations plus query-claim identity should preserve those filters when moving between site, cluster, and raw rows.",
         "Open-seam raw, summary, site, and overview displays should prefer authored `path:line:column` samples when source ranges are available. Byte-offset labels are acceptable as structured source-reference identity, but first-read text should not force users or AIs to translate offsets before acting.",
         "`OpenSeamSummary` should distinguish raw derivation row counts from `uniqueSiteCount`. Cluster queries are often the first drill-down an MCP user tries, and raw counts alone can make repeated evaluator derivations look like hundreds of independent user problems.",
         "Open-seam rows are not diagnostics. Public MCP/IDE surfaces should project factual `attempt` and `boundary` interpretation from the controlled seam vocabulary so large clusters explain which semantic operation hit which boundary without inventing confidence, severity, or adapter-local classifications.",
         "Default public seam overview should prefer `open-seam-sites` over raw rows: repeated evaluator derivations can create many raw seams at one authored span, so first-read answers must distinguish unique authored sites from raw derivation rows, include attempt/boundary/reason-kind summaries, and preserve raw rows only as drill-down detail.",
+        "When a caller is already on raw open-seam rows, continuation ordering should still teach rollup-first: offer `open-seam-summary` before unique-site or raw-row drill-downs unless the caller asked for a narrower site-oriented intent.",
         "Open-seam site ordering should prefer authored app/template/style/root-document roles before test/example, tooling, generated, declaration, external, or unknown rows; raw-row count is only a secondary sort inside the same role band.",
         "Open-seam site rows should join factual application topology roles when available. `sourceRole=app-source` is boot/admission evidence; `applicationFileRoles` such as component-source, entrypoint, route-source, service-source, state-source, or model-source give public answers better context without turning seams into severity or actionability labels.",
         "Open-seam site rows should also join compact static-evaluation origins when available. `staticEvaluationOrigins` explains whether the source was a direct app-source evaluation root, a module-graph dependency from another root, or both; this is factual context, not severity or actionability.",
@@ -85,7 +87,9 @@
         "Open bindable configuration should not fabricate confident defaults. Preserve explicit fields from an open `@bindable(...)` object, but report open setter/configuration facts and use the neutral default binding mode when membership did not close.",
         "Public app-query selectors that a query family cannot consume should return `unsupported` with accepted query-kind menus instead of being silently catalog-shaped away. Keep `diagnosticProjection` separate from selectors: it may be a continuation target-policy hint even when the current source query does not consume it.",
         "Public answers carry both coarse `outcome` and precise `closure`. Use `closure` for transport/UI decisions about paging, open semantic facts, ambiguity, reroutes, and unsupported selectors; keep `outcome` backward-compatible for hit/miss/partial/unsupported grouping.",
+        "Public app-query answers should expose the analysis depth actually used when an app world answered the query. Presentation prose should say depth is auto-selected/auto-raised by query policy rather than teaching callers a manual prerequisite step.",
         "MCP text previews are part of the trust surface, not decoration: bounded row previews should preserve identity fields, source labels, and source spans even when structuredContent carries the full row payload.",
+        "MCP `tools/list` schemas should be described but compact. Put one-line field purpose/default/use hints in schemas, keep workflow prose in the orientation resource and catalogs, and preserve a measured startup-surface budget in the adversarial MCP contract.",
         "Public row pagination is bounded by both row count and estimated row JSON payload size. If dense row families make structuredContent large, improve or reuse `pageRows(...)` and `SemanticRuntimePageResult` payload-budget metadata instead of hiding rows in the MCP adapter.",
         "Treat `partial` as a normal successful answer state for dense row families. Contracts, MCP tools, IDE clients, and fixture verifiers that need complete row sets must walk `page.nextCursor` to exhaustion instead of assuming one large `page.size` request returns all rows."
       ],
@@ -189,7 +193,22 @@
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
-          "summary": "Contract proving MCP strict envelopes, row-count and byte-budget page clamps, source-preserving row previews, cursor vocabulary, and error-remedy text."
+          "summary": "Contract proving MCP orientation instructions/resource, compact described schemas, strict envelopes, source-file selector honesty, analysis-depth visibility, workspace continuations, row-count and byte-budget page clamps, source-preserving row previews, cursor vocabulary, and error-remedy text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "Canonical app-agnostic MCP orientation text shared by server instructions, prompts, and resource reads."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tool-schemas.ts",
+          "summary": "Public MCP input schema boundary with compact described fields and sourceFile/sourceFilePath selector guidance."
+        },
+        {
+          "kind": "doc",
+          "path": ".temp/mcp-orientation-external-findings-fable-2026-06-11.md",
+          "summary": "Current pre-release onboarding/orientation packet that established the golden path and contracts for MCP cold-start teaching."
         },
         {
           "kind": "source",
@@ -327,7 +346,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-06-11"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -644,6 +663,8 @@
         "Use this decision before expanding public MCP prompts, tools, or app-generation output.",
         "Keep the MCP package a thin adapter over semantic-runtime query families; do not classify diagnostics, app-building taste, or source-plan policy in the transport layer.",
         "For current public preview behavior, prioritize analysis answers that help agents write compact Aurelia: diagnostics including ordinary TypeScript diagnostics, app/router/template/binding facts, continuations, and concise prompt workflows.",
+        "Treat the MCP orientation module as the public cold-start teaching source. It should teach sequencing and affordances, not app-specific canaries or product facts that belong in semantic-runtime answers.",
+        "Keep startup token economy measurable: schema descriptions are valuable, but they should remain terse and the adversarial MCP contract should fail if `tools/list` grows beyond the current described-schema budget.",
         "Prioritize low-boilerplate Aurelia guidance in future app-builder outputs: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by domain shape, and expected-effect verification.",
         "Keep core observation high priority: ordinary template reads, proxy-observed domain state, value channels, binding data-flow, and the patterns that make forwarding getters unnecessary.",
         "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
@@ -671,6 +692,11 @@
           "filePath": "packages/mcp/src/prompts.ts",
           "symbolName": "registerAureliaSemanticRuntimePrompts",
           "summary": "Public workflow prompts orchestrate stable tools without owning product facts or source edits."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "Canonical orientation module used by server instructions, prompts, and the orientation resource."
         },
         {
           "kind": "source",
@@ -705,10 +731,15 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
           "summary": "Contract proving MCP pass-through for app-query continuations and app-builder detail request envelopes."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving public MCP startup orientation, compact described schema surface, source-file selector honesty, and onboarding affordance claims."
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-06-02"
+      "updatedAt": "2026-06-11"
     },
     {
       "id": "reuse:runtime-resource-local-binding-ownership",

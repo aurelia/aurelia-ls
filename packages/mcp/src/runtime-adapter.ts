@@ -160,7 +160,10 @@ export class AureliaMcpSemanticRuntimeAdapter {
       includeAppProfile: input.includeAppProfile ?? undefined,
       includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
       inquiryProfile: 'mcp-orientation',
-      queries: continuationFilteredQueries(input.queries, input.continuationIntents),
+      queries: queriesWithSourceFilePathSelector(
+        continuationFilteredQueries(input.queries, input.continuationIntents),
+        input.sourceFilePath,
+      ),
     });
     return toolResponse(aureliaMcpToolNames.appQueryBatch, input, answer);
   }
@@ -250,15 +253,16 @@ export class AureliaMcpSemanticRuntimeAdapter {
     query: SemanticAppQuery & Pick<SemanticRuntimeAppQueryRequest, 'analysisDepth'>,
   ): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     const runtime = await this.sessions.runtime(runtimeOptions(input));
+    const queryWithSelectors = queryWithSourceFilePathSelector(query, input.sourceFilePath);
     const answer = await runtime.answerAppQuery({
-      ...query,
+      ...queryWithSelectors,
       projectKey: input.projectKey ?? undefined,
       sourceFilePath: input.sourceFilePath ?? undefined,
-      analysisDepth: query.analysisDepth ?? input.analysisDepth ?? semanticAppQueryCatalogRow(query.kind as SemanticAppQueryKind).minimumAnalysisDepth,
+      analysisDepth: queryWithSelectors.analysisDepth ?? input.analysisDepth ?? semanticAppQueryCatalogRow(queryWithSelectors.kind as SemanticAppQueryKind).minimumAnalysisDepth,
       includeAuthoringTemplates: input.includeAuthoringTemplates ?? undefined,
       authoringTemplateSourceFiles: input.authoringTemplateSourceFiles ?? undefined,
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
-      continuationIntents: query.continuationIntents ?? input.continuationIntents ?? undefined,
+      continuationIntents: queryWithSelectors.continuationIntents ?? input.continuationIntents ?? undefined,
       inquiryProfile: 'mcp-orientation',
       appRetention: input.appRetention ?? 'dispose-app',
     });
@@ -277,6 +281,29 @@ function continuationFilteredQueries(
     ...query,
     continuationIntents: query.continuationIntents ?? continuationIntents,
   }));
+}
+
+function queriesWithSourceFilePathSelector(
+  queries: readonly SemanticAppQuery[],
+  sourceFilePath: string | null | undefined,
+): readonly SemanticAppQuery[] {
+  if (sourceFilePath == null) {
+    return queries;
+  }
+  return queries.map((query) => queryWithSourceFilePathSelector(query, sourceFilePath));
+}
+
+function queryWithSourceFilePathSelector<TQuery extends SemanticAppQuery>(
+  query: TQuery,
+  sourceFilePath: string | null | undefined,
+): TQuery {
+  if (sourceFilePath == null || query.sourceFile != null) {
+    return query;
+  }
+  return {
+    ...query,
+    sourceFile: normalizedSourceFilePathInput(sourceFilePath),
+  };
 }
 
 interface RuntimeOptionsInput {
