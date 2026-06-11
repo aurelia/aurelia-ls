@@ -271,7 +271,9 @@ function discoverAureliaTypePaths(rootDir: string, discoveryRoots: readonly stri
     return {};
   }
 
-  const paths: Record<string, string[]> = {};
+  const paths: Record<string, string[]> = {
+    ...packageSourcePathsForRoot(rootDir, path.join(workspaceRoot, 'aurelia')),
+  };
   const packagesRoot = path.join(workspaceRoot, 'aurelia', 'packages');
   for (const packageDir of safeReadDirectory(packagesRoot)) {
     const packageRoot = path.join(packagesRoot, packageDir);
@@ -292,8 +294,9 @@ function discoverAureliaTypePaths(rootDir: string, discoveryRoots: readonly stri
 function discoverAureliaCheckoutRoot(rootDir: string): string | null {
   let current = path.resolve(rootDir);
   while (true) {
-    const candidate = path.join(current, 'aurelia', 'packages', 'kernel', 'dist', 'types', 'index.d.ts');
-    if (ts.sys.fileExists(candidate)) {
+    const typeCandidate = path.join(current, 'aurelia', 'packages', 'kernel', 'dist', 'types', 'index.d.ts');
+    const sourceCandidate = path.join(current, 'aurelia', 'packages', 'kernel', 'src', 'index.ts');
+    if (ts.sys.fileExists(typeCandidate) || ts.sys.fileExists(sourceCandidate)) {
       return current;
     }
     const parent = path.dirname(current);
