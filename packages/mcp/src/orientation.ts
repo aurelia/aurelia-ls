@@ -21,11 +21,12 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '1. Call `aurelia_workspace_overview` first. It is cheap and deterministic, and returns discovered project frames plus the default app candidate.',
   '2. Call `aurelia_app_overview` next. Use `appRetention=retain-app` when several follow-up app calls should share one app epoch; otherwise omit it. Keep `diagnosticPageSize` and `openSeamPageSize` small on first reads.',
   '3. Call `aurelia_app_query_catalog` before improvising generic `aurelia_app_query` calls. Catalog rows are the authority for `queryKind`, `minimumAnalysisDepth`, paging, detail, source-file support, and continuation behavior.',
-  '4. Prefer pressure clusters before rows: `aurelia_diagnostic_overview`, `open-seam-summary`, and `open-seam-sites` before paging raw rows. Follow returned continuations when they fit the task.',
-  '5. Use `page.size=0` on summary queries when the caller needs counts/clusters without row payload.',
-  '6. For `aurelia_template_cursor_info`, position is semantic: cursor on a call name returns expression-site context; cursor on a member token returns expression-member owner type context.',
-  '7. Omit `analysisDepth` unless intentionally controlling cache or cost. Query calls auto-select the smallest required app-world depth, and answers report the depth used when an app world is opened.',
-  '8. Check `supportsSourceFile` before file-scoping a query with `sourceFile` or `sourceFilePath`. Unsupported selectors return `outcome=unsupported` with accepted query families; trust that answer instead of retrying blindly.',
+  '4. Use `aurelia_app_query_batch` when several related app summaries belong to one inspection move, especially with `page.size=0` rollup queries.',
+  '5. Prefer pressure clusters before rows: `aurelia_diagnostic_overview`, `open-seam-summary`, and `open-seam-sites` before paging raw rows. Follow returned continuations when they fit the task.',
+  '6. Use `page.size=0` on summary queries when the caller needs counts/clusters without row payload.',
+  '7. For `aurelia_template_cursor_info`, position is semantic: cursor on a call name returns expression-site context; cursor on a member token returns expression-member owner type context.',
+  '8. Omit `analysisDepth` unless intentionally controlling cache or cost. Query calls auto-select the smallest required app-world depth, and answers report the depth used when an app world is opened.',
+  '9. Check `supportsSourceFile` before file-scoping a query with `sourceFile` or `sourceFilePath`. Unsupported selectors return `outcome=unsupported` with accepted query families; trust that answer instead of retrying blindly.',
   '',
   '## Worked Shape',
   '',
@@ -52,6 +53,7 @@ export function aureliaOrientWorkspacePromptText(input: {
     'Use aurelia_app_overview with small diagnostic/open-seam budgets. Pass appRetention=retain-app only if several app calls will share this session.',
     'Do not manually deepen analysisDepth for ordinary calls; semantic-runtime auto-selects the required query depth and reports the app-world depth used.',
     'Use page.size=0 on summary queries for rollup-only first reads, then follow continuations or page rows for the chosen cluster.',
+    'Use aurelia_app_query_batch when several related summaries belong to one orientation move.',
     input.includeRouter === 'true'
       ? 'Because routing is in scope, call aurelia_router_overview after app overview with a small rowPageSize.'
       : 'Call aurelia_router_overview only if the overview or user task makes route/viewport facts relevant.',
@@ -103,6 +105,7 @@ export function aureliaBuildAppFeaturePromptText(input: {
     input.includeDiagnostics === 'true'
       ? 'Because diagnostics are in scope, run aurelia_diagnostic_overview before and after edits.'
       : 'After source edits or lint/formatter autofixes, rerun diagnostics before declaring the app clean.',
+    'For post-edit type safety, call aurelia_app_query with queryKind=typescript-diagnostic-summary or use the unified diagnostic overview before declaring the workspace clean.',
     'Prefer compact idiomatic Aurelia: DI-owned state/domain classes, direct state/domain template reads, source-backed getters for real derived behavior, sparse bindables, and explicit domain boundaries.',
     'Avoid one-hop view-model forwarding getters, callback bindables for non-leaf composition, broad observation disabling, and @computed unless explicit dependency or trackable-method semantics are intended.',
   ].join(' ');

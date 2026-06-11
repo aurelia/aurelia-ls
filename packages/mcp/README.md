@@ -41,6 +41,16 @@ Probe the stdio shell after transport-level edits:
 pnpm --filter @aurelia-ls/mcp probe:stdio
 ```
 
+Smoke the source checkout after clone/install changes:
+
+```powershell
+pnpm --filter @aurelia-ls/mcp smoke:postinstall
+```
+
+This source-checkout smoke launches the built server entry directly. The GitHub
+Release tarball smoke should additionally exercise the packaged `au-mcp` bin
+once release staging exists.
+
 Large app-world opens can require more than Node's default heap while semantic-runtime performance work is still in
 flux. For local MCP client registration, prefer launching with an explicit heap budget:
 
