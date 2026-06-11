@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -7,17 +8,25 @@ import {
   type SourceProject,
 } from "../../source/index.js";
 
+const trackedRepoPathsByRoot = new Map<string, ReadonlySet<string>>();
+
 /** Normalize a repository-relative path carried by Atlas memory records. */
 export function normalizeAtlasMemoryRepoPath(value: string): string {
   return value.replace(/\\/g, "/").replace(/^\.\//u, "");
 }
 
-/** True when a repository-relative path exists in the current checkout. */
+/** True when a durable memory path is present in the recursive Git index. */
 export function atlasMemoryRepoPathExists(
   sourceProject: SourceProject,
   filePath: string,
 ): boolean {
-  return existsSync(path.join(sourceProject.repoRoot, filePath));
+  const normalizedFilePath = normalizeAtlasMemoryRepoPath(filePath);
+  const trackedPaths = trackedRepoPaths(sourceProject.repoRoot);
+  if (trackedPaths !== undefined) {
+    return trackedPaths.has(normalizedFilePath) ||
+      trackedDirectoryExists(trackedPaths, normalizedFilePath);
+  }
+  return existsSync(path.join(sourceProject.repoRoot, normalizedFilePath));
 }
 
 /** True when the admitted TypeScript source project exposes one declaration at a path. */
@@ -68,3 +77,40 @@ const memberDeclarationKinds = new Set<SourceDeclarationKind>([
   SourceDeclarationKind.Accessor,
   SourceDeclarationKind.Constructor,
 ]);
+
+function trackedRepoPaths(repoRoot: string): ReadonlySet<string> | undefined {
+  const cached = trackedRepoPathsByRoot.get(repoRoot);
+  if (cached !== undefined) {
+    return cached;
+  }
+  try {
+    const output = execFileSync(
+      "git",
+      ["-C", repoRoot, "ls-files", "--recurse-submodules"],
+      { encoding: "utf8" },
+    );
+    const paths = new Set(
+      output
+        .split(/\r?\n/u)
+        .map((entry) => normalizeAtlasMemoryRepoPath(entry))
+        .filter((entry) => entry.length > 0),
+    );
+    trackedRepoPathsByRoot.set(repoRoot, paths);
+    return paths;
+  } catch {
+    return undefined;
+  }
+}
+
+function trackedDirectoryExists(
+  trackedPaths: ReadonlySet<string>,
+  filePath: string,
+): boolean {
+  const prefix = filePath.endsWith("/") ? filePath : `${filePath}/`;
+  for (const trackedPath of trackedPaths) {
+    if (trackedPath.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}

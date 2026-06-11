@@ -14,7 +14,6 @@ import type {
   ConvergenceRef,
   ResourceView,
   BindableView,
-  BindingMode,
   ResourceDef,
   CustomElementDef,
   CustomAttributeDef,
@@ -138,7 +137,7 @@ function projectBindable(def: BindableDef, resourceKey: string, bindableName: st
   return {
     property: unwrapSourcedString(def.property) || bindableName,
     attribute: projectSourced(def.attribute, bindableName, resourceKey, `${field}.attribute`),
-    mode: projectSourced(def.mode, 'default' as BindingMode, resourceKey, `${field}.mode`),
+    mode: projectSourced(def.mode, 'default', resourceKey, `${field}.mode`),
     primary: projectSourced(def.primary, false, resourceKey, `${field}.primary`),
     type: unwrapSourcedValue(def.type) ?? undefined,
     doc: unwrapSourcedValue(def.doc) ?? undefined,

@@ -1,7 +1,6 @@
 import type {
   BindingSourceIR,
   ExprRef,
-  ExprTableEntry,
   InterpIR,
   NormalizedPath,
 } from "../../model/ir.js";
@@ -112,7 +111,7 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
 
     // Collect binding contracts from linked semantics
     trace.event("typecheck.collectContracts.start");
-    const exprIndex = indexExprTable(opts.linked.exprTable as readonly ExprTableEntry[] | undefined);
+    const exprIndex = indexExprTable(opts.linked.exprTable);
     const contracts = collectBindingContracts(opts.linked, exprIndex);
     trace.event("typecheck.collectContracts.complete", { count: contracts.size });
     debug.typecheck("contracts.collected", { count: contracts.size });

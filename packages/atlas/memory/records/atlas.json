@@ -865,11 +865,6 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/atlas work:router",
           "summary": "Human-oriented route query script."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/autonomous-loop-ledger-2026-05-14-work-router.md",
-          "summary": "Chronological scratch ledger for the first Work Router autonomous run."
         }
       ],
       "liveChecks": [

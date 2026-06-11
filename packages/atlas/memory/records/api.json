@@ -206,11 +206,6 @@
           "summary": "Public MCP input schema boundary with compact described fields and sourceFile/sourceFilePath selector guidance."
         },
         {
-          "kind": "doc",
-          "path": ".temp/mcp-orientation-external-findings-fable-2026-06-11.md",
-          "summary": "Current pre-release onboarding/orientation packet that established the golden path and contracts for MCP cold-start teaching."
-        },
-        {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/answer-helpers.ts",
           "symbolName": "pageRows",

@@ -496,7 +496,7 @@ function injectPromiseBranchesIntoDef(
     const branch = detectPromiseBranch(kid, attrParser, catalog);
     if (!branch) continue;
 
-    const target = idMap.get(kid as P5Node);
+    const target = idMap.get(kid);
     if (!target) continue;
 
     const hostRow = def.rows.find((r) => r.target === target);
@@ -519,10 +519,10 @@ function injectPromiseBranchesIntoDef(
     };
 
     const branchDef = preservedInstructions.length > 0
-      ? templateOfElementChildren(kid as P5Element, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin)
+      ? templateOfElementChildren(kid, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin)
       : (branch.isTemplate
           ? templateOfTemplateContent(kid as P5Template, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin)
-          : templateOfElementChildren(kid as P5Element, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin));
+          : templateOfElementChildren(kid, lowerCtx, nestedTemplates, collectRows, ctx, branchOrigin));
 
     branchDef.origin = branchOrigin;
 
@@ -562,7 +562,7 @@ function injectPromiseBranchesIntoDef(
       branch: branchInfo,
       containerless: false,
       loc: toSpan(
-        branch.loc ?? (branch.isTemplate ? (kid as P5Template).sourceCodeLocation : (kid as P5Element).sourceCodeLocation),
+        branch.loc ?? (branch.isTemplate ? (kid as P5Template).sourceCodeLocation : (kid).sourceCodeLocation),
         table.source
       ),
     };

@@ -15,7 +15,6 @@ import type {
   HydrateAttributeIR,
   HydrateElementIR,
   InstructionIR,
-  SetPropertyIR,
 } from "../../model/ir.js";
 import type { ExprTable, P5Element, P5Loc, ProjectionMap } from "./lower-shared.js";
 import {
@@ -183,7 +182,7 @@ function parseMultiBindings(
             value: valuePart,
             loc: toSpan(subFullSpan, table.source),
             nameLoc: toSpan(subNameSpan, table.source),
-          } as SetPropertyIR);
+          });
         }
       }
       // Note: Unknown bindables are silently ignored here; diagnostics are handled in link phase
@@ -269,7 +268,7 @@ export function lowerElementAttributes(
       value: raw,
       loc: toSpan(loc, table.source),
       nameLoc: toSpan(attrNameSpan, table.source),
-    } as SetPropertyIR);
+    });
   };
 
   for (const a of attrs) {

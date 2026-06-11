@@ -5,7 +5,6 @@ import type {
   CustomAttributeDef,
   CustomElementDef,
   NormalizedPath,
-  ResourceKind,
   SourceLocation,
   Sourced,
   ResourceCatalog,
@@ -234,7 +233,7 @@ function groupDefinitionCandidates(
       unnamedGaps.push({
         kind: "unresolved-name",
         message: `Resource name could not be determined for ${displayName}`,
-        resourceKind: resource.kind as ResourceKind,
+        resourceKind: resource.kind,
         resourceName: fallback,
         ...(resource.file ? { resource: resource.file } : {}),
       });

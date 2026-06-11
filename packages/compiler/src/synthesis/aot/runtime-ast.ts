@@ -316,13 +316,13 @@ export function toRuntimeExpression(
     case "BadExpression":
       return unsupportedExpression("BadExpression");
     default:
-      return toRuntimeIsBindingBehavior(ast as IsBindingBehavior, includeSpans);
+      return toRuntimeIsBindingBehavior(ast, includeSpans);
   }
 }
 
 function toRuntimeInterpolation(ast: Interpolation, includeSpans: boolean): RuntimeInterpolation {
   const expressions = ast.expressions.map((expr) => toRuntimeIsBindingBehavior(expr, includeSpans));
-  const firstExpression = expressions[0] ?? (createPrimitiveLiteral(undefined, includeSpans) as RuntimeIsBindingBehavior);
+  const firstExpression = expressions[0] ?? (createPrimitiveLiteral(undefined, includeSpans));
   return withSpan({
     $kind: "Interpolation",
     isMulti: expressions.length > 1,

@@ -755,27 +755,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     anchors: [
       {
-        kind: "doc",
-        path: ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
-        role: "primary",
-        summary:
-          "Current leading app-builder v1 scope and prioritization packet; read before older interviews for implementation priorities.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-v1-investigation-answer-2026-06-07.md",
-        role: "grounding",
-        summary:
-          "Investigation answer that grounds immediate v1 substrate gaps behind the recalibration packet.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-control-primitive-completeness-answer-2026-06-07.md",
-        role: "grounding",
-        summary:
-          "Control primitive completeness answer for native/display/control-affordance gaps exposed by v1 canaries.",
-      },
-      {
         kind: "source",
         filePath: "packages/semantic-runtime/src/api/app-builder.ts",
         symbolName: "SemanticRuntimeAppBuilderQueryKind",
@@ -2212,34 +2191,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Starting-point framing for app-builder as an AI-first pattern algebra and source-lowering substrate.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
-        role: "grounding",
-        summary:
-          "Reviewable synthesis across recommendation, ontology, design/control, and app-design interview notes.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-source-lowering-authority-interview-2026-06-03.md",
-        role: "grounding",
-        summary:
-          "Reviewable interview for status/defaulting/recommendation policy, source-lowering authority, and generated fixture contract boundaries.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-recommendation-defaulting-policy-review-2026-06-03.md",
-        role: "grounding",
-        summary:
-          "Generated review checklist for recommendation posture, applicability/context, evidence, defaulting candidates, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/app-builder-generated-fixture-review-rolling-2026-06-04.md",
-        role: "grounding",
-        summary:
-          "Qualitative rolling review of generated app-builder fixture source shape, request/response inspectability, SourcePattern metadata, and the app-builder versus fixture-verification boundary.",
       },
       {
         kind: "script",
@@ -3833,13 +3784,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Durable memory for the semantic-contract harness and inquiry-budget test policy.",
       },
       {
-        kind: "doc",
-        path: ".temp/mcp-preview-and-testing-alignment-2026-05-18.md",
-        role: "grounding",
-        summary:
-          "Scratch alignment for the route-scoped semantic contract testing strategy.",
-      },
-      {
         kind: "script",
         command: "pnpm --filter @aurelia-ls/atlas work:router -- --projection=route-health",
         role: "supporting",
@@ -4476,13 +4420,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Contract proving MCP startup orientation, schema budget, selector honesty, depth visibility, continuations, strict envelopes, and remedy text.",
       },
       {
-        kind: "doc",
-        path: ".temp/mcp-orientation-external-findings-fable-2026-06-11.md",
-        role: "supporting",
-        summary:
-          "Pre-release orientation packet that defines the golden path and onboarding contracts.",
-      },
-      {
         kind: "script",
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-5-compat",
         role: "supporting",
@@ -4902,13 +4839,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Inquiry docs distinguish continuation intent from query cost policy and app-semantic ontology.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/intent-aware-continuations-scope-map-2026-05-23.md",
-        role: "grounding",
-        summary:
-          "Reviewed scope map explicitly excludes authoring continuations until app-builder replaces the current recipe/fixture gravity.",
       },
       {
         kind: "lens",
@@ -7202,13 +7132,6 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Semantic-runtime observation docs describe ProxyObservable as part of the same circuit as ordinary binding reads.",
-      },
-      {
-        kind: "doc",
-        path: ".temp/proxy-observation-authoring-substrate-run-2026-05-18.md",
-        role: "grounding",
-        summary:
-          "Scratch run scaffold capturing object-vs-ID binding, proxy escape, and broad fixture pressure.",
       },
     ],
     authority: [
@@ -11422,9 +11345,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Open DI registry-body seams should route through evaluator/DI/world admission.",
       },
       {
-        query: "DialogConfigurationClassic.withChild di.open-registry-body",
+        query: "IRegistry unknown registry-body di.open-registry-body evaluator world construction",
         summary:
-          "Valid dialog child configuration should close through framework registration effects, including named/namespace import const and local factory wrappers; remaining registry-body seams need a richer cross-project registry reproducer before DI publication changes.",
+          "Unknown registry-body seams should route to evaluator/DI world construction unless a narrower framework plugin route owns the positive closure contract.",
       },
       {
         query:
@@ -13321,10 +13244,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath: "packages/semantic-runtime/src/registration/framework-registration-manifest.ts",
-        symbolName: "frameworkRegistrationManifestEntries",
+        symbolName: "frameworkRegistrationKindSupportsChainMethod",
         role: "supporting",
         summary:
-          "Framework registration manifest descriptor for DialogConfiguration and withChild chain methods.",
+          "Framework registration chain-method predicate that admits DialogConfiguration.withChild.",
       },
       {
         kind: "source",

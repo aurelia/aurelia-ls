@@ -104,13 +104,13 @@
               "attribute": "form",
               "name": "form",
               "primary": false,
-              "type": { "kind": "ts", "name": "FormController" }
+              "type": { "kind": "ts", "name": "FormController | null" }
             },
             "name": {
               "attribute": "name",
               "name": "name",
               "primary": true,
-              "type": { "kind": "ts", "name": "string" }
+              "type": { "kind": "ts", "name": "string | null" }
             },
             "validateOn": {
               "attribute": "validate-on",
@@ -122,13 +122,13 @@
               "attribute": "validation-model",
               "name": "validationModel",
               "primary": false,
-              "type": { "kind": "ts", "name": "IValidateable" }
+              "type": { "kind": "ts", "name": "IValidateable | null" }
             },
             "validationProperty": {
               "attribute": "validation-property",
               "name": "validationProperty",
               "primary": false,
-              "type": { "kind": "ts", "name": "string" }
+              "type": { "kind": "ts", "name": "string | null" }
             },
             "validators": {
               "attribute": "validators",
@@ -156,7 +156,7 @@
               "attribute": "data",
               "name": "data",
               "primary": false,
-              "type": { "kind": "ts", "name": "any[]" }
+              "type": { "kind": "ts", "name": "never[]" }
             },
             "dataSource": {
               "attribute": "data-source",
@@ -169,7 +169,7 @@
               "attribute": "filters",
               "name": "filters",
               "primary": false,
-              "type": { "kind": "ts", "name": "any[]" }
+              "type": { "kind": "ts", "name": "never[]" }
             },
             "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
             "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
@@ -388,7 +388,7 @@
               "attribute": "fn",
               "name": "fn",
               "primary": true,
-              "type": { "kind": "ts", "name": "(event?: any) => string" }
+              "type": { "kind": "ts", "name": "(event: MouseEvent) => void" }
             }
           },
           "className": "Outclick",
@@ -920,13 +920,13 @@
               "mode": "twoWay",
               "name": "form",
               "primary": false,
-              "type": { "kind": "ts", "name": "FormController" }
+              "type": { "kind": "ts", "name": "FormController | null" }
             },
             "submit": {
               "attribute": "submit",
               "name": "submit",
               "primary": false,
-              "type": { "kind": "ts", "name": "(context: FormSubmitContext) => void" }
+              "type": { "kind": "ts", "name": "((context: FormSubmitContext) => void) | undefined" }
             },
             "validateOnSubmit": {
               "attribute": "validate-on-submit",
@@ -938,13 +938,13 @@
               "attribute": "validation-model",
               "name": "validationModel",
               "primary": false,
-              "type": { "kind": "ts", "name": "IValidateable" }
+              "type": { "kind": "ts", "name": "IValidateable | null" }
             },
             "validationObjectTag": {
               "attribute": "validation-object-tag",
               "name": "validationObjectTag",
               "primary": false,
-              "type": { "kind": "ts", "name": "string" }
+              "type": { "kind": "ts", "name": "string | null" }
             }
           },
           "boundary": true,
@@ -1075,7 +1075,12 @@
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
+            "totalItems": {
+              "attribute": "total-items",
+              "name": "totalItems",
+              "primary": false,
+              "type": { "kind": "ts", "name": "number" }
+            }
           },
           "boundary": true,
           "capture": false,
@@ -1118,13 +1123,13 @@
                   "attribute": "form",
                   "name": "form",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "FormController" }
+                  "type": { "kind": "ts", "name": "FormController | null" }
                 },
                 "name": {
                   "attribute": "name",
                   "name": "name",
                   "primary": true,
-                  "type": { "kind": "ts", "name": "string" }
+                  "type": { "kind": "ts", "name": "string | null" }
                 },
                 "validateOn": {
                   "attribute": "validate-on",
@@ -1136,13 +1141,13 @@
                   "attribute": "validation-model",
                   "name": "validationModel",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "IValidateable" }
+                  "type": { "kind": "ts", "name": "IValidateable | null" }
                 },
                 "validationProperty": {
                   "attribute": "validation-property",
                   "name": "validationProperty",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "string" }
+                  "type": { "kind": "ts", "name": "string | null" }
                 },
                 "validators": {
                   "attribute": "validators",
@@ -1167,7 +1172,7 @@
                   "attribute": "data",
                   "name": "data",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "any[]" }
+                  "type": { "kind": "ts", "name": "never[]" }
                 },
                 "dataSource": {
                   "attribute": "data-source",
@@ -1180,7 +1185,7 @@
                   "attribute": "filters",
                   "name": "filters",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "any[]" }
+                  "type": { "kind": "ts", "name": "never[]" }
                 },
                 "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
                 "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
@@ -1255,7 +1260,7 @@
                   "attribute": "fn",
                   "name": "fn",
                   "primary": true,
-                  "type": { "kind": "ts", "name": "(event?: any) => string" }
+                  "type": { "kind": "ts", "name": "(event: MouseEvent) => void" }
                 }
               },
               "className": "Outclick",
@@ -1637,13 +1642,13 @@
                   "mode": "twoWay",
                   "name": "form",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "FormController" }
+                  "type": { "kind": "ts", "name": "FormController | null" }
                 },
                 "submit": {
                   "attribute": "submit",
                   "name": "submit",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "(context: FormSubmitContext) => void" }
+                  "type": { "kind": "ts", "name": "((context: FormSubmitContext) => void) | undefined" }
                 },
                 "validateOnSubmit": {
                   "attribute": "validate-on-submit",
@@ -1655,13 +1660,13 @@
                   "attribute": "validation-model",
                   "name": "validationModel",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "IValidateable" }
+                  "type": { "kind": "ts", "name": "IValidateable | null" }
                 },
                 "validationObjectTag": {
                   "attribute": "validation-object-tag",
                   "name": "validationObjectTag",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "string" }
+                  "type": { "kind": "ts", "name": "string | null" }
                 }
               },
               "boundary": true,
@@ -1747,7 +1752,12 @@
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
+                "totalItems": {
+                  "attribute": "total-items",
+                  "name": "totalItems",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "number" }
+                }
               },
               "boundary": true,
               "capture": false,
@@ -1881,92 +1891,92 @@
         "bindables": {
           "form": {
             "attribute": {
-              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
+              "location": { "end": 845, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 793 },
               "origin": "source",
               "state": "known",
               "value": "form"
             },
             "mode": {
-              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
+              "location": { "end": 845, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 793 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
+              "location": { "end": 845, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 793 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
+              "location": { "end": 845, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 793 },
               "origin": "source",
               "state": "known",
               "value": "form"
             },
             "type": {
-              "location": { "end": 816, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 764 },
+              "location": { "end": 845, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 793 },
               "origin": "source",
               "state": "known",
-              "value": "FormController"
+              "value": "FormController | null"
             }
           },
           "name": {
             "attribute": {
-              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
+              "location": { "end": 608, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 564 },
               "origin": "source",
               "state": "known",
               "value": "name"
             },
             "mode": {
-              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
+              "location": { "end": 608, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 564 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
+              "location": { "end": 608, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 564 },
               "origin": "source",
               "state": "known",
               "value": true
             },
             "property": {
-              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
+              "location": { "end": 608, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 564 },
               "origin": "source",
               "state": "known",
               "value": "name"
             },
             "type": {
-              "location": { "end": 579, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 535 },
+              "location": { "end": 608, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 564 },
               "origin": "source",
               "state": "known",
-              "value": "string"
+              "value": "string | null"
             }
           },
           "validateOn": {
             "attribute": {
-              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
+              "location": { "end": 790, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 739 },
               "origin": "source",
               "state": "known",
               "value": "validate-on"
             },
             "mode": {
-              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
+              "location": { "end": 790, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 739 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
+              "location": { "end": 790, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 739 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
+              "location": { "end": 790, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 739 },
               "origin": "source",
               "state": "known",
               "value": "validateOn"
             },
             "type": {
-              "location": { "end": 761, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 710 },
+              "location": { "end": 790, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 739 },
               "origin": "source",
               "state": "known",
               "value": "ValidateOn"
@@ -1974,92 +1984,92 @@
           },
           "validationModel": {
             "attribute": {
-              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
+              "location": { "end": 910, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 848 },
               "origin": "source",
               "state": "known",
               "value": "validation-model"
             },
             "mode": {
-              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
+              "location": { "end": 910, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 848 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
+              "location": { "end": 910, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 848 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
+              "location": { "end": 910, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 848 },
               "origin": "source",
               "state": "known",
               "value": "validationModel"
             },
             "type": {
-              "location": { "end": 881, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 819 },
+              "location": { "end": 910, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 848 },
               "origin": "source",
               "state": "known",
-              "value": "IValidateable"
+              "value": "IValidateable | null"
             }
           },
           "validationProperty": {
             "attribute": {
-              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
+              "location": { "end": 971, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 913 },
               "origin": "source",
               "state": "known",
               "value": "validation-property"
             },
             "mode": {
-              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
+              "location": { "end": 971, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 913 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
+              "location": { "end": 971, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 913 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
+              "location": { "end": 971, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 913 },
               "origin": "source",
               "state": "known",
               "value": "validationProperty"
             },
             "type": {
-              "location": { "end": 942, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 884 },
+              "location": { "end": 971, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 913 },
               "origin": "source",
               "state": "known",
-              "value": "string"
+              "value": "string | null"
             }
           },
           "validators": {
             "attribute": {
-              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
+              "location": { "end": 736, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 688 },
               "origin": "source",
               "state": "known",
               "value": "validators"
             },
             "mode": {
-              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
+              "location": { "end": 736, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 688 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
+              "location": { "end": 736, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 688 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
+              "location": { "end": 736, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 688 },
               "origin": "source",
               "state": "known",
               "value": "validators"
             },
             "type": {
-              "location": { "end": 707, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 659 },
+              "location": { "end": 736, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 688 },
               "origin": "source",
               "state": "known",
               "value": "ValidatorFn[]"
@@ -2067,25 +2077,25 @@
           },
           "value": {
             "attribute": {
-              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
+              "location": { "end": 685, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 611 },
               "origin": "source",
               "state": "known",
               "value": "value"
             },
             "mode": {
-              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
+              "location": { "end": 685, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 611 },
               "origin": "source",
               "state": "known",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
+              "location": { "end": 685, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 611 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 656, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 582 },
+              "location": { "end": 685, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 611 },
               "origin": "source",
               "state": "known",
               "value": "value"
@@ -2093,7 +2103,7 @@
           }
         },
         "className": {
-          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5442, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 433 },
           "origin": "source",
           "state": "known",
           "value": "AuFieldCustomAttribute"
@@ -2103,19 +2113,19 @@
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 439, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 429 },
+          "location": { "end": 468, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 458 },
           "origin": "source",
           "state": "known",
           "value": "au-field"
         },
         "noMultiBindings": {
-          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5442, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 433 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "primary": {
-          "location": { "end": 5382, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 404 },
+          "location": { "end": 5442, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts", "pos": 433 },
           "origin": "source",
           "state": "known",
           "value": "name"
@@ -2210,7 +2220,7 @@
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
               "origin": "source",
               "state": "known",
-              "value": "any[]"
+              "value": "never[]"
             }
           },
           "dataSource": {
@@ -2298,7 +2308,7 @@
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
               "origin": "source",
               "state": "known",
-              "value": "any[]"
+              "value": "never[]"
             }
           },
           "pageSize": {
@@ -2354,7 +2364,7 @@
           }
         },
         "className": {
-          "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+          "location": { "end": 7302, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
           "origin": "source",
           "state": "known",
           "value": "AureliaTableCustomAttribute"
@@ -2370,7 +2380,7 @@
           "value": "aurelia-table"
         },
         "noMultiBindings": {
-          "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+          "location": { "end": 7302, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
           "origin": "source",
           "state": "known",
           "value": false
@@ -2387,30 +2397,30 @@
         "bindables": {
           "custom": {
             "attribute": {
-              "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
+              "location": { "end": 387, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 362 },
               "origin": "source",
               "state": "known",
               "value": "custom"
             },
             "mode": {
-              "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
+              "location": { "end": 387, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 362 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
+              "location": { "end": 387, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 362 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
+              "location": { "end": 387, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 362 },
               "origin": "source",
               "state": "known",
               "value": "custom"
             },
             "type": {
-              "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
+              "location": { "end": 387, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 362 },
               "origin": "source",
               "state": "known",
               "value": "boolean"
@@ -2418,30 +2428,30 @@
           },
           "mode": {
             "attribute": {
-              "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "mode"
             },
             "mode": {
-              "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 285 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "mode"
             },
             "type": {
-              "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
+              "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -2449,25 +2459,25 @@
           },
           "row": {
             "attribute": {
-              "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
+              "location": { "end": 282, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 240 },
               "origin": "source",
               "state": "known",
               "value": "row"
             },
             "mode": {
-              "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
+              "location": { "end": 282, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 240 },
               "origin": "source",
               "state": "known",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
+              "location": { "end": 282, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 240 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
+              "location": { "end": 282, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 240 },
               "origin": "source",
               "state": "known",
               "value": "row"
@@ -2475,30 +2485,30 @@
           },
           "selectedClass": {
             "attribute": {
-              "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 314 },
               "origin": "source",
               "state": "known",
               "value": "selected-class"
             },
             "mode": {
-              "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 314 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 314 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 314 },
               "origin": "source",
               "state": "known",
               "value": "selectedClass"
             },
             "type": {
-              "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 314 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -2506,7 +2516,7 @@
           }
         },
         "className": {
-          "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+          "location": { "end": 3040, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 167 },
           "origin": "source",
           "state": "known",
           "value": "AutSelectCustomAttribute"
@@ -2516,13 +2526,13 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 204, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 192 },
+          "location": { "end": 196, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 184 },
           "origin": "source",
           "state": "known",
           "value": "aut-select"
         },
         "noMultiBindings": {
-          "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+          "location": { "end": 3040, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 167 },
           "origin": "source",
           "state": "known",
           "value": false
@@ -2539,24 +2549,24 @@
         "bindables": {
           "custom": {
             "attribute": {
-              "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
+              "location": { "end": 255, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 238 },
               "origin": "source",
               "state": "known",
               "value": "custom"
             },
             "mode": {
-              "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
+              "location": { "end": 255, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 238 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
+              "location": { "end": 255, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 238 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
+              "location": { "end": 255, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 238 },
               "origin": "source",
               "state": "known",
               "value": "custom"
@@ -2564,24 +2574,24 @@
           },
           "default": {
             "attribute": {
-              "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
+              "location": { "end": 278, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 260 },
               "origin": "source",
               "state": "known",
               "value": "default"
             },
             "mode": {
-              "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
+              "location": { "end": 278, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 260 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
+              "location": { "end": 278, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 260 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
+              "location": { "end": 278, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 260 },
               "origin": "source",
               "state": "known",
               "value": "default"
@@ -2589,24 +2599,24 @@
           },
           "key": {
             "attribute": {
-              "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
+              "location": { "end": 233, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 219 },
               "origin": "source",
               "state": "known",
               "value": "key"
             },
             "mode": {
-              "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
+              "location": { "end": 233, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 219 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
+              "location": { "end": 233, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 219 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
+              "location": { "end": 233, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 219 },
               "origin": "source",
               "state": "known",
               "value": "key"
@@ -2614,7 +2624,7 @@
           }
         },
         "className": {
-          "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+          "location": { "end": 3681, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 148 },
           "origin": "source",
           "state": "known",
           "value": "AutSortCustomAttribute"
@@ -2624,13 +2634,13 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 183, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 173 },
+          "location": { "end": 175, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 165 },
           "origin": "source",
           "state": "known",
           "value": "aut-sort"
         },
         "noMultiBindings": {
-          "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+          "location": { "end": 3681, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 148 },
           "origin": "source",
           "state": "known",
           "value": false
@@ -2742,38 +2752,38 @@
         "bindables": {
           "fn": {
             "attribute": {
-              "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
+              "location": { "end": 360, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
               "state": "known",
               "value": "fn"
             },
             "mode": {
-              "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
+              "location": { "end": 360, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
+              "location": { "end": 360, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
               "state": "known",
               "value": true
             },
             "property": {
-              "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
+              "location": { "end": 360, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
               "state": "known",
               "value": "fn"
             },
             "type": {
-              "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
+              "location": { "end": 360, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
               "state": "known",
-              "value": "(event?: any) => string"
+              "value": "(event: MouseEvent) => void"
             }
           }
         },
         "className": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 799, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": "Outclick"
@@ -2789,13 +2799,13 @@
           "value": "outclick"
         },
         "noMultiBindings": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 799, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "primary": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 799, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": "fn"
@@ -2930,7 +2940,7 @@
               "location": { "end": 740, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 658 },
               "origin": "source",
               "state": "known",
-              "value": "FormController"
+              "value": "FormController | null"
             }
           },
           "submit": {
@@ -2961,7 +2971,7 @@
               "location": { "end": 602, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 539 },
               "origin": "source",
               "state": "known",
-              "value": "(context: FormSubmitContext) => void"
+              "value": "((context: FormSubmitContext) => void) | undefined"
             }
           },
           "validateOnSubmit": {
@@ -3023,7 +3033,7 @@
               "location": { "end": 805, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 743 },
               "origin": "source",
               "state": "known",
-              "value": "IValidateable"
+              "value": "IValidateable | null"
             }
           },
           "validationObjectTag": {
@@ -3054,30 +3064,30 @@
               "location": { "end": 867, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 808 },
               "origin": "source",
               "state": "known",
-              "value": "string"
+              "value": "string | null"
             }
           }
         },
         "boundary": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known",
           "value": true
         },
         "capture": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "className": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known",
           "value": "AuFormCustomElement"
         },
         "containerless": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known",
           "value": false
@@ -3093,13 +3103,13 @@
           "value": "au-form"
         },
         "processContent": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 2346, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
+          "location": { "end": 2336, "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts", "pos": 431 },
           "origin": "source",
           "state": "known"
         }
@@ -3196,30 +3206,30 @@
         "bindables": {
           "boundaryLinks": {
             "attribute": {
-              "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
+              "location": { "end": 493, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 461 },
               "origin": "source",
               "state": "known",
               "value": "boundary-links"
             },
             "mode": {
-              "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
+              "location": { "end": 493, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 461 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
+              "location": { "end": 493, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 461 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
+              "location": { "end": 493, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 461 },
               "origin": "source",
               "state": "known",
               "value": "boundaryLinks"
             },
             "type": {
-              "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
+              "location": { "end": 493, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 461 },
               "origin": "source",
               "state": "known",
               "value": "boolean"
@@ -3227,25 +3237,25 @@
           },
           "currentPage": {
             "attribute": {
-              "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
+              "location": { "end": 335, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "current-page"
             },
             "mode": {
-              "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
+              "location": { "end": 335, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "twoWay"
             },
             "primary": {
-              "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
+              "location": { "end": 335, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
+              "location": { "end": 335, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 285 },
               "origin": "source",
               "state": "known",
               "value": "currentPage"
@@ -3253,30 +3263,30 @@
           },
           "directionLinks": {
             "attribute": {
-              "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
+              "location": { "end": 598, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 566 },
               "origin": "source",
               "state": "known",
               "value": "direction-links"
             },
             "mode": {
-              "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
+              "location": { "end": 598, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 566 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
+              "location": { "end": 598, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 566 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
+              "location": { "end": 598, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 566 },
               "origin": "source",
               "state": "known",
               "value": "directionLinks"
             },
             "type": {
-              "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
+              "location": { "end": 598, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 566 },
               "origin": "source",
               "state": "known",
               "value": "boolean"
@@ -3284,30 +3294,30 @@
           },
           "firstText": {
             "attribute": {
-              "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
+              "location": { "end": 528, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 498 },
               "origin": "source",
               "state": "known",
               "value": "first-text"
             },
             "mode": {
-              "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
+              "location": { "end": 528, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 498 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
+              "location": { "end": 528, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 498 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
+              "location": { "end": 528, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 498 },
               "origin": "source",
               "state": "known",
               "value": "firstText"
             },
             "type": {
-              "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
+              "location": { "end": 528, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 498 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -3315,30 +3325,30 @@
           },
           "hideSinglePage": {
             "attribute": {
-              "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
+              "location": { "end": 426, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
               "state": "known",
               "value": "hide-single-page"
             },
             "mode": {
-              "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
+              "location": { "end": 426, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
+              "location": { "end": 426, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
+              "location": { "end": 426, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
               "state": "known",
               "value": "hideSinglePage"
             },
             "type": {
-              "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
+              "location": { "end": 426, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
               "state": "known",
               "value": "boolean"
@@ -3346,30 +3356,30 @@
           },
           "lastText": {
             "attribute": {
-              "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
+              "location": { "end": 561, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 533 },
               "origin": "source",
               "state": "known",
               "value": "last-text"
             },
             "mode": {
-              "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
+              "location": { "end": 561, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 533 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
+              "location": { "end": 561, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 533 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
+              "location": { "end": 561, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 533 },
               "origin": "source",
               "state": "known",
               "value": "lastText"
             },
             "type": {
-              "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
+              "location": { "end": 561, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 533 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -3377,30 +3387,30 @@
           },
           "nextText": {
             "attribute": {
-              "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
+              "location": { "end": 662, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 637 },
               "origin": "source",
               "state": "known",
               "value": "next-text"
             },
             "mode": {
-              "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
+              "location": { "end": 662, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 637 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
+              "location": { "end": 662, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 637 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
+              "location": { "end": 662, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 637 },
               "origin": "source",
               "state": "known",
               "value": "nextText"
             },
             "type": {
-              "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
+              "location": { "end": 662, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 637 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -3408,24 +3418,24 @@
           },
           "pageSize": {
             "attribute": {
-              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 340 },
               "origin": "source",
               "state": "known",
               "value": "page-size"
             },
             "mode": {
-              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 340 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 340 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
+              "location": { "end": 359, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 340 },
               "origin": "source",
               "state": "known",
               "value": "pageSize"
@@ -3433,24 +3443,24 @@
           },
           "paginationSize": {
             "attribute": {
-              "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
+              "location": { "end": 456, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 431 },
               "origin": "source",
               "state": "known",
               "value": "pagination-size"
             },
             "mode": {
-              "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
+              "location": { "end": 456, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 431 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
+              "location": { "end": 456, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 431 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
+              "location": { "end": 456, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 431 },
               "origin": "source",
               "state": "known",
               "value": "paginationSize"
@@ -3458,30 +3468,30 @@
           },
           "previousText": {
             "attribute": {
-              "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
+              "location": { "end": 632, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 603 },
               "origin": "source",
               "state": "known",
               "value": "previous-text"
             },
             "mode": {
-              "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
+              "location": { "end": 632, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 603 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
+              "location": { "end": 632, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 603 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
+              "location": { "end": 632, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 603 },
               "origin": "source",
               "state": "known",
               "value": "previousText"
             },
             "type": {
-              "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
+              "location": { "end": 632, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 603 },
               "origin": "source",
               "state": "known",
               "value": "string"
@@ -3489,50 +3499,56 @@
           },
           "totalItems": {
             "attribute": {
-              "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
+              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 364 },
               "origin": "source",
               "state": "known",
               "value": "total-items"
             },
             "mode": {
-              "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
+              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 364 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
+              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 364 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
+              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 364 },
               "origin": "source",
               "state": "known",
               "value": "totalItems"
+            },
+            "type": {
+              "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 364 },
+              "origin": "source",
+              "state": "known",
+              "value": "number"
             }
           }
         },
         "boundary": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known",
           "value": true
         },
         "capture": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "className": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known",
           "value": "AutPaginationCustomElement"
         },
         "containerless": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known",
           "value": false
@@ -3542,19 +3558,19 @@
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 203, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 187 },
+          "location": { "end": 188, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 172 },
           "origin": "source",
           "state": "known",
           "value": "aut-pagination"
         },
         "processContent": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "shadowOptions": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 4783, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 147 },
           "origin": "source",
           "state": "known"
         }

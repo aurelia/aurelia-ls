@@ -2320,7 +2320,7 @@ function resolveBaseSpan(source: string, context?: ExpressionParseContext): Sour
   const end = context.baseSpan?.end ?? start + source.length;
   const file = context.baseSpan?.file ?? context.file ?? null;
   const candidate = file ? { start, end, file } : { start, end };
-  const normalized = normalizeSpan(candidate) as SourceSpan;
+  const normalized = normalizeSpan(candidate);
   return ensureSpanFile(normalized, file) ?? normalized;
 }
 

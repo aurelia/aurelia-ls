@@ -85,7 +85,7 @@ export function templateOfElementChildren(
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, lowerCtx.attrParser, lowerCtx.catalog);
-  const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
+  const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host] };
   return buildTemplateFrom(
     syntheticRoot,
     ids,
@@ -109,7 +109,7 @@ export function templateOfElementChildrenWithMap(
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
   const host = stripControllerAttrsFromElement(el, lowerCtx.attrParser, lowerCtx.catalog);
-  const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
+  const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host] };
 
   const def = buildTemplateFrom(
     syntheticRoot,
@@ -220,7 +220,7 @@ export function buildTemplateFrom(
   const domIdMap = idMap ?? new WeakMap<P5Node, NodeId>();
 
   const projectionIndex = buildProjectionIndex(
-    rootLike as { childNodes?: P5Node[] },
+    rootLike,
     lowerCtx,
     nestedTemplates,
     collectRows,
@@ -232,7 +232,7 @@ export function buildTemplateFrom(
     ns: "html",
     attrs: [],
     children: buildDomChildren(
-      rootLike as { childNodes?: P5Node[] },
+      rootLike,
       ids,
       table.source,
       table.sourceText,
@@ -244,7 +244,7 @@ export function buildTemplateFrom(
   };
   const rows: InstructionRow[] = [];
   collectRows(
-    rootLike as { childNodes?: P5Node[] },
+    rootLike,
     ids,
     lowerCtx,
     nestedTemplates,
@@ -266,7 +266,7 @@ export function applyProjectionOrigins(
 ): void {
   if (entries.length === 0) return;
   for (const entry of entries) {
-    const hostId = idMap.get(entry.host as P5Node);
+    const hostId = idMap.get(entry.host);
     if (!hostId) {
       throw new Error(`Projection origin host node not found for template ${templateId}.`);
     }

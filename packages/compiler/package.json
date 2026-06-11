@@ -6,6 +6,10 @@
   "main": "./out/index.js",
   "types": "./out/index.d.ts",
   "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    },
     "./*.js": {
       "import": "./out/*.js",
       "types": "./out/*.d.ts"

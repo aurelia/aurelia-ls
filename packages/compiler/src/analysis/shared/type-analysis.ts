@@ -221,7 +221,7 @@ export function buildFrameAnalysis(
       for (const [name, id] of Object.entries(f.letValueExprs)) {
         const entry = exprIndex.get(id);
         if (entry?.expressionType === "IsProperty") {
-          const t = evalTypeInFrame(f.id, entry.ast, env as Env);
+          const t = evalTypeInFrame(f.id, entry.ast, env);
           env.set(name, t);
         } else {
           env.set(name, "unknown");
@@ -264,7 +264,7 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
       case "PrimitiveLiteral":return literalType(n);
       case "ArrayLiteral":    return "unknown[]";
       case "ObjectLiteral":   return "Record<string, unknown>";
-      case "Paren":           return tIsBindingBehavior(n.expression as IsBindingBehavior);
+      case "Paren":           return tIsBindingBehavior(n.expression);
       case "Template":        return "string";
       case "TaggedTemplate":  return "unknown";
       default:
@@ -287,13 +287,13 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 
   function tAccessMember(n: AccessMemberExpression): string {
-    const base = tIsBindingBehavior(n.object as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     return indexType(base, [n.name.name]);
   }
 
   function tAccessKeyed(n: AccessKeyedExpression): string {
-    const base = tIsBindingBehavior(n.object as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     if (n.key.$kind === "PrimitiveLiteral") {
       const keyVal = n.key.value;
@@ -309,14 +309,14 @@ export function typeFromExprAst(ast: IsBindingBehavior, ctx: TypeCtx): string {
   }
 
   function tCallMember(n: CallMemberExpression): string {
-    const base = tIsBindingBehavior(n.object as IsBindingBehavior);
+    const base = tIsBindingBehavior(n.object);
     if (!base || base === "unknown") return "unknown";
     const calleeT = indexType(base, [n.name.name]);
     return returnTypeOf(calleeT);
   }
 
   function tCallFunction(n: CallFunctionExpression): string {
-    const fnT = tIsBindingBehavior(n.func as IsBindingBehavior);
+    const fnT = tIsBindingBehavior(n.func);
     return returnTypeOf(fnT);
   }
 }

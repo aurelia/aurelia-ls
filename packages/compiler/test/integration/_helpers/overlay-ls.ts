@@ -58,6 +58,9 @@ function createLsSession({ checkJs }: { checkJs: boolean }): LsSession {
     allowJs: true,
     checkJs: !!checkJs,
     experimentalDecorators: true,
+    strict: false,
+    noImplicitAny: false,
+    strictPropertyInitialization: false,
     noResolve: true, // no module resolution; overlays are self-contained
     noLib: false,
     skipLibCheck: true,

@@ -25,6 +25,7 @@ import type { AnalysisResult, AnalysisGap } from './types.js';
 import { highConfidence, partial } from './types.js';
 import type { AnalyzedResource } from './types.js';
 import { explicitEvidence } from './evidence.js';
+import { canonicalBindableName } from '../util/naming.js';
 
 // =============================================================================
 // Types
@@ -516,9 +517,10 @@ function buildResource(
   }
 
   const file = fileName as NormalizedPath;
-  const bindableInputs = bindables;
+  const defaultProperty = extractResourceDefaultProperty(resourceDecorator);
+  const primaryBindable = findPrimaryBindableName(bindables, defaultProperty);
+  const bindableInputs = applyPrimaryBindable(bindables, primaryBindable);
   const bindableDefs = buildBindableDefs(bindableInputs, file);
-  const primaryBindable = findPrimaryBindableName(bindableInputs);
   const isTemplateController = resourceDecorator.decoratorName === 'templateController';
 
   let resource = null;
@@ -641,7 +643,41 @@ function extractBindable(
   };
 }
 
-function findPrimaryBindableName(bindables: BindableInput[]): string | undefined {
+function extractResourceDefaultProperty(decorator: DecoratorCall): string | undefined {
+  if (decorator.args.length === 0 || decorator.args[0]?.kind !== 'object') {
+    return undefined;
+  }
+  const value = decorator.args[0].properties.get('defaultProperty');
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  return canonicalBindableName(value) ?? value.trim();
+}
+
+function applyPrimaryBindable(
+  bindables: BindableInput[],
+  primary: string | undefined,
+): BindableInput[] {
+  if (!primary) {
+    return bindables;
+  }
+  const updated = bindables.map((bindable) => ({
+    ...bindable,
+    primary: bindable.name === primary,
+  }));
+  if (!updated.some((bindable) => bindable.name === primary)) {
+    updated.push({ name: primary, primary: true });
+  }
+  return updated;
+}
+
+function findPrimaryBindableName(
+  bindables: BindableInput[],
+  defaultProperty?: string,
+): string | undefined {
+  if (defaultProperty) {
+    return defaultProperty;
+  }
   for (const bindable of bindables) {
     if (bindable.primary) {
       return bindable.name;

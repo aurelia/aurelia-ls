@@ -580,11 +580,6 @@
           "lensId": "framework.corpus",
           "projection": "fixture-seeds",
           "summary": "Docs/tests witness seeds for promoted-pattern and behavior-grounding examples."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/mcp-preview-and-testing-alignment-2026-05-18.md",
-          "summary": "Scratch alignment that captured the testing strategy before promotion."
         }
       ],
       "liveChecks": [
@@ -761,11 +756,6 @@
           "filePath": "packages/semantic-runtime/src/api/app-query-continuations.ts",
           "symbolName": "withSemanticAppQueryContinuations",
           "summary": "Catalog-aware public app-query continuation policy."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/intent-aware-continuations-scope-map-2026-05-23.md",
-          "summary": "Reviewed scope map that explicitly excludes authoring continuations until app-builder has a clearer ontology."
         },
         {
           "kind": "script",

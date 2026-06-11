@@ -126,14 +126,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            aurelia2-plugins/packages/*/dist
+            aurelia2-plugins/packages/aurelia2-table/dist
+            aurelia2-plugins/packages/aurelia2-outclick/dist
+            aurelia2-plugins/packages/aurelia2-forms/dist
+            aurelia2-plugins/packages/aurelia2-notification/dist
           key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
           restore-keys: |
             aurelia2-plugins-build-
 
-      - name: Build aurelia2-plugins
+      - name: Build aurelia2-plugins test fixtures
         if: steps.cache-plugins-build.outputs.cache-hit != 'true'
-        run: npm run build
+        run: npm run build --workspace aurelia2-table --workspace aurelia2-outclick --workspace aurelia2-forms --workspace aurelia2-notification
         working-directory: aurelia2-plugins
 
       - name: Bundle VS Code extension
@@ -367,14 +370,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            aurelia2-plugins/packages/*/dist
+            aurelia2-plugins/packages/aurelia2-table/dist
+            aurelia2-plugins/packages/aurelia2-outclick/dist
+            aurelia2-plugins/packages/aurelia2-forms/dist
+            aurelia2-plugins/packages/aurelia2-notification/dist
           key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
           restore-keys: |
             aurelia2-plugins-build-
 
-      - name: Build aurelia2-plugins
+      - name: Build aurelia2-plugins test fixtures
         if: steps.cache-plugins-build.outputs.cache-hit != 'true'
-        run: npm run build
+        run: npm run build --workspace aurelia2-table --workspace aurelia2-outclick --workspace aurelia2-forms --workspace aurelia2-notification
         working-directory: aurelia2-plugins
 
       - name: Install Playwright

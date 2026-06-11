@@ -14,7 +14,7 @@
       "summary": "The app-builder direction is an AI-first app-building ontology; the June 7 v1 recalibration packet currently leads implementation scope.",
       "rationale": "The June 2026 interviews and the 2026-06-03 cleanup supersede the older starter/golden frame as top-level authority, and the 2026-06-07 recalibration packet narrows the immediate v1 work back to truthful substrate gaps before broad composition climbing. The durable direction is app-building affordances, input dependencies, application design patterns, status/recommendation policy, component/control manifests, style inputs, SourcePlan effects, pressure fixtures, and semantic-runtime verification.",
       "guidance": [
-        "For app-builder v1 implementation, read `.temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md` first until a later packet supersedes it. Use the June 1-3 synthesis/interview files as background texture and provenance when ambiguity remains, not as co-equal current scope.",
+        "For app-builder v1 implementation, use this record plus `intent:app-builder-v1-scope-recalibration` as the promoted durable summary of the June 2026 calibration work. Older private scratch packets were provenance for these records, not clean-checkout dependencies.",
         "The current direction is read-only breadth before more generation: framework capability terrain -> app-builder policy/status projection -> application design patterns -> app-building affordance/move graph -> input contracts and supplied-input provenance -> control/style/component manifest substrate -> executable lowerers for recommendable source-lowering-implemented rows -> SourcePlan effects -> semantic-runtime reopen/verification/findings.",
         "The June 7 packet pulls immediate v1 attention to runnable app startup/root awareness, control affordance expansion, validation policy floor, central default labels/messages, LLM/seed/local data handoff, @aurelia/state posture, lean accessibility, and existing control library/plugin detection/reporting. Routed-detail `with.bind` taste has a first fix in the routed collection/detail lowerer: default generated detail source should keep explicit item expressions such as `taskItem.title` and `state.assigneeLabelForTaskItem(taskItem)`, leaving `with.bind` as an explicit structural part rather than a default compactness strategy. Treat `$parent.state.*($this)` in generated app-builder detail fixtures as a regression canary. Do not keep broad composition ascent ahead of remaining gaps just because local maintenance tasks are abundant.",
         "The first validation-policy floor is native field-local constraints, not validation-library or business-rule generation. Domain fields may carry `required`, `numericConstraints`, and `textConstraints`; native lowerers spend those as `required`, `min`, `max`, `step`, `minlength`, `maxlength`, and `pattern` only where the selected control can truthfully lower them. Boolean and choice-set field `required` is not auto-spent because presence is not the same as `true` or non-empty selection. The `ValidationMechanism` policy axis exists to keep native constraints, future validation-plugin rules, and AI handoff distinct.",
@@ -262,21 +262,6 @@
         "Source-lowering availability uses SourceLoweringImplemented, NotImplemented, and UnknownTarget. Treat sourceLoweringImplemented as the executable support bit; there is no starter-evidence bridge."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
-          "summary": "Current leading app-builder v1 scope and prioritization packet; read before broad app-builder v1 implementation work."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-investigation-answer-2026-06-07.md",
-          "summary": "Investigation answer that grounds immediate v1 substrate gaps behind the recalibration packet."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-control-primitive-completeness-answer-2026-06-07.md",
-          "summary": "Control primitive completeness answer for native/display/control-affordance gaps exposed by the v1 canaries."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/app-builder/ontology/catalog.ts",
@@ -1031,31 +1016,6 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/app-builder/README.md",
           "summary": "Starting-point explanation for AI-first app-builder pattern algebra."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
-          "summary": "Reviewable synthesis that currently owns the app-builder ontology roadmap before Atlas memory/router promotion is complete."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-ontology-interview-2026-06-01.md",
-          "summary": "Interview source for app-building affordances, input contracts, status matrix, gradual ascent, and old app-builder ontology boundaries."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-recommendation-policy-interview-2026-06-01.md",
-          "summary": "Interview source for recommendation policy, findings, suppressions, app health, and shared MCP/IDE reality."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-design-styling-control-interview-2026-06-01.md",
-          "summary": "Interview source for local generated controls, native-first control patterns, style inputs, visual policy, and component/control manifests."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-design-pattern-research-rolling-2026-06-01.md",
-          "summary": "Rolling research source for application design patterns, collection display/query, and gradual-ascent pressure."
         },
         {
           "kind": "source",
@@ -2451,8 +2411,8 @@
       "summary": "The 2026-06-07 app-builder v1 recalibration packet is the current leading scope and priority authority for app-builder v1 implementation.",
       "rationale": "The latest calibration found that app-builder work can look productive while drifting into maintenance or broad rung climbing before immediate v1 truthfulness gaps are closed. Atlas should route app-builder v1 work toward the packet, use older interviews as texture, and prevent fixture-flywheel or starter/golden memory from reasserting stale shape.",
       "guidance": [
-        "Read `.temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md` first for app-builder v1 work until a later calibration supersedes it.",
-        "Use `.temp/app-builder-v1-investigation-answer-2026-06-07.md` and `.temp/app-builder-control-primitive-completeness-answer-2026-06-07.md` as immediate supporting answers; use older June 1-3 interviews as background texture when ambiguity remains.",
+        "Use this record as the promoted durable summary of the June 7 app-builder v1 recalibration until a later calibration supersedes it.",
+        "Use `intent:app-builder-pattern-ontology`, `reuse:app-builder-native-first-control-patterns`, and current source/fixture evidence as supporting handles; older scratch interviews were summarized into memory and should not be treated as clean-checkout dependencies.",
         "Treat Atlas as a navigation and staleness-check substrate for this topic, not as permission to let older app-builder routes outrank the recalibration packet.",
         "Immediate v1 slices after the routed-detail fix are runnable app startup/root awareness, control affordance expansion, validation policy floor, central default labels/messages, LLM/seed/local data handoff, @aurelia/state posture, lean accessibility, and existing control library/plugin detection/reporting. Keep routed-detail `with.bind`/taste as a regression canary: generated detail output should use explicit item-qualified bindings and state helper calls with item arguments, not broad `with.bind` plus `$parent.state.*($this)`.",
         "Validation policy floor currently means native field-local scalar constraints only. Do not treat it as permission to generate validation-plugin rules, cross-field rules, business validation, or source-owned validation messages; those need a separate rule contract, policy/defaulting review, and probably additional interviews.",
@@ -2466,31 +2426,6 @@
         "After meaningful app-builder product slices, update Atlas memory, Work Router terms/canaries, and reconciliation surfaces so future agents do not rediscover stale assumptions."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
-          "summary": "Current leading app-builder v1 scope and prioritization packet."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-investigation-answer-2026-06-07.md",
-          "summary": "Investigation answer for v1 substrate gaps and canaries."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-control-primitive-completeness-answer-2026-06-07.md",
-          "summary": "Control primitive completeness answer for native/display/control-affordance gaps."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-investigative-feedback-2026-06-07.md",
-          "summary": "Original investigative feedback that triggered the June 7 recalibration."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-control-primitive-completeness-followup-2026-06-07.md",
-          "summary": "Follow-up calibration on primitive control completeness."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/app-builder/domain-model.ts",
@@ -2561,69 +2496,21 @@
         "mcp"
       ],
       "summary": "The June 2026 app-builder interviews and synthesis roadmap are background texture for app-builder ontology, policy, and generated fixture contracts; the June 7 v1 recalibration packet currently leads implementation scope.",
-      "rationale": "The interviews contain operator taste, uncertainty, and cross-cutting principles that are too nuanced for one memory record. Future work should use Atlas memory as the queryable handle, open the June 7 recalibration packet first for v1 scope, then reopen older temp notes when implementation pressure requires more texture.",
+      "rationale": "The interviews contained operator taste, uncertainty, and cross-cutting principles that were promoted into Atlas memory and app-builder source/review surfaces. Future work should use Atlas memory as the queryable handle and avoid depending on ignored scratch files in clean checkouts.",
       "guidance": [
-        "Read `.temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md` before app-builder v1 implementation or public MCP app-generation design work. Read `.temp/app-builder-synthesis-roadmap-2026-06-01.md` and the interview files after that when the packet leaves a design ambiguity unresolved.",
-        "When a local implementation question feels ambiguous, re-open the relevant interview file rather than inferring solely from current source. The current source may still reflect the earlier staged composition experiment.",
-        "Use the ontology interview for affordances, input contracts, status matrix, input provenance, domain identity caution, and generation deferral.",
-        "Use the recommendation-policy interview for findings, app health, suppressions, recommendation policy, and shared MCP/IDE product reality.",
-        "Use the design/styling/control interview for native-first controls, local generated controls library policy, style input boundaries, manifest architecture, and deferred design-engine/style-flow pressure.",
-        "Use the source-lowering authority interview for status/defaulting/recommendation policy, request-local decision bundles, policy-folder direction, source-lowering authority, generated fixture contract boundaries, and the separation between focused pressure fixtures and tracked app-builder generated-app fixtures.",
+        "Use `intent:app-builder-v1-scope-recalibration` before app-builder v1 implementation or public MCP app-generation design work.",
+        "When a local implementation question feels ambiguous, prefer promoted memory records, current app-builder source, generated fixture evidence, and queryable review scripts over private scratch files. The current source may still reflect earlier staged composition experiments.",
+        "Use app-builder memory records for affordances, input contracts, status matrix, input provenance, domain identity caution, generation deferral, recommendation policy, findings/app-health policy, native-first controls, style input boundaries, source-lowering authority, generated fixture contract boundaries, and the separation between focused pressure fixtures and tracked app-builder generated-app fixtures.",
         "Use `reuse:app-builder-interview-decision-effects` when an interview answer could be anything from a five-minute invariant to a multi-hour frontier. Classify the effect horizon before choosing the work surface.",
-        "Use `.temp/app-builder-recommendation-defaulting-policy-review-2026-06-03.md` for the current generated checklist of recommendation posture, applicability/context rows, evidence rows, defaultingCandidate policy, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates. Re-run `pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review` after app-builder ontology or policy changes so the review artifact stays aligned with the compiled projection.",
-        "Use `.temp/app-builder-generated-fixture-review-rolling-2026-06-04.md` when generated app-builder fixture output shape, request/response reviewability, SourcePattern metadata, or fixture/source-plan boundary questions feel ambiguous. It is a qualitative review ledger, not a replacement for fixture verification or recommendation policy.",
-        "Use the rolling research file for application design pattern and collection query/display grounding. Research rows are pressure, not direct ontology authority."
+        "Use `pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review` for the generated checklist of recommendation posture, applicability/context rows, evidence rows, defaultingCandidate policy, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates after app-builder ontology or policy changes.",
+        "Use tracked app-builder fixtures and fixture indexes when generated output shape, request/response reviewability, SourcePattern metadata, or fixture/source-plan boundary questions feel ambiguous. They are review evidence, not a replacement for semantic-runtime verification or recommendation policy.",
+        "Treat research-derived rows as pressure, not direct ontology authority."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
-          "summary": "Current leading app-builder v1 scope packet; use before the older synthesis pack for implementation priorities."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
-          "summary": "Reviewable synthesis roadmap across the three interviews and rolling research file."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-ontology-interview-2026-06-01.md",
-          "summary": "Primary app-builder ontology interview."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-recommendation-policy-interview-2026-06-01.md",
-          "summary": "Recommendation/finding/policy interview."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-design-styling-control-interview-2026-06-01.md",
-          "summary": "Design, styling, and control-design interview."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-source-lowering-authority-interview-2026-06-03.md",
-          "summary": "Source-lowering authority, recommendation/defaulting/status policy, and generated fixture contract interview."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-recommendation-defaulting-policy-review-2026-06-03.md",
-          "summary": "Generated review checklist for recommendation posture, applicability/context, evidence, defaulting candidates, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-generated-fixture-review-rolling-2026-06-04.md",
-          "summary": "Qualitative rolling review of generated app-builder fixture source shape, request/response inspectability, SourcePattern metadata, and app-builder versus fixture-verification boundaries."
-        },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review",
           "summary": "Regenerates the app-builder recommendation/defaulting policy review from the compiled ontology and policy projection."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-design-pattern-research-rolling-2026-06-01.md",
-          "summary": "Application design pattern and collection-query rolling research."
         }
       ],
       "createdAt": "2026-06-01",
@@ -2650,11 +2537,6 @@
         "A source slice is pressure, not proof. Keep holistic consistency and public explainability as the stronger acceptance condition."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
-          "summary": "Phase 1 read-only ontology skeleton recommendation."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
@@ -3023,11 +2905,6 @@
       ],
       "anchors": [
         {
-          "kind": "doc",
-          "path": ".temp/app-builder-design-styling-control-interview-2026-06-01.md",
-          "summary": "Design/styling/control interview grounding for visual-input boundary and style-flow deferral."
-        },
-        {
           "kind": "lens",
           "lensId": "framework.capabilities",
           "projection": "catalog",
@@ -3075,11 +2952,6 @@
         "ControlManifestFieldDescriptor rows are selected-manifest contract vocabulary. They name fields to expose or prove later without publishing external manifests, component APIs, control-use products, or style hooks by themselves."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-design-styling-control-interview-2026-06-01.md",
-          "summary": "Manifest architecture and control-pattern interview source."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
@@ -3205,21 +3077,6 @@
         "Inline controls may eventually use marker/data attributes, but semantic-runtime should still understand ordinary HTML/Aurelia bindings when markers are absent."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-control-primitive-completeness-answer-2026-06-07.md",
-          "summary": "Control primitive completeness answer that identifies native/display affordance canaries beyond the current value-kind enum set."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-v1-scope-recalibration-packet-2026-06-07.md",
-          "summary": "Current v1 recalibration packet that makes control affordance expansion an immediate substrate gap."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-design-styling-control-interview-2026-06-01.md",
-          "summary": "Native-first and WAI-ARIA/control-pattern research source."
-        },
         {
           "kind": "lens",
           "lensId": "framework.capabilities",
@@ -3465,16 +3322,6 @@
         "If an interview decision turns into a fixture requirement, decide whether it belongs in focused pressure fixtures or `fixtures/app-builder` generated-app contracts. Generated-app contracts require exact public inputs, generated source, manifest/effects, and reopen verification."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-source-lowering-authority-interview-2026-06-03.md",
-          "summary": "Decision-bundle/defaulting/source-lowering authority interview with Turn 9 effect-horizon decisions."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-synthesis-roadmap-2026-06-01.md",
-          "summary": "Synthesis roadmap across app-builder ontology, recommendation policy, design/control, and research interviews."
-        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/app-builder/ontology/input-readiness.ts",
@@ -3898,11 +3745,6 @@
           "summary": "Generated app-builder fixture that proves ordered AppSection childContent can interleave native submit form composition, direct filter button invocation, action feedback, and a promise-backed table while one service collection spends explicit filter/create/update methods and component commands preserve active query state through reload."
         },
         {
-          "kind": "doc",
-          "path": ".temp/app-builder-source-lowering-authority-interview-2026-06-03.md",
-          "summary": "Interview grounding for generated fixture contracts and source-lowering authority boundaries."
-        },
-        {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-reset-button",
           "summary": "Generated app-builder fixture that proves direct template invocations can be assembled beside a form composition inside a runnable component-pair app shell."
@@ -4020,21 +3862,6 @@
         "Use `pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review` as the cheap count/projection refresh after touching ontology rows, recommendation policy, source-lowering registry rows, or defaulting-candidate policy. The generated review includes focused source-lowering request-field rows, contextual source-lowering policy-satisfaction candidate rows, and defaulting-candidate policy rows with scope/rationale so policy/defaulting work can see concrete executable contextual targets and local fallback candidates without merging request fields into durable input facets or hidden defaults."
       ],
       "anchors": [
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-ontology-interview-2026-06-01.md",
-          "summary": "Status matrix and gradual-ascent interview source."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-recommendation-policy-interview-2026-06-01.md",
-          "summary": "Recommendation/finding policy interview source that reinforces explicit authority and policy dimensions."
-        },
-        {
-          "kind": "doc",
-          "path": ".temp/app-builder-recommendation-defaulting-policy-review-2026-06-03.md",
-          "summary": "Current generated review checklist for recommendation posture, applicability/context rows, evidence rows, defaulting-candidate policy, source-lowering support, explicit input, and contextual source-lowering policy-satisfaction candidates."
-        },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime policy:app-builder-review",

@@ -382,7 +382,7 @@ function walkAst(node: AstNode | undefined, refs: ExprResourceRef[], exprId: Exp
   }
 
   // Recurse into children using the unified walker
-  forEachExprChild(node as WalkableExpr, child => walkAst(child, refs, exprId));
+  forEachExprChild(node, child => walkAst(child, refs, exprId));
 }
 
 /** Walk AST to find assignments to $host, using forEachExprChild. */
@@ -400,7 +400,7 @@ function walkAstForHostAssign(node: AstNode | undefined, refs: HostAssignmentRef
   }
 
   // Recurse into children using the unified walker
-  forEachExprChild(node as WalkableExpr, child => walkAstForHostAssign(child, refs, exprId));
+  forEachExprChild(node, child => walkAstForHostAssign(child, refs, exprId));
 }
 
 /**
