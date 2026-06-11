@@ -297,8 +297,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   [framework-router-analysis.ts](framework-router-analysis.ts), the curated flow/route-recognizer descriptor keys live
   in [framework-router-descriptor-map.ts](framework-router-descriptor-map.ts), and the expected Aurelia checkout
   baseline lives in [framework-router-source-map.ts](framework-router-source-map.ts). The `flow-issues` projection
-  compares the curated route-flow descriptors to the materialized source rows and reports stale descriptors,
-  duplicate sequences, or ambiguous descriptor keys. Router rows that cross component/materialization boundaries expose declared semantic route
+  compares the curated route-flow descriptors to the materialized source rows and reports source-baseline drift,
+  descriptor inventory drift, stale descriptors, duplicate sequences, or ambiguous descriptor keys. Router rows that
+  cross component/materialization boundaries expose declared semantic route
   continuations into `framework.materialization:resource-instantiations`,
   `framework.rendering:hydration-flow`, `framework.rendering:controller-creations`, and
   `framework.lifecycle:controller-calls`, so router modeling can follow the same end-to-end route grammar as compiler

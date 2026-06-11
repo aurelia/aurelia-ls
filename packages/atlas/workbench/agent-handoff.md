@@ -323,7 +323,13 @@ pnpm --filter @aurelia-ls/atlas self-check
   endpoint registration/materialization, recognition walk, candidate selection,
   cache, and lookup mechanics for `@aurelia/route-recognizer`; follow
   `framework.router:flow-issues` and `framework.router:recognizer-issues` when
-  curated descriptors need to be checked against the live Aurelia source. Router
+  curated descriptors need to be checked against the live Aurelia source. These
+  issue projections now also report source-baseline and descriptor-count drift,
+  so a zero-row result is the router map freshness signal rather than only a
+  descriptor materialization check. Router URL parsing/stringifying has its own
+  `url-parsing` flow stage and `url-parser` relationship mechanism, so hash/path
+  mode route semantics should be inspected there before treating route-recognizer
+  rows as the full navigation story. Router
   relationship rows now include the route-recognizer mechanic rows and are joined
   by `bridge.aulink`, so mirror reads should be used to check semantic-runtime
   router anchors against framework role evidence before app pressure is trusted.

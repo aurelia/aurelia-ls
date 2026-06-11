@@ -82,6 +82,10 @@ export const enum FrameworkRelationshipRelation {
   ResolvesRoute = "resolves-route",
   IndexesRoute = "indexes-route",
   RecognizesRoute = "recognizes-route",
+  /** Parses an authored or browser URL string into route URL parts before route recognition. */
+  ParsesRouteUrl = "parses-route-url",
+  /** Serializes router URL parts back into path or hash-router URL text. */
+  SerializesRouteUrl = "serializes-route-url",
   ProducesViewportInstruction = "produces-viewport-instruction",
   UpdatesRouteTree = "updates-route-tree",
   CreatesRouteContext = "creates-route-context",
@@ -157,6 +161,8 @@ export const enum FrameworkRelationshipMechanism {
   Watcher = "watcher",
   Effect = "effect",
   RouterConfiguration = "router-configuration",
+  /** Router URL parser and serializer for path and hash-fragment navigation modes. */
+  UrlParser = "url-parser",
   RouteConfigContext = "route-config-context",
   RouteRecognizer = "route-recognizer",
   ViewportInstruction = "viewport-instruction",

@@ -137,6 +137,10 @@ function routerRelationForFlow(
   switch (row.stage) {
     case "configuration-registration":
       return FrameworkRelationshipRelation.ConfiguresRouter;
+    case "url-parsing":
+      return row.flowRelation === "serializes"
+        ? FrameworkRelationshipRelation.SerializesRouteUrl
+        : FrameworkRelationshipRelation.ParsesRouteUrl;
     case "route-config-authoring":
       return FrameworkRelationshipRelation.ConfiguresRoute;
     case "route-config-resolution":
@@ -213,6 +217,8 @@ function routerMechanismForStage(
   switch (stage) {
     case "configuration-registration":
       return FrameworkRelationshipMechanism.RouterConfiguration;
+    case "url-parsing":
+      return FrameworkRelationshipMechanism.UrlParser;
     case "route-config-authoring":
     case "route-config-resolution":
       return FrameworkRelationshipMechanism.RouterConfiguration;
@@ -244,6 +250,10 @@ function routerPhaseForFlow(row: FrameworkRouterFlowRow): FrameworkRelationshipP
   switch (row.stage) {
     case "configuration-registration":
       return FrameworkRelationshipPhase.Registration;
+    case "url-parsing":
+      return row.flowRelation === "serializes"
+        ? FrameworkRelationshipPhase.Navigation
+        : FrameworkRelationshipPhase.Routing;
     case "route-config-authoring":
       return FrameworkRelationshipPhase.Definition;
     case "route-config-resolution":

@@ -14,6 +14,8 @@
       "rationale": "External apps are pressure floors, not literal specs. Router modeling must be grounded in the Aurelia framework router architecture because semantic-runtime will eventually support MCP, IDE, AOT, SSR, and SSG.",
       "guidance": [
         "Start with framework.router flow and relationship projections before deriving product router behavior from an app sample.",
+        "Router URL parsing and stringifying are first-class `framework.router` flow rows under the `url-parsing` stage with `url-parser` relationship mechanisms; do not treat route-recognizer rows as the whole navigation URL story.",
+        "Treat `framework.router:flow-issues` and `framework.router:recognizer-issues` as map freshness checks too: source-baseline and descriptor-count drift are issue rows, not only materialization warnings.",
         "Use `pnpm --filter @aurelia-ls/atlas framework:router -- --projection=relationships --query=ViewportAgent --detail` when row-level router grounding is needed beyond the compact pressure summary.",
         "Use `pnpm --filter @aurelia-ls/atlas bridge:aulink -- --projection=mirror --packageId=router --detail` when the question is whether router framework actors have product mirrors, role evidence, or emulation obligations.",
         "Model au-viewport explicitly when route rendering semantics are in scope.",
@@ -46,7 +48,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-06-11"
     },
     {
       "id": "frontier:route-config-kernel-emitter",

@@ -41,6 +41,7 @@ export type FrameworkRouterSurfaceKind =
 
 export type FrameworkRouterFlowStage =
   | "configuration-registration"
+  | "url-parsing"
   | "route-config-authoring"
   | "route-config-resolution"
   | "route-config-context"
@@ -56,11 +57,15 @@ export type FrameworkRouterFlowStage =
   | "navigation-model";
 
 export type FrameworkRouterFlowIssueKind =
+  | "source-baseline-mismatch"
+  | "descriptor-count-mismatch"
   | "unmaterialized-descriptor"
   | "multi-materialized-descriptor"
   | "duplicate-sequence";
 
 export type FrameworkRouteRecognizerMechanicIssueKind =
+  | "source-baseline-mismatch"
+  | "descriptor-count-mismatch"
   | "unmaterialized-descriptor"
   | "multi-materialized-descriptor";
 
@@ -321,8 +326,8 @@ function buildFrameworkRouterAnalysis(
   }
 
   const relationships = routerRelationshipsFromRows(flows, routeRecognizerMechanics);
-  const flowIssues = flowIssueRows(flows);
-  const routeRecognizerMechanicIssues = routeRecognizerMechanicIssueRows(routeRecognizerMechanics);
+  const flowIssues = flowIssueRows(sourceState, flows);
+  const routeRecognizerMechanicIssues = routeRecognizerMechanicIssueRows(sourceState, routeRecognizerMechanics);
   const packages = [...packageRows.values()].map(frameworkRouterPackageRow);
   return {
     version: FRAMEWORK_ROUTER_ANALYSIS_VERSION,
@@ -671,11 +676,36 @@ function compareRouteRecognizerMechanicRows(
 }
 
 function flowIssueRows(
+  sourceState: FrameworkRouterSourceState,
   rows: readonly FrameworkRouterFlowRow[],
 ): readonly FrameworkRouterFlowIssueRow[] {
   const issues: FrameworkRouterFlowIssueRow[] = [];
   const rowsByDescriptor = new Map<string, FrameworkRouterFlowRow[]>();
   const rowsBySequence = new Map<number, FrameworkRouterFlowRow[]>();
+
+  if (sourceState.status !== "matched") {
+    issues.push({
+      id: `framework-router-flow-issue:source-baseline-mismatch:${sourceState.status}`,
+      kind: "source-baseline-mismatch",
+      descriptorKey: null,
+      sequence: null,
+      actor: null,
+      count: 1,
+      summary: sourceState.summary,
+    });
+  }
+
+  if (ROUTER_FLOW_DESCRIPTORS.size !== sourceState.baseline.flowDescriptorCount) {
+    issues.push({
+      id: "framework-router-flow-issue:descriptor-count-mismatch",
+      kind: "descriptor-count-mismatch",
+      descriptorKey: null,
+      sequence: null,
+      actor: null,
+      count: ROUTER_FLOW_DESCRIPTORS.size,
+      summary: `Router flow descriptor map has ${ROUTER_FLOW_DESCRIPTORS.size} entries, but the source baseline records ${sourceState.baseline.flowDescriptorCount}; update framework-router-source-map.ts when descriptor inventory changes intentionally.`,
+    });
+  }
 
   for (const row of rows) {
     rowsByDescriptor.set(row.descriptorKey, [...(rowsByDescriptor.get(row.descriptorKey) ?? []), row]);
@@ -737,10 +767,35 @@ function compareFlowIssueRows(
 }
 
 function routeRecognizerMechanicIssueRows(
+  sourceState: FrameworkRouterSourceState,
   rows: readonly FrameworkRouteRecognizerMechanicRow[],
 ): readonly FrameworkRouteRecognizerMechanicIssueRow[] {
   const issues: FrameworkRouteRecognizerMechanicIssueRow[] = [];
   const rowsByDescriptor = new Map<string, FrameworkRouteRecognizerMechanicRow[]>();
+
+  if (sourceState.status !== "matched") {
+    issues.push({
+      id: `framework-route-recognizer-mechanic-issue:source-baseline-mismatch:${sourceState.status}`,
+      kind: "source-baseline-mismatch",
+      descriptorKey: "source-baseline",
+      ownerName: null,
+      name: "framework.router source baseline",
+      count: 1,
+      summary: sourceState.summary,
+    });
+  }
+
+  if (ROUTE_RECOGNIZER_MECHANIC_DESCRIPTORS.size !== sourceState.baseline.routeRecognizerMechanicDescriptorCount) {
+    issues.push({
+      id: "framework-route-recognizer-mechanic-issue:descriptor-count-mismatch",
+      kind: "descriptor-count-mismatch",
+      descriptorKey: "route-recognizer-descriptor-count",
+      ownerName: null,
+      name: "route-recognizer descriptor inventory",
+      count: ROUTE_RECOGNIZER_MECHANIC_DESCRIPTORS.size,
+      summary: `Route-recognizer mechanic descriptor map has ${ROUTE_RECOGNIZER_MECHANIC_DESCRIPTORS.size} entries, but the source baseline records ${sourceState.baseline.routeRecognizerMechanicDescriptorCount}; update framework-router-source-map.ts when descriptor inventory changes intentionally.`,
+    });
+  }
 
   for (const row of rows) {
     rowsByDescriptor.set(row.descriptorKey, [...(rowsByDescriptor.get(row.descriptorKey) ?? []), row]);
@@ -926,6 +981,26 @@ function objectLiteralOwnerName(node: ts.ObjectLiteralExpression): string | null
   if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
     return parent.name.text;
   }
+  if (ts.isCallExpression(parent)) {
+    return objectLiteralCallOwnerName(parent);
+  }
+  if (ts.isPropertyAssignment(parent)) {
+    const propertyName = propertyNameText(parent.name, parent.getSourceFile());
+    const outerOwner = parent.parent !== undefined && ts.isObjectLiteralExpression(parent.parent)
+      ? objectLiteralOwnerName(parent.parent)
+      : null;
+    if (propertyName !== null && outerOwner !== null) {
+      return `${outerOwner}.${propertyName}`;
+    }
+  }
+  return null;
+}
+
+function objectLiteralCallOwnerName(call: ts.CallExpression): string | null {
+  const parent = call.parent;
+  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+    return parent.name.text;
+  }
   if (ts.isPropertyAssignment(parent)) {
     const propertyName = propertyNameText(parent.name, parent.getSourceFile());
     const outerOwner = parent.parent !== undefined && ts.isObjectLiteralExpression(parent.parent)
@@ -943,6 +1018,7 @@ function countFlowStages(
 ): Readonly<Record<FrameworkRouterFlowStage, number>> {
   const counts: Record<FrameworkRouterFlowStage, number> = {
     "configuration-registration": 0,
+    "url-parsing": 0,
     "route-config-authoring": 0,
     "route-config-resolution": 0,
     "route-config-context": 0,

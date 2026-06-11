@@ -227,6 +227,9 @@ jobs:
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
+      - name: Smoke Atlas source maps
+        run: pnpm --filter @aurelia-ls/atlas smoke
+
       - name: Probe source stdio MCP
         run: pnpm --filter @aurelia-ls/mcp probe:stdio
 

@@ -12038,7 +12038,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     title: "Router Viewport Authoring Semantics",
     summary:
-      "Route router, au-viewport, RouteContext, route tree, route-recognizer, and routeable-component work through framework-grounded modeling before MCP or fixture generation.",
+      "Route router, URL parsing, au-viewport, RouteContext, route tree, route-recognizer, and routeable-component work through framework-grounded modeling before MCP or fixture generation.",
     domains: ["router", "viewport", "authoring", "world-construction", "fixtures"],
     roles: ["orient", "author", "analyze", "refactor", "verify"],
     terms: [
@@ -12048,6 +12048,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "route context",
       "route tree",
       "route recognizer",
+      "url parser",
+      "url parsing",
+      "url-parsing",
+      "hash router",
+      "fragmentUrlParser",
+      "pathUrlParser",
       "route parameter",
       "route parameters",
       "route parameter aggregation",
@@ -12506,7 +12512,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         command: "pnpm --filter @aurelia-ls/atlas pressure:framework-router",
         role: "grounding",
         summary:
-          "Compact router architecture pressure read for framework flow, route-recognizer mechanics, and descriptor drift.",
+          "Compact router architecture pressure read for framework flow, URL parser rows, route-recognizer mechanics, and descriptor drift.",
       },
       {
         kind: "script",
@@ -12538,12 +12544,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
     ],
     authority: [
-      "Aurelia router package source, including route context, route tree, viewport-agent, and route-recognizer.",
+      "Aurelia router package source, including URL parser, route context, route tree, viewport-agent, and route-recognizer.",
       "auLink mirrored semantic-runtime concepts for routeable components and viewports.",
       "External app pressure only as a floor for understandability, not as the semantic ceiling.",
     ],
     cautions: [
       "Router work should not be framed as a narrow app-pressure patch; it needs framework architecture first.",
+      "Route-recognizer rows are not the full navigation story; inspect framework.router url-parsing flow rows when path/hash URL behavior is in scope.",
       "au-viewport needs explicit semantics like built-in template controllers.",
       "RouteableComponent should be treated as a convergeable product/framework concept.",
     ],
