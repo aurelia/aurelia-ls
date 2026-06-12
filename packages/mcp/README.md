@@ -8,6 +8,38 @@ The current preview is read-only. It helps MCP clients inspect Aurelia workspace
 TypeScript/Aurelia/template issues, and follow typed continuations. Public app generation belongs to the future
 app-builder API, not to the retired legacy authoring recipe surface.
 
+## Preview Install
+
+The preview is distributed as a GitHub Release tarball until npm publishing is
+available. For diagnostics that should agree with project-local `tsc`, install
+the tarball as a dev dependency in the Aurelia app being analyzed:
+
+```powershell
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+```
+
+Then configure your MCP client to run from that project:
+
+```powershell
+node ./node_modules/@aurelia-ls/mcp/au-mcp.js
+```
+
+For a quick trial:
+
+```powershell
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+```
+
+Direct URL `npx` is convenient for smoke testing, but the project-local
+dev-dependency path is preferred for serious diagnostics. Public TypeScript
+diagnostic answers report whether the analyzer and workspace TypeScript
+packages are `same-package`, `same-version-different-package`,
+`different-version`, or `workspace-not-found`; prefer `same-package`.
+
+See [RELEASE.md](./RELEASE.md) for the temporary GitHub Release flow and
+[mcp-v0.1.0-preview.1.md](./release-notes/mcp-v0.1.0-preview.1.md) for the
+current preview notes.
+
 ## Local Development
 
 Fresh clone setup:
@@ -56,13 +88,6 @@ pnpm --filter @aurelia-ls/mcp release:pack
 pnpm --filter @aurelia-ls/mcp probe:release-tarball
 pnpm --filter @aurelia-ls/mcp probe:project-local-install
 ```
-
-See [RELEASE.md](./RELEASE.md) for the temporary GitHub Release tarball flow and
-install snippets. For diagnostics that should agree with a project-local
-TypeScript install, use the project-local dev-dependency path rather than direct
-URL `npx`; public TypeScript diagnostic answers report whether the analyzer and
-workspace TypeScript packages are `same-package`, `same-version-different-package`,
-`different-version`, or `workspace-not-found`.
 
 Large app-world opens can require more than Node's default heap while semantic-runtime performance work is still in
 flux. For local MCP client registration, prefer launching with an explicit heap budget:

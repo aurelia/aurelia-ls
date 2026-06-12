@@ -29,7 +29,7 @@ pnpm --filter @aurelia-ls/mcp probe:release-tarball
 ```powershell
 git tag mcp-v0.1.0-preview.1
 git push origin mcp-v0.1.0-preview.1
-gh release create mcp-v0.1.0-preview.1 packages/mcp/.release/aurelia-ls-mcp-0.1.0-preview.1.tgz --title "Aurelia MCP 0.1.0 preview 1" --notes "Preview MCP tarball for Aurelia semantic-runtime."
+gh release create mcp-v0.1.0-preview.1 packages/mcp/.release/aurelia-ls-mcp-0.1.0-preview.1.tgz --title "Aurelia MCP 0.1.0 preview 1" --notes-file packages/mcp/release-notes/mcp-v0.1.0-preview.1.md
 ```
 
 Do not add npm publish steps to this flow yet.

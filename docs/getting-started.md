@@ -23,6 +23,36 @@ Try these to verify it's working:
 
 Check the "Aurelia Language Server" output channel if anything isn't working.
 
+## Using the MCP Preview
+
+The `@aurelia-ls/mcp` preview is a local, read-only MCP server for AI coding
+tools. It can inspect Aurelia workspaces, query TypeScript/Aurelia/template
+diagnostics, read router and open-seam surfaces, and return typed continuation
+hints.
+
+For trustworthy TypeScript diagnostics, install the preview tarball inside the
+project being analyzed:
+
+```bash
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+```
+
+Then configure your MCP client to run:
+
+```bash
+node ./node_modules/@aurelia-ls/mcp/au-mcp.js
+```
+
+For a quick smoke test, direct URL `npx` also works:
+
+```bash
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+```
+
+Project-local install is preferred for serious diagnostics because the analyzer
+can resolve the same TypeScript package as the workspace. Check
+`typescript-diagnostic-summary` and prefer `relation=same-package`.
+
 ## Prerequisites (for building from source)
 
 - Node.js 22.13+
