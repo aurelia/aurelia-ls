@@ -40,8 +40,11 @@ npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-prev
 Then configure your MCP client to run:
 
 ```bash
-node ./node_modules/@aurelia-ls/mcp/au-mcp.js
+node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
+
+Provider-specific config examples are in the
+[MCP provider setup guides](../packages/mcp/docs/providers/README.md).
 
 For a quick smoke test, direct URL `npx` also works:
 
@@ -51,7 +54,10 @@ npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-previe
 
 Project-local install is preferred for serious diagnostics because the analyzer
 can resolve the same TypeScript package as the workspace. Check
-`typescript-diagnostic-summary` and prefer `relation=same-package`.
+`aurelia_app_overview` or `typescript-diagnostic-summary` after restarting the
+MCP client and prefer `relation=same-package`. Global or user-profile installs
+are convenient, but may report `different-version` when they resolve a different
+TypeScript package than the project.
 
 ## Prerequisites (for building from source)
 

@@ -63,10 +63,13 @@ imports TypeScript, and Node resolves that import from the package install
 context. Installing inside the app makes the analyzer TypeScript package line up
 with the app's own TypeScript package when the peer dependency is satisfied.
 
+Provider-specific config snippets live in
+[docs/providers](./docs/providers/README.md).
+
 When asking an AI to set this up, the useful instruction is:
 
 ```text
-Install the Aurelia MCP preview tarball as a dev dependency in this project, then configure the MCP server to run node ./node_modules/@aurelia-ls/mcp/au-mcp.js from the project root. After setup, call aurelia_app_query with queryKind=typescript-diagnostic-summary and confirm the TypeScript relation is same-package.
+Install the Aurelia MCP preview tarball as a dev dependency in this project, then configure the MCP server for my MCP client using the provider guide in packages/mcp/docs/providers. After setup, call aurelia_app_query with queryKind=typescript-diagnostic-summary and confirm the TypeScript relation is same-package.
 ```
 
 Run the local-install smoke before treating this path as release-ready:

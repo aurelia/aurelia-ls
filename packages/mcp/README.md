@@ -21,8 +21,11 @@ npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-prev
 Then configure your MCP client to run from that project:
 
 ```powershell
-node ./node_modules/@aurelia-ls/mcp/au-mcp.js
+node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
+
+Provider-specific config examples are in the
+[MCP provider setup guides](./docs/providers/README.md).
 
 For a quick trial:
 
@@ -31,10 +34,19 @@ npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-previe
 ```
 
 Direct URL `npx` is convenient for smoke testing, but the project-local
-dev-dependency path is preferred for serious diagnostics. Public TypeScript
-diagnostic answers report whether the analyzer and workspace TypeScript
-packages are `same-package`, `same-version-different-package`,
-`different-version`, or `workspace-not-found`; prefer `same-package`.
+dev-dependency path is preferred for serious diagnostics. Global or
+user-profile installs are fine for convenience, but can resolve a different
+TypeScript package than the project being analyzed.
+
+After restarting the MCP client, call `aurelia_app_overview` or
+`aurelia_app_query` with `queryKind=typescript-diagnostic-summary`. A good
+project-local install reports a TypeScript relation of `same-package`; public
+TypeScript diagnostic answers can also report `same-version-different-package`,
+`different-version`, or `workspace-not-found`.
+
+Some MCP clients expose separate tool-search/discovery surfaces that can lag
+behind the registered server tools. If discovery looks empty after setup,
+restart the client and try calling an Aurelia MCP tool directly.
 
 See [RELEASE.md](./RELEASE.md) for the temporary GitHub Release flow and
 [mcp-v0.1.0-preview.1.md](./release-notes/mcp-v0.1.0-preview.1.md) for the

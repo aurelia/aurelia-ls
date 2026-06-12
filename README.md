@@ -17,8 +17,11 @@ npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-prev
 Then configure your MCP client to run:
 
 ```bash
-node ./node_modules/@aurelia-ls/mcp/au-mcp.js
+node --max-old-space-size=8192 ./node_modules/@aurelia-ls/mcp/au-mcp.js
 ```
+
+Provider-specific config examples are in the
+[MCP provider setup guides](packages/mcp/docs/providers/README.md).
 
 For a quick trial:
 
@@ -27,7 +30,8 @@ npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-previe
 ```
 
 Direct URL `npx` is convenient for smoke testing, but project-local install is preferred for serious diagnostics because
-the analyzer can resolve the same TypeScript package as the workspace. See the [MCP README](packages/mcp/README.md) and
+the analyzer can resolve the same TypeScript package as the workspace. After restarting the MCP client, verify that the
+TypeScript relation is `same-package`. See the [MCP README](packages/mcp/README.md) and
 [MCP release notes](packages/mcp/release-notes/mcp-v0.1.0-preview.1.md) for details.
 
 ## VS Code Extension
