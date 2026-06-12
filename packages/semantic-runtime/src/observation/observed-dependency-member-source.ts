@@ -21,6 +21,8 @@ import type {
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
 import {
+  type RuntimeBindingObservedDependency,
+  RuntimeObservedMemberSourceState,
   RuntimeObservedDependencyKind,
 } from './runtime-binding-observation.js';
 import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
@@ -54,6 +56,33 @@ export function observedMemberSourceFields(
       observedMemberKind: projection.observedMemberKind,
       observedMemberSourceAddressHandle: projection.observedMemberSourceAddressHandle,
     };
+}
+
+export function observedMemberSourceStateForBindingDependency(input: {
+  readonly dependency: RuntimeObservedDependencyDraft;
+  readonly scope: BindingScope | null;
+  readonly projection: RuntimeObservedMemberSourceProjection | null;
+}): RuntimeObservedMemberSourceState {
+  if (input.projection?.observedMemberSourceAddressHandle != null) {
+    return RuntimeObservedMemberSourceState.Source;
+  }
+  if (isTemporaryObservedCollectionOwner(input.dependency)) {
+    return RuntimeObservedMemberSourceState.TemporaryValue;
+  }
+  if (isRuntimeScopeNameDependency(input.dependency)) {
+    return RuntimeObservedMemberSourceState.RuntimeScopeName;
+  }
+  if (!hasConcreteObservedMemberProjection(input.projection) && isScopeOpenRootDependency(input.dependency, input.scope)) {
+    return RuntimeObservedMemberSourceState.ScopeOpen;
+  }
+  return RuntimeObservedMemberSourceState.Open;
+}
+
+export function isRuntimeObservedDependencyScopeOpenRoot(
+  dependency: RuntimeBindingObservedDependency,
+): boolean {
+  return dependency.observedMemberSourceState === RuntimeObservedMemberSourceState.ScopeOpen
+    && isDirectScopeRootDependency(dependency);
 }
 
 export function observedDependencyWithMemberSourceForCheckerType<TDraft extends RuntimeObservedDependencyDraft>(
@@ -248,4 +277,86 @@ function observedOwnerSourceProjectionForDependency(
       observedMemberKind: null,
       observedMemberSourceAddressHandle: access.sourceAddressHandle,
     };
+}
+
+function isScopeOpenRootDependency(
+  dependency: RuntimeObservedDependencyDraft,
+  scope: BindingScope | null,
+): boolean {
+  if (!isDirectScopeRootDependency(dependency) || dependency.scopeLookupAncestor == null || scope == null) {
+    return false;
+  }
+  const rootName = dependency.sourceRootName;
+  if (rootName == null) {
+    return false;
+  }
+  const lookup = scope.locate(rootName, dependency.scopeLookupAncestor);
+  return lookup.slot == null && lookup.context != null && (
+    lookup.context.contextType != null
+    || lookup.context.slots.length > 0
+    || lookup.context.sourceAddressHandle != null
+  );
+}
+
+function hasConcreteObservedMemberProjection(
+  projection: RuntimeObservedMemberSourceProjection | null,
+): boolean {
+  return projection?.observedMemberKind != null
+    || projection?.observedMemberSourceAddressHandle != null;
+}
+
+function isDirectScopeRootDependency(
+  dependency: Pick<
+    RuntimeObservedDependencyDraft,
+    'dependencyKind'
+    | 'expressionKind'
+    | 'sourceName'
+    | 'sourceRootName'
+    | 'memberName'
+    | 'keyExpression'
+    | 'methodName'
+  >,
+): boolean {
+  if (
+    dependency.dependencyKind !== RuntimeObservedDependencyKind.TemplateExpressionRead
+    || dependency.sourceRootName == null
+    || dependency.sourceName !== dependency.sourceRootName
+    || dependency.memberName != null
+    || dependency.keyExpression != null
+  ) {
+    return false;
+  }
+  return (
+    dependency.expressionKind === 'AccessScope'
+    && dependency.methodName == null
+  ) || (
+    dependency.expressionKind === 'CallScope'
+    && dependency.methodName === dependency.sourceRootName
+  );
+}
+
+function isTemporaryObservedCollectionOwner(
+  dependency: RuntimeObservedDependencyDraft,
+): boolean {
+  return (
+    (
+      dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
+      || dependency.dependencyKind === RuntimeObservedDependencyKind.ProxyCollectionRead
+      || dependency.dependencyKind === RuntimeObservedDependencyKind.DeepCollectionRead
+    )
+    && dependency.memberName == null
+    && dependency.keyExpression == null
+    && dependency.methodName != null
+    && dependency.sourceName != null
+    && dependency.sourceRootName != null
+    && dependency.sourceName !== dependency.sourceRootName
+  );
+}
+
+function isRuntimeScopeNameDependency(
+  dependency: RuntimeObservedDependencyDraft,
+): boolean {
+  return dependency.scopeLookupAncestor === 0
+    && dependency.sourceRootName === '$host'
+    && dependency.sourceName === '$host';
 }

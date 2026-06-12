@@ -572,7 +572,7 @@ completion-specific helpers. Converter method projection keeps the outer `ValueC
 context, then hands the converter input, optional caller-context, and authored converter args to the call projector as
 child expression arguments so overload selection and generated overlay calls spend the same TypeChecker call semantics.
 `value-converter-writeback.ts` is the shared `astAssign` bridge for `fromView`: binding data-flow and runtime-assignment
-scope construction both use it, so target-to-source assignment rows and synthetic writeback locals cannot drift into
+scope construction both use it, so target-to-source assignment rows and runtime-assignment scope slots cannot drift into
 parallel converter-chain loops.
 Callers that start from a lazy `CheckerTypeMember.valueType` must materialize the reference before converter
 projection; a checker-key-only reference is fine for display, but `fromView` overload selection needs the current

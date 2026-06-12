@@ -261,13 +261,16 @@ static type surfaces rather than hydrated runtime values.
   receives the target value type as contextual type, so callback and function-valued bindables can type arrow
   parameters when the target bindable exposes a callable signature. If the target type is `unknown`, `any`, or
   index-signature-only, the data-flow row stays honest instead of manufacturing members.
-  `$`-prefixed synthetic writeback locals created by from-view/two-way bindable assignments, such as
-  `display-data.bind: $displayData`, are treated as runtime-assignable even when no authored view-model member exists;
-  the target bindable value type is used as the assignment type for later scope analysis. `$host` is reserved by
-  Aurelia runtime and is excluded from this synthetic-local lane: missing `$host` reads report `AUR0105`, while
-  `astAssign` throws `ast_no_assign_$host` before ordinary scope lookup, so data-flow reports `AUR0106` as an exact
-  framework assignment diagnostic. Other runtime-only scope slots can still report TypeScript strictness pressure when
-  the product cannot prove a real TypeChecker member. A
+  Runtime-assignment locals created by from-view/two-way bindable assignments, such as
+  `display-data.bind: $displayData`, are treated as runtime-assignable only when scope construction materializes a
+  `BindingScopeCreatorKind.RuntimeAssignment` slot for the authored name. The slot target type is used as the
+  assignment type for later scope analysis. A `$` prefix by itself is not evidence of a synthetic local; ordinary
+  unresolved names such as `$ghostLocal` still fall through the same context-type and TypeScript strictness policy as
+  other unresolved access-scope writes. `$host` is reserved by Aurelia runtime and is excluded from this
+  runtime-assignment lane: missing `$host` reads report `AUR0105`, while `astAssign` throws `ast_no_assign_$host`
+  before ordinary scope lookup, so data-flow reports `AUR0106` as an exact framework assignment diagnostic. Other
+  runtime-only scope slots can still report TypeScript strictness pressure when the product cannot prove a real
+  TypeChecker member. A
   runtime-created slot may still carry the target bindable's TypeMember product as a type carrier for expression
   analysis; assignment policy should not treat that carrier as proof that the scope name is an authored view-model
   member. Target bindable members are projected on demand because resource target type shapes are allowed to stay

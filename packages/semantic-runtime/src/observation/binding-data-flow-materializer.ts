@@ -136,6 +136,7 @@ import {
 } from './runtime-observed-dependency-draft.js';
 import {
   observedMemberSourceForBindingDependency,
+  observedMemberSourceStateForBindingDependency,
 } from './observed-dependency-member-source.js';
 import {
   runtimeObservedDependencyRecords,
@@ -690,6 +691,11 @@ export class RuntimeBindingDataFlowMaterializer {
             evaluator: context.evaluator,
             localKey: local,
           });
+        const observedMemberSourceState = observedMemberSourceStateForBindingDependency({
+          dependency,
+          scope: input.checkerContext?.scope ?? input.scope,
+          projection: observedMember,
+        });
         return new RuntimeBindingObservedDependency(
           this.store.handles.product(dependencyLocal),
           this.store.handles.identity(dependencyLocal),
@@ -706,6 +712,7 @@ export class RuntimeBindingDataFlowMaterializer {
           dependency.methodName,
           observedMember?.observedMemberKind ?? null,
           observedMember?.observedMemberSourceAddressHandle ?? null,
+          observedMemberSourceState,
           dependency.spanStart,
           dependency.spanEnd,
           dependencySource.handle,

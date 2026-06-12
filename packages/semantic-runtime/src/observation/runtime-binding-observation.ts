@@ -256,8 +256,17 @@ export type RuntimeBindingObservedDependencyField =
   | 'methodName'
   | 'observedMemberKind'
   | 'observedMemberSource'
+  | 'observedMemberSourceState'
   | 'span'
   | 'source';
+
+export const enum RuntimeObservedMemberSourceState {
+  Source = 'source',
+  TemporaryValue = 'temporary-value',
+  RuntimeScopeName = 'runtime-scope-name',
+  ScopeOpen = 'scope-open',
+  Open = 'open',
+}
 
 export type RuntimeBindingValueChannelField =
   | 'binding'
@@ -309,6 +318,7 @@ export class RuntimeBindingObservedDependency {
     readonly methodName: string | null,
     readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
     readonly observedMemberSourceAddressHandle: AddressHandle | null,
+    readonly observedMemberSourceState: RuntimeObservedMemberSourceState,
     readonly spanStart: number | null,
     readonly spanEnd: number | null,
     readonly sourceAddressHandle: AddressHandle | null,

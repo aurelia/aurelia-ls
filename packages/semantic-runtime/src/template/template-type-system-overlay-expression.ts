@@ -1,4 +1,7 @@
-import type { ExpressionAstNode } from '../expression/ast.js';
+import {
+  scopeExpressionUsesCurrentBindingContextRoot,
+  type ExpressionAstNode,
+} from '../expression/ast.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
@@ -331,9 +334,15 @@ export class TemplateTypeSystemOverlayExpressionProjector {
           context,
           semanticProductHandle,
           [],
-          this.scopeRootUnsupported(expression, context?.scopeAliases ?? null, semanticProductHandle),
+          this.scopeRootUnsupported(expression, context?.scopeAliases ?? null),
         );
       case 'CallScope':
+        {
+          const unsupportedSyntax = this.scopeRootUnsupported(expression, context?.scopeAliases ?? null);
+          if (unsupportedSyntax != null) {
+            return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupportedSyntax);
+          }
+        }
         if (this.shouldLowerNonStrictAccess(context)) {
           return this.nonStrictCallScopeExpression(expression, context, semanticProductHandle);
         }
@@ -342,7 +351,7 @@ export class TemplateTypeSystemOverlayExpressionProjector {
           context,
           semanticProductHandle,
           expression.args,
-          this.scopeRootUnsupported(expression, context?.scopeAliases ?? null, semanticProductHandle),
+          null,
         );
       case 'AccessThis':
         return this.copySourceProjection(
@@ -664,7 +673,6 @@ export class TemplateTypeSystemOverlayExpressionProjector {
   private scopeRootUnsupported(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessScope' | 'CallScope' }>,
     scopeAliases: TemplateTypeSystemOverlayExpressionScopeAliases | null,
-    semanticProductHandle: ProductHandle | null,
   ): TemplateTypeSystemOverlayExpressionUnsupportedSyntax | null {
     if (expression.ancestor > 0) {
       return expression.ancestor <= (scopeAliases?.parentBindingContextDepth ?? 0)
@@ -674,8 +682,7 @@ export class TemplateTypeSystemOverlayExpressionProjector {
           '$parent-style ancestor scope access needs a generated scope alias before it can be checked by TypeScript overlays.',
         );
     }
-    const source = this.sourceSlice(expression.span, semanticProductHandle);
-    return expressionSourceText(expression, source)?.startsWith('$this.') === true && scopeAliases?.currentBindingContext !== true
+    return scopeExpressionUsesCurrentBindingContextRoot(expression) && scopeAliases?.currentBindingContext !== true
       ? unsupported(
         TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext,
         '$this access needs a generated current binding-context alias before it can be checked by TypeScript overlays.',

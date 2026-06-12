@@ -163,6 +163,15 @@ export class AccessBoundaryExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessBoundary' as const;
 }
 
+export enum ScopeExpressionRootKind {
+  /** Ordinary scope lookup, such as `title`. */
+  BindingContext = 'binding-context',
+  /** Authored `$this.member` or `$this.method()` before parser lowering. */
+  CurrentBindingContext = 'current-binding-context',
+  /** Authored `$parent.member` / `$parent.$parent.member` before parser lowering. */
+  AncestorBindingContext = 'ancestor-binding-context',
+}
+
 @auLink('expression-parser:AccessScopeExpression')
 export class AccessScopeExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessScope' as const;
@@ -171,6 +180,7 @@ export class AccessScopeExpression extends ExpressionNodeBase {
     span: SourceSpan,
     readonly name: Identifier,
     readonly ancestor: number,
+    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
   ) {
     super(span);
   }
@@ -248,9 +258,16 @@ export class CallScopeExpression extends ExpressionNodeBase {
     readonly args: IsAssign[],
     readonly ancestor: number,
     readonly optional: boolean,
+    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
   ) {
     super(span);
   }
+}
+
+export function scopeExpressionUsesCurrentBindingContextRoot(
+  expression: AccessScopeExpression | CallScopeExpression,
+): boolean {
+  return expression.rootKind === ScopeExpressionRootKind.CurrentBindingContext;
 }
 
 @auLink('expression-parser:CallMemberExpression')

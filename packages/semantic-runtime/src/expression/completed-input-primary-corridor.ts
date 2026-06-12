@@ -14,6 +14,7 @@ import {
   ObjectLiteralExpression,
   ParenExpression,
   PrimitiveLiteralExpression,
+  ScopeExpressionRootKind,
 } from './ast.js';
 import type {
   Identifier,
@@ -246,6 +247,7 @@ export class CompletedInputPrimaryCorridor {
           this.state.span(start, nameTok.end),
           this.deps.identifierFromToken(nameTok),
           0,
+          ScopeExpressionRootKind.CurrentBindingContext,
         );
       }
 
@@ -294,6 +296,7 @@ export class CompletedInputPrimaryCorridor {
         this.state.span(start, maybeParent.end),
         this.deps.identifierFromToken(maybeParent),
         ancestor,
+        ScopeExpressionRootKind.AncestorBindingContext,
       );
     }
 

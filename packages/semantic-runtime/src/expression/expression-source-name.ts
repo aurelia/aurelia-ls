@@ -1,4 +1,6 @@
-import type { ExpressionAstNode } from './ast.js';
+import type {
+  ExpressionAstNode,
+} from './ast.js';
 
 export function expressionSourceName(expression: ExpressionAstNode): string | null {
   switch (expression.$kind) {

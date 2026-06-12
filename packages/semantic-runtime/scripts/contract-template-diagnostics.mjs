@@ -17,6 +17,7 @@ const mixedFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/mixed-for
 const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressure/select-model-primitives');
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
 const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
+const guidanceTruthCanariesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/guidance-truth-canaries');
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
 const unregisteredShorthandFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-shorthand-syntax');
 const unregisteredPluginSyntaxFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-syntax');
@@ -343,6 +344,85 @@ const contracts = [
           effectFilter('source.sourceFileRole', 'template'),
         ],
         'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    guidanceTruthCanariesFixtureRoot,
+    'template-diagnostics-contract:guidance-truth-canaries',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unknown typed-template roots should surface as missing binding-scope diagnostics at the authored identifier.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'missing-expression-member'),
+          effectFilter('missingInput', 'expression-member:selected-member-missing'),
+          effectFilter('selectedMemberName', 'titel'),
+          effectFilter('source.path', 'src/guidance-truth-canary-app.html'),
+          effectFilter('source.start', 6),
+          effectFilter('source.end', 11),
+          effectFilter('suggestion.suggestionKind', 'declare-explicit-member'),
+          effectFilter('suggestion.actionKind', 'declare-member'),
+          effectFilter('suggestion.actionTarget.targetKind', 'expression'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Host globals absent from Aurelia expression globals should surface as unsupported expression-global diagnostics.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'unsupported-expression-global'),
+          effectFilter('missingInput', 'expression-global:not-admitted'),
+          effectFilter('selectedMemberName', 'console'),
+          effectFilter('source.path', 'src/guidance-truth-canary-app.html'),
+          effectFilter('source.start', 41),
+          effectFilter('source.end', 48),
+          effectFilter('suggestion.suggestionKind', 'fix-expression-syntax'),
+          effectFilter('suggestion.actionKind', 'rewrite-expression'),
+          effectFilter('suggestion.actionTarget.targetKind', 'expression'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.absent(
+        'Runtime listener event slots should not be treated as missing binding-scope roots.',
+        'template-diagnostic',
+        'template',
+        null,
+        [
+          effectFilter('diagnosticKind', 'missing-expression-member'),
+          effectFilter('selectedMemberName', '$event'),
+        ],
+      ),
+      ExpectedSemanticEffect.exactly(
+        '$-prefixed writeback roots should not become synthetic locals without runtime-assignment scope evidence.',
+        'binding-data-flow',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('sourceName', '$ghostLocal'),
+          effectFilter('sourceAssignmentKind', 'runtime-assignable-with-typescript-strictness'),
+          effectFilter('sourceAssignmentReasonKinds', 'owner-member-not-projected'),
+          effectFilter('sourceAssignmentTargetType', 'GuidanceTruthCanaryApp'),
+          effectFilter('sourceAssignmentTargetSource', null),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.absent(
+        '$-prefixed writeback roots without runtime-assignment scope evidence should not be marked runtime-assignable.',
+        'binding-data-flow',
+        'template',
+        null,
+        [
+          effectFilter('sourceName', '$ghostLocal'),
+          effectFilter('sourceAssignmentKind', 'runtime-assignable'),
+        ],
       ),
     ],
   ),

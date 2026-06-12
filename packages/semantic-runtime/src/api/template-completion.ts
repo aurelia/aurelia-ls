@@ -1,3 +1,5 @@
+import ts from 'typescript';
+
 import {
   answerTemplateCompletion,
   TemplateCompletionSiteKind,
@@ -31,6 +33,7 @@ import {
   type AuthoredSourceText,
 } from '../kernel/authored-source-text.js';
 import type { SourceSpan } from '../expression/source-span.js';
+import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
   ExpressionParseResultInspector,
@@ -72,7 +75,11 @@ import {
   type TypeSystemOverlayDiagnostic,
 } from '../type-system/diagnostics.js';
 import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
-import { TypeSystemProjectBuilder } from '../type-system/project.js';
+import { TypeSystemProjectBuilder, type TypeSystemProject } from '../type-system/project.js';
+import {
+  checkerPropertySymbol,
+  checkerSymbolValueType,
+} from '../type-system/checker-node-helpers.js';
 import {
   CheckerTypeMemberKind,
   checkerIndexedAccessSupportsString,
@@ -82,7 +89,11 @@ import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-typ
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   type RuntimeBindingDataFlow,
+  type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
+import {
+  isRuntimeObservedDependencyScopeOpenRoot,
+} from '../observation/observed-dependency-member-source.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import {
   semanticClosureForInquiry,
@@ -125,6 +136,7 @@ import {
   bindingTargetAccessFrameworkErrorDiagnostic,
   cursorDiagnosticRows,
   expressionParseErrorDiagnostic,
+  missingExpressionRootDiagnostic,
   runtimeBindingIssueDiagnostic,
   runtimeBindingBehaviorIssueDiagnostic,
   runtimeBindingScopeIssueDiagnostic,
@@ -133,10 +145,12 @@ import {
   runtimeControllerIssueDiagnostic,
   routerIssueDiagnostic,
   frameworkCapabilityDemandDiagnostic,
+  unsupportedExpressionGlobalDiagnostic,
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
 import {
   resourceLocalBindingDataFlows,
+  resourceLocalBindingObservedDependencies,
   resourceLocalBindingTargetAccesses,
 } from './runtime-resource-ownership.js';
 import {
@@ -297,6 +311,7 @@ function readTemplateCursorInfoValue(
           ],
         ),
         ...bindingSourceAssignmentDiagnostics,
+        ...runtimeObservedDependencyRootCursorDiagnostics(store, emission, readContext.selection, cursorOffset),
         ...frameworkCapabilityDemandCursorDiagnostics(store, emission, readContext.selection, cursorOffset),
         ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
         ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
@@ -367,6 +382,20 @@ function bindingSourceAssignmentCursorDiagnostics(
     }
     return bindingDataFlowDiagnostics(store, dataFlow, source);
   });
+}
+
+function runtimeObservedDependencyRootCursorDiagnostics(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  cursorOffset: number | null,
+): readonly SemanticTemplateCursorDiagnosticRow[] {
+  if (cursorOffset == null) {
+    return [];
+  }
+  return runtimeObservedDependencyRootDiagnosticCandidates(store, emission, selection)
+    .filter((candidate) => sourceReferenceContainsOffset(candidate.source, cursorOffset))
+    .map((candidate) => candidate.diagnostic);
 }
 
 function templateCompilerIssueCursorDiagnostics(
@@ -793,6 +822,7 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...typeProjectionTemplateDiagnosticRows(store, workspaceRootDir, emission, selections, context, projectionPolicy),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeObservedDependencyRootDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
   ];
   return [...rows].sort((left, right) =>
@@ -1220,6 +1250,12 @@ function diagnosticRowMissingInputKey(
     : [...diagnostic.missingInputs].sort().join('+');
 }
 
+interface RuntimeObservedDependencyRootDiagnosticCandidate {
+  readonly dependency: RuntimeBindingObservedDependency;
+  readonly diagnostic: SemanticTemplateCursorDiagnosticRow;
+  readonly source: NonNullable<SemanticTemplateDiagnosticRow['source']>;
+}
+
 function bindingDataFlowDiagnosticRowsForSelection(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
@@ -1250,6 +1286,96 @@ function bindingDataFlowDiagnosticRowsForSelection(
       }];
     });
   });
+}
+
+function runtimeObservedDependencyRootDiagnosticRowsForSelection(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return runtimeObservedDependencyRootDiagnosticCandidates(store, emission, selection).flatMap((candidate) => {
+    const source = candidate.source;
+    if (!sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = candidate.diagnostic;
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.Expression,
+      valueSiteKind: valueSiteKindForObservedDependency(store, candidate.dependency),
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeObservedDependencyRootDiagnosticCandidates(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+): readonly RuntimeObservedDependencyRootDiagnosticCandidate[] {
+  return resourceLocalBindingObservedDependencies(store, selection.resource).flatMap((dependency) => {
+    if (!isRuntimeObservedDependencyScopeOpenRoot(dependency)) {
+      return [];
+    }
+    const source = describeAddress(store, dependency.sourceAddressHandle);
+    const rootName = dependency.sourceRootName;
+    if (source == null || rootName == null) {
+      return [];
+    }
+    const diagnostic = typeSystemGlobalThisValueExists(emission.typeSystem, rootName)
+      && !isAureliaExpressionGlobalName(rootName)
+      ? unsupportedExpressionGlobalDiagnostic(rootName, source)
+      : missingExpressionRootDiagnostic(rootName, source);
+    return [{
+      dependency,
+      diagnostic,
+      source,
+    }];
+  });
+}
+
+function typeSystemGlobalThisValueExists(
+  typeSystem: TypeSystemProject,
+  name: string,
+): boolean {
+  const location = typeSystemProjectSourceFile(typeSystem);
+  const globalThisSymbol = typeSystem.checker.resolveName(
+    'globalThis',
+    location ?? undefined,
+    ts.SymbolFlags.Value,
+    false,
+  );
+  const globalThisType = globalThisSymbol == null
+    ? null
+    : checkerSymbolValueType(typeSystem.checker, globalThisSymbol, location);
+  const globalPropertySymbol = globalThisType == null
+    ? null
+    : checkerPropertySymbol(typeSystem.checker, globalThisType, name);
+  return globalPropertySymbol == null
+    ? false
+    : checkerSymbolValueType(typeSystem.checker, globalPropertySymbol, location) != null;
+}
+
+function typeSystemProjectSourceFile(
+  typeSystem: TypeSystemProject,
+): ts.SourceFile | null {
+  for (const source of typeSystem.project.sourceFiles) {
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
+    if (sourceFile != null) {
+      return sourceFile;
+    }
+  }
+  return typeSystem.program.getSourceFiles().find((sourceFile) => !sourceFile.isDeclarationFile) ?? null;
 }
 
 function targetAccessDiagnosticRowsForSelection(
@@ -1771,6 +1897,14 @@ function valueSiteKindForDataFlow(
   expressionProductHandle: ProductHandle | null,
 ): SemanticTemplateDiagnosticRow['valueSiteKind'] {
   const parse = readTemplateExpressionParse(store, expressionProductHandle);
+  return parse?.site.siteKind ?? null;
+}
+
+function valueSiteKindForObservedDependency(
+  store: KernelStore,
+  dependency: RuntimeBindingObservedDependency,
+): SemanticTemplateDiagnosticRow['valueSiteKind'] {
+  const parse = readTemplateExpressionParse(store, dependency.expressionProductHandle);
   return parse?.site.siteKind ?? null;
 }
 

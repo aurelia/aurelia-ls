@@ -2,7 +2,6 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
-  RuntimeObservedDependencyKind,
   type RuntimeBindingDataFlow,
   type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
@@ -1247,7 +1246,7 @@ function bindingObservedDependencyRow(
     methodName: dependency.methodName,
     observedMemberKind: dependency.observedMemberKind,
     observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
-    observedMemberSourceState: observedMemberSourceState(dependency),
+    observedMemberSourceState: dependency.observedMemberSourceState,
     spanStart: dependency.spanStart,
     spanEnd: dependency.spanEnd,
     source: describeAddress(store, dependency.sourceAddressHandle),
@@ -1263,50 +1262,6 @@ function bindingObservedDependencyRow(
       },
     } : {}),
   };
-}
-
-function observedMemberSourceState(
-  dependency: RuntimeBindingObservedDependency,
-): SemanticObservedMemberSourceState {
-  if (dependency.observedMemberSourceAddressHandle != null) {
-    return 'source';
-  }
-  if (isTemporaryObservedCollectionOwner(dependency)) {
-    return 'temporary-value';
-  }
-  if (isRuntimeScopeName(dependency.sourceName) || isRuntimeScopeName(dependency.sourceRootName)) {
-    return 'runtime-scope-name';
-  }
-  if (
-    dependency.memberName == null
-    && dependency.keyExpression == null
-    && (dependency.expressionKind === 'AccessScope' || dependency.expressionKind === 'CallScope')
-  ) {
-    return 'scope-open';
-  }
-  return 'open';
-}
-
-function isTemporaryObservedCollectionOwner(
-  dependency: RuntimeBindingObservedDependency,
-): boolean {
-  return (
-    (
-      dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
-      || dependency.dependencyKind === RuntimeObservedDependencyKind.ProxyCollectionRead
-      || dependency.dependencyKind === RuntimeObservedDependencyKind.DeepCollectionRead
-    )
-    && dependency.memberName == null
-    && dependency.keyExpression == null
-    && dependency.methodName != null
-    && dependency.sourceName != null
-    && dependency.sourceRootName != null
-    && dependency.sourceName !== dependency.sourceRootName
-  );
-}
-
-function isRuntimeScopeName(name: string | null): boolean {
-  return name?.startsWith('$') === true;
 }
 
 function expressionParseForDataFlow(

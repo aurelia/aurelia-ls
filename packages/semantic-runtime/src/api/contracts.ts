@@ -3259,6 +3259,7 @@ export type SemanticTemplateCursorDiagnosticSeverity =
 export type SemanticTemplateCursorDiagnosticKind =
   | 'weak-expression-member-owner'
   | 'missing-expression-member'
+  | 'unsupported-expression-global'
   | 'template-expression-typescript-diagnostic'
   | 'expression-runtime-evaluation-error'
   | 'expression-parse-error'

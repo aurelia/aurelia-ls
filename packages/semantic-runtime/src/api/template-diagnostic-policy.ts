@@ -998,6 +998,66 @@ export function expressionRuntimeEvaluationErrorDiagnostic(
   };
 }
 
+export function missingExpressionRootDiagnostic(
+  rootName: string,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'missing-expression-member',
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    severity: 'error',
+    summary: `Template expression root "${rootName}" is not available on the current binding scope.`,
+    missingInput: 'expression-member:selected-member-missing',
+    missingInputs: ['expression-member:selected-member-missing'],
+    source,
+    selectedMemberName: rootName,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'declare-explicit-member',
+      actionKind: 'declare-member',
+      actionTarget: suggestionActionTarget('expression', source, rootName, null),
+      summary: 'Declare this member on the binding context or fix the expression name.',
+      targetMemberName: rootName,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
+export function unsupportedExpressionGlobalDiagnostic(
+  globalName: string,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'unsupported-expression-global',
+    diagnosticAuthority: 'semantic-authoring-policy',
+    frameworkErrorCode: null,
+    severity: 'error',
+    summary: `Aurelia expression syntax does not admit host global "${globalName}" as an expression global in this template.`,
+    missingInput: 'expression-global:not-admitted',
+    missingInputs: ['expression-global:not-admitted'],
+    source,
+    selectedMemberName: globalName,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-expression-syntax',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, globalName, null),
+      summary: 'Move the host-global use into a view-model method/member or use an Aurelia-admitted expression global.',
+      targetMemberName: globalName,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: null,
+      valueTypeSource: null,
+    },
+  };
+}
+
 function expressionRuntimeEvaluationSuggestion(
   frameworkErrorCode: RuntimeAstFrameworkErrorCode | RuntimeHtmlAstFrameworkErrorCode,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,

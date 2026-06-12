@@ -24,6 +24,9 @@ import type {
 import {
   projectRuntimeAssignmentValueConverterWriteback,
 } from '../type-system/value-converter-writeback.js';
+import type {
+  BindingScope,
+} from '../configuration/scope.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -35,7 +38,7 @@ import {
 import {
   type BindingDataFlowSourceWriteCapabilityProjector,
   type SourceWriteCapability,
-  isSyntheticWritebackLocal,
+  runtimeAssignmentScopeSlotForAccessScope,
   sourceWriteCapabilityOpen,
   sourceWriteCapabilityRuntimeUnassignable,
   sourceWriteCapabilityWritable,
@@ -104,9 +107,9 @@ export class BindingDataFlowSourceInfoProjector {
       sourceName: bindingDataFlowSourceNameForRuntimeAssignmentTarget(unwrapped),
       sourceRootName: bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(unwrapped),
       sourceWriteCapability: needsSourceWriteCapability
-        ? this.sourceWriteCapabilityForRuntimeAssignmentTarget(unwrapped, checkerContext, evaluator, targetValueType)
+        ? this.sourceWriteCapabilityForRuntimeAssignmentTarget(unwrapped, checkerContext, evaluator)
         : null,
-      ...syntheticWritebackSourceTypeHint(unwrapped, needsSourceWriteCapability, targetValueType),
+      ...runtimeAssignmentSourceTypeHint(unwrapped, needsSourceWriteCapability, checkerContext.scope),
       ...writeback,
     };
   }
@@ -115,11 +118,10 @@ export class BindingDataFlowSourceInfoProjector {
     unwrapped: ExpressionAstNode,
     checkerContext: CheckerExpressionTypeEvaluationContext,
     evaluator: CheckerExpressionTypeEvaluator,
-    targetValueType: CheckerTypeReference | null,
   ): SourceWriteCapability {
     switch (unwrapped.$kind) {
       case 'AccessScope':
-        return this.sourceWriteCapability.forAccessScope(unwrapped, checkerContext.scope, targetValueType);
+        return this.sourceWriteCapability.forAccessScope(unwrapped, checkerContext.scope);
       case 'AccessMember':
         return this.sourceWriteCapability.forAccessMember(unwrapped, checkerContext, evaluator);
       case 'AccessKeyed':
@@ -219,18 +221,19 @@ function bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(
   return expression.$kind === 'AccessThis' ? '$this' : expressionSourceRootName(expression);
 }
 
-function syntheticWritebackSourceTypeHint(
+function runtimeAssignmentSourceTypeHint(
   expression: ExpressionAstNode,
   needsSourceWriteCapability: boolean,
-  targetValueType: CheckerTypeReference | null,
+  scope: BindingScope,
 ): Pick<SourceExpressionInfo, 'sourceTypeHint'> | Record<string, never> {
   if (expression.$kind !== 'AccessScope') {
     return {};
   }
+  const slot = needsSourceWriteCapability
+    ? runtimeAssignmentScopeSlotForAccessScope(expression, scope)
+    : null;
   return {
-    sourceTypeHint: needsSourceWriteCapability && isSyntheticWritebackLocal(expression)
-      ? targetValueType
-      : null,
+    sourceTypeHint: slot?.targetType ?? null,
   };
 }
 

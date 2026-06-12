@@ -75,7 +75,6 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
   forAccessScope(
     expression: AccessScopeExpression,
     scope: BindingScope,
-    targetValueType: CheckerTypeReference | null,
   ): SourceWriteCapability {
     if (isHostAccessScope(expression)) {
       return sourceWriteCapabilityRuntimeUnassignable(
@@ -90,8 +89,12 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeLookupMissingAncestor,
       );
     }
-    if (lookup.slot == null && isSyntheticWritebackLocal(expression)) {
-      return sourceWriteCapabilityWritable(targetValueType);
+    const runtimeAssignmentSlot = runtimeAssignmentScopeSlotForLookup(lookup.scope, lookup.slot);
+    if (runtimeAssignmentSlot != null) {
+      return sourceWriteCapabilityWritable(
+        runtimeAssignmentSlot.targetType,
+        runtimeAssignmentSlot.sourceAddressHandle,
+      );
     }
     if (lookup.slot == null) {
       const contextType = lookup.context?.contextType ?? null;
@@ -112,9 +115,7 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotMissingTypeCheckerMember,
       );
     }
-    return isRuntimeAssignmentScopeSlot(lookup.scope, lookup.slot)
-      ? sourceWriteCapabilityWritable(lookup.slot.targetType, lookup.slot.sourceAddressHandle)
-      : this.forSlot(lookup.slot);
+    return this.forSlot(lookup.slot);
   }
 
   forAccessMember(
@@ -221,10 +222,24 @@ export class BindingDataFlowSourceWriteCapabilityProjector {
   }
 }
 
-export function isSyntheticWritebackLocal(expression: AccessScopeExpression): boolean {
-  return expression.ancestor === 0
-    && expression.name.name.startsWith('$')
-    && !isHostAccessScope(expression);
+export function runtimeAssignmentScopeSlotForAccessScope(
+  expression: AccessScopeExpression,
+  scope: BindingScope,
+): BindingContextSlot | null {
+  if (expression.ancestor !== 0 || isHostAccessScope(expression)) {
+    return null;
+  }
+  const lookup = scope.locate(expression.name.name, expression.ancestor);
+  return runtimeAssignmentScopeSlotForLookup(lookup.scope, lookup.slot);
+}
+
+function runtimeAssignmentScopeSlotForLookup(
+  scope: BindingScope | null,
+  slot: BindingContextSlot | null,
+): BindingContextSlot | null {
+  return slot != null && isRuntimeAssignmentScopeSlot(scope, slot)
+    ? slot
+    : null;
 }
 
 function isRuntimeAssignmentScopeSlot(scope: BindingScope | null, slot: BindingContextSlot): boolean {

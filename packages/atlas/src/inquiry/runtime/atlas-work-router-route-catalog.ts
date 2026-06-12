@@ -8221,11 +8221,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "TemplateScopeTypeProjector",
       "TemplateTypeSystemOverlayExpressionProjector",
       "TemplateTypeSystemOverlayBuilder",
+      "ScopeExpressionRootKind",
+      "scope expression rootKind",
+      "current-binding-context root",
+      "ancestor-binding-context root",
       "scopeCreators",
       "BindingScopeCreator",
       "runtime assignment scope",
       "runtime assignment expression scope",
-      "synthetic writeback local",
+      "runtime assignment local",
+      "runtime-assignment scope slot",
       "inline multi-binding segment",
       "repeat override local",
       "$index",
@@ -8285,6 +8290,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "`$this.` awaiting-member-name completion is covered through parser frontier owner fallback; related gaps should still route through shared binding-scope and member-owner projection, not public row shaping.",
       },
       {
+        query: "ScopeExpressionRootKind current-binding-context CallScope non-strict overlay",
+        summary:
+          "Authored `$this.`/`$parent.` root origin should come from parser-preserved scope expression rootKind before overlay text checks or non-strict call lowering are changed.",
+      },
+      {
         query: "template expression projection value converter binding behavior parent this overlay",
         summary:
           "Aurelia-only expression forms should route through the copied-expression projector and semantic products before generated TypeScript text is widened.",
@@ -8332,7 +8342,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         depth: AtlasWorkRouteCoverageDepth.Semantic,
         ownerRouteId: "semantic-runtime.observation.binding-flow",
         summary:
-          "BindingScope, BindingContext, OverrideContext, RuntimeInstructionScopeLookup, scope-slot creators, synthetic writeback locals, repeat locals, and template-scope projection are semantic inputs to binding data flow. Coverage is partial because scope consumers must continue to prove they spend the materialized scope products instead of rebuilding parent/local lookup or target-to-source slots locally.",
+          "BindingScope, BindingContext, OverrideContext, RuntimeInstructionScopeLookup, scope-slot creators, runtime-assignment locals, repeat locals, and template-scope projection are semantic inputs to binding data flow. Coverage is partial because scope consumers must continue to prove they spend the materialized scope products and BindingScopeCreator evidence instead of rebuilding parent/local lookup or target-to-source slots locally.",
       },
     ],
     anchors: [
@@ -8797,12 +8807,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "template expression selection",
       "template expression projection",
       "template type-system overlay",
+      "ScopeExpressionRootKind",
+      "scope expression rootKind",
+      "current-binding-context root",
+      "ancestor-binding-context root",
       "let scope overlay",
       "scopeCreators",
       "BindingScopeCreator",
       "runtime assignment scope",
       "runtime assignment expression scope",
-      "synthetic writeback local",
+      "runtime assignment local",
+      "runtime-assignment scope slot",
       "inline multi-binding segment",
       "repeat override local",
       "$index",
@@ -13048,7 +13063,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     id: "diagnostics.template-repair-policy",
     title: "Template Diagnostic Repair Policy",
     summary:
-      "Route weak owner typing, missing member, assignment strictness, source-route, and diagnostic action-target pressure through the shared template diagnostic policy.",
+      "Route weak owner typing, missing member/root, unsupported expression-global, assignment strictness, source-route, and diagnostic action-target pressure through the shared template diagnostic policy.",
     domains: ["diagnostics", "template", "type-system", "repair", "source-provenance"],
     roles: ["orient", "analyze", "verify", "document"],
     terms: [
@@ -13063,6 +13078,25 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "expression-member-owner-type:index-signature-only",
       "missing expression member",
       "missing-expression-member",
+      "missing expression root",
+      "unknown root identifier",
+      "unknown typed template root",
+      "missing binding scope root",
+      "scope-open observed dependency",
+      "RuntimeBindingObservedDependency scope-open",
+      "observedMemberSourceState",
+      "observedMemberSourceStateForBindingDependency",
+      "binding observed dependency root",
+      "guidance truth canary",
+      "guidance-truth canary",
+      "guidance-truth-canaries",
+      "unsupported expression global",
+      "unsupported-expression-global",
+      "expression-global:not-admitted",
+      "Aurelia expression global",
+      "expression global allow-list",
+      "globalThis host global",
+      "console unsupported expression global",
       "selected member missing",
       "source route",
       "source-route",
@@ -13096,6 +13130,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Missing member diagnostics should route through the same diagnostic repair policy as weak owner rows.",
       },
+      {
+        query: "unknown root identifier unsupported expression global guidance truth canary",
+        summary:
+          "Guidance-truth canaries should route through observed-dependency root diagnostics before expression-text or overlay-local heuristics.",
+      },
     ],
     coverage: [
       {
@@ -13103,7 +13142,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         state: AtlasWorkRouteCoverageState.Covered,
         depth: AtlasWorkRouteCoverageDepth.Verified,
         summary:
-          "Template diagnostics and cursor diagnostics share the authored source text/cache path used for template source slicing, while template-diagnostics contracts prove weak-owner and missing-member rows preserve concrete source routes and action targets. Future repair planning should spend those source routes rather than opening another diagnostic-local text reader.",
+          "Template diagnostics and cursor diagnostics share the authored source text/cache path used for template source slicing, while template-diagnostics contracts prove weak-owner, missing-member/root, and unsupported-expression-global rows preserve concrete source routes and action targets. Future repair planning should spend those source routes rather than opening another diagnostic-local text reader.",
       },
       {
         dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
@@ -13129,7 +13168,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "readSemanticTemplateDiagnostics",
         role: "primary",
         summary:
-          "File/app-locus template diagnostic reader that lifts cursor diagnostic policy.",
+          "File/app-locus template diagnostic reader that projects observation-owned root facts into public diagnostic rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/observed-dependency-member-source.ts",
+        symbolName: "observedMemberSourceStateForBindingDependency",
+        role: "primary",
+        summary:
+          "Binding observation classifier that marks source-backed members, temporary collection owners, runtime scope names, and scope-open root reads before API diagnostics project them.",
       },
       {
         kind: "source",
@@ -13160,7 +13207,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics",
         role: "pressure",
         summary:
-          "Focused semantic contract for weak-owner diagnostics, source routes, binding-assignment repair targets, and framework capability-demand canaries.",
+          "Focused semantic contract for weak-owner diagnostics, source routes, binding-assignment repair targets, framework capability-demand canaries, and guidance-truth root/global diagnostics.",
       },
       {
         kind: "path",
@@ -13168,6 +13215,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "pressure",
         summary:
           "Pressure fixture for missing slot types, any owners, index-signature-only owners, and source-backed repair targets.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/guidance-truth-canaries",
+        role: "pressure",
+        summary:
+          "Pressure fixture proving unknown template roots and host globals absent from Aurelia expression globals become honest template diagnostics.",
       },
       {
         kind: "memory",
@@ -13178,6 +13232,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
     ],
     authority: [
+      "Binding observed-dependency rows for scope-open root reads, before interpolation or overlay projection can hide the missing root.",
       "TypeScript checker owner/member facts and semantic-runtime value-producing source routes.",
       "Template diagnostic policy that turns weak or missing owner/member facts into structured suggestions.",
       "Focused semantic contracts and synthetic fixtures before external app pressure is generalized.",
@@ -13186,6 +13241,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not treat weak typing as an autocomplete failure; it can be the correct diagnostic outcome.",
       "Do not cluster repair pressure without preserving concrete action-target source when one exists.",
       "Do not add local TypeChecker walks in diagnostics when CheckerExpressionTypeEvaluator or CheckerExpressionMemberOwnerProjector should own the fact.",
+      "Do not classify module locals/imports as host globals; unsupported expression globals are globalThis-backed values that Aurelia did not admit through its expression global registry.",
     ],
     nextQuestions: [
       "Is this diagnostic missing a source route, an owner/member projection, or only a policy/suggestion shape?",

@@ -155,7 +155,11 @@ state, with special corridors split out by ownership:
   collapsing into generic trailing-token noise. Shared missing closing
   delimiter publication carries `AUR0167` so paren, indexed-access, call,
   arrow-head, and binding-pattern close gaps keep the framework parser code
-  visible without duplicating it at every caller.
+  visible without duplicating it at every caller. Scope-special roots preserve
+  authored `$this.member` and `$parent.member` origin in
+  `ScopeExpressionRootKind` even when the runtime-shaped AST lowers them to
+  `AccessScope`/`CallScope`; downstream consumers should spend that root kind
+  instead of re-reading source text for `$this.` or `$parent.` prefixes.
 - `completed-input-left-hand-side-corridor.ts`
   `new`, member access, optional chaining, keyed access, calls, and tagged
   template handoff. It also owns Aurelia's optional-chain/tagged-template
@@ -168,6 +172,8 @@ state, with special corridors split out by ownership:
   tagged-template tails resume only after the `NewExpression` is closed. This
   keeps `new Foo()` from becoming a call-shaped constructor target and prevents
   runtime AST diagnostics from seeing class construction as an ordinary call.
+  Call-scope lowering copies `AccessScope.rootKind`, so `$this.method()` and
+  `$parent.method()` keep their authored scope origin after the call transform.
 - `completed-input-tail-corridor.ts`
   Value-converter and binding-behavior tails.
 - `completed-input-arrow-corridor.ts`

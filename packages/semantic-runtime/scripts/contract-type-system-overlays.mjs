@@ -23,6 +23,8 @@ import {
 } from '../out/template/template-type-system-overlay.js';
 import {
   TemplateTypeSystemOverlayExpressionProjector,
+  TemplateTypeSystemOverlayExpressionProjectionKind,
+  TemplateTypeSystemOverlayExpressionUnsupportedKind,
 } from '../out/template/template-type-system-overlay-expression.js';
 import {
   templateTypeSystemOverlayExpressionSupportMatrix,
@@ -34,6 +36,7 @@ import {
   AccessScopeExpression,
   CallScopeExpression,
   Identifier,
+  ScopeExpressionRootKind,
   ValueConverterExpression,
 } from '../out/expression/ast.js';
 import {
@@ -206,6 +209,7 @@ const overlayExpressionSupportKinds = new Set(templateTypeSystemOverlayExpressio
 const overlayExpressionSupportByKind = new Map(templateTypeSystemOverlayExpressionSupportMatrix.map((row) => [row.expressionKind, row]));
 const preludeHelpersByKey = new Map(templateTypeSystemOverlayPreludeHelpers.map((helper) => [helper.key, helper]));
 const generatedChildSpliceOverlay = readGeneratedChildSpliceOverlayProbe();
+const nonStrictCurrentBindingCallProjection = readNonStrictCurrentBindingCallProjectionProbe();
 
 const failures = [];
 const generatedOverlayAnyHoleRows = [
@@ -548,6 +552,12 @@ if (generatedChildSpliceOverlay.text !== 'formatWordCount(__au_vc_wordCount.toVi
 if (!generatedChildSpliceOverlay.hasParentPrefixSegment || !generatedChildSpliceOverlay.hasChildGeneratedCall) {
   failures.push('Expected generated child splice overlay to preserve parent source segments and child generated call parts.');
 }
+if (
+  nonStrictCurrentBindingCallProjection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax
+  || nonStrictCurrentBindingCallProjection.unsupportedKind !== TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext
+) {
+  failures.push(`Expected non-strict $this call-scope projection without aliases to stay unsupported by current-binding-context policy, observed kind=${nonStrictCurrentBindingCallProjection.kind}, unsupported=${nonStrictCurrentBindingCallProjection.unsupportedKind ?? 'missing'}.`);
+}
 if (generatedValueConverterOverlay.variableTypes.get('word') !== 'string') {
   failures.push(`Expected generated value-converter overlay repeat source to infer repeated word locals as string, observed ${generatedValueConverterOverlay.variableTypes.get('word') ?? 'missing'}.`);
 }
@@ -844,6 +854,7 @@ if (failures.length > 0) {
         argumentMismatchHasSemanticProductHandle: generatedValueConverterOverlay.argumentMismatchHasSemanticProductHandle,
       },
       generatedChildSpliceOverlay,
+      nonStrictCurrentBindingCallProjection,
       overlayExpressionSupportMatrix: {
         rows: templateTypeSystemOverlayExpressionSupportMatrix.length,
         resourceLowered: templateTypeSystemOverlayExpressionSupportMatrix
@@ -1631,6 +1642,33 @@ function readGeneratedChildSpliceOverlayProbe() {
       part.kind === 'text' && part.text === '.toView('
     ),
     partLabels: projection.parts.map((part) => part.kind === 'source' ? part.label : 'generated-text'),
+  };
+}
+
+function readNonStrictCurrentBindingCallProjectionProbe() {
+  const file = new SourceFileRef('contract:overlay-current-binding-call', path.join(scopeAliasFixtureRoot, 'src/synthetic-current-binding-call.txt'));
+  const titleLength = '$this.titleLength()';
+  const nameStart = '$this.'.length;
+  const nameEnd = nameStart + 'titleLength'.length;
+  const call = new CallScopeExpression(
+    new SourceSpan(0, titleLength.length, file),
+    new Identifier(new SourceSpan(nameStart, nameEnd, file), 'titleLength'),
+    [],
+    0,
+    false,
+    ScopeExpressionRootKind.CurrentBindingContext,
+  );
+  const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot)
+    .copyableExpression(call, {
+      strictBinding: false,
+      valueConverterCallSurface() {
+        return null;
+      },
+    });
+  return {
+    kind: projection.kind,
+    unsupportedKind: projection.unsupportedSyntax?.unsupportedKind ?? null,
+    text: projection.text,
   };
 }
 

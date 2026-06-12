@@ -761,7 +761,9 @@ resource-template function boundary: root `$this` points at the function `this`,
 current `$this` object synthesized from replayed binding-context slots
 such as `{ item }` or `{ key, entry }`, and nested repeat parent aliases carry a typed `$parent` chain so
 `$parent.$parent.*` follows Aurelia ancestor lookup without rewriting authored text. Non-replayed binding-pattern
-context shapes remain explicit skips rather than hidden generated-TypeScript name-resolution diagnostics. `with.bind`
+context shapes remain explicit skips rather than hidden generated-TypeScript name-resolution diagnostics. The parser
+preserves lowered `AccessScope`/`CallScope` scope-special origin through `ScopeExpressionRootKind`; overlay projection
+should spend that fact before copying or lowering source text, especially in non-strict call-scope lowering. `with.bind`
 captures the outer `$this`, evaluates the source expression once, casts the generated binding context through
 `NonNullable<typeof source>`, and then projects ordinary local declarations such as `label` from the materialized
 binding-context slots; listener-event scopes nested under that value scope retain the generated `$parent` alias so
