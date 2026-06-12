@@ -94,11 +94,33 @@ if (!rootUsesContainerClaims.some((claim) =>
   failures.push('Expected a RootUsesContainerRoot claim from a container-get-backed dialog service-root to its container root product.');
 }
 const sourceDemandProducts = capabilityDemandDetails.filter((demand) => demand.siteKind === 'source-service-api');
+const dialogSourceDemandProducts = sourceDemandProducts.filter((demand) =>
+  demand.requiredCapability === 'dialog.service-resolvers'
+);
+const dialogDemandOwnerRoots = dialogSourceDemandProducts
+  .map((demand) => serviceRootDetails.find((root) => root.identityHandle === demand.ownerIdentityHandle) ?? null)
+  .filter(Boolean);
+const parameterPropertyContainerDemand = dialogSourceDemandProducts.find((demand) => {
+  const ownerRoot = serviceRootDetails.find((root) => root.identityHandle === demand.ownerIdentityHandle) ?? null;
+  return ownerRoot?.basis === 'container-get-backed'
+    && ownerRoot.sourcePath === 'src/main.ts'
+    && ownerRoot.start === 1994
+    && ownerRoot.end === 2039;
+}) ?? null;
 if (sourceDemandProducts.length === 0) {
   failures.push('Expected registered dialog source service API roots to still publish admitted capability-demand products.');
 }
-if (sourceDemandProducts.some((demand) => demand.requiredCapability === 'dialog.service-resolvers' && demand.admissionState !== 'admitted')) {
-  failures.push('Dialog source service API demands should be admitted when DialogConfiguration is registered.');
+if (dialogSourceDemandProducts.some((demand) =>
+  demand.admissionState !== 'admitted'
+  && demand.admissionState !== 'admitted-chain-unproven'
+)) {
+  failures.push('Registered dialog source service API demands should be admitted or admitted-chain-unproven, never missing or unknown.');
+}
+if (!dialogSourceDemandProducts.some((demand) => demand.admissionState === 'admitted')) {
+  failures.push('Expected at least one registered dialog source service API demand to be chain-proven admitted.');
+}
+if (parameterPropertyContainerDemand?.admissionState !== 'admitted-chain-unproven') {
+  failures.push('The parameter-property IContainer dialog root should remain admitted-chain-unproven because the typed container root is not chain-proven.');
 }
 if (appDiagnostics.rows.some((row) =>
   row.diagnosticDomain === 'framework'
@@ -113,6 +135,8 @@ if (failures.length > 0) {
     ok: false,
     failures,
     dialogIssues,
+    sourceDemandProducts,
+    dialogDemandOwnerRoots,
   }, null, 2));
   process.exitCode = 1;
 } else {
@@ -125,6 +149,7 @@ if (failures.length > 0) {
       rootResolvesDiKeyClaims: rootResolvesDiKeyClaims.length,
       rootUsesContainerClaims: rootUsesContainerClaims.length,
       sourceDemandProducts: sourceDemandProducts.length,
+      dialogDemandStates: Object.fromEntries(countBy(dialogSourceDemandProducts, (demand) => demand.admissionState)),
       frameworkCodes: Object.fromEntries(frameworkCodes),
     },
   }, null, 2));

@@ -2064,6 +2064,14 @@ export interface SemanticAppDiagnosticRow {
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly templateSourceAddressHandle?: AddressHandle | null;
+    readonly resourceDefinitionProductHandle?: ProductHandle | null;
+  };
 }
 
 export interface SemanticAppDiagnosticsResult {

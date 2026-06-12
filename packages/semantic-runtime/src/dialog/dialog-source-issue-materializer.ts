@@ -22,6 +22,9 @@ import {
   sourceRootSymbolForName,
   sourceRootSymbolForPropertyName,
 } from '../framework/source-api-root-recognition.js';
+import {
+  frameworkServiceRootBasisResolvesDiKey,
+} from '../framework/service-root.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -35,6 +38,7 @@ import {
 } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  frameworkDeclarationSourceSpec,
   type FrameworkDeclarationSourcePathIndex,
   typeMatchesFrameworkDeclarationSource,
 } from '../type-system/framework-declaration-source.js';
@@ -71,14 +75,13 @@ const DIALOG_SERVICE_EXPORTS = new Set([
 
 const DIALOG_DECLARATION_SOURCE_FRAGMENTS = [
   '/aurelia/packages/dialog/src/',
-  '/@aurelia/dialog/',
-  '/@aurelia+dialog',
 ] as const;
 
-const DIALOG_SERVICE_DECLARATIONS = {
-  names: DIALOG_SERVICE_EXPORTS,
-  sourcePathFragments: DIALOG_DECLARATION_SOURCE_FRAGMENTS,
-} as const;
+const DIALOG_SERVICE_DECLARATIONS = frameworkDeclarationSourceSpec(
+  DIALOG_SERVICE_EXPORTS,
+  ['@aurelia/dialog'],
+  DIALOG_DECLARATION_SOURCE_FRAGMENTS,
+);
 
 const BARE_DIALOG_CONFIGURATION_EXPORTS = new Set([
   'DialogConfiguration',
@@ -474,6 +477,15 @@ function readDialogServiceBaseSettingsState(
     if (rooted != null) {
       return rooted;
     }
+    const serviceRoot = context.sourceApiRoots.serviceRootIdentityForExpression(
+      context.sourcePath,
+      context.sourceFile,
+      current,
+      DIALOG_SERVICE_EXPORTS,
+    );
+    if (serviceRoot != null && frameworkServiceRootBasisResolvesDiKey(serviceRoot.basis)) {
+      return DialogServiceBaseSettingsState.RootNoBase;
+    }
     return expressionHasFrameworkDialogServiceType(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
   }
   if (
@@ -484,6 +496,15 @@ function readDialogServiceBaseSettingsState(
     const rooted = symbol == null ? null : context.roots.instanceServiceMembers.get(symbol) ?? null;
     if (rooted != null) {
       return rooted;
+    }
+    const serviceRoot = context.sourceApiRoots.serviceRootIdentityForExpression(
+      context.sourcePath,
+      context.sourceFile,
+      current,
+      DIALOG_SERVICE_EXPORTS,
+    );
+    if (serviceRoot != null && frameworkServiceRootBasisResolvesDiKey(serviceRoot.basis)) {
+      return DialogServiceBaseSettingsState.RootNoBase;
     }
     return expressionHasFrameworkDialogServiceType(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
   }

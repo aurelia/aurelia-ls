@@ -218,9 +218,12 @@ function globalSequenceForSteps(
   steps: readonly ConfigurationStepObservation[],
 ): readonly ConfigurationSequenceObservation[] {
   const sorted = [...steps].sort((left, right) => compareNodes(context.sourceFile, left.sourceNode, right.sourceNode));
-  return sorted.length === 0
-    ? []
-    : [
+  if (sorted.length === 0) {
+    return [];
+  }
+  const receiverGroups = splitGlobalStepsByAureliaReceiver(context.sourceFile, sorted);
+  if (receiverGroups == null) {
+    return [
       new ConfigurationSequenceObservation(
         sequenceKindForSteps(sorted),
         context.sourceFile,
@@ -228,6 +231,119 @@ function globalSequenceForSteps(
         sorted,
       ),
     ];
+  }
+  return receiverGroups.map((group, index) =>
+    new ConfigurationSequenceObservation(
+      sequenceKindForSteps(group.steps),
+      group.steps[0]?.sourceNode ?? context.sourceFile,
+      group.localName ?? `${context.moduleKey}:${index}`,
+      group.steps,
+    )
+  );
+}
+
+interface GlobalConfigurationStepGroup {
+  readonly localName: string | null;
+  readonly steps: readonly ConfigurationStepObservation[];
+}
+
+function splitGlobalStepsByAureliaReceiver(
+  sourceFile: ts.SourceFile,
+  steps: readonly ConfigurationStepObservation[],
+): readonly GlobalConfigurationStepGroup[] | null {
+  if (!steps.some((step) => aureliaStepReceiverName(step) != null)) {
+    return null;
+  }
+
+  const groups = new Map<string, ConfigurationStepObservation[]>();
+  const groupOrder: string[] = [];
+  const append = (key: string, step: ConfigurationStepObservation): void => {
+    const existing = groups.get(key);
+    if (existing == null) {
+      groups.set(key, [step]);
+      groupOrder.push(key);
+    } else {
+      existing.push(step);
+    }
+  };
+
+  steps.forEach((step, index) => {
+    const key = aureliaStepGroupKey(sourceFile, step, steps)
+      ?? `global:${index}`;
+    append(key, step);
+  });
+
+  return groupOrder.map((key) => ({
+    localName: key.startsWith('global:') || key.startsWith('aurelia-constructor:')
+      ? null
+      : key,
+    steps: groups.get(key) ?? [],
+  }));
+}
+
+function aureliaStepGroupKey(
+  sourceFile: ts.SourceFile,
+  step: ConfigurationStepObservation,
+  steps: readonly ConfigurationStepObservation[],
+): string | null {
+  const receiver = aureliaStepReceiverName(step);
+  const constructorKey = relatedAureliaConstructorStepKey(sourceFile, step, steps);
+  return receiver == null || receiver === 'Aurelia'
+    ? constructorKey ?? receiver
+    : receiver;
+}
+
+function aureliaStepReceiverName(
+  step: ConfigurationStepObservation,
+): string | null {
+  switch (step.stepKind) {
+    case ConfigurationStepKind.CreateAurelia:
+    case ConfigurationStepKind.AureliaRegister:
+    case ConfigurationStepKind.AureliaApp:
+      return step.receiverLocalName;
+    default:
+      return null;
+  }
+}
+
+function relatedAureliaConstructorStepKey(
+  sourceFile: ts.SourceFile,
+  step: ConfigurationStepObservation,
+  steps: readonly ConfigurationStepObservation[],
+): string | null {
+  const related = steps
+    .filter((candidate) =>
+      candidate.stepKind === ConfigurationStepKind.CreateAurelia
+      && (
+        candidate === step
+        || sourceContainsNode(sourceFile, candidate.sourceNode, step.sourceNode)
+        || sourceContainsNode(sourceFile, step.sourceNode, candidate.sourceNode)
+      )
+    )
+    .sort((left, right) => sourceSpanLength(left.sourceNode) - sourceSpanLength(right.sourceNode));
+  const owner = related[0] ?? null;
+  return owner == null
+    ? null
+    : [
+      'aurelia-constructor',
+      owner.sourceNode.getStart(sourceFile).toString(),
+      owner.sourceNode.end.toString(),
+    ].join(':');
+}
+
+function sourceContainsNode(
+  sourceFile: ts.SourceFile,
+  outer: ts.Node,
+  inner: ts.Node,
+): boolean {
+  return outer.getStart(sourceFile) <= inner.getStart(sourceFile)
+    && inner.end <= outer.end;
+}
+
+function sourceSpanLength(
+  node: ts.Node,
+): number {
+  return node.end - node.getStart();
 }
 
 function readRegistryRegisterMethodSteps(
@@ -316,12 +432,21 @@ function recognizeAureliaConstructor(
     ConfigurationCarrierKind.AureliaConstructor,
     ConfigurationStepKind.CreateAurelia,
     node,
-    readReferenceName(node.expression),
+    aureliaConstructorLocalName(node) ?? readReferenceName(node.expression),
     null,
     [],
     [],
     defaultAdmissions,
   );
+}
+
+function aureliaConstructorLocalName(
+  node: ts.NewExpression,
+): string | null {
+  const parent = node.parent;
+  return ts.isVariableDeclaration(parent) && parent.initializer === node && ts.isIdentifier(parent.name)
+    ? parent.name.text
+    : null;
 }
 
 function recognizeCall(
@@ -2014,7 +2139,24 @@ function readCallReceiverName(call: ts.CallExpression): string | null {
   if (!ts.isPropertyAccessExpression(expression)) {
     return null;
   }
-  return readReferenceName(expression.expression);
+  return readReceiverExpressionName(expression.expression);
+}
+
+function readReceiverExpressionName(
+  expression: ts.Expression,
+): string | null {
+  const direct = readReferenceName(expression);
+  if (direct != null) {
+    return direct;
+  }
+  const current = unwrapExpression(expression);
+  if (!ts.isCallExpression(current)) {
+    return null;
+  }
+  const callee = unwrapExpression(current.expression);
+  return ts.isPropertyAccessExpression(callee)
+    ? readReceiverExpressionName(callee.expression)
+    : null;
 }
 
 function isAureliaReceiver(

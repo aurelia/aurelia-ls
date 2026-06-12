@@ -7,6 +7,7 @@ export type FrameworkDeclarationSourcePathIndex = ReadonlyMap<string, string>;
 export interface FrameworkDeclarationSourceSpec {
   readonly names: ReadonlySet<string>;
   readonly sourcePathFragments: readonly string[];
+  readonly packageNames?: readonly string[];
 }
 
 /** Match a checker symbol against framework-owned declaration sources rather than local lookalike names. */
@@ -26,7 +27,7 @@ export function symbolMatchesFrameworkDeclarationSource(
     return false;
   }
   return (resolved.declarations ?? []).some((declaration) =>
-    declarationMatchesFrameworkSource(declaration, sourcePathByFileName, spec.sourcePathFragments)
+    declarationMatchesFrameworkSource(declaration, sourcePathByFileName, spec)
   );
 }
 
@@ -55,10 +56,38 @@ export function typeMatchesFrameworkDeclarationSource(
 export function declarationMatchesFrameworkSource(
   declaration: ts.Declaration,
   sourcePathByFileName: FrameworkDeclarationSourcePathIndex,
-  sourcePathFragments: readonly string[],
+  specOrSourcePathFragments: FrameworkDeclarationSourceSpec | readonly string[],
 ): boolean {
   const sourceFileName = normalizeTypeSystemSourceFileName(declaration.getSourceFile().fileName);
   const projectSourcePath = sourcePathByFileName.get(sourceFileName) ?? sourceFileName;
   const normalized = projectSourcePath.replace(/\\/g, '/');
-  return sourcePathFragments.some((fragment) => normalized.includes(fragment));
+  const sourcePathFragments: readonly string[] = 'names' in specOrSourcePathFragments
+    ? specOrSourcePathFragments.sourcePathFragments
+    : specOrSourcePathFragments;
+  const packageNames: readonly string[] = 'names' in specOrSourcePathFragments
+    ? specOrSourcePathFragments.packageNames ?? []
+    : [];
+  return sourcePathFragments.some((fragment) => normalized.includes(fragment))
+    || packageNames.some((packageName) => pathContainsNodeModulePackage(normalized, packageName));
+}
+
+export function frameworkDeclarationSourceSpec(
+  names: ReadonlySet<string>,
+  packageNames: readonly string[],
+  sourcePathFragments: readonly string[],
+): FrameworkDeclarationSourceSpec {
+  return {
+    names,
+    packageNames,
+    sourcePathFragments,
+  };
+}
+
+function pathContainsNodeModulePackage(
+  normalized: string,
+  packageName: string,
+): boolean {
+  const packageRoot = `/node_modules/${packageName}`;
+  return normalized.endsWith(packageRoot)
+    || normalized.includes(`${packageRoot}/`);
 }

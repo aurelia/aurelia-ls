@@ -94,10 +94,14 @@ if (!rootResolvesDiKeyClaims.some((claim) => serviceRootsByProduct.get(claim.sub
 }
 const sourceDemandProducts = capabilityDemandDetails.filter((demand) => demand.siteKind === 'source-service-api');
 if (sourceDemandProducts.length === 0) {
-  failures.push('Expected registered validation source service API roots to still publish admitted capability-demand products.');
+  failures.push('Expected registered validation source service API roots to still publish capability-demand products.');
 }
-if (sourceDemandProducts.some((demand) => demand.requiredCapability === 'validation.service-resolvers' && demand.admissionState !== 'admitted')) {
-  failures.push('Validation source service API demands should be admitted when ValidationConfiguration is registered.');
+if (sourceDemandProducts.some((demand) =>
+  demand.requiredCapability === 'validation.service-resolvers'
+  && demand.admissionState !== 'admitted'
+  && demand.admissionState !== 'admitted-chain-unproven'
+)) {
+  failures.push('Validation source service API demands should be admitted or admitted-chain-unproven when ValidationConfiguration is registered.');
 }
 if (appDiagnostics.rows.some((row) =>
   row.diagnosticDomain === 'framework'

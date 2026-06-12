@@ -1,6 +1,7 @@
 import type {
   AddressHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import type { KernelStoreRecord } from '../kernel/store.js';
@@ -35,6 +36,8 @@ export const enum FrameworkCapabilityDemandKind {
 
 export const enum FrameworkCapabilityAdmissionState {
   Admitted = 'admitted',
+  AdmittedChainUnproven = 'admitted-chain-unproven',
+  AdmissionUnknown = 'admission-unknown',
   NotAdmitted = 'not-admitted',
 }
 
@@ -80,6 +83,7 @@ export class FrameworkCapabilityDemand {
     readonly requiredRegistrationKinds: readonly FrameworkRegistrationKind[],
     readonly candidateModuleNames: readonly string[],
     readonly admissionState: FrameworkCapabilityAdmissionState,
+    readonly blockingOpenSeamHandles: readonly OpenSeamHandle[],
     readonly availabilityState: FrameworkCapabilityAvailabilityState,
     readonly packageEvidence: readonly FrameworkCapabilityPackageEvidence[],
     readonly recommendedModuleName: string | null,

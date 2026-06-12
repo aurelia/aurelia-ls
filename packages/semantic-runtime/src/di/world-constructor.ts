@@ -30,7 +30,6 @@ import {
   AppTaskDefinition,
 } from '../configuration/app-task.js';
 import {
-  ConfigurationSequenceKind,
   type ConfigurationStep,
 } from '../configuration/configuration-sequence.js';
 import {
@@ -448,7 +447,6 @@ function registrationAdmissionStrategyLabel(admission: RegistrationAdmissionProd
 
 interface DiConfigurationSequenceIndex {
   readonly containerBySequenceProduct: ReadonlyMap<ProductHandle, Container>;
-  readonly sequenceKindByProduct: ReadonlyMap<ProductHandle, ConfigurationSequenceKind>;
 }
 
 class DiWorldConstructionFrame {
@@ -654,9 +652,7 @@ export class DiWorldConstructor {
     aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
   ): DiConfigurationSequenceIndex {
     const containerBySequenceProduct = new Map<ProductHandle, Container>();
-    const sequenceKindByProduct = new Map<ProductHandle, ConfigurationSequenceKind>();
     for (const sequence of configuration.sequences) {
-      sequenceKindByProduct.set(sequence.productHandle, sequence.sequenceKind);
       if (sequence.aurelia?.productHandle == null) {
         continue;
       }
@@ -665,7 +661,7 @@ export class DiWorldConstructor {
         containerBySequenceProduct.set(sequence.productHandle, container);
       }
     }
-    return { containerBySequenceProduct, sequenceKindByProduct };
+    return { containerBySequenceProduct };
   }
 
   private spendConfigurationSteps(
@@ -681,13 +677,10 @@ export class DiWorldConstructor {
 
       const container = this.containerForStep(step, sequenceIndex.containerBySequenceProduct);
       if (container == null) {
-        if (!this.stepBelongsToAppSequence(step, sequenceIndex.sequenceKindByProduct)) {
-          continue;
-        }
         frame.recordOpenSeam(recordsForDiOpenSeam(this.store,
           `di-open-container:${step.productHandle}`,
           KernelVocabulary.Di.OpenRegistrationSpending.key,
-          'Configuration step admitted registrations, but DI world construction could not identify the receiving container.',
+          'Configuration step admitted registrations, but DI world construction could not identify or model the receiving container.',
           step.sourceAddressHandle,
           [OpenSeamReasonKind.DiRegistrationContainerOpen],
         ));
@@ -719,14 +712,6 @@ export class DiWorldConstructor {
     return step.sequence?.productHandle == null
       ? null
       : containerBySequenceProduct.get(step.sequence.productHandle) ?? null;
-  }
-
-  private stepBelongsToAppSequence(
-    step: ConfigurationStep,
-    sequenceKindByProduct: ReadonlyMap<ProductHandle, ConfigurationSequenceKind>,
-  ): boolean {
-    return step.sequence?.productHandle != null
-      && sequenceKindByProduct.get(step.sequence.productHandle) === ConfigurationSequenceKind.App;
   }
 
   private recordsForRegistrationSpending(

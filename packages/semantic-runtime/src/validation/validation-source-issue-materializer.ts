@@ -36,6 +36,7 @@ import { FrameworkRegistrationKind } from '../registration/registration-referenc
 import type { TypeSystemProject } from '../type-system/project.js';
 import { symbolForExpression } from '../type-system/checker-node-helpers.js';
 import {
+  frameworkDeclarationSourceSpec,
   type FrameworkDeclarationSourcePathIndex,
   typeMatchesFrameworkDeclarationSource,
 } from '../type-system/framework-declaration-source.js';
@@ -74,19 +75,19 @@ const VALIDATION_RULES_EXPORTS = new Set([
 
 const VALIDATION_DECLARATION_SOURCE_FRAGMENTS = [
   '/aurelia/packages/validation/src/',
-  '/@aurelia/validation/',
-  '/@aurelia+validation',
 ] as const;
 
-const VALIDATION_RULES_DECLARATIONS = {
-  names: VALIDATION_RULES_EXPORTS,
-  sourcePathFragments: VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
-} as const;
+const VALIDATION_RULES_DECLARATIONS = frameworkDeclarationSourceSpec(
+  VALIDATION_RULES_EXPORTS,
+  ['@aurelia/validation', '@aurelia/validation-html'],
+  VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
+);
 
-const VALIDATION_PROPERTY_RULE_DECLARATIONS = {
-  names: new Set(['PropertyRule']),
-  sourcePathFragments: VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
-} as const;
+const VALIDATION_PROPERTY_RULE_DECLARATIONS = frameworkDeclarationSourceSpec(
+  new Set(['PropertyRule']),
+  ['@aurelia/validation', '@aurelia/validation-html'],
+  VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
+);
 
 const PROPERTY_RULE_RESET_METHODS = new Set([
   'ensure',
@@ -901,6 +902,14 @@ function expressionIsValidationRulesRoot(
     context.bindings,
     VALIDATION_RULES_EXPORTS,
   )) {
+    return true;
+  }
+  if (context.sourceApiRoots.serviceRootIdentityForExpression(
+    context.sourcePath,
+    context.sourceFile,
+    current,
+    VALIDATION_RULES_EXPORTS,
+  ) != null) {
     return true;
   }
   if (ts.isIdentifier(current)) {

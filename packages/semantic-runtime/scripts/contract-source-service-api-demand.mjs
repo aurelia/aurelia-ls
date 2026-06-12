@@ -14,28 +14,17 @@ import {
   diagnosticActionPlanReadinessForCluster,
 } from '../out/index.js';
 import { FrameworkProductDetails } from '../out/framework/product-details.js';
+import { KernelVocabulary } from '../out/kernel/vocabulary.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/source-service-api-demand');
 
-const runtime = await createSemanticRuntime({
-  workspaceRoot: fixtureRoot,
-  storeKey: 'source-service-api-demand-contract',
-});
-const app = await runtime.openApp({
-  analysisDepth: 'binding-targets',
-});
-const appDiagnostics = app.ask({
-  kind: SemanticAppQueryKind.AppDiagnostics,
-  detail: 'handles',
-  page: { size: 50 },
-}).value;
-const capabilityDemands = runtime.workspace.store.productDetails
-  .readBySlot(FrameworkProductDetails.CapabilityDemand)
-  .map((entry) => entry.detail);
-const serviceRoots = runtime.workspace.store.productDetails
-  .readBySlot(FrameworkProductDetails.ServiceRoot)
-  .map((entry) => entry.detail);
+const primary = await readFixture('source-service-api-demand-contract');
+const secondary = await readFixture('source-service-api-demand-contract-secondary');
+const appDiagnostics = primary.appDiagnostics;
+const capabilityDemands = primary.capabilityDemands;
+const serviceRoots = primary.serviceRoots;
+const providedDiKeyNames = providedDiKeyInterfaceNames(primary.store);
 
 const failures = [];
 const sourceDemandDiagnostics = appDiagnostics.rows.filter((row) =>
@@ -45,10 +34,15 @@ const sourceDemandDiagnostics = appDiagnostics.rows.filter((row) =>
 const sourceDemandProducts = capabilityDemands.filter((demand) =>
   demand.siteKind === 'source-service-api'
 );
+const secondarySourceDemandProducts = secondary.capabilityDemands.filter((demand) =>
+  demand.siteKind === 'source-service-api'
+);
 const missingInputs = sourceDemandDiagnostics
   .map((row) => row.missingInput)
   .filter(Boolean)
   .sort();
+const primaryDemandHandleSuffixes = productHandleLocalSuffixes(sourceDemandProducts);
+const secondaryDemandHandleSuffixes = productHandleLocalSuffixes(secondarySourceDemandProducts);
 
 if (sourceDemandDiagnostics.length !== 2) {
   failures.push(`Expected two source service API framework capability diagnostics, observed ${sourceDemandDiagnostics.length}.`);
@@ -58,6 +52,21 @@ if (missingInputs.join(',') !== 'dialog.service-resolvers,validation.service-res
 }
 if (sourceDemandDiagnostics.some((row) => row.suggestion?.suggestionKind !== 'register-framework-capability')) {
   failures.push('Expected source service API diagnostics to carry register-framework-capability suggestions.');
+}
+if (sourceDemandDiagnostics.some((row) =>
+  row.missingInput === 'dialog.service-resolvers'
+  && row.relatedQueryKind !== SemanticAppQueryKind.DialogIssues
+)) {
+  failures.push('Expected dialog source service API diagnostics to point at dialog-issues as their related query lane.');
+}
+if (sourceDemandDiagnostics.some((row) =>
+  row.missingInput === 'validation.service-resolvers'
+  && row.relatedQueryKind !== SemanticAppQueryKind.ValidationIssues
+)) {
+  failures.push('Expected validation source service API diagnostics to point at validation-issues as their related query lane.');
+}
+if (sourceDemandDiagnostics.some((row) => row.handles?.productHandle == null || row.handles?.ownerIdentityHandle == null)) {
+  failures.push('Expected source service API diagnostics to expose demand product handles and service-root owner handles.');
 }
 if (sourceDemandDiagnostics.some((row) => row.suggestion?.actionTarget?.targetKind !== 'framework-capability')) {
   failures.push('Expected source service API diagnostic action targets to classify as framework-capability.');
@@ -84,14 +93,26 @@ if (actionProbe.readiness !== DiagnosticActionPlanReadiness.SourceEditPolicyOpen
 if (sourceDemandProducts.length !== 2) {
   failures.push(`Expected two source-service-api capability demand products, observed ${sourceDemandProducts.length}.`);
 }
+if (primaryDemandHandleSuffixes.join(',') !== secondaryDemandHandleSuffixes.join(',')) {
+  failures.push(`Expected source-service demand local handle suffixes to be stable across store keys, observed ${primaryDemandHandleSuffixes.join(',')} vs ${secondaryDemandHandleSuffixes.join(',')}.`);
+}
 if (sourceDemandProducts.some((demand) => demand.admissionState !== 'not-admitted')) {
   failures.push('Source service API demand products should be not-admitted when only StandardConfiguration is registered.');
+}
+if (sourceDemandProducts.some((demand) => (demand.blockingOpenSeamHandles?.length ?? 0) !== 0)) {
+  failures.push('StandardConfiguration-only missing service demands should not link blocking open seams.');
 }
 if (sourceDemandProducts.some((demand) => demand.availabilityState !== 'evidence-found')) {
   failures.push('Source service API demand products should retain package/import availability evidence.');
 }
 if (sourceDemandProducts.some((demand) => demand.ownerIdentityHandle == null)) {
   failures.push('Source service API demand products should be owned by the framework.service-root identity that justified them.');
+}
+if (providedDiKeyNames.has('IDialogService')) {
+  failures.push('StandardConfiguration-only app should not publish a Di.ProvidesKey claim for IDialogService.');
+}
+if (providedDiKeyNames.has('IValidationRules')) {
+  failures.push('StandardConfiguration-only app should not publish a Di.ProvidesKey claim for IValidationRules.');
 }
 if (!serviceRoots.some((root) =>
   root.rootKind === 'service'
@@ -114,7 +135,10 @@ if (failures.length > 0) {
     failures,
     sourceDemandDiagnostics,
     sourceDemandProducts,
+    primaryDemandHandleSuffixes,
+    secondaryDemandHandleSuffixes,
     actionProbe,
+    providedDiKeyNames: [...providedDiKeyNames],
   }, null, 2));
   process.exitCode = 1;
 } else {
@@ -124,10 +148,57 @@ if (failures.length > 0) {
       sourceDemandDiagnostics: sourceDemandDiagnostics.length,
       sourceDemandProducts: sourceDemandProducts.length,
       missingInputs,
+      demandHandleSuffixes: primaryDemandHandleSuffixes,
       serviceRoots: serviceRoots.length,
       actionPlanKind: actionProbe.planKind,
     },
   }, null, 2));
+}
+
+async function readFixture(storeKey) {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: fixtureRoot,
+    storeKey,
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-targets',
+  });
+  const appDiagnostics = app.ask({
+    kind: SemanticAppQueryKind.AppDiagnostics,
+    detail: 'handles',
+    page: { size: 50 },
+  }).value;
+  return {
+    runtime,
+    app,
+    store: runtime.workspace.store,
+    appDiagnostics,
+    capabilityDemands: runtime.workspace.store.productDetails
+      .readBySlot(FrameworkProductDetails.CapabilityDemand)
+      .map((entry) => entry.detail),
+    serviceRoots: runtime.workspace.store.productDetails
+      .readBySlot(FrameworkProductDetails.ServiceRoot)
+      .map((entry) => entry.detail),
+  };
+}
+
+function providedDiKeyInterfaceNames(store) {
+  const providedIdentityHandles = new Set(
+    store.readClaims()
+      .filter((claim) => claim.predicateKey === KernelVocabulary.Di.ProvidesKey.key)
+      .map((claim) => claim.objectHandle),
+  );
+  const names = new Set();
+  for (const identity of store.readIdentities()) {
+    if (
+      identity.kind === 'di-key-identity'
+      && identity.keyKind === 'interface'
+      && providedIdentityHandles.has(identity.handle)
+    ) {
+      names.add(identity.interfaceName);
+    }
+  }
+  return names;
 }
 
 function readDiagnosticActionProbe(suggestion) {
@@ -149,4 +220,13 @@ function readDiagnosticActionProbe(suggestion) {
       [],
     ),
   };
+}
+
+function productHandleLocalSuffixes(products) {
+  return products
+    .map((product) => {
+      const handle = String(product.productHandle);
+      return handle.split(':product:')[1] ?? handle;
+    })
+    .sort();
 }

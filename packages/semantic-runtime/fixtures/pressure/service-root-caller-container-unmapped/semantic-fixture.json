@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "framework-service-root-pressure",
+  "pressureOrigin": "service-root-caller-container-unmapped",
+  "expectedEffects": [
+    "source-service-admission-unknown",
+    "caller-container-unmapped"
+  ],
+  "effectContractIds": [
+    "service-root-admission-chain"
+  ]
+}

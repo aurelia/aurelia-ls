@@ -11153,6 +11153,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "StandardConfiguration",
       "framework capability demand",
       "capability demand",
+      "framework service root",
+      "framework-service-root",
+      "framework.service-root",
+      "service-root substrate",
+      "source service API root",
+      "source-service-api",
+      "RootResolvesDiKey",
+      "RootUsesContainerRoot",
+      "admitted-chain-unproven",
+      "admission-unknown",
+      "container-chain",
+      "DiProductIdentity.containerHandle",
+      "source service admission chain",
+      "framework.open-service-root-candidate",
       "unregistered shorthand syntax",
       "ShortHandBindingSyntax",
       "framework-capability-not-registered",
@@ -11287,6 +11301,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "unregistered shorthand syntax ShortHandBindingSyntax framework capability demand",
         summary:
           "Authored optional syntax should route through semantic-runtime capability-demand products plus registration/package evidence, not parser-only or binding-scope patches.",
+      },
+      {
+        query:
+          "framework service-root source-service-api RootResolvesDiKey capability demand open candidate admitted-chain-unproven admission-unknown",
+        summary:
+          "Framework service-root work should route through world construction because source API roots join DI recognition, KernelStore products, app-world admission, chain-scoped capability-demand states, and diagnostics.",
+      },
+      {
+        query:
+          "source service admission chain DiProductIdentity.containerHandle di.provides-key admitted-chain-unproven",
+        summary:
+          "Source-service capability admission should use the DI container-chain helper over existing product identity and provides-key facts, not world-global provider checks or new membership predicates.",
       },
       {
         query: "custom configuration bundle",
@@ -11616,7 +11642,64 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "FrameworkCapabilityDemandMaterializer",
         role: "primary",
         summary:
-          "Publishes authored framework capability demands from compiled syntax, resource, and expression sites, joining app-world admission with manifest/import availability evidence.",
+          "Publishes authored framework capability demands from compiled syntax, resource, expression, and source-service sites, including chain-scoped source-service admission states.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/di/container-chain.ts",
+        symbolName: "DiContainerChainFacts",
+        role: "primary",
+        summary:
+          "Read-only DI chain helper that joins DiProductIdentity.containerHandle with di.provides-key for provider visibility without new membership vocabulary.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/framework/service-root-materializer.ts",
+        symbolName: "FrameworkServiceRootMaterializer",
+        role: "primary",
+        summary:
+          "Publishes framework service/container root products and open service-root candidate seams from DI scanners and source API facts.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/framework/source-api-root-recognition.ts",
+        symbolName: "AureliaSourceApiRootFacts",
+        role: "primary",
+        summary:
+          "Hot source API root index over DI resolve/container API sites, AppTask callback roots, and cross-source service-root product facts.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/framework/service-root-enrichment-materializer.ts",
+        symbolName: "FrameworkServiceRootEnrichmentMaterializer",
+        role: "supporting",
+        summary:
+          "Post-app-world enrichment that joins framework service roots to DI-key and container-root claim evidence.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:service-root-v2-edges",
+        role: "supporting",
+        summary:
+          "Contract for aliased resolve roots, module-scope resolve candidates, local resolve barrels, container resolver wrappers, and classic inject metadata.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:source-service-api-demand",
+        role: "supporting",
+        summary:
+          "Contract for unadmitted source service API capability demand, diagnostic actionability, and no false provided-key admission.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:service-root-admission-chain",
+        role: "supporting",
+        summary:
+          "Contract for chain-proven source-service admission, admitted-chain-unproven fallback, scoped admission-unknown seams, caller-unmapped containers, and multi-root cross-admission canaries.",
       },
       {
         kind: "source",
@@ -11769,6 +11852,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Source-local framework API issue memory stays in evaluator/world construction with diagnostics as a consumer.",
       },
       {
+        kind: "memory",
+        domains: ["semantic-runtime", "framework-capabilities", "kernel", "di", "diagnostics", "type-system", "api"],
+        role: "supporting",
+        summary:
+          "Framework service-root substrate memory belongs to world construction when source API roots, capability demand, DI-key claims, or candidate/open boundaries are touched.",
+      },
+      {
         kind: "framework-corpus",
         projection: "expected-effects",
         effectKind: "project-shape",
@@ -11797,6 +11887,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Static evaluator open seams and TypeScript checker facts.",
       "Aurelia DI/configuration framework source through auLink and framework lenses.",
       "KernelStore record ownership and world-construction entrypoint topology.",
+      "Framework service-root facts are positive only when DI activation, container get, or AppTask evidence proves an active container path; non-activation resolve and wrapper shapes remain candidate seams.",
       "ECMAScript declaration-instantiation order: class lexical cells are declared early, but static class properties evaluate when the class declaration executes.",
       "Atlas performance/profile lenses when evaluator growth obscures navigation.",
     ],

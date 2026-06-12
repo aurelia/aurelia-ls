@@ -424,7 +424,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
     this.enrichFrameworkServiceRoots(serviceRoots);
     const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
-    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, serviceRoots);
+    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, configuration, serviceRoots);
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
@@ -544,6 +544,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeFrameworkCapabilityDemands(
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
+    configuration: ConfigurationRecognitionProjectResult,
     serviceRoots: FrameworkServiceRootMaterializationResult,
   ): FrameworkCapabilityDemandProjectResult {
     return this.measure('framework-capability-demands', () =>
@@ -551,6 +552,7 @@ class AureliaAppWorldProjectConstructionFrame {
         this.project,
         typeSystem,
         templates,
+        configuration.readConfiguration(),
         serviceRoots.readRoots(),
       )
     );

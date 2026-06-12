@@ -246,9 +246,29 @@ const contractSuites = [
   ], 'contract-source-service-api-demand.mjs', 'Source service API roots produce framework capability demands when their plugin service resolvers are not registered.'),
   contract('framework', 'fast', [
     'framework',
+    'di',
+    'open-seams',
+    'source-address',
+    'query-claim',
+  ], 'contract-service-root-v2-edges.mjs', 'Framework service-root substrate preserves aliased, exported, wrapper, and classic-injection edge evidence without overclaiming registration.'),
+  contract('framework', 'fast', [
+    'framework',
+    'di',
+    'open-seams',
+    'configuration',
+    'diagnostics',
+  ], 'contract-service-root-admission-chain.mjs', 'Source-service capability admission is chain-proven when possible and degrades to explicit unproven or unknown states without false diagnostics.'),
+  contract('framework', 'fast', [
+    'framework',
     'open-seams',
     'source-address',
   ], 'contract-service-root-candidate-rollup.mjs', 'Framework service-root candidates cap detailed seams while preserving an explicit source-backed rollup.'),
+  contract('type-system', 'fast', [
+    'type-system',
+    'framework',
+    'package-source',
+    'checker',
+  ], 'contract-framework-declaration-source-paths.mjs', 'Framework declaration-source matching admits monorepo and package-root paths without admitting lookalike package names.'),
   contract('i18n', 'fast', [
     'i18n',
     'binding',

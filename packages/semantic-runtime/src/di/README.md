@@ -175,9 +175,10 @@ records, DI key identities, resolver products and resolver slots, resource slots
 registry/parameterized-registry products, framework-created AppTask products, and `IContainer` self-resolver slots.
 Keep these product/source/claim envelopes there instead of rebuilding them inside the world-construction traversal.
 
-Plugin, builder, and registry-body sequences can exist in a project without being attached to an app root. DI world
-construction skips those unattached sequences instead of emitting missing-container seams; the seam is reserved for
-app-owned configuration sequences that should have produced a root container but did not.
+Plugin, builder, registry-body, and standalone container-registration sequences can exist in a project without being
+attached to an app root. DI world construction preserves their unspent registration pressure as
+`di.open-registration-spending` seams with `di-registration-container-open` when the receiving container cannot be
+identified, rather than silently spending them into a nearby app root or publishing a world-global provider.
 
 Recursive registry-body spending is owned by `DiRegistrationSpendingCascade`. The cascade is a construction-time
 traversal object that owns the visited-admission set and admission lookup while each per-admission
@@ -213,6 +214,10 @@ The current spending path is intentionally narrow but end-to-end:
 - registration operations point at their emitted resolver, registry, AppTask, and slot products through `di.produces-product`
   claims;
 - resolver products, resolver slots, and resource slots produce `di.provides-key` claims;
+- `container-chain.ts` is the read-only chain helper for consumers that need provider visibility. It treats
+  `DiProductIdentity.containerHandle` as the canonical product-to-container owner and joins that with
+  `di.provides-key`; do not introduce another slot/container membership predicate unless the kernel vocabulary is being
+  intentionally redesigned.
 - duplicate source/static `$au` resource-key publication produces a `DiIssue` product and skips the incoming slot,
   matching the framework's kernel warning path for `AUR0007`; duplicate runtime-html definition registration produces
   `ResourceIssue` warnings (`AUR0153`-`AUR0156`) instead;

@@ -21,6 +21,7 @@ import {
   sourceRootSymbolForPropertyName,
 } from '../framework/source-api-root-recognition.js';
 import {
+  frameworkDeclarationSourceSpec,
   symbolMatchesFrameworkDeclarationSource,
   type FrameworkDeclarationSourcePathIndex,
   typeMatchesFrameworkDeclarationSource,
@@ -70,14 +71,13 @@ const FETCH_CLIENT_ROOT_EXPORTS = new Set([
 
 const FETCH_CLIENT_DECLARATION_SOURCE_FRAGMENTS = [
   '/aurelia/packages/fetch-client/src/',
-  '/@aurelia/fetch-client/',
-  '/@aurelia+fetch-client',
 ] as const;
 
-const FETCH_CLIENT_ROOT_DECLARATIONS = {
-  names: FETCH_CLIENT_ROOT_EXPORTS,
-  sourcePathFragments: FETCH_CLIENT_DECLARATION_SOURCE_FRAGMENTS,
-} as const;
+const FETCH_CLIENT_ROOT_DECLARATIONS = frameworkDeclarationSourceSpec(
+  FETCH_CLIENT_ROOT_EXPORTS,
+  ['@aurelia/fetch-client'],
+  FETCH_CLIENT_DECLARATION_SOURCE_FRAGMENTS,
+);
 
 const DOM_HEADERS_DECLARATIONS = {
   names: new Set(['Headers']),
@@ -658,6 +658,14 @@ function expressionIsFetchClientRoot(
     context.bindings,
     FETCH_CLIENT_ROOT_EXPORTS,
   )) {
+    return true;
+  }
+  if (context.sourceApiRoots.serviceRootIdentityForExpression(
+    context.sourcePath,
+    context.sourceFile,
+    current,
+    FETCH_CLIENT_ROOT_EXPORTS,
+  ) != null) {
     return true;
   }
   if (ts.isIdentifier(current)) {

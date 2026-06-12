@@ -51,8 +51,10 @@ export class AureliaSourceApiRootFacts {
   private readonly serviceRootProductFacts: readonly AureliaSourceApiRootProductFact[];
   private readonly serviceRootProductsBySpan: ReadonlyMap<string, readonly FrameworkServiceRoot[]>;
   private readonly serviceRootProductsBySymbol: ReadonlyMap<string, ReadonlyMap<ts.Symbol, readonly FrameworkServiceRoot[]>>;
+  private readonly serviceRootProductsBySymbolAnySource: ReadonlyMap<ts.Symbol, readonly FrameworkServiceRoot[]>;
   private readonly containerRootProductsBySpan: ReadonlyMap<string, readonly FrameworkServiceRoot[]>;
   private readonly containerRootProductsBySymbol: ReadonlyMap<string, ReadonlyMap<ts.Symbol, readonly FrameworkServiceRoot[]>>;
+  private readonly containerRootProductsBySymbolAnySource: ReadonlyMap<ts.Symbol, readonly FrameworkServiceRoot[]>;
   private readonly appTaskCallbackRootsBySourcePath: ReadonlyMap<string, readonly AureliaSourceAppTaskCallbackRoot[]>;
 
   constructor(
@@ -70,8 +72,10 @@ export class AureliaSourceApiRootFacts {
     this.serviceRootProductFacts = serviceRootProductFacts;
     this.serviceRootProductsBySpan = groupRootProductsBySpan(serviceRootProductFacts, FrameworkServiceRootKind.Service);
     this.serviceRootProductsBySymbol = groupRootProductsBySymbol(serviceRootProductFacts, FrameworkServiceRootKind.Service);
+    this.serviceRootProductsBySymbolAnySource = groupRootProductsBySymbolAnySource(serviceRootProductFacts, FrameworkServiceRootKind.Service);
     this.containerRootProductsBySpan = groupRootProductsBySpan(serviceRootProductFacts, FrameworkServiceRootKind.Container);
     this.containerRootProductsBySymbol = groupRootProductsBySymbol(serviceRootProductFacts, FrameworkServiceRootKind.Container);
+    this.containerRootProductsBySymbolAnySource = groupRootProductsBySymbolAnySource(serviceRootProductFacts, FrameworkServiceRootKind.Container);
     this.appTaskCallbackRoots = appTaskCallbackRoots;
     this.appTaskCallbackRootsBySourcePath = groupAppTaskCallbackRootsBySourcePath(appTaskCallbackRoots);
   }
@@ -261,9 +265,6 @@ export class AureliaSourceApiRootFacts {
     const productsBySpan = rootKind === FrameworkServiceRootKind.Container
       ? this.containerRootProductsBySpan
       : this.serviceRootProductsBySpan;
-    const productsBySymbol = rootKind === FrameworkServiceRootKind.Container
-      ? this.containerRootProductsBySymbol
-      : this.serviceRootProductsBySymbol;
     if (ts.isCallExpression(current) || ts.isNewExpression(current)) {
       return firstMatchingRootProduct(
         productsBySpan.get(sourcePathSpanLookupKey({
@@ -278,10 +279,7 @@ export class AureliaSourceApiRootFacts {
       const symbol = symbolForExpression(this.checker, current);
       return symbol == null
         ? null
-        : firstMatchingRootProduct(
-          productsBySymbol.get(sourcePath)?.get(symbol) ?? [],
-          serviceExports,
-        );
+        : this.frameworkRootProductForSymbol(sourcePath, symbol, rootKind, serviceExports);
     }
     if (
       ts.isPropertyAccessExpression(current)
@@ -290,10 +288,38 @@ export class AureliaSourceApiRootFacts {
       const symbol = symbolForExpression(this.checker, current.name);
       return symbol == null
         ? null
-        : firstMatchingRootProduct(
-          productsBySymbol.get(sourcePath)?.get(symbol) ?? [],
-          serviceExports,
-        );
+        : this.frameworkRootProductForSymbol(sourcePath, symbol, rootKind, serviceExports);
+    }
+    return null;
+  }
+
+  private frameworkRootProductForSymbol(
+    sourcePath: string,
+    symbol: ts.Symbol,
+    rootKind: FrameworkServiceRootKind,
+    serviceExports?: ReadonlySet<string>,
+  ): FrameworkServiceRoot | null {
+    const productsBySymbol = rootKind === FrameworkServiceRootKind.Container
+      ? this.containerRootProductsBySymbol
+      : this.serviceRootProductsBySymbol;
+    const productsBySymbolAnySource = rootKind === FrameworkServiceRootKind.Container
+      ? this.containerRootProductsBySymbolAnySource
+      : this.serviceRootProductsBySymbolAnySource;
+    for (const candidate of symbolAndAliasedSymbol(this.checker, symbol)) {
+      const sameSource = firstMatchingRootProduct(
+        productsBySymbol.get(sourcePath)?.get(candidate) ?? [],
+        serviceExports,
+      );
+      if (sameSource != null) {
+        return sameSource;
+      }
+      const crossSource = firstMatchingRootProduct(
+        productsBySymbolAnySource.get(candidate) ?? [],
+        serviceExports,
+      );
+      if (crossSource != null) {
+        return crossSource;
+      }
     }
     return null;
   }
@@ -626,6 +652,36 @@ function groupRootProductsBySymbol(
     }
   }
   return new Map([...mutable.entries()]);
+}
+
+function groupRootProductsBySymbolAnySource(
+  facts: readonly AureliaSourceApiRootProductFact[],
+  rootKind: FrameworkServiceRootKind,
+): ReadonlyMap<ts.Symbol, readonly FrameworkServiceRoot[]> {
+  const result = new Map<ts.Symbol, FrameworkServiceRoot[]>();
+  for (const fact of facts) {
+    if (fact.symbol == null || fact.root.rootKind !== rootKind) {
+      continue;
+    }
+    const existing = result.get(fact.symbol);
+    if (existing == null) {
+      result.set(fact.symbol, [fact.root]);
+    } else if (!existing.some((root) => root.productHandle === fact.root.productHandle)) {
+      existing.push(fact.root);
+    }
+  }
+  return result;
+}
+
+function symbolAndAliasedSymbol(
+  checker: ts.TypeChecker,
+  symbol: ts.Symbol,
+): readonly ts.Symbol[] {
+  if ((symbol.flags & ts.SymbolFlags.Alias) === 0) {
+    return [symbol];
+  }
+  const aliased = checker.getAliasedSymbol(symbol);
+  return aliased === symbol ? [symbol] : [symbol, aliased];
 }
 
 function firstMatchingRootProduct(

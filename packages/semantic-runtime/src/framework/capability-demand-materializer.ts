@@ -3,6 +3,10 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
+  sourceSpanContains,
+  type SourceSpanAddress,
+} from '../kernel/address.js';
+import {
   type BootPackageManifest,
   isHostPathWithin,
   manifestWorkspacesIncludeProject,
@@ -18,11 +22,11 @@ import type { SourceSpan } from '../expression/source-span.js';
 import type {
   AddressHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import {
-  DiKeyIdentityKind,
-} from '../kernel/identity.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { FrameworkIdentity } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -37,8 +41,21 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  sourceSpanAddressForAddress,
+} from '../kernel/source-address.js';
 import { uniqueStrings } from '../kernel/collections.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
+import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
+import type { AppTaskDefinition } from '../configuration/app-task.js';
+import type {
+  ConfigurationSequence,
+  ConfigurationStep,
+} from '../configuration/configuration-sequence.js';
+import {
+  type DiContainerChainFacts,
+  readDiContainerChainFacts,
+} from '../di/container-chain.js';
 import {
   FrameworkRegistrationCapability,
   frameworkRegistrationKindsForCapability,
@@ -101,6 +118,7 @@ import {
 import { FrameworkProductDetails } from './product-details.js';
 import {
   FrameworkServiceRoot,
+  FrameworkServiceRootBasis,
   FrameworkServiceRootKind,
   frameworkServiceRootBasisResolvesDiKey,
 } from './service-root.js';
@@ -110,7 +128,8 @@ interface CapabilityDemandSite {
   readonly demandKind: FrameworkCapabilityDemandKind;
   readonly requiredCapability: FrameworkRegistrationCapability;
   readonly authoredName: string;
-  readonly admitted: boolean;
+  readonly admissionState: FrameworkCapabilityAdmissionState;
+  readonly blockingOpenSeamHandles?: readonly OpenSeamHandle[];
   readonly sourceAddressHandle: AddressHandle | null;
   readonly ownerIdentityHandle: IdentityHandle | null;
   readonly resource?: TemplateResourceRuntimeAnalysisEmission;
@@ -141,10 +160,11 @@ export class FrameworkCapabilityDemandMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
+    configuration: ConfigurationKernelEmission | null = null,
     serviceRoots: readonly FrameworkServiceRoot[] = [],
   ): FrameworkCapabilityDemandProjectResult {
     const availability = readCapabilityAvailabilityEvidence(project, typeSystem);
-    const publications = capabilityDemandSites(this.store, templates, serviceRoots).map((site, index) =>
+    const publications = capabilityDemandSites(this.store, typeSystem, templates, configuration, serviceRoots).map((site, index) =>
       this.publishDemand(project, site, availability, index)
     );
     const records = publications.flatMap((publication) => publication.records);
@@ -180,9 +200,6 @@ export class FrameworkCapabilityDemandMaterializer {
     const packageEvidence = uniquePackageEvidence(
       candidatePackageNames.flatMap((packageName) => availability.byPackageName.get(packageName) ?? []),
     );
-    const admissionState = site.admitted
-      ? FrameworkCapabilityAdmissionState.Admitted
-      : FrameworkCapabilityAdmissionState.NotAdmitted;
     const availabilityState = packageEvidence.length > 0
       ? FrameworkCapabilityAvailabilityState.EvidenceFound
       : FrameworkCapabilityAvailabilityState.NoLocalEvidence;
@@ -196,7 +213,8 @@ export class FrameworkCapabilityDemandMaterializer {
       site.requiredCapability,
       frameworkRegistrationKindsForCapability(site.requiredCapability),
       candidateModuleNames,
-      admissionState,
+      site.admissionState,
+      site.blockingOpenSeamHandles ?? [],
       availabilityState,
       packageEvidence,
       recommendedModuleName,
@@ -212,7 +230,7 @@ export class FrameworkCapabilityDemandMaterializer {
         evidenceHandle,
         EvidenceKind.SemanticObservation,
         [EvidenceRole.Diagnostic, EvidenceRole.Configuration],
-        `Authored template ${site.siteKind} "${site.authoredName}" requires framework capability ${site.requiredCapability}.`,
+        `Authored ${site.siteKind} "${site.authoredName}" requires framework capability ${site.requiredCapability}.`,
         site.sourceAddressHandle,
       ),
       new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
@@ -242,7 +260,9 @@ export class FrameworkCapabilityDemandMaterializer {
 
 function capabilityDemandSites(
   store: KernelStore,
+  typeSystem: TypeSystemProject,
   templates: TemplateCompilationProjectEmission,
+  configuration: ConfigurationKernelEmission | null,
   serviceRoots: readonly FrameworkServiceRoot[],
 ): readonly CapabilityDemandSite[] {
   return uniqueDemandSites([
@@ -253,36 +273,351 @@ function capabilityDemandSites(
     ...bindingCommandCapabilityDemandSites(resource),
     ...resourceCapabilityDemandSites(resource),
     ...expressionResourceCapabilityDemandSites(store, resource),
-  ]).concat(sourceServiceApiCapabilityDemandSites(store, serviceRoots)));
+  ]).concat(sourceServiceApiCapabilityDemandSites(store, typeSystem, templates, configuration, serviceRoots)));
 }
 
 function sourceServiceApiCapabilityDemandSites(
   store: KernelStore,
+  typeSystem: TypeSystemProject,
+  templates: TemplateCompilationProjectEmission,
+  configuration: ConfigurationKernelEmission | null,
   serviceRoots: readonly FrameworkServiceRoot[],
 ): readonly CapabilityDemandSite[] {
-  const providedInterfaceNames = providedInterfaceDiKeyNames(store);
+  const admissionContext = new SourceServiceApiAdmissionContext(
+    store,
+    typeSystem,
+    templates,
+    configuration,
+    serviceRoots,
+  );
   return serviceRoots.flatMap((root): readonly CapabilityDemandSite[] => {
+    if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
+      return [];
+    }
     const descriptor = sourceServiceApiDemandDescriptor(root);
     if (descriptor == null) {
       return [];
     }
+    const admission = admissionContext.admissionForRoot(root);
     return [{
       siteKind: FrameworkCapabilityDemandSiteKind.SourceServiceApi,
       demandKind: descriptor.demandKind,
       requiredCapability: descriptor.requiredCapability,
       authoredName: root.serviceKeyName,
-      admitted: providedInterfaceNames.has(root.serviceKeyName),
+      admissionState: admission.admissionState,
+      blockingOpenSeamHandles: admission.blockingOpenSeamHandles,
       sourceAddressHandle: root.evidenceSourceAddressHandle ?? root.sourceAddressHandle,
       ownerIdentityHandle: root.identityHandle,
       localKeyParts: [
         'source-service-api',
-        localKeyPart(root.productHandle),
+        localKeyPart(root.projectKey),
+        localKeyPart(root.sourcePath),
+        root.rootKind,
         localKeyPart(root.serviceKeyName),
+        localKeyPart(descriptor.requiredCapability),
+        root.start.toString(),
+        root.end.toString(),
+        root.evidenceStart.toString(),
+        root.evidenceEnd.toString(),
       ],
       templateSourceAddressHandle: null,
       resourceDefinitionProductHandle: null,
     }];
   });
+}
+
+class SourceServiceApiAdmission {
+  constructor(
+    readonly admissionState: FrameworkCapabilityAdmissionState,
+    readonly blockingOpenSeamHandles: readonly OpenSeamHandle[] = [],
+  ) {}
+}
+
+class SourceServiceApiAdmissionContext {
+  private readonly chainFacts: DiContainerChainFacts;
+  private readonly resolvedDiKeyClaimsByRoot: ReadonlyMap<ProductHandle, readonly IdentityHandle[]>;
+  private readonly registrationHidingOpenSeams: readonly OpenSeam[];
+  private readonly registrationHidingOpenSeamContainerScopes: ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]>;
+  private readonly serviceRootsByProduct: ReadonlyMap<ProductHandle, FrameworkServiceRoot>;
+  private readonly consultingContainerCache = new Map<ProductHandle, IdentityHandle | null>();
+  private readonly consultingContainerStack = new Set<ProductHandle>();
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly typeSystem: TypeSystemProject,
+    private readonly templates: TemplateCompilationProjectEmission,
+    private readonly configuration: ConfigurationKernelEmission | null,
+    serviceRoots: readonly FrameworkServiceRoot[],
+  ) {
+    this.chainFacts = readDiContainerChainFacts(store);
+    this.resolvedDiKeyClaimsByRoot = rootResolvedDiKeyClaimsByRoot(store);
+    this.registrationHidingOpenSeams = registrationHidingOpenSeams(store);
+    this.registrationHidingOpenSeamContainerScopes = registrationHidingOpenSeamContainerScopes(store, configuration, this.chainFacts);
+    this.serviceRootsByProduct = new Map(serviceRoots.map((root) => [root.productHandle, root]));
+  }
+
+  admissionForRoot(root: FrameworkServiceRoot): SourceServiceApiAdmission {
+    if (!frameworkServiceRootBasisResolvesDiKey(root.basis)) {
+      return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
+    }
+    const resolvedKeyHandles = this.resolvedDiKeyClaimsByRoot.get(root.productHandle) ?? [];
+    const hasWorldProvider = resolvedKeyHandles.some((keyHandle) => this.chainFacts.hasProviderForKey(keyHandle));
+    const consultingContainer = this.consultingContainerIdentityForRoot(root);
+    if (!hasWorldProvider) {
+      const blockingOpenSeams = this.registrationHidingOpenSeamsForRoot(root, consultingContainer);
+      if (blockingOpenSeams.length > 0) {
+        return new SourceServiceApiAdmission(
+          FrameworkCapabilityAdmissionState.AdmissionUnknown,
+          blockingOpenSeams.map((seam) => seam.handle),
+        );
+      }
+      return consultingContainer == null
+        ? new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmissionUnknown)
+        : new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
+    }
+
+    if (
+      consultingContainer != null
+      && resolvedKeyHandles.some((keyHandle) => this.chainFacts.providerIsOnConsultingChain(keyHandle, consultingContainer))
+    ) {
+      return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.Admitted);
+    }
+    return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmittedChainUnproven);
+  }
+
+  private registrationHidingOpenSeamsForRoot(
+    root: FrameworkServiceRoot,
+    consultingContainer: IdentityHandle | null,
+  ): readonly OpenSeam[] {
+    const consultingChain = consultingContainer == null
+      ? null
+      : new Set(this.chainFacts.containerChainIdentityHandles(consultingContainer));
+    return this.registrationHidingOpenSeams.filter((seam) =>
+      this.registrationHidingOpenSeamBlocksRoot(seam, root, consultingChain)
+    );
+  }
+
+  private registrationHidingOpenSeamBlocksRoot(
+    seam: OpenSeam,
+    root: FrameworkServiceRoot,
+    consultingChain: ReadonlySet<IdentityHandle> | null,
+  ): boolean {
+    const scopedContainers = this.registrationHidingOpenSeamContainerScopes.get(seam.handle) ?? [];
+    if (scopedContainers.length > 0) {
+      return consultingChain == null
+        ? sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle)
+        : scopedContainers.some((container) => consultingChain.has(container));
+    }
+    return consultingChain == null
+      && sourceAddressesMayShareFile(this.store, root.sourceAddressHandle, seam.addressHandle);
+  }
+
+  private consultingContainerIdentityForRoot(root: FrameworkServiceRoot): IdentityHandle | null {
+    if (this.consultingContainerCache.has(root.productHandle)) {
+      return this.consultingContainerCache.get(root.productHandle) ?? null;
+    }
+    if (this.consultingContainerStack.has(root.productHandle)) {
+      return null;
+    }
+    this.consultingContainerStack.add(root.productHandle);
+    const resolved = this.resolveConsultingContainerIdentityForRoot(root);
+    this.consultingContainerStack.delete(root.productHandle);
+    this.consultingContainerCache.set(root.productHandle, resolved);
+    return resolved;
+  }
+
+  private resolveConsultingContainerIdentityForRoot(root: FrameworkServiceRoot): IdentityHandle | null {
+    switch (root.basis) {
+      case FrameworkServiceRootBasis.AppTaskDeclaredKey:
+        return this.appTaskConsultingContainerIdentity(root);
+      case FrameworkServiceRootBasis.ContainerGetBacked:
+        return this.containerGetConsultingContainerIdentity(root);
+      case FrameworkServiceRootBasis.DiActivationBacked:
+        return this.resourceActivationConsultingContainerIdentity(root);
+      case FrameworkServiceRootBasis.FrameworkTypeAnnotation:
+      case FrameworkServiceRootBasis.DirectConstructor:
+      case FrameworkServiceRootBasis.DeclarationSourceMatched:
+      case FrameworkServiceRootBasis.CandidateOpen:
+        return null;
+    }
+  }
+
+  private containerGetConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
+    if (root.ownerProductHandle == null) {
+      return null;
+    }
+    const owner = this.serviceRootsByProduct.get(root.ownerProductHandle) ?? null;
+    return owner == null
+      ? null
+      : this.consultingContainerIdentityForRoot(owner);
+  }
+
+  private appTaskConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
+    if (this.configuration == null) {
+      return null;
+    }
+    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    if (rootSpan == null) {
+      return null;
+    }
+    const containerHandles = this.configuration.appTasks.flatMap((appTask) => {
+      if (!appTaskContainsRoot(this.store, appTask, rootSpan)) {
+        return [];
+      }
+      const appRootContainerProductHandle = this.appRootContainerProductHandleForAppTask(appTask);
+      const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(appRootContainerProductHandle);
+      return containerIdentityHandle == null ? [] : [containerIdentityHandle];
+    });
+    return uniqueIdentityHandleOrNull(containerHandles);
+  }
+
+  private appRootContainerProductHandleForAppTask(appTask: AppTaskDefinition): ProductHandle | null {
+    if (this.configuration == null) {
+      return null;
+    }
+    const step = this.configuration.steps.find((candidate) => stepContainsAppTask(candidate, appTask)) ?? null;
+    const sequence = step == null
+      ? null
+      : sequenceForStep(this.configuration.sequences, step);
+    const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
+    const appRoot = appRootProductHandle == null
+      ? null
+      : this.configuration.appRoots.find((candidate) => candidate.productHandle === appRootProductHandle) ?? null;
+    return appRoot?.container.productHandle ?? null;
+  }
+
+  private resourceActivationConsultingContainerIdentity(root: FrameworkServiceRoot): IdentityHandle | null {
+    const rootSpan = sourceSpanAddressForAddress(this.store, root.sourceAddressHandle);
+    if (rootSpan == null) {
+      return null;
+    }
+    const containerHandles = [
+      ...this.templates.resources,
+      ...this.templates.authoringResources,
+    ].flatMap((resource) => {
+      if (!resourceDefinitionContainsSpan(this.store, this.typeSystem, resource, rootSpan)) {
+        return [];
+      }
+      const containerIdentityHandle = this.chainFacts.containerIdentityHandleForProduct(
+        resource.compilation.compilerWorld.container.productHandle,
+      );
+      return containerIdentityHandle == null ? [] : [containerIdentityHandle];
+    });
+    return uniqueIdentityHandleOrNull(containerHandles);
+  }
+}
+
+function appTaskContainsRoot(
+  store: KernelStore,
+  appTask: AppTaskDefinition,
+  rootSpan: SourceSpanAddress,
+): boolean {
+  const callbackSpan = sourceSpanAddressForAddress(store, appTask.callback?.addressHandle ?? null);
+  const keySpan = sourceSpanAddressForAddress(store, appTask.key?.addressHandle ?? null);
+  const taskSpan = sourceSpanAddressForAddress(store, appTask.sourceAddressHandle);
+  return spanContains(callbackSpan, rootSpan)
+    || spanContains(keySpan, rootSpan)
+    || spanContains(taskSpan, rootSpan);
+}
+
+function stepContainsAppTask(
+  step: ConfigurationStep,
+  appTask: AppTaskDefinition,
+): boolean {
+  return step.appTasks.some((reference) => reference.productHandle === appTask.productHandle);
+}
+
+function sequenceForStep(
+  sequences: readonly ConfigurationSequence[],
+  step: ConfigurationStep,
+): ConfigurationSequence | null {
+  const sequenceProductHandle = step.sequence?.productHandle ?? null;
+  return sequenceProductHandle == null
+    ? null
+    : sequences.find((sequence) => sequence.productHandle === sequenceProductHandle) ?? null;
+}
+
+function resourceDefinitionContainsSpan(
+  store: KernelStore,
+  typeSystem: TypeSystemProject,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  rootSpan: SourceSpanAddress,
+): boolean {
+  const definition = resource.compilation.definition;
+  if ([
+    sourceSpanAddressForAddress(store, definition.sourceAddressHandle),
+    sourceSpanAddressForAddress(store, definition.target.addressHandle),
+  ].some((span) => spanContains(span, rootSpan))) {
+    return true;
+  }
+  const targetName = definition.target.localName;
+  if (targetName == null) {
+    return false;
+  }
+  const sourceFilePath = sourceFilePathForSpan(store, rootSpan);
+  const sourceFile = sourceFilePath == null
+    ? null
+    : typeSystem.readProgramSourceFileByPath(sourceFilePath);
+  return sourceFile == null
+    ? false
+    : classDeclarationNamedContainsSpan(sourceFile, targetName, rootSpan);
+}
+
+function spanContains(
+  outer: SourceSpanAddress | null,
+  inner: SourceSpanAddress,
+): boolean {
+  return outer != null && sourceSpanContains(outer, inner);
+}
+
+function sourceFilePathForSpan(
+  store: KernelStore,
+  span: SourceSpanAddress,
+): string | null {
+  const file = store.readAddress(span.fileHandle);
+  return file?.kind === 'source-file-address' ? file.path : null;
+}
+
+function classDeclarationNamedContainsSpan(
+  sourceFile: ts.SourceFile,
+  className: string,
+  span: SourceSpanAddress,
+): boolean {
+  let matched = false;
+  const visit = (node: ts.Node): void => {
+    if (matched) {
+      return;
+    }
+    if (
+      ts.isClassDeclaration(node)
+      && node.name?.text === className
+      && node.getStart(sourceFile) <= span.start
+      && span.end <= node.end
+    ) {
+      matched = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return matched;
+}
+
+function uniqueIdentityHandleOrNull(
+  handles: readonly IdentityHandle[],
+): IdentityHandle | null {
+  const unique = new Set(handles);
+  return unique.size === 1
+    ? [...unique][0] ?? null
+    : null;
+}
+
+function admissionStateForBoolean(
+  admitted: boolean,
+): FrameworkCapabilityAdmissionState {
+  return admitted
+    ? FrameworkCapabilityAdmissionState.Admitted
+    : FrameworkCapabilityAdmissionState.NotAdmitted;
 }
 
 function syntaxCapabilityDemandSites(
@@ -430,7 +765,7 @@ function siteForAttributeSyntax(
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: syntax.rawName,
-    admitted,
+    admissionState: admissionStateForBoolean(admitted),
     sourceAddressHandle: syntax.sourceAddressHandle,
     ownerIdentityHandle: syntax.identityHandle,
     resource,
@@ -449,7 +784,7 @@ function siteForElementResource(
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName: lookupName,
-    admitted,
+    admissionState: admissionStateForBoolean(admitted),
     sourceAddressHandle: element.sourceAddressHandle,
     ownerIdentityHandle: element.identityHandle,
     resource,
@@ -496,7 +831,7 @@ function siteForExpressionResource(
     demandKind: demand.demandKind,
     requiredCapability: demand.requiredCapability,
     authoredName,
-    admitted,
+    admissionState: admissionStateForBoolean(admitted),
     sourceAddressHandle: expressionSource.handle,
     ownerIdentityHandle: parse.identityHandle,
     resource,
@@ -755,25 +1090,210 @@ function frameworkCapabilityDemandLocalKey(
   ].join(':');
 }
 
-function providedInterfaceDiKeyNames(
+function rootResolvedDiKeyClaimsByRoot(
   store: KernelStore,
-): ReadonlySet<string> {
-  const providedIdentityHandles = new Set(
-    store.readClaims()
-      .filter((claim) => claim.predicateKey === KernelVocabulary.Di.ProvidesKey.key)
-      .map((claim) => claim.objectHandle),
-  );
-  const result = new Set<string>();
-  for (const identity of store.readIdentities()) {
-    if (
-      identity.kind === 'di-key-identity'
-      && identity.keyKind === DiKeyIdentityKind.Interface
-      && providedIdentityHandles.has(identity.handle)
-    ) {
-      result.add(identity.interfaceName);
+): ReadonlyMap<ProductHandle, readonly IdentityHandle[]> {
+  const result = new Map<ProductHandle, IdentityHandle[]>();
+  for (const claim of store.readClaims()) {
+    if (claim.predicateKey !== KernelVocabulary.Framework.RootResolvesDiKey.key) {
+      continue;
+    }
+    const existing = result.get(claim.subjectHandle as ProductHandle);
+    if (existing == null) {
+      result.set(claim.subjectHandle as ProductHandle, [claim.objectHandle as IdentityHandle]);
+    } else {
+      existing.push(claim.objectHandle as IdentityHandle);
     }
   }
   return result;
+}
+
+function registrationHidingOpenSeams(
+  store: KernelStore,
+): readonly OpenSeam[] {
+  return store.readOpenSeams().filter(isRegistrationHidingOpenSeam);
+}
+
+function registrationHidingOpenSeamContainerScopes(
+  store: KernelStore,
+  configuration: ConfigurationKernelEmission | null,
+  chainFacts: DiContainerChainFacts,
+): ReadonlyMap<OpenSeamHandle, readonly IdentityHandle[]> {
+  const sequencesByProduct = new Map(
+    (configuration?.sequences ?? []).map((sequence) => [sequence.productHandle, sequence] as const),
+  );
+  const stepsByProduct = new Map(
+    (configuration?.steps ?? []).map((step) => [step.productHandle, step] as const),
+  );
+  const stepsByRegistrationAdmissionProduct = configurationStepsByRegistrationAdmissionProduct(configuration?.steps ?? []);
+  const appRootContainerProductsByAppRootProduct = new Map(
+    (configuration?.appRoots ?? []).flatMap((appRoot) =>
+      appRoot.container.productHandle == null
+        ? []
+        : [[appRoot.productHandle, appRoot.container.productHandle] as const]
+    ),
+  );
+  const result = new Map<OpenSeamHandle, IdentityHandle[]>();
+  for (const materialization of store.readMaterializations()) {
+    if (materialization.openSeamHandles.length === 0) {
+      continue;
+    }
+    const containers = uniqueIdentityHandles(materialization.productHandles.flatMap((productHandle) =>
+      scopedContainerIdentityHandlesForProduct(
+        productHandle,
+        stepsByProduct,
+        stepsByRegistrationAdmissionProduct,
+        sequencesByProduct,
+        appRootContainerProductsByAppRootProduct,
+        chainFacts,
+      )
+    ));
+    if (containers.length === 0) {
+      continue;
+    }
+    for (const seamHandle of materialization.openSeamHandles) {
+      appendIdentityHandles(result, seamHandle, containers);
+    }
+  }
+  return new Map([...result].map(([handle, containers]) => [handle, uniqueIdentityHandles(containers)]));
+}
+
+function scopedContainerIdentityHandlesForProduct(
+  productHandle: ProductHandle,
+  stepsByProduct: ReadonlyMap<ProductHandle, ConfigurationStep>,
+  stepsByRegistrationAdmissionProduct: ReadonlyMap<ProductHandle, readonly ConfigurationStep[]>,
+  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
+  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  chainFacts: DiContainerChainFacts,
+): readonly IdentityHandle[] {
+  const containers: IdentityHandle[] = [];
+  const diOwner = chainFacts.owningContainerIdentityHandleForProduct(productHandle);
+  if (diOwner != null) {
+    containers.push(diOwner);
+  }
+
+  const step = stepsByProduct.get(productHandle) ?? null;
+  const stepContainer = step == null
+    ? null
+    : containerIdentityHandleForConfigurationStep(step, sequencesByProduct, appRootContainerProductsByAppRootProduct, chainFacts);
+  if (stepContainer != null) {
+    containers.push(stepContainer);
+  }
+
+  for (const admissionStep of stepsByRegistrationAdmissionProduct.get(productHandle) ?? []) {
+    const admissionStepContainer = containerIdentityHandleForConfigurationStep(
+      admissionStep,
+      sequencesByProduct,
+      appRootContainerProductsByAppRootProduct,
+      chainFacts,
+    );
+    if (admissionStepContainer != null) {
+      containers.push(admissionStepContainer);
+    }
+  }
+
+  return uniqueIdentityHandles(containers);
+}
+
+function configurationStepsByRegistrationAdmissionProduct(
+  steps: readonly ConfigurationStep[],
+): ReadonlyMap<ProductHandle, readonly ConfigurationStep[]> {
+  const result = new Map<ProductHandle, ConfigurationStep[]>();
+  for (const step of steps) {
+    for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
+      const existing = result.get(admissionProductHandle);
+      if (existing == null) {
+        result.set(admissionProductHandle, [step]);
+      } else {
+        existing.push(step);
+      }
+    }
+  }
+  return result;
+}
+
+function containerIdentityHandleForConfigurationStep(
+  step: ConfigurationStep,
+  sequencesByProduct: ReadonlyMap<ProductHandle, ConfigurationSequence>,
+  appRootContainerProductsByAppRootProduct: ReadonlyMap<ProductHandle, ProductHandle>,
+  chainFacts: DiContainerChainFacts,
+): IdentityHandle | null {
+  const sequenceProductHandle = step.sequence?.productHandle ?? null;
+  const sequence = sequenceProductHandle == null
+    ? null
+    : sequencesByProduct.get(sequenceProductHandle) ?? null;
+  const appRootProductHandle = sequence?.appRoot?.productHandle ?? null;
+  return chainFacts.containerIdentityHandleForProduct(
+    appRootProductHandle == null
+      ? null
+      : appRootContainerProductsByAppRootProduct.get(appRootProductHandle) ?? null,
+  );
+}
+
+function appendIdentityHandles(
+  map: Map<OpenSeamHandle, IdentityHandle[]>,
+  key: OpenSeamHandle,
+  values: readonly IdentityHandle[],
+): void {
+  const existing = map.get(key);
+  if (existing == null) {
+    map.set(key, [...values]);
+  } else {
+    existing.push(...values);
+  }
+}
+
+function isRegistrationHidingOpenSeam(
+  seam: OpenSeam,
+): boolean {
+  switch (seam.seamKindKey) {
+    case KernelVocabulary.Di.OpenRegistryBody.key:
+      return true;
+    case KernelVocabulary.Di.OpenRegistrationSpending.key:
+      return seam.reasonKinds.some(isRegistrationHidingDiSpendingReason);
+    case KernelVocabulary.Registration.OpenKeyExpression.key:
+    case KernelVocabulary.Registration.OpenValueExpression.key:
+    case KernelVocabulary.Registration.OpenStrategy.key:
+    case KernelVocabulary.Registration.OpenSpread.key:
+    case KernelVocabulary.Registration.OpenAliasTarget.key:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function sourceAddressesMayShareFile(
+  store: KernelStore,
+  leftHandle: AddressHandle | null,
+  rightHandle: AddressHandle | null,
+): boolean {
+  const left = sourceSpanAddressForAddress(store, leftHandle);
+  const right = sourceSpanAddressForAddress(store, rightHandle);
+  return left == null
+    || right == null
+    || left.fileHandle === right.fileHandle;
+}
+
+function uniqueIdentityHandles(
+  handles: readonly IdentityHandle[],
+): readonly IdentityHandle[] {
+  return [...new Set(handles)];
+}
+
+function isRegistrationHidingDiSpendingReason(
+  reason: OpenSeamReasonKind,
+): boolean {
+  switch (reason) {
+    case OpenSeamReasonKind.DiRegistrationContainerOpen:
+    case OpenSeamReasonKind.DiRegistrationAdmissionOpen:
+    case OpenSeamReasonKind.DiRegistrationKeyOpen:
+    case OpenSeamReasonKind.DiRegistrationStrategyOpen:
+    case OpenSeamReasonKind.DiRegistrationPublicationOpen:
+    case OpenSeamReasonKind.DiRegistryBodyOpen:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function readCapabilityAvailabilityEvidence(

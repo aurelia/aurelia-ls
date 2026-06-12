@@ -254,17 +254,21 @@
         "framework-capabilities",
         "kernel",
         "di",
-        "diagnostics"
+        "diagnostics",
+        "type-system",
+        "api"
       ],
-      "summary": "Framework service-root facts are first-class semantic-runtime kernel products used for source API diagnostics, DI-key enrichment, and framework capability demand.",
-      "rationale": "Dialog, validation, fetch-client, and future plugin source APIs can all need the same authored evidence: a service/root value came from DI activation, container get, AppTask declaration, framework type annotation, or a direct constructor. Keeping this as a `framework.service-root` product with provenance, source/evidence spans, DI-key claims, and candidate open seams prevents each domain from re-recognizing framework service usage locally or promoting TypeChecker/evaluator hints into positive claims without source-backed admission.",
+      "summary": "Framework service-root facts are first-class semantic-runtime kernel products used for source API diagnostics, DI-key enrichment, capability demand, and candidate/open boundaries.",
+      "rationale": "Dialog, validation, fetch-client, and future plugin source APIs can all need the same authored evidence: a service/root value came from DI activation, container get, AppTask declaration, framework type annotation, direct constructor, or an unresolved-but-framework-shaped candidate such as non-activation `resolve(...)`, resolver wrappers, local resolve barrels, and classic injection metadata. Keeping this as a `framework.service-root` product plus `framework.open-service-root-candidate` seams with provenance, source/evidence spans, DI-key claims, and demand diagnostics prevents each domain from re-recognizing framework service usage locally or promoting TypeChecker/evaluator hints into positive claims without source-backed admission.",
       "guidance": [
         "Start in `packages/semantic-runtime/src/framework/service-root.ts`, `service-root-materializer.ts`, and `service-root-enrichment-materializer.ts` when a framework service usage must justify diagnostics, capability demand, or cross-domain ownership.",
-        "Use `AureliaSourceApiRootFacts` from `source-api-root-recognition.ts` as the hot index over service-root products and source spans; do not add parallel span-key maps in dialog, validation, fetch-client, or completion code.",
+        "Use `AureliaSourceApiRootFacts` from `source-api-root-recognition.ts` as the hot index over service-root products, source spans, same-source symbols, cross-source aliased symbols, and container roots; do not add parallel span-key maps in dialog, validation, fetch-client, or completion code.",
         "Only DI-resolution-backed service-root bases should join to DI keys or create source-service capability demand. Update `frameworkServiceRootBasisResolvesDiKey(...)` when adding a new basis.",
-        "Use `FrameworkCapabilityDemandSiteKind.SourceServiceApi` when an authored DI-backed root references a plugin service key whose framework registration is required. Check framework source semantics before adding a new key: some interfaces, such as fetch-client `IHttpClient`, have default aliases and should not demand app registration.",
-        "Candidate service-root shapes should publish source-backed `framework.open-service-root-candidate` seams with explicit reason/rollup policy rather than silently dropping or fabricating roots.",
-        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows."
+        "Use `FrameworkCapabilityDemandSiteKind.SourceServiceApi` when an authored DI-backed root references a plugin service key whose framework registration is required. Admission should join the root's `Framework.RootResolvesDiKey` claims through `di/container-chain.ts`, using `DiProductIdentity.containerHandle` plus `Di.ProvidesKey` to prove provider visibility on the consulting container chain; do not fall back to plain service-key-name strings or world-global provider presence. Check framework source semantics before adding a new key: some interfaces, such as fetch-client `IHttpClient`, have default aliases and should not demand app registration.",
+        "Source-service capability demand admission has four states: `admitted` for chain-proven providers, `admitted-chain-unproven` when a provider exists but the consulting chain cannot be proven, `admission-unknown` when no provider exists but same-chain registration-hiding seams or an unmapped consulting container block accusation, and `not-admitted` for missing providers with a mapped consulting chain and no blocking seam. Only `not-admitted` should emit `framework-capability-not-registered`.",
+        "Candidate service-root shapes should publish source-backed `framework.open-service-root-candidate` seams with explicit reason/rollup policy rather than silently dropping or fabricating roots. Non-activation `resolve(...)` sites, including module-scope `definitely-absent` ambient container sites, are candidates rather than positive roots.",
+        "Framework declaration-source matching belongs in `type-system/framework-declaration-source.ts`; domain readers should use package-root-aware specs instead of local pnpm/yarn path fragments.",
+        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows. Source-service diagnostics should point to related domain lanes such as `dialog-issues` or `validation-issues`, and expose demand/root handles when detail is requested."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -296,7 +300,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
           "symbolName": "FrameworkCapabilityDemandMaterializer",
-          "summary": "Source-service API demand and admission joins against framework registration evidence."
+          "summary": "Source-service API demand and chain-scoped admission joins against framework registration evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-chain.ts",
+          "symbolName": "DiContainerChainFacts",
+          "summary": "Shared read-only DI chain helper over DiProductIdentity.containerHandle and Di.ProvidesKey facts."
         },
         {
           "kind": "source",
@@ -305,14 +315,35 @@
           "summary": "Public app-diagnostics projection for unadmitted source-service capability demand."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "frameworkDeclarationSourceSpec",
+          "summary": "Package-root-aware framework declaration source matching for TypeChecker-backed framework API recognition."
+        },
+        {
           "kind": "script",
           "command": "node scripts/contract-source-service-api-demand.mjs",
-          "summary": "Contract for source-service API roots, diagnostics, demand products, and diagnostic-action targets."
+          "summary": "Contract for source-service API roots, diagnostics, demand products, diagnostic-action targets, related query lanes, and no false provided-key admission."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-v2-edges.mjs",
+          "summary": "Contract for aliased resolve roots, module-scope resolve candidates, local resolve barrels, container resolver wrappers, and classic inject metadata."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-admission-chain.mjs",
+          "summary": "Contract for chain-proven source-service admission, admitted-chain-unproven fallback, scoped admission-unknown seams, caller-unmapped containers, and multi-root cross-admission canaries."
         },
         {
           "kind": "script",
           "command": "node scripts/contract-service-root-candidate-rollup.mjs",
           "summary": "Contract for candidate service-root seam cap and explicit rollup behavior."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-framework-declaration-source-paths.mjs",
+          "summary": "Contract for framework declaration source package-root/path matching without admitting lookalike packages."
         }
       ],
       "liveChecks": [
@@ -338,8 +369,18 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-chain.ts",
+          "symbolName": "DiContainerChainFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
           "symbolName": "readFrameworkCapabilityDemandDiagnosticRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "frameworkDeclarationSourceSpec"
         }
       ],
       "createdAt": "2026-06-12",
