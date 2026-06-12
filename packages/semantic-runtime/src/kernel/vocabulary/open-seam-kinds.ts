@@ -252,6 +252,15 @@ export const KernelOpenSeamKinds = {
     ),
 
   },
+  Framework: {
+    /** Source service-root evidence exists, but the semantic runtime cannot promote it to a positive root yet. */
+    OpenServiceRootCandidate: defineVocabulary(
+      KernelVocabularyNamespace.Framework,
+      'open-service-root-candidate',
+      KernelVocabularySlot.OpenSeamKind,
+      'Source service-root evidence exists, but the semantic runtime cannot promote it to a positive framework service-root product yet.',
+    ),
+  },
   Router: {
     /** Router instruction materialization could not close a NavigationInstruction or related option without guessing. */
     OpenInstruction: defineVocabulary(

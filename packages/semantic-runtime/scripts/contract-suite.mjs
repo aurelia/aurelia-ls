@@ -233,6 +233,22 @@ const contractSuites = [
     'diagnostics',
     'configuration',
   ], 'contract-fetch-client-source-errors.mjs', 'Fetch-client source diagnostics cover closed invalid configure, header, and retry-interceptor shapes.'),
+  contract('validation', 'fast', [
+    'validation',
+    'diagnostics',
+    'configuration',
+  ], 'contract-validation-source-errors.mjs', 'Validation source diagnostics claim only framework-backed rule and model-rule failures.'),
+  contract('framework', 'fast', [
+    'framework',
+    'diagnostics',
+    'configuration',
+    'di',
+  ], 'contract-source-service-api-demand.mjs', 'Source service API roots produce framework capability demands when their plugin service resolvers are not registered.'),
+  contract('framework', 'fast', [
+    'framework',
+    'open-seams',
+    'source-address',
+  ], 'contract-service-root-candidate-rollup.mjs', 'Framework service-root candidates cap detailed seams while preserving an explicit source-backed rollup.'),
   contract('i18n', 'fast', [
     'i18n',
     'binding',

@@ -23,6 +23,9 @@ The first modeled lane is validation rule construction and model-rule hydration:
 - Closed `ensureGroup(...)` callbacks spend `AUR4108` only when the returned object literal names a property outside the
   statically closed group, or omits the `property` key entirely.
 
+Rule API recognition is import/DI/declaration-backed; local `ValidationRules` or `PropertyRule` lookalikes are not
+enough to spend validation framework authority.
+
 The intentionally unclaimed validation codes remain separate: serialized validation AST/ruleset payloads
 (`AUR4100`, `AUR4103`, `AUR4104`), live group execution without scope (`AUR4107`), arbitrary custom rule return values
 (`AUR4109`), and framework abstract/mixin stubs (`AUR0099`) need a broader serializer or live rule-execution product

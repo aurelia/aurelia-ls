@@ -35,6 +35,11 @@ export function semanticOpenSeamAttemptForKind(
         kind: SemanticOpenSeamAttemptKind.DiWorldConstruction,
         summary: 'DI world construction tried to spend recognized registrations into container effects.',
       };
+    case 'framework':
+      return {
+        kind: SemanticOpenSeamAttemptKind.FrameworkServiceRootRecognition,
+        summary: 'Framework service-root recognition tried to promote source service or container evidence into root products.',
+      };
     case 'router':
     case 'route-recognizer':
       return {
@@ -127,6 +132,8 @@ function frameworkSemanticBoundarySummaryForKind(seamKindKey: string): string {
       return 'Configuration recognition reached an app or plugin configuration shape that could not close without guessing the target, option, or callback contribution.';
     case 'di':
       return 'DI world construction reached a registration or container effect boundary that could not be spent into concrete container state.';
+    case 'framework':
+      return 'Framework service-root recognition found source service or container evidence that could not be promoted without guessing activation or resolver semantics.';
     case 'router':
     case 'route-recognizer':
       return 'Router materialization reached a route, viewport, href, redirect, or recognition boundary that could not close without guessing navigation state.';

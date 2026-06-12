@@ -1710,6 +1710,8 @@ function frameworkCapabilityDemandLabel(demand: FrameworkCapabilityDemand): stri
       return 'Aurelia i18n translation syntax';
     case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
       return 'Aurelia validation-html default resources';
+    case FrameworkCapabilityDemandKind.ValidationServiceResolvers:
+      return 'Aurelia validation service resolvers';
     case FrameworkCapabilityDemandKind.RouterDefaultResources:
       return 'Aurelia router default resources';
     case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
@@ -1718,6 +1720,8 @@ function frameworkCapabilityDemandLabel(demand: FrameworkCapabilityDemand): stri
       return 'Aurelia state default resources';
     case FrameworkCapabilityDemandKind.StateBindingSyntax:
       return 'Aurelia state binding syntax';
+    case FrameworkCapabilityDemandKind.DialogServiceResolvers:
+      return 'Aurelia dialog service resolvers';
   }
 }
 
@@ -1731,6 +1735,8 @@ function frameworkCapabilityDemandSiteLabel(demand: FrameworkCapabilityDemand): 
       return 'Value converter';
     case FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior:
       return 'Binding behavior';
+    case FrameworkCapabilityDemandSiteKind.SourceServiceApi:
+      return 'Source service API';
   }
 }
 
@@ -1753,10 +1759,12 @@ function frameworkCapabilityRegistrationSuggestion(
     case FrameworkCapabilityDemandKind.I18nDefaultResources:
     case FrameworkCapabilityDemandKind.I18nTranslationSyntax:
     case FrameworkCapabilityDemandKind.ValidationHtmlDefaultResources:
+    case FrameworkCapabilityDemandKind.ValidationServiceResolvers:
     case FrameworkCapabilityDemandKind.RouterDefaultResources:
     case FrameworkCapabilityDemandKind.UiVirtualizationDefaultResources:
     case FrameworkCapabilityDemandKind.StateDefaultResources:
     case FrameworkCapabilityDemandKind.StateBindingSyntax:
+    case FrameworkCapabilityDemandKind.DialogServiceResolvers:
       return moduleName == null
         ? `Register ${registrationName} with the app container.`
         : `Register ${registrationName} from ${moduleName} with the app container.`;

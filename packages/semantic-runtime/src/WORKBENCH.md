@@ -56,6 +56,9 @@ consumers pressure these layers and then refactor horizontally when the boundari
   same-facet duplicate placements should still be treated as split-brain.
 - Put durable semantics in product records and vocabulary, not in documentation tables.
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
+- If a framework-shaped fact is consumed by more than one domain, or justifies any framework-coded positive diagnostic,
+  it must become kernel-owned as a product, claim, or open seam with provenance in the same pass that creates the second
+  consumer.
 - Treat package-local READMEs as boundary notes. Keep them short enough that future agents actually read them.
 
 ## Decision Provenance

@@ -20,11 +20,27 @@ export interface SourceSpanSite {
   readonly end: number;
 }
 
+export interface SourcePathSpanSite {
+  readonly sourcePath: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 export class SourceSpanAddressPublication {
   constructor(
     readonly handle: AddressHandle,
     readonly records: readonly KernelStoreRecord[],
   ) {}
+}
+
+/**
+ * Build an in-memory lookup key for source-span facts that have a source path but not a materialized address handle.
+ *
+ * Durable product/source records should use SourceSpanAddress handles instead. This helper is for pre-publication
+ * source scanners that need to join rows emitted by adjacent recognizers in the same source epoch.
+ */
+export function sourcePathSpanLookupKey(site: SourcePathSpanSite): string {
+  return `${site.sourcePath}\0${site.start}\0${site.end}`;
 }
 
 /** Materialize an exact source span when the caller already has the boot-admitted source-file handle. */

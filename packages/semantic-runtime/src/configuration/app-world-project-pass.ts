@@ -194,9 +194,23 @@ import {
 import {
   FrameworkCapabilityDemandMaterializer,
 } from '../framework/capability-demand-materializer.js';
+import {
+  FrameworkServiceRootMaterializer,
+  type FrameworkServiceRootMaterializationResult,
+} from '../framework/service-root-materializer.js';
+import {
+  FrameworkServiceRootEnrichmentMaterializer,
+  type FrameworkServiceRootEnrichmentProjectResult,
+} from '../framework/service-root-enrichment-materializer.js';
 import type {
   FrameworkCapabilityDemandProjectResult,
 } from '../framework/capability-demand.js';
+import {
+  AureliaSourceApiRootFacts,
+} from '../framework/source-api-root-recognition.js';
+import {
+  readAppTaskCallbackRoots,
+} from './app-task-source-api-roots.js';
 
 export type AureliaAppWorldProjectPhaseName =
   | 'static-evaluation'
@@ -224,6 +238,9 @@ export type AureliaAppWorldProjectPhaseName =
   | 'state-store-materialization'
   | 'state-getter-binding-materialization'
   | 'state-source-issues'
+  | 'source-api-root-recognition'
+  | 'framework-service-roots'
+  | 'framework-service-root-enrichment'
   | 'validation-source-issues'
   | 'fetch-client-source-issues'
   | 'dialog-source-issues'
@@ -398,12 +415,16 @@ class AureliaAppWorldProjectConstructionFrame {
     );
     const i18n = this.materializeI18nTranslationCatalog(configuration);
     const stateBase = this.materializeStateBase(configuration, typeSystem);
-    const validation = this.materializeValidationSourceIssues(typeSystem, configuration);
-    const fetchClient = this.materializeFetchClientSourceIssues(typeSystem);
-    const dialog = this.materializeDialogSourceIssues(typeSystem);
+    const recognizedSourceApiRoots = this.recognizeSourceApiRoots(typeSystem, configuration);
+    const serviceRoots = this.materializeFrameworkServiceRoots(typeSystem, recognizedSourceApiRoots);
+    const sourceApiRoots = serviceRoots.sourceApiRoots;
+    const validation = this.materializeValidationSourceIssues(typeSystem, configuration, sourceApiRoots);
+    const fetchClient = this.materializeFetchClientSourceIssues(typeSystem, sourceApiRoots);
+    const dialog = this.materializeDialogSourceIssues(typeSystem, sourceApiRoots);
     const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
+    this.enrichFrameworkServiceRoots(serviceRoots);
     const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts, stateBase);
-    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates);
+    const capabilityDemands = this.materializeFrameworkCapabilityDemands(typeSystem, templates, serviceRoots);
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
@@ -523,12 +544,14 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeFrameworkCapabilityDemands(
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
+    serviceRoots: FrameworkServiceRootMaterializationResult,
   ): FrameworkCapabilityDemandProjectResult {
     return this.measure('framework-capability-demands', () =>
       new FrameworkCapabilityDemandMaterializer(this.store).materializeAndEmit(
         this.project,
         typeSystem,
         templates,
+        serviceRoots.readRoots(),
       )
     );
   }
@@ -784,37 +807,78 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
+  private recognizeSourceApiRoots(
+    typeSystem: TypeSystemProject,
+    configuration: ConfigurationRecognitionProjectResult,
+  ): AureliaSourceApiRootFacts {
+    return this.measure('source-api-root-recognition', () =>
+      AureliaSourceApiRootFacts.read(this.project, typeSystem, {
+        appTaskCallbackRoots: readAppTaskCallbackRoots(configuration, typeSystem),
+      })
+    );
+  }
+
+  private materializeFrameworkServiceRoots(
+    typeSystem: TypeSystemProject,
+    sourceApiRoots: AureliaSourceApiRootFacts,
+  ): FrameworkServiceRootMaterializationResult {
+    return this.measure('framework-service-roots', () =>
+      new FrameworkServiceRootMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+        sourceApiRoots,
+      )
+    );
+  }
+
+  private enrichFrameworkServiceRoots(
+    serviceRoots: FrameworkServiceRootMaterializationResult,
+  ): FrameworkServiceRootEnrichmentProjectResult {
+    return this.measure('framework-service-root-enrichment', () =>
+      new FrameworkServiceRootEnrichmentMaterializer(this.store).materializeAndEmit(
+        this.project.projectKey,
+        serviceRoots.readRoots(),
+      )
+    );
+  }
+
   private materializeValidationSourceIssues(
     typeSystem: TypeSystemProject,
     configuration: ConfigurationRecognitionProjectResult,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): ValidationSourceIssueProjectResult {
     return this.measure('validation-source-issues', () =>
       new ValidationSourceIssueMaterializer(this.store).materializeAndEmit(
         this.project,
         typeSystem,
         configuration,
+        sourceApiRoots,
       )
     );
   }
 
   private materializeFetchClientSourceIssues(
     typeSystem: TypeSystemProject,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): FetchClientSourceIssueProjectResult {
     return this.measure('fetch-client-source-issues', () =>
       new FetchClientSourceIssueMaterializer(this.store).materializeAndEmit(
         this.project,
         typeSystem,
+        sourceApiRoots,
       )
     );
   }
 
   private materializeDialogSourceIssues(
     typeSystem: TypeSystemProject,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): DialogSourceIssueProjectResult {
     return this.measure('dialog-source-issues', () =>
       new DialogSourceIssueMaterializer(this.store).materializeAndEmit(
         this.project,
         typeSystem,
+        sourceApiRoots,
       )
     );
   }

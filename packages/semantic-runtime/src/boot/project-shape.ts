@@ -6,10 +6,9 @@ import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
 import type { ProjectBootFrame } from './frames.js';
 import {
   type BootPackageManifest,
+  manifestWorkspacesIncludeProject,
   readPackageManifest,
-  readPackageWorkspacePatterns,
   isHostPathWithin,
-  normalizePosixPath,
   sameHostPath,
 } from './host-files.js';
 
@@ -262,52 +261,6 @@ function nearestWorkspaceManifestForProject(
   }
 
   return null;
-}
-
-function manifestWorkspacesIncludeProject(
-  manifest: BootPackageManifest,
-  manifestRoot: string,
-  projectRoot: string,
-): boolean {
-  const patterns = readPackageWorkspacePatterns(manifest);
-  if (patterns.length === 0) {
-    return false;
-  }
-  const relativeProjectRoot = normalizePosixPath(path.relative(manifestRoot, projectRoot));
-  return relativeProjectRoot.length > 0 && patterns.some((pattern) =>
-    workspacePatternMatchesProject(pattern, relativeProjectRoot)
-  );
-}
-
-function workspacePatternMatchesProject(
-  pattern: string,
-  relativeProjectRoot: string,
-): boolean {
-  const normalizedPattern = normalizeWorkspacePattern(pattern);
-  return globPatternToRegExp(normalizedPattern).test(relativeProjectRoot);
-}
-
-function normalizeWorkspacePattern(pattern: string): string {
-  let normalized = normalizePosixPath(pattern).replace(/^\.\//, '');
-  while (normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1);
-  }
-  return normalized;
-}
-
-function globPatternToRegExp(pattern: string): RegExp {
-  const body = pattern
-    .split('/')
-    .map((segment) => {
-      if (segment === '**') {
-        return '(?:[^/]+/)*[^/]+';
-      }
-      return segment
-        .replace(/[\\^$+?.()|[\]{}]/g, '\\$&')
-        .replace(/\*/g, '[^/]*');
-    })
-    .join('/');
-  return new RegExp(`^${body}$`);
 }
 
 function isSameOrDescendantPath(parent: string, child: string): boolean {

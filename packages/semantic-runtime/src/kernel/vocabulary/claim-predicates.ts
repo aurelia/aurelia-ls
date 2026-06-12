@@ -145,6 +145,30 @@ export const KernelClaimPredicates = {
       ),
     ),
   },
+  Framework: {
+
+    /** A source-backed framework service root resolves or requests one DI key identity. */
+    RootResolvesDiKey: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'root-resolves-di-key',
+      'A source-backed framework service or container root resolves or requests one DI key identity.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+        identityEndpoint(),
+      ),
+    ),
+
+    /** A container.get-backed framework service root uses a source-backed container root. */
+    RootUsesContainerRoot: defineClaimPredicate(
+      KernelVocabularyNamespace.Framework,
+      'root-uses-container-root',
+      'A container.get-backed framework service root uses a source-backed container root.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+        productEndpoint(KernelProductKinds.Framework.ServiceRoot),
+      ),
+    ),
+  },
   Registration: {
 
     /** A registration admission offers a DI key to later world construction. */

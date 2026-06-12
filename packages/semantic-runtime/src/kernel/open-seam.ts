@@ -116,6 +116,8 @@ export const enum OpenSeamReasonKind {
   RegistrationSpreadOpen = 'registration-spread-open',
   /** Registration recognition could not close an alias target. */
   RegistrationAliasTargetOpen = 'registration-alias-target-open',
+  /** Framework service-root recognition saw source evidence that is not positive root evidence yet. */
+  FrameworkServiceRootCandidateOpen = 'framework-service-root-candidate-open',
 }
 
 export interface OpenSeamReasonSource {

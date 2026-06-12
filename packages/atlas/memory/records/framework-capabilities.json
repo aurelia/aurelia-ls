@@ -245,6 +245,105 @@
       ],
       "createdAt": "2026-05-29",
       "updatedAt": "2026-05-30"
+    },
+    {
+      "id": "reuse:framework-service-root-substrate",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "framework-capabilities",
+        "kernel",
+        "di",
+        "diagnostics"
+      ],
+      "summary": "Framework service-root facts are first-class semantic-runtime kernel products used for source API diagnostics, DI-key enrichment, and framework capability demand.",
+      "rationale": "Dialog, validation, fetch-client, and future plugin source APIs can all need the same authored evidence: a service/root value came from DI activation, container get, AppTask declaration, framework type annotation, or a direct constructor. Keeping this as a `framework.service-root` product with provenance, source/evidence spans, DI-key claims, and candidate open seams prevents each domain from re-recognizing framework service usage locally or promoting TypeChecker/evaluator hints into positive claims without source-backed admission.",
+      "guidance": [
+        "Start in `packages/semantic-runtime/src/framework/service-root.ts`, `service-root-materializer.ts`, and `service-root-enrichment-materializer.ts` when a framework service usage must justify diagnostics, capability demand, or cross-domain ownership.",
+        "Use `AureliaSourceApiRootFacts` from `source-api-root-recognition.ts` as the hot index over service-root products and source spans; do not add parallel span-key maps in dialog, validation, fetch-client, or completion code.",
+        "Only DI-resolution-backed service-root bases should join to DI keys or create source-service capability demand. Update `frameworkServiceRootBasisResolvesDiKey(...)` when adding a new basis.",
+        "Use `FrameworkCapabilityDemandSiteKind.SourceServiceApi` when an authored DI-backed root references a plugin service key whose framework registration is required. Check framework source semantics before adding a new key: some interfaces, such as fetch-client `IHttpClient`, have default aliases and should not demand app registration.",
+        "Candidate service-root shapes should publish source-backed `framework.open-service-root-candidate` seams with explicit reason/rollup policy rather than silently dropping or fabricating roots.",
+        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root.ts",
+          "symbolName": "FrameworkServiceRoot",
+          "summary": "First-class service-root product detail and basis predicate."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-materializer.ts",
+          "symbolName": "FrameworkServiceRootMaterializer",
+          "summary": "Publishes container/service roots and candidate seams from authored source and source API facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-enrichment-materializer.ts",
+          "symbolName": "FrameworkServiceRootEnrichmentMaterializer",
+          "summary": "Post-DI-world enrichment that adds RootResolvesDiKey and RootUsesContainerRoot claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/source-api-root-recognition.ts",
+          "symbolName": "AureliaSourceApiRootFacts",
+          "summary": "Hot source API root index over DI scanners, AppTask callbacks, and materialized service-root products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
+          "symbolName": "FrameworkCapabilityDemandMaterializer",
+          "summary": "Source-service API demand and admission joins against framework registration evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandDiagnosticRows",
+          "summary": "Public app-diagnostics projection for unadmitted source-service capability demand."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-source-service-api-demand.mjs",
+          "summary": "Contract for source-service API roots, diagnostics, demand products, and diagnostic-action targets."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-candidate-rollup.mjs",
+          "summary": "Contract for candidate service-root seam cap and explicit rollup behavior."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root.ts",
+          "symbolName": "FrameworkServiceRoot"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-materializer.ts",
+          "symbolName": "FrameworkServiceRootMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-enrichment-materializer.ts",
+          "symbolName": "FrameworkServiceRootEnrichmentMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/source-api-root-recognition.ts",
+          "symbolName": "AureliaSourceApiRootFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandDiagnosticRows"
+        }
+      ],
+      "createdAt": "2026-06-12",
+      "updatedAt": "2026-06-12"
     }
   ]
 }

@@ -155,6 +155,13 @@ const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
   },
   {
     capability: FrameworkRegistrationCapability.DialogServiceResolvers,
+    keyName: 'IDialogService',
+    strategy: ResolverStrategy.alias,
+    valueKind: RegistrationValueKind.AliasTarget,
+    valueName: 'DialogService',
+  },
+  {
+    capability: FrameworkRegistrationCapability.DialogServiceResolvers,
     keyName: 'IDialogChildSettings',
     strategy: ResolverStrategy.instance,
     valueKind: RegistrationValueKind.Instance,

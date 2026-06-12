@@ -34,6 +34,7 @@ export function appDiagnosticRows(
   diRows: readonly SemanticDiIssueRow[],
   observationRows: readonly SemanticObservationIssueRow[],
   templateRows: readonly SemanticTemplateDiagnosticRow[],
+  frameworkRows: readonly SemanticAppDiagnosticRow[],
   resourceRows: readonly SemanticResourceIssueRow[],
   stateRows: readonly SemanticStateIssueRow[],
   validationRows: readonly SemanticValidationIssueRow[],
@@ -62,6 +63,9 @@ export function appDiagnosticRows(
     ...templateRows
       .filter(templateDiagnosticContributesToAppDiagnostics)
       .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), projectKey, sources)),
+    ...frameworkRows
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
+      .map((row) => appDiagnosticRowWithSourceRole(row, projectKey, sources)),
     ...resourceRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), projectKey, sources)),

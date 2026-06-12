@@ -13,8 +13,18 @@ import {
   sourceSiteForNode,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import {
+  AureliaSourceApiRootFacts,
+  callIsAureliaContainerGetCall,
+  callIsAureliaContainerGetServiceRoot,
+  callIsProvidedByAureliaResolveActivation,
+  sourceRootSymbolForMemberName,
+  sourceRootSymbolForName,
+  sourceRootSymbolForPropertyName,
+} from '../framework/source-api-root-recognition.js';
 import type {
   AddressHandle,
+  IdentityHandle,
 } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
@@ -24,6 +34,11 @@ import {
   KernelStoreBatch,
 } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  type FrameworkDeclarationSourcePathIndex,
+  typeMatchesFrameworkDeclarationSource,
+} from '../type-system/framework-declaration-source.js';
+import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
 import {
   DialogIssueKind,
   DialogIssuePhase,
@@ -40,11 +55,6 @@ const DIALOG_MODULES = new Set([
   '@aurelia/dialog',
 ]);
 
-const KERNEL_MODULES = new Set([
-  '@aurelia/kernel',
-  'aurelia',
-]);
-
 const DIALOG_EXPORTS = new Set([
   'DialogConfiguration',
   'DialogConfigurationStandard',
@@ -59,6 +69,17 @@ const DIALOG_SERVICE_EXPORTS = new Set([
   'IDialogService',
 ]);
 
+const DIALOG_DECLARATION_SOURCE_FRAGMENTS = [
+  '/aurelia/packages/dialog/src/',
+  '/@aurelia/dialog/',
+  '/@aurelia+dialog',
+] as const;
+
+const DIALOG_SERVICE_DECLARATIONS = {
+  names: DIALOG_SERVICE_EXPORTS,
+  sourcePathFragments: DIALOG_DECLARATION_SOURCE_FRAGMENTS,
+} as const;
+
 const BARE_DIALOG_CONFIGURATION_EXPORTS = new Set([
   'DialogConfiguration',
 ]);
@@ -68,11 +89,6 @@ const DIALOG_CONFIGURATION_EXPORTS = new Set([
   'DialogConfigurationStandard',
   'DialogConfigurationClassic',
   'createDialogConfiguration',
-]);
-
-const KERNEL_RESOLVER_EXPORTS = new Set([
-  'inject',
-  'resolve',
 ]);
 
 type DialogSettingsPropertyValue =
@@ -100,7 +116,6 @@ interface DialogSourceRead {
   readonly source: ProjectBootFrame['sourceFiles'][number];
   readonly sourceFile: ts.SourceFile;
   readonly bindings: SourceImportBindings;
-  readonly kernelBindings: SourceImportBindings;
 }
 
 interface DialogReadContext {
@@ -110,20 +125,22 @@ interface DialogReadContext {
   readonly sourceFileAddressHandle: AddressHandle;
   readonly sourceFile: ts.SourceFile;
   readonly checker: ts.TypeChecker;
+  readonly sourcePathByFileName: FrameworkDeclarationSourcePathIndex;
   readonly bindings: SourceImportBindings;
-  readonly kernelBindings: SourceImportBindings;
+  readonly sourceApiRoots: AureliaSourceApiRootFacts;
   readonly roots: DialogServiceRootSet;
   readonly childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>;
   readonly sites: DialogIssueSourceSite[];
 }
 
 interface DialogServiceRootSet {
-  readonly services: ReadonlyMap<string, DialogServiceBaseSettingsState>;
-  readonly instanceServiceMembers: ReadonlyMap<string, DialogServiceBaseSettingsState>;
+  readonly services: ReadonlyMap<ts.Symbol, DialogServiceBaseSettingsState>;
+  readonly instanceServiceMembers: ReadonlyMap<ts.Symbol, DialogServiceBaseSettingsState>;
 }
 
 interface DialogIssueSourceSite extends SourceSpanSite {
   readonly sourcePath: string;
+  readonly ownerIdentityHandle?: IdentityHandle | null;
   readonly phase: DialogIssuePhase;
   readonly issueKind: DialogIssueKind;
   readonly frameworkErrorCode: DialogFrameworkErrorCode;
@@ -144,8 +161,9 @@ export class DialogSourceIssueMaterializer {
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): DialogSourceIssueProjectResult {
-    const sites = readDialogIssueSourceSites(project, typeSystem);
+    const sites = readDialogIssueSourceSites(project, typeSystem, sourceApiRoots);
     const publications = distinctDialogIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
@@ -170,7 +188,7 @@ export class DialogSourceIssueMaterializer {
     const source = sourceSpanAddressForSite(this.store, local, site);
     const publication = this.publisher.publish(
       project.projectKey,
-      null,
+      site.ownerIdentityHandle ?? null,
       site.phase,
       site.issueKind,
       site.message,
@@ -185,19 +203,19 @@ export class DialogSourceIssueMaterializer {
 function readDialogIssueSourceSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly DialogIssueSourceSite[] {
+  const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   const reads = project.sourceFiles.flatMap((source): DialogSourceRead[] => {
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       return [];
     }
     const bindings = readSourceImportBindings(sourceFile, DIALOG_MODULES, DIALOG_EXPORTS);
-    const kernelBindings = readSourceImportBindings(sourceFile, KERNEL_MODULES, KERNEL_RESOLVER_EXPORTS);
     return [{
       source,
       sourceFile,
       bindings,
-      kernelBindings,
     }];
   });
   const childSettingsStates = readDialogChildSettingsStates(reads);
@@ -209,9 +227,17 @@ function readDialogIssueSourceSites(
       sourceFileAddressHandle: read.source.addressHandle,
       sourceFile: read.sourceFile,
       checker: typeSystem.checker,
+      sourcePathByFileName,
       bindings: read.bindings,
-      kernelBindings: read.kernelBindings,
-      roots: readDialogServiceRoots(read.sourceFile, read.bindings, childSettingsStates),
+      sourceApiRoots,
+      roots: readDialogServiceRoots(
+        typeSystem,
+        read.source.path,
+        read.sourceFile,
+        read.bindings,
+        sourceApiRoots,
+        childSettingsStates,
+      ),
       childSettingsStates,
       sites: [],
     };
@@ -297,6 +323,7 @@ function readDialogChildSettingsIssues(
         frameworkErrorCode: DialogFrameworkErrorCode.ChildSettingsNotFound,
         message: 'Dialog child service resolver key has no matching DialogConfiguration.withChild(...) settings registration in the visible app source.',
         localName: `child:${key}`,
+        ownerIdentityHandle: dialogServiceRootOwnerIdentity(context, call),
       },
     ));
   }
@@ -332,39 +359,52 @@ function readDialogServiceOpenIssues(
       frameworkErrorCode: DialogFrameworkErrorCode.SettingsInvalid,
       message: 'DialogService.open(...) settings statically provide neither component nor template.',
       localName: 'open.settings',
+      ownerIdentityHandle: dialogServiceRootOwnerIdentity(context, call.expression.expression),
     },
   ));
 }
 
 function readDialogServiceRoots(
+  typeSystem: TypeSystemProject,
+  sourcePath: string,
   sourceFile: ts.SourceFile,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
   childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>,
 ): DialogServiceRootSet {
-  const services = new Map<string, DialogServiceBaseSettingsState>();
-  const instanceServiceMembers = new Map<string, DialogServiceBaseSettingsState>();
+  const services = new Map<ts.Symbol, DialogServiceBaseSettingsState>();
+  const instanceServiceMembers = new Map<ts.Symbol, DialogServiceBaseSettingsState>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
+      const initializerState = expressionDialogServiceBaseSettingsState(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots, childSettingsStates);
       if (initializerState != null) {
-        services.set(node.name.text, initializerState);
+        setDialogServiceRoot(services, typeSystem, node.name, initializerState);
       } else if (nodeIsDialogServiceTyped(node, bindings)) {
-        services.set(node.name.text, DialogServiceBaseSettingsState.Unknown);
+        setDialogServiceRoot(services, typeSystem, node.name, DialogServiceBaseSettingsState.Unknown);
       }
     } else if (ts.isPropertyDeclaration(node)) {
-      const name = readPropertyName(node.name);
-      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
-      if (name != null && initializerState != null) {
-        instanceServiceMembers.set(name, initializerState);
-      } else if (name != null && nodeIsDialogServiceTyped(node, bindings)) {
-        instanceServiceMembers.set(name, DialogServiceBaseSettingsState.Unknown);
+      const initializerState = expressionDialogServiceBaseSettingsState(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots, childSettingsStates);
+      if (initializerState != null) {
+        setDialogServicePropertyRoot(instanceServiceMembers, typeSystem, node.name, initializerState);
+      } else if (nodeIsDialogServiceTyped(node, bindings)) {
+        setDialogServicePropertyRoot(instanceServiceMembers, typeSystem, node.name, DialogServiceBaseSettingsState.Unknown);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      const initializerState = expressionDialogServiceBaseSettingsState(node.initializer ?? null, bindings, childSettingsStates);
-      if (initializerState != null || nodeIsDialogServiceTyped(node, bindings)) {
-        services.set(node.name.text, initializerState ?? DialogServiceBaseSettingsState.Unknown);
+      const initializerState = expressionDialogServiceBaseSettingsState(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots, childSettingsStates);
+      const appTaskRootState = sourceApiRoots.parameterIsAppTaskDeclaredServiceRoot(
+        sourcePath,
+        sourceFile,
+        node.name,
+        bindings,
+        DIALOG_SERVICE_EXPORTS,
+      )
+        ? DialogServiceBaseSettingsState.RootNoBase
+        : null;
+      if (initializerState != null || appTaskRootState != null || nodeIsDialogServiceTyped(node, bindings)) {
+        const rootState = initializerState ?? appTaskRootState ?? DialogServiceBaseSettingsState.Unknown;
+        setDialogServiceRoot(services, typeSystem, node.name, rootState);
         if (isParameterProperty(node)) {
-          instanceServiceMembers.set(node.name.text, initializerState ?? DialogServiceBaseSettingsState.Unknown);
+          setDialogServiceRoot(instanceServiceMembers, typeSystem, node.name, rootState);
         }
       }
     }
@@ -377,32 +417,97 @@ function readDialogServiceRoots(
   };
 }
 
+function setDialogServiceRoot(
+  roots: Map<ts.Symbol, DialogServiceBaseSettingsState>,
+  typeSystem: TypeSystemProject,
+  name: ts.Identifier,
+  state: DialogServiceBaseSettingsState,
+): void {
+  const symbol = sourceRootSymbolForName(typeSystem, name);
+  if (symbol != null) {
+    roots.set(symbol, state);
+  }
+}
+
+function setDialogServicePropertyRoot(
+  roots: Map<ts.Symbol, DialogServiceBaseSettingsState>,
+  typeSystem: TypeSystemProject,
+  name: ts.PropertyName,
+  state: DialogServiceBaseSettingsState,
+): void {
+  const symbol = sourceRootSymbolForPropertyName(typeSystem, name);
+  if (symbol != null) {
+    roots.set(symbol, state);
+  }
+}
+
 function readDialogServiceBaseSettingsState(
   context: DialogReadContext,
   expression: ts.Expression,
 ): DialogServiceBaseSettingsState | null {
   const current = unwrapExpression(expression);
-  const created = expressionDialogServiceBaseSettingsState(current, context.bindings, context.childSettingsStates);
+  const created = expressionDialogServiceBaseSettingsState(
+    context.sourcePath,
+    context.sourceFile,
+    current,
+    context.bindings,
+    context.sourceApiRoots,
+    context.childSettingsStates,
+  );
   if (created != null) {
     return created;
   }
   if (ts.isIdentifier(current)) {
-    return context.roots.services.get(current.text)
-      ?? (typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null);
+    if (
+      context.sourceApiRoots.expressionIsAppTaskDeclaredServiceRoot(
+        context.sourcePath,
+        context.sourceFile,
+        current,
+        context.bindings,
+        DIALOG_SERVICE_EXPORTS,
+      )
+    ) {
+      return DialogServiceBaseSettingsState.RootNoBase;
+    }
+    const symbol = sourceRootSymbolForName(context.typeSystem, current);
+    const rooted = symbol == null ? null : context.roots.services.get(symbol) ?? null;
+    if (rooted != null) {
+      return rooted;
+    }
+    return expressionHasFrameworkDialogServiceType(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
   }
   if (
     ts.isPropertyAccessExpression(current)
     && current.expression.kind === ts.SyntaxKind.ThisKeyword
   ) {
-    return context.roots.instanceServiceMembers.get(current.name.text)
-      ?? (typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null);
+    const symbol = sourceRootSymbolForMemberName(context.typeSystem, current.name);
+    const rooted = symbol == null ? null : context.roots.instanceServiceMembers.get(symbol) ?? null;
+    if (rooted != null) {
+      return rooted;
+    }
+    return expressionHasFrameworkDialogServiceType(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
   }
-  return typeLooksLikeDialogService(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
+  return expressionHasFrameworkDialogServiceType(context, current) ? DialogServiceBaseSettingsState.Unknown : null;
+}
+
+function dialogServiceRootOwnerIdentity(
+  context: DialogReadContext,
+  expression: ts.Expression,
+): IdentityHandle | null {
+  return context.sourceApiRoots.serviceRootIdentityForExpression(
+    context.sourcePath,
+    context.sourceFile,
+    expression,
+    DIALOG_SERVICE_EXPORTS,
+  )?.identityHandle ?? null;
 }
 
 function expressionDialogServiceBaseSettingsState(
+  sourcePath: string,
+  sourceFile: ts.SourceFile,
   expression: ts.Expression | null,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
   childSettingsStates: ReadonlyMap<string, DialogServiceBaseSettingsState>,
 ): DialogServiceBaseSettingsState | null {
   if (expression == null) {
@@ -418,16 +523,24 @@ function expressionDialogServiceBaseSettingsState(
   if (!ts.isCallExpression(current)) {
     return null;
   }
-  const childResolver = current.arguments[0] == null
-    ? null
-    : readDialogChildResolverCall(current.arguments[0], bindings);
-  if (childResolver != null) {
-    const key = readStaticDialogChildKey(childResolver.arguments[0] ?? null);
-    return key === 'dynamic'
-      ? DialogServiceBaseSettingsState.Unknown
-      : childSettingsStates.get(key) ?? DialogServiceBaseSettingsState.Unknown;
+  if (callIsProvidedByAureliaResolveActivation(sourceApiRoots, sourcePath, sourceFile, current)) {
+    const first = current.arguments[0] ?? null;
+    const childResolver = first == null || ts.isSpreadElement(first)
+      ? null
+      : readDialogChildResolverCall(first, bindings);
+    if (childResolver != null) {
+      const key = readStaticDialogChildKey(childResolver.arguments[0] ?? null);
+      return key === 'dynamic'
+        ? DialogServiceBaseSettingsState.Unknown
+        : childSettingsStates.get(key) ?? DialogServiceBaseSettingsState.Unknown;
+    }
+    return first != null
+      && !ts.isSpreadElement(first)
+      && readImportedExportName(first, bindings, DIALOG_SERVICE_EXPORTS) != null
+      ? DialogServiceBaseSettingsState.RootNoBase
+      : null;
   }
-  if (current.arguments[0] != null && readImportedExportName(current.arguments[0], bindings, DIALOG_SERVICE_EXPORTS) != null) {
+  if (callIsAureliaContainerGetServiceRoot(sourceApiRoots, sourcePath, sourceFile, current, bindings, DIALOG_SERVICE_EXPORTS)) {
     return DialogServiceBaseSettingsState.RootNoBase;
   }
   if (ts.isPropertyAccessExpression(current.expression) && current.expression.name.text === 'createChild') {
@@ -466,21 +579,17 @@ function nodeIsDialogServiceTyped(
   return typeNodeReferencesImportedExport(node.type ?? null, bindings, DIALOG_SERVICE_EXPORTS);
 }
 
-function typeLooksLikeDialogService(
+function expressionHasFrameworkDialogServiceType(
   context: DialogReadContext,
   expression: ts.Expression,
 ): boolean {
   const type = context.typeSystem.readProgramTypeAtLocation(expression);
-  if (type == null) {
-    return false;
-  }
-  const symbolName = type.symbol?.getName() ?? type.aliasSymbol?.getName() ?? null;
-  if (symbolName === 'DialogService' || symbolName === 'IDialogService') {
-    return true;
-  }
-  return type.getProperty('open') != null
-    && type.getProperty('closeAll') != null
-    && type.getProperty('createChild') != null;
+  return typeMatchesFrameworkDeclarationSource(
+    type,
+    context.checker,
+    context.sourcePathByFileName,
+    DIALOG_SERVICE_DECLARATIONS,
+  );
 }
 
 function dialogConfigurationExpressionIsEmptyDefault(
@@ -622,11 +731,10 @@ function callIsDialogChildResolverAdmission(
   if (!call.arguments.some((argument) => readDialogChildResolverCall(argument, context.bindings) != null)) {
     return false;
   }
-  if (readImportedExportName(call.expression, context.kernelBindings, KERNEL_RESOLVER_EXPORTS) != null) {
+  if (callIsProvidedByAureliaResolveActivation(context.sourceApiRoots, context.sourcePath, context.sourceFile, call)) {
     return true;
   }
-  return ts.isPropertyAccessExpression(call.expression)
-    && (call.expression.name.text === 'get' || call.expression.name.text === 'getResolver');
+  return callIsAureliaContainerGetCall(context.sourceApiRoots, context.sourcePath, context.sourceFile, call);
 }
 
 function readDialogChildResolverCall(

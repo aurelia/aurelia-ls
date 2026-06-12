@@ -1487,6 +1487,8 @@ export const enum SemanticOpenSeamAttemptKind {
   ConfigurationRecognition = 'configuration-recognition',
   /** DI world construction tried to spend recognized registrations into container effects. */
   DiWorldConstruction = 'di-world-construction',
+  /** Framework service-root recognition tried to promote source service/container evidence into root products. */
+  FrameworkServiceRootRecognition = 'framework-service-root-recognition',
   /** Router analysis tried to materialize route, viewport, instruction, or recognition state. */
   RouterMaterialization = 'router-materialization',
   /** Template compilation or rendering analysis tried to lower HTML/compiler products into runtime semantics. */
@@ -2039,6 +2041,7 @@ export type SemanticAppDiagnosticDomain =
   | 'template'
   | 'resource'
   | 'state'
+  | 'framework'
   | 'validation'
   | 'fetch-client'
   | 'dialog'
@@ -2054,7 +2057,10 @@ export interface SemanticAppDiagnosticRow {
   readonly frameworkRawErrorAuthority?: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
+  readonly missingInput?: string | null;
+  readonly missingInputs?: readonly string[];
   readonly source: SemanticSourceReference | null;
+  readonly suggestion?: SemanticTemplateCursorSuggestionRow | null;
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;

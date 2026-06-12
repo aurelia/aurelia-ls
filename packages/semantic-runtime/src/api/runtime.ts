@@ -238,6 +238,9 @@ import {
   readDialogIssueRows,
 } from './dialog-projections.js';
 import {
+  readFrameworkCapabilityDemandDiagnosticRows,
+} from './framework-projections.js';
+import {
   compilerWorldLabel,
   describeAddress,
   type SemanticSourceReference,
@@ -3359,6 +3362,7 @@ export class SemanticApp {
     const diRows = readDiIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const observationRows = readObservationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const templateRows = this.templateQueries.templateDiagnosticRows({ ...query, detail });
+    const frameworkRows = readFrameworkCapabilityDemandDiagnosticRows(this.emission, this.runtime.workspace.store);
     const resourceRows = readResourceIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const stateRows = readStateIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const validationRows = readValidationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
@@ -3376,6 +3380,7 @@ export class SemanticApp {
       diRows,
       observationRows,
       templateRows,
+      frameworkRows,
       resourceRows,
       stateRows,
       validationRows,

@@ -2,7 +2,7 @@
 
 This folder owns semantic-runtime products for source-backed `@aurelia/fetch-client` diagnostics.
 
-The first admitted lane is the static subset of `HttpClient.configure(...)` and `RetryInterceptor` configuration that can be proven from TypeScript source before executing a request. It publishes `FetchClientIssue` products and app diagnostics linked to exact Aurelia framework error codes.
+The first admitted lane is the static subset of `HttpClient.configure(...)` and `RetryInterceptor` configuration that can be proven from TypeScript source before executing a request. It publishes `FetchClientIssue` products and app diagnostics linked to exact Aurelia framework error codes. Framework API recognition is import/DI/declaration-backed; local `HttpClient` or `Headers` lookalikes are not enough to spend fetch-client framework authority.
 
 ## Claimed Authorities
 

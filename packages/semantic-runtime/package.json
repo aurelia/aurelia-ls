@@ -64,6 +64,7 @@
     "contract:fetch-client-source-errors": "pnpm build && node scripts/contract-fetch-client-source-errors.mjs",
     "contract:dialog-source-errors": "pnpm build && node scripts/contract-dialog-source-errors.mjs",
     "contract:dialog-classic-with-child": "pnpm build && node scripts/contract-dialog-classic-with-child.mjs",
+    "contract:validation-source-errors": "pnpm build && node scripts/contract-validation-source-errors.mjs",
     "contract:i18n-binding-lifecycle": "pnpm build && node scripts/contract-i18n-binding-lifecycle.mjs",
     "contract:template-diagnostics": "pnpm build && node scripts/contract-template-diagnostics.mjs",
     "contract:template-completion-source-scope": "pnpm build && node scripts/contract-template-completion-source-scope.mjs",

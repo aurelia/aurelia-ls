@@ -55,7 +55,9 @@ export const KernelVocabulary = {
     ...KernelClaimPredicates.Configuration,
   },
   Framework: {
+    ...KernelOpenSeamKinds.Framework,
     ...KernelProductKinds.Framework,
+    ...KernelClaimPredicates.Framework,
   },
   Router: {
     ...KernelOpenSeamKinds.Router,

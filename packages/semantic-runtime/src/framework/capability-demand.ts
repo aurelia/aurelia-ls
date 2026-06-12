@@ -14,6 +14,7 @@ export const enum FrameworkCapabilityDemandSiteKind {
   TemplateElement = 'template-element',
   TemplateValueConverter = 'template-value-converter',
   TemplateBindingBehavior = 'template-binding-behavior',
+  SourceServiceApi = 'source-service-api',
 }
 
 export const enum FrameworkCapabilityDemandKind {
@@ -24,10 +25,12 @@ export const enum FrameworkCapabilityDemandKind {
   I18nDefaultResources = 'i18n.default-resources',
   I18nTranslationSyntax = 'i18n.translation-syntax',
   ValidationHtmlDefaultResources = 'validation-html.default-resources',
+  ValidationServiceResolvers = 'validation.service-resolvers',
   RouterDefaultResources = 'router.default-resources',
   UiVirtualizationDefaultResources = 'ui-virtualization.default-resources',
   StateDefaultResources = 'state.default-resources',
   StateBindingSyntax = 'state.binding-syntax',
+  DialogServiceResolvers = 'dialog.service-resolvers',
 }
 
 export const enum FrameworkCapabilityAdmissionState {

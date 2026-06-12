@@ -11,6 +11,13 @@ import {
   type SourceImportBindings,
 } from '../evaluation/import-bindings.js';
 import {
+  AureliaSourceApiRootFacts,
+  expressionCreatesFrameworkServiceRoot,
+  sourceRootSymbolForMemberName,
+  sourceRootSymbolForName,
+  sourceRootSymbolForPropertyName,
+} from '../framework/source-api-root-recognition.js';
+import {
   isParameterProperty,
   readObjectPropertyExpression,
   readPropertyName,
@@ -18,6 +25,7 @@ import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { sourceSpanAddressForSite, type SourceSpanSite } from '../kernel/source-address.js';
 import {
@@ -27,7 +35,11 @@ import {
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { symbolForExpression } from '../type-system/checker-node-helpers.js';
-import { checkerTypeHasAnyName } from '../type-system/checker-related-types.js';
+import {
+  type FrameworkDeclarationSourcePathIndex,
+  typeMatchesFrameworkDeclarationSource,
+} from '../type-system/framework-declaration-source.js';
+import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
 import { ValidationFrameworkErrorCode } from './framework-error-code.js';
 import { ValidationProductDetails } from './product-details.js';
 import {
@@ -54,6 +66,27 @@ const VALIDATION_EXPORTS = new Set([
   'ValidationRules',
   'parsePropertyName',
 ]);
+
+const VALIDATION_RULES_EXPORTS = new Set([
+  'IValidationRules',
+  'ValidationRules',
+]);
+
+const VALIDATION_DECLARATION_SOURCE_FRAGMENTS = [
+  '/aurelia/packages/validation/src/',
+  '/@aurelia/validation/',
+  '/@aurelia+validation',
+] as const;
+
+const VALIDATION_RULES_DECLARATIONS = {
+  names: VALIDATION_RULES_EXPORTS,
+  sourcePathFragments: VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
+} as const;
+
+const VALIDATION_PROPERTY_RULE_DECLARATIONS = {
+  names: new Set(['PropertyRule']),
+  sourcePathFragments: VALIDATION_DECLARATION_SOURCE_FRAGMENTS,
+} as const;
 
 const PROPERTY_RULE_RESET_METHODS = new Set([
   'ensure',
@@ -99,6 +132,7 @@ const MODEL_RULE_NAMES = new Set([
 
 interface ValidationIssueSourceSite extends SourceSpanSite {
   readonly sourcePath: string;
+  readonly ownerIdentityHandle?: IdentityHandle | null;
   readonly phase: ValidationIssuePhase;
   readonly issueKind: ValidationIssueKind;
   readonly message: string;
@@ -113,15 +147,17 @@ interface ValidationReadContext {
   readonly sourceFileAddressHandle: ProjectBootFrame['sourceFiles'][number]['addressHandle'];
   readonly sourceFile: ts.SourceFile;
   readonly checker: ts.TypeChecker;
+  readonly sourcePathByFileName: FrameworkDeclarationSourcePathIndex;
   readonly bindings: SourceImportBindings;
+  readonly sourceApiRoots: AureliaSourceApiRootFacts;
   readonly validationRulesRoots: ValidationRulesRootSet;
   readonly defaultModelHydratorActive: boolean;
   readonly sites: ValidationIssueSourceSite[];
 }
 
 interface ValidationRulesRootSet {
-  readonly locals: ReadonlySet<string>;
-  readonly instanceMembers: ReadonlySet<string>;
+  readonly locals: ReadonlySet<ts.Symbol>;
+  readonly instanceMembers: ReadonlySet<ts.Symbol>;
 }
 
 interface ValidationCallChainMethod {
@@ -149,8 +185,9 @@ export class ValidationSourceIssueMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     configuration: ConfigurationRecognitionProjectResult,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): ValidationSourceIssueProjectResult {
-    const sites = readValidationIssueSourceSites(project, typeSystem, configuration);
+    const sites = readValidationIssueSourceSites(project, typeSystem, configuration, sourceApiRoots);
     const publications = distinctValidationIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
@@ -175,7 +212,7 @@ export class ValidationSourceIssueMaterializer {
     const source = sourceSpanAddressForSite(this.store, local, site);
     const publication = this.publisher.publish(
       project.projectKey,
-      null,
+      site.ownerIdentityHandle ?? null,
       site.phase,
       site.issueKind,
       site.message,
@@ -191,8 +228,10 @@ function readValidationIssueSourceSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
   configuration: ConfigurationRecognitionProjectResult,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly ValidationIssueSourceSite[] {
   const defaultModelHydratorActive = validationDefaultModelHydratorActive(configuration);
+  const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
@@ -206,8 +245,10 @@ function readValidationIssueSourceSites(
       sourceFileAddressHandle: source.addressHandle,
       sourceFile,
       checker: typeSystem.checker,
+      sourcePathByFileName,
       bindings,
-      validationRulesRoots: readValidationRulesRoots(sourceFile, bindings),
+      sourceApiRoots,
+      validationRulesRoots: readValidationRulesRoots(typeSystem, source.path, sourceFile, bindings, sourceApiRoots),
       defaultModelHydratorActive,
       sites: [],
     };
@@ -230,26 +271,32 @@ function visitValidationSourceNode(
 }
 
 function readValidationRulesRoots(
+  typeSystem: TypeSystemProject,
+  sourcePath: string,
   sourceFile: ts.SourceFile,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): ValidationRulesRootSet {
-  const locals = new Set<string>();
-  const instanceMembers = new Set<string>();
+  const locals = new Set<ts.Symbol>();
+  const instanceMembers = new Set<ts.Symbol>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsValidationRulesTyped(node, bindings) || expressionCreatesValidationRulesRoot(node.initializer ?? null, bindings)) {
-        locals.add(node.name.text);
+      if (nodeIsValidationRulesTyped(node, bindings) || expressionCreatesValidationRulesRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)) {
+        addValidationRulesRoot(locals, typeSystem, node.name);
       }
     } else if (ts.isPropertyDeclaration(node)) {
-      const name = readPropertyName(node.name);
-      if (name != null && (nodeIsValidationRulesTyped(node, bindings) || expressionCreatesValidationRulesRoot(node.initializer ?? null, bindings))) {
-        instanceMembers.add(name);
+      if (nodeIsValidationRulesTyped(node, bindings) || expressionCreatesValidationRulesRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)) {
+        addValidationRulesPropertyRoot(instanceMembers, typeSystem, node.name);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsValidationRulesTyped(node, bindings) || expressionCreatesValidationRulesRoot(node.initializer ?? null, bindings)) {
-        locals.add(node.name.text);
+      if (
+        nodeIsValidationRulesTyped(node, bindings)
+        || expressionCreatesValidationRulesRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)
+        || sourceApiRoots.parameterIsAppTaskDeclaredServiceRoot(sourcePath, sourceFile, node.name, bindings, VALIDATION_RULES_EXPORTS)
+      ) {
+        addValidationRulesRoot(locals, typeSystem, node.name);
         if (isParameterProperty(node)) {
-          instanceMembers.add(node.name.text);
+          addValidationRulesRoot(instanceMembers, typeSystem, node.name);
         }
       }
     }
@@ -260,6 +307,28 @@ function readValidationRulesRoots(
     locals,
     instanceMembers,
   };
+}
+
+function addValidationRulesRoot(
+  roots: Set<ts.Symbol>,
+  typeSystem: TypeSystemProject,
+  name: ts.Identifier,
+): void {
+  const symbol = sourceRootSymbolForName(typeSystem, name);
+  if (symbol != null) {
+    roots.add(symbol);
+  }
+}
+
+function addValidationRulesPropertyRoot(
+  roots: Set<ts.Symbol>,
+  typeSystem: TypeSystemProject,
+  name: ts.PropertyName,
+): void {
+  const symbol = sourceRootSymbolForPropertyName(typeSystem, name);
+  if (symbol != null) {
+    roots.add(symbol);
+  }
 }
 
 function nodeIsValidationRulesTyped(
@@ -305,20 +374,20 @@ function importedValidationRulesTypeName(
 }
 
 function expressionCreatesValidationRulesRoot(
+  sourcePath: string,
+  sourceFile: ts.SourceFile,
   expression: ts.Expression | null,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): boolean {
-  if (expression == null) {
-    return false;
-  }
-  const current = unwrapExpression(expression);
-  if (!ts.isCallExpression(current)) {
-    return false;
-  }
-  const first = current.arguments[0] ?? null;
-  return first != null
-    && !ts.isSpreadElement(first)
-    && readImportedExportName(unwrapExpression(first), bindings, new Set(['IValidationRules', 'ValidationRules'])) != null;
+  return expressionCreatesFrameworkServiceRoot(
+    sourceApiRoots,
+    sourcePath,
+    sourceFile,
+    expression,
+    bindings,
+    VALIDATION_RULES_EXPORTS,
+  );
 }
 
 function readValidationCallIssues(
@@ -354,6 +423,7 @@ function readFluentRuleModifierIssue(
       frameworkErrorCode: ValidationFrameworkErrorCode.RuleProviderNoRuleFound,
       message: `${callee.name.text}(...) is called before this PropertyRule chain has added a validation rule.`,
       localName: callee.name.text,
+      ownerIdentityHandle: validationRulesRootOwnerIdentity(context, callee.expression),
     },
   ));
 }
@@ -405,23 +475,24 @@ function readValidationAccessorIssues(
   if (ts.isPropertyAccessExpression(callee)) {
     const methodName = callee.name.text;
     if (methodName === 'ensure' && isValidationRulesOrPropertyRuleExpression(context, callee.expression)) {
-      readPropertyAccessorArgumentIssue(context, call.arguments[0] ?? null);
+      readPropertyAccessorArgumentIssue(context, call.arguments[0] ?? null, validationRulesRootOwnerIdentity(context, callee.expression));
       return;
     }
     if (methodName === 'ensureGroup' && isValidationRulesOrPropertyRuleExpression(context, callee.expression)) {
-      readEnsureGroupPropertyAccessorIssues(context, call);
+      readEnsureGroupPropertyAccessorIssues(context, call, validationRulesRootOwnerIdentity(context, callee.expression));
       return;
     }
   }
 
   if (readImportedExportName(callee, context.bindings, new Set(['parsePropertyName'])) === 'parsePropertyName') {
-    readPropertyAccessorArgumentIssue(context, call.arguments[0] ?? null);
+    readPropertyAccessorArgumentIssue(context, call.arguments[0] ?? null, null);
   }
 }
 
 function readPropertyAccessorArgumentIssue(
   context: ValidationReadContext,
   argument: ts.Expression | null,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   if (argument == null || ts.isSpreadElement(argument)) {
     return;
@@ -439,6 +510,7 @@ function readPropertyAccessorArgumentIssue(
       frameworkErrorCode: ValidationFrameworkErrorCode.UnableToParseAccessorFunction,
       message: reason,
       localName: 'property-accessor',
+      ownerIdentityHandle,
     },
   ));
 }
@@ -446,6 +518,7 @@ function readPropertyAccessorArgumentIssue(
 function readEnsureGroupPropertyAccessorIssues(
   context: ValidationReadContext,
   call: ts.CallExpression,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const properties = unwrapExpression(call.arguments[0] ?? call);
   if (!ts.isArrayLiteralExpression(properties)) {
@@ -455,7 +528,7 @@ function readEnsureGroupPropertyAccessorIssues(
     if (ts.isSpreadElement(element)) {
       continue;
     }
-    readPropertyAccessorArgumentIssue(context, element);
+    readPropertyAccessorArgumentIssue(context, element, ownerIdentityHandle);
   }
 }
 
@@ -512,6 +585,7 @@ function readValidationGroupRuleResultIssues(
           frameworkErrorCode: ValidationFrameworkErrorCode.GroupRuleInvalidExecutionResult,
           message: 'Group rule result object does not contain a property name.',
           localName: 'group-rule-result',
+          ownerIdentityHandle: validationRulesRootOwnerIdentity(context, callee.expression),
         },
       ));
       continue;
@@ -530,6 +604,7 @@ function readValidationGroupRuleResultIssues(
           frameworkErrorCode: ValidationFrameworkErrorCode.GroupRuleInvalidExecutionResult,
           message: `Group rule result targets "${propertyName}", but that property is not part of the group.`,
           localName: propertyName,
+          ownerIdentityHandle: validationRulesRootOwnerIdentity(context, callee.expression),
         },
       ));
     }
@@ -745,38 +820,70 @@ function isValidationRulesLikeExpression(
   if (expressionIsValidationRulesRoot(context, expression)) {
     return true;
   }
-  const root = validationCallChainRoot(expression);
-  if (root != null && root !== unwrapExpression(expression) && expressionIsValidationRulesRoot(context, root)) {
+  const root = validationCallChainRulesRoot(context, expression);
+  if (root != null && root !== unwrapExpression(expression)) {
     return true;
   }
   const type = context.typeSystem.readProgramTypeAtLocation(expression);
-  return type != null && checkerTypeHasAnyName(context.checker, type, ['IValidationRules', 'ValidationRules']);
+  return typeMatchesFrameworkDeclarationSource(
+    type,
+    context.checker,
+    context.sourcePathByFileName,
+    VALIDATION_RULES_DECLARATIONS,
+  );
 }
 
 function isPropertyRuleLikeExpression(
   context: ValidationReadContext,
   expression: ts.Expression,
 ): boolean {
-  const root = validationCallChainRoot(expression);
-  if (root != null && expressionIsValidationRulesRoot(context, root)) {
+  if (validationCallChainRulesRoot(context, expression) != null) {
     return true;
   }
   const type = context.typeSystem.readProgramTypeAtLocation(expression);
-  return type != null && checkerTypeHasAnyName(context.checker, type, ['PropertyRule']);
+  return typeMatchesFrameworkDeclarationSource(
+    type,
+    context.checker,
+    context.sourcePathByFileName,
+    VALIDATION_PROPERTY_RULE_DECLARATIONS,
+  );
 }
 
-function validationCallChainRoot(
+function validationCallChainRulesRoot(
+  context: ValidationReadContext,
   expression: ts.Expression,
 ): ts.Expression | null {
   let current = unwrapExpression(expression);
+  if (expressionIsValidationRulesRoot(context, current)) {
+    return current;
+  }
   while (ts.isCallExpression(current)) {
     const callee = unwrapExpression(current.expression);
     if (!ts.isPropertyAccessExpression(callee)) {
       return null;
     }
-    current = unwrapExpression(callee.expression);
+    const receiver = unwrapExpression(callee.expression);
+    if (expressionIsValidationRulesRoot(context, receiver)) {
+      return receiver;
+    }
+    current = receiver;
   }
-  return current;
+  return expressionIsValidationRulesRoot(context, current) ? current : null;
+}
+
+function validationRulesRootOwnerIdentity(
+  context: ValidationReadContext,
+  expression: ts.Expression,
+): IdentityHandle | null {
+  const root = validationCallChainRulesRoot(context, expression);
+  return root == null
+    ? null
+    : context.sourceApiRoots.serviceRootIdentityForExpression(
+      context.sourcePath,
+      context.sourceFile,
+      root,
+      VALIDATION_RULES_EXPORTS,
+    )?.identityHandle ?? null;
 }
 
 function expressionIsValidationRulesRoot(
@@ -784,13 +891,30 @@ function expressionIsValidationRulesRoot(
   expression: ts.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return context.validationRulesRoots.locals.has(current.text);
+  if (expressionCreatesValidationRulesRoot(context.sourcePath, context.sourceFile, current, context.bindings, context.sourceApiRoots)) {
+    return true;
   }
-  return ts.isPropertyAccessExpression(current)
-    && current.name != null
-    && context.validationRulesRoots.instanceMembers.has(current.name.text)
-    && current.expression.kind === ts.SyntaxKind.ThisKeyword;
+  if (context.sourceApiRoots.expressionIsAppTaskDeclaredServiceRoot(
+    context.sourcePath,
+    context.sourceFile,
+    current,
+    context.bindings,
+    VALIDATION_RULES_EXPORTS,
+  )) {
+    return true;
+  }
+  if (ts.isIdentifier(current)) {
+    const symbol = sourceRootSymbolForName(context.typeSystem, current);
+    return symbol != null && context.validationRulesRoots.locals.has(symbol);
+  }
+  if (
+    ts.isPropertyAccessExpression(current)
+    && current.expression.kind === ts.SyntaxKind.ThisKeyword
+  ) {
+    const symbol = sourceRootSymbolForMemberName(context.typeSystem, current.name);
+    return symbol != null && context.validationRulesRoots.instanceMembers.has(symbol);
+  }
+  return false;
 }
 
 function resolveFunctionLikeExpression(

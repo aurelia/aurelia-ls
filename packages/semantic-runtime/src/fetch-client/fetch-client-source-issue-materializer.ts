@@ -10,12 +10,24 @@ import {
 import {
   isParameterProperty,
   readObjectPropertyExpression,
-  readPropertyName,
   sourceSiteForNode,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import {
+  AureliaSourceApiRootFacts,
+  expressionCreatesFrameworkServiceRoot,
+  sourceRootSymbolForMemberName,
+  sourceRootSymbolForName,
+  sourceRootSymbolForPropertyName,
+} from '../framework/source-api-root-recognition.js';
+import {
+  symbolMatchesFrameworkDeclarationSource,
+  type FrameworkDeclarationSourcePathIndex,
+  typeMatchesFrameworkDeclarationSource,
+} from '../type-system/framework-declaration-source.js';
 import type {
   AddressHandle,
+  IdentityHandle,
 } from '../kernel/handles.js';
 import { issuePublicationWithRecords } from '../kernel/issue-publication.js';
 import { localKeyPart } from '../kernel/local-key.js';
@@ -25,6 +37,8 @@ import {
   KernelStoreBatch,
 } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { symbolForExpression } from '../type-system/checker-node-helpers.js';
+import { typeSystemSourcePathIndex } from '../type-system/source-path-index.js';
 import {
   FetchClientIssueKind,
   FetchClientIssuePhase,
@@ -54,6 +68,26 @@ const FETCH_CLIENT_ROOT_EXPORTS = new Set([
   'IHttpClient',
 ]);
 
+const FETCH_CLIENT_DECLARATION_SOURCE_FRAGMENTS = [
+  '/aurelia/packages/fetch-client/src/',
+  '/@aurelia/fetch-client/',
+  '/@aurelia+fetch-client',
+] as const;
+
+const FETCH_CLIENT_ROOT_DECLARATIONS = {
+  names: FETCH_CLIENT_ROOT_EXPORTS,
+  sourcePathFragments: FETCH_CLIENT_DECLARATION_SOURCE_FRAGMENTS,
+} as const;
+
+const DOM_HEADERS_DECLARATIONS = {
+  names: new Set(['Headers']),
+  sourcePathFragments: [
+    '/typescript/lib/lib.dom.d.ts',
+    '/typescript/lib/lib.webworker.d.ts',
+    '/typescript/lib/lib.webworker.importscripts.d.ts',
+  ],
+} as const;
+
 const RETRY_STRATEGY_VALUES = {
   fixed: 0,
   incremental: 1,
@@ -70,18 +104,21 @@ interface FetchClientReadContext {
   readonly sourceFileAddressHandle: AddressHandle;
   readonly sourceFile: ts.SourceFile;
   readonly checker: ts.TypeChecker;
+  readonly sourcePathByFileName: FrameworkDeclarationSourcePathIndex;
   readonly bindings: SourceImportBindings;
+  readonly sourceApiRoots: AureliaSourceApiRootFacts;
   readonly roots: FetchClientRootSet;
   readonly sites: FetchClientIssueSourceSite[];
 }
 
 interface FetchClientRootSet {
-  readonly clients: ReadonlySet<string>;
-  readonly instanceClientMembers: ReadonlySet<string>;
+  readonly clients: ReadonlySet<ts.Symbol>;
+  readonly instanceClientMembers: ReadonlySet<ts.Symbol>;
 }
 
 interface FetchClientIssueSourceSite extends SourceSpanSite {
   readonly sourcePath: string;
+  readonly ownerIdentityHandle?: IdentityHandle | null;
   readonly phase: FetchClientIssuePhase;
   readonly issueKind: FetchClientIssueKind;
   readonly frameworkErrorCode: FetchClientFrameworkErrorCode;
@@ -112,8 +149,9 @@ export class FetchClientSourceIssueMaterializer {
   materializeAndEmit(
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
+    sourceApiRoots: AureliaSourceApiRootFacts,
   ): FetchClientSourceIssueProjectResult {
-    const sites = readFetchClientIssueSourceSites(project, typeSystem);
+    const sites = readFetchClientIssueSourceSites(project, typeSystem, sourceApiRoots);
     const publications = distinctFetchClientIssueSites(sites)
       .map((site, index) => this.publicationForSite(project, site, index));
     const records = publications.flatMap((publication) => publication.records);
@@ -138,7 +176,7 @@ export class FetchClientSourceIssueMaterializer {
     const source = sourceSpanAddressForSite(this.store, local, site);
     const publication = this.publisher.publish(
       project.projectKey,
-      null,
+      site.ownerIdentityHandle ?? null,
       site.phase,
       site.issueKind,
       site.message,
@@ -153,7 +191,9 @@ export class FetchClientSourceIssueMaterializer {
 function readFetchClientIssueSourceSites(
   project: ProjectBootFrame,
   typeSystem: TypeSystemProject,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): readonly FetchClientIssueSourceSite[] {
+  const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
     const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
@@ -167,8 +207,10 @@ function readFetchClientIssueSourceSites(
       sourceFileAddressHandle: source.addressHandle,
       sourceFile,
       checker: typeSystem.checker,
+      sourcePathByFileName,
       bindings,
-      roots: readFetchClientRoots(sourceFile, bindings),
+      sourceApiRoots,
+      roots: readFetchClientRoots(typeSystem, source.path, sourceFile, bindings, sourceApiRoots),
       sites: [],
     };
     visitFetchClientSourceNode(context, sourceFile);
@@ -183,32 +225,38 @@ function visitFetchClientSourceNode(
   if (ts.isCallExpression(node)) {
     readHttpClientConfigureIssues(context, node);
   } else if (ts.isNewExpression(node) && expressionCreatesRetryInterceptor(node, context.bindings)) {
-    readRetryConfigurationIssues(context, node.arguments?.[0] ?? null, node);
+    readRetryConfigurationIssues(context, node.arguments?.[0] ?? null, node, null);
   }
   ts.forEachChild(node, (child) => visitFetchClientSourceNode(context, child));
 }
 
 function readFetchClientRoots(
+  typeSystem: TypeSystemProject,
+  sourcePath: string,
   sourceFile: ts.SourceFile,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): FetchClientRootSet {
-  const clients = new Set<string>();
-  const instanceClientMembers = new Set<string>();
+  const clients = new Set<ts.Symbol>();
+  const instanceClientMembers = new Set<ts.Symbol>();
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsFetchClientTyped(node, bindings) || expressionCreatesFetchClientRoot(node.initializer ?? null, bindings)) {
-        clients.add(node.name.text);
+      if (nodeIsFetchClientTyped(node, bindings) || expressionCreatesFetchClientRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)) {
+        addFetchClientRoot(clients, typeSystem, node.name);
       }
     } else if (ts.isPropertyDeclaration(node)) {
-      const name = readPropertyName(node.name);
-      if (name != null && (nodeIsFetchClientTyped(node, bindings) || expressionCreatesFetchClientRoot(node.initializer ?? null, bindings))) {
-        instanceClientMembers.add(name);
+      if (nodeIsFetchClientTyped(node, bindings) || expressionCreatesFetchClientRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)) {
+        addFetchClientPropertyRoot(instanceClientMembers, typeSystem, node.name);
       }
     } else if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      if (nodeIsFetchClientTyped(node, bindings) || expressionCreatesFetchClientRoot(node.initializer ?? null, bindings)) {
-        clients.add(node.name.text);
+      if (
+        nodeIsFetchClientTyped(node, bindings)
+        || expressionCreatesFetchClientRoot(sourcePath, sourceFile, node.initializer ?? null, bindings, sourceApiRoots)
+        || sourceApiRoots.parameterIsAppTaskDeclaredServiceRoot(sourcePath, sourceFile, node.name, bindings, FETCH_CLIENT_ROOT_EXPORTS)
+      ) {
+        addFetchClientRoot(clients, typeSystem, node.name);
         if (isParameterProperty(node)) {
-          instanceClientMembers.add(node.name.text);
+          addFetchClientRoot(instanceClientMembers, typeSystem, node.name);
         }
       }
     }
@@ -221,6 +269,28 @@ function readFetchClientRoots(
   };
 }
 
+function addFetchClientRoot(
+  roots: Set<ts.Symbol>,
+  typeSystem: TypeSystemProject,
+  name: ts.Identifier,
+): void {
+  const symbol = sourceRootSymbolForName(typeSystem, name);
+  if (symbol != null) {
+    roots.add(symbol);
+  }
+}
+
+function addFetchClientPropertyRoot(
+  roots: Set<ts.Symbol>,
+  typeSystem: TypeSystemProject,
+  name: ts.PropertyName,
+): void {
+  const symbol = sourceRootSymbolForPropertyName(typeSystem, name);
+  if (symbol != null) {
+    roots.add(symbol);
+  }
+}
+
 function readHttpClientConfigureIssues(
   context: FetchClientReadContext,
   call: ts.CallExpression,
@@ -231,6 +301,7 @@ function readHttpClientConfigureIssues(
   if (!expressionIsFetchClientRoot(context, call.expression.expression)) {
     return;
   }
+  const ownerIdentityHandle = fetchClientRootOwnerIdentity(context, call.expression.expression);
   const config = call.arguments[0] ?? null;
   if (config == null || definitelyInvalidConfigureInput(config)) {
     context.sites.push(sourceSiteForNode(
@@ -242,18 +313,20 @@ function readHttpClientConfigureIssues(
         frameworkErrorCode: FetchClientFrameworkErrorCode.ConfigureInvalidConfig,
         message: 'HttpClient.configure(...) received a statically closed value that is neither an object nor a configuration callback.',
         localName: 'configure',
+        ownerIdentityHandle,
       },
     ));
     return;
   }
-  readConfigureObjectIssues(context, config, false);
-  readConfigureCallbackIssues(context, config);
+  readConfigureObjectIssues(context, config, false, ownerIdentityHandle);
+  readConfigureCallbackIssues(context, config, ownerIdentityHandle);
 }
 
 function readConfigureObjectIssues(
   context: FetchClientReadContext,
   expression: ts.Expression,
   normalizedConfigurationObject: boolean,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const current = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(current)) {
@@ -262,21 +335,22 @@ function readConfigureObjectIssues(
 
   const defaultsExpression = readObjectPropertyExpression(current, 'defaults');
   if (defaultsExpression != null) {
-    readDefaultHeaderIssues(context, defaultsExpression, 'defaults.headers');
+    readDefaultHeaderIssues(context, defaultsExpression, 'defaults.headers', ownerIdentityHandle);
   }
   if (!normalizedConfigurationObject) {
-    readDefaultHeaderIssues(context, current, 'headers');
+    readDefaultHeaderIssues(context, current, 'headers', ownerIdentityHandle);
   }
 
   const interceptorsExpression = readObjectPropertyExpression(current, 'interceptors');
   if (interceptorsExpression != null) {
-    readInterceptorCollectionIssues(context, interceptorsExpression);
+    readInterceptorCollectionIssues(context, interceptorsExpression, ownerIdentityHandle);
   }
 }
 
 function readConfigureCallbackIssues(
   context: FetchClientReadContext,
   expression: ts.Expression,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const current = unwrapExpression(expression);
   if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) {
@@ -287,15 +361,15 @@ function readConfigureCallbackIssues(
     : null;
 
   if (ts.isBlock(current.body)) {
-    readConfigureCallbackBlockIssues(context, current.body, configParameterName);
+    readConfigureCallbackBlockIssues(context, current.body, configParameterName, ownerIdentityHandle);
     return;
   }
 
-  readConfigureCallbackReturnIssues(context, current.body);
+  readConfigureCallbackReturnIssues(context, current.body, ownerIdentityHandle);
   if (configParameterName != null) {
     const actions = readHttpClientConfigurationActionChain(current.body, configParameterName);
     if (actions != null) {
-      readConfigurationActionIssues(context, actions);
+      readConfigurationActionIssues(context, actions, ownerIdentityHandle);
     }
   }
 }
@@ -304,11 +378,12 @@ function readConfigureCallbackBlockIssues(
   context: FetchClientReadContext,
   body: ts.Block,
   configParameterName: string | null,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const actions: HttpClientConfigurationAction[] = [];
   for (const statement of body.statements) {
     if (ts.isReturnStatement(statement) && statement.expression != null) {
-      readConfigureCallbackReturnIssues(context, statement.expression);
+      readConfigureCallbackReturnIssues(context, statement.expression, ownerIdentityHandle);
       if (configParameterName != null) {
         const returnedActions = readHttpClientConfigurationActionChain(statement.expression, configParameterName);
         if (returnedActions != null) {
@@ -322,17 +397,18 @@ function readConfigureCallbackBlockIssues(
       }
     }
   }
-  readConfigurationActionIssues(context, actions);
+  readConfigurationActionIssues(context, actions, ownerIdentityHandle);
 }
 
 function readConfigureCallbackReturnIssues(
   context: FetchClientReadContext,
   expression: ts.Expression,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const current = unwrapExpression(expression);
   if (callbackReturnIsAccepted(current)) {
     if (ts.isObjectLiteralExpression(current)) {
-      readConfigureObjectIssues(context, current, true);
+      readConfigureObjectIssues(context, current, true, ownerIdentityHandle);
     }
     return;
   }
@@ -346,6 +422,7 @@ function readConfigureCallbackReturnIssues(
         frameworkErrorCode: FetchClientFrameworkErrorCode.ConfigureInvalidReturn,
         message: 'HttpClient.configure(...) callback returned a statically closed non-object value.',
         localName: 'configure-return',
+        ownerIdentityHandle,
       },
     ));
   }
@@ -354,6 +431,7 @@ function readConfigureCallbackReturnIssues(
 function readConfigurationActionIssues(
   context: FetchClientReadContext,
   actions: readonly HttpClientConfigurationAction[],
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   if (actions.length === 0) {
     return;
@@ -363,7 +441,7 @@ function readConfigurationActionIssues(
     switch (action.name) {
       case 'withDefaults':
         if (action.call.arguments[0] != null) {
-          readDefaultHeaderIssues(context, action.call.arguments[0], 'defaults.headers');
+          readDefaultHeaderIssues(context, action.call.arguments[0], 'defaults.headers', ownerIdentityHandle);
         }
         break;
       case 'withRetry':
@@ -371,7 +449,7 @@ function readConfigurationActionIssues(
           node: action.call,
           config: action.call.arguments[0] ?? null,
         });
-        readRetryConfigurationIssues(context, action.call.arguments[0] ?? null, action.call);
+        readRetryConfigurationIssues(context, action.call.arguments[0] ?? null, action.call, ownerIdentityHandle);
         break;
       case 'withInterceptor': {
         const interceptor = action.call.arguments[0] ?? null;
@@ -380,26 +458,27 @@ function readConfigurationActionIssues(
             node: action.call,
             config: retryInterceptorConfig(interceptor),
           });
-          readRetryConfigurationIssues(context, retryInterceptorConfig(interceptor), action.call);
+          readRetryConfigurationIssues(context, retryInterceptorConfig(interceptor), action.call, ownerIdentityHandle);
         }
         break;
       }
     }
   }
-  readRetryInterceptorOrderingIssues(context, retryFacts, actions.length);
+  readRetryInterceptorOrderingIssues(context, retryFacts, actions.length, ownerIdentityHandle);
 }
 
 function readDefaultHeaderIssues(
   context: FetchClientReadContext,
   expression: ts.Expression,
   localName: string,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const current = unwrapExpression(expression);
   if (!ts.isObjectLiteralExpression(current)) {
     return;
   }
   const headers = readObjectPropertyExpression(current, 'headers');
-  if (headers == null || !expressionCreatesHeadersInstance(headers)) {
+  if (headers == null || !expressionCreatesHeadersInstance(context, headers)) {
     return;
   }
   context.sites.push(sourceSiteForNode(
@@ -411,6 +490,7 @@ function readDefaultHeaderIssues(
       frameworkErrorCode: FetchClientFrameworkErrorCode.ConfigureInvalidHeader,
       message: 'HttpClient.configure(...) defaults.headers is a Headers instance; Aurelia requires a plain object for default header merging.',
       localName,
+      ownerIdentityHandle,
     },
   ));
 }
@@ -418,6 +498,7 @@ function readDefaultHeaderIssues(
 function readInterceptorCollectionIssues(
   context: FetchClientReadContext,
   expression: ts.Expression,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const current = unwrapExpression(expression);
   if (!ts.isArrayLiteralExpression(current)) {
@@ -435,11 +516,11 @@ function readInterceptorCollectionIssues(
         node: element,
         config: retryInterceptorConfig(element),
       });
-      readRetryConfigurationIssues(context, retryInterceptorConfig(element), element);
+      readRetryConfigurationIssues(context, retryInterceptorConfig(element), element, ownerIdentityHandle);
     }
   }
   if (!hasSpread) {
-    readRetryInterceptorOrderingIssues(context, retryFacts, current.elements.length);
+    readRetryInterceptorOrderingIssues(context, retryFacts, current.elements.length, ownerIdentityHandle);
   }
 }
 
@@ -447,6 +528,7 @@ function readRetryInterceptorOrderingIssues(
   context: FetchClientReadContext,
   retryFacts: readonly RetryInterceptorFact[],
   interceptorCount: number,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   if (retryFacts.length > 1) {
     const secondRetry = retryFacts[1]!;
@@ -459,6 +541,7 @@ function readRetryInterceptorOrderingIssues(
         frameworkErrorCode: FetchClientFrameworkErrorCode.MoreThanOneRetryInterceptor,
         message: 'HttpClient.configure(...) statically configures more than one RetryInterceptor.',
         localName: 'interceptors',
+        ownerIdentityHandle,
       },
     ));
     return;
@@ -476,6 +559,7 @@ function readRetryInterceptorOrderingIssues(
           frameworkErrorCode: FetchClientFrameworkErrorCode.RetryInterceptorNotLast,
           message: 'HttpClient.configure(...) statically configures a RetryInterceptor before another interceptor.',
           localName: 'interceptors',
+          ownerIdentityHandle,
         },
       ));
     }
@@ -486,6 +570,7 @@ function readRetryConfigurationIssues(
   context: FetchClientReadContext,
   config: ts.Expression | null,
   siteNode: ts.Node,
+  ownerIdentityHandle: IdentityHandle | null,
 ): void {
   const retryConfig = config == null ? null : unwrapExpression(config);
   if (retryConfig != null && !ts.isObjectLiteralExpression(retryConfig)) {
@@ -511,6 +596,7 @@ function readRetryConfigurationIssues(
         frameworkErrorCode: FetchClientFrameworkErrorCode.RetryInterceptorInvalidExponentialInterval,
         message: 'RetryInterceptor exponential strategy uses an interval less than or equal to one second.',
         localName: 'retry.interval',
+        ownerIdentityHandle,
       },
     ));
   }
@@ -528,6 +614,7 @@ function readRetryConfigurationIssues(
         frameworkErrorCode: FetchClientFrameworkErrorCode.RetryInterceptorInvalidStrategy,
         message: 'RetryInterceptor strategy is statically outside Aurelia fetch-client RetryStrategy.',
         localName: 'retry.strategy',
+        ownerIdentityHandle,
       },
     ));
   }
@@ -561,24 +648,50 @@ function expressionIsFetchClientRoot(
   expression: ts.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
-  if (expressionCreatesFetchClientRoot(current, context.bindings)) {
+  if (expressionCreatesFetchClientRoot(context.sourcePath, context.sourceFile, current, context.bindings, context.sourceApiRoots)) {
+    return true;
+  }
+  if (context.sourceApiRoots.expressionIsAppTaskDeclaredServiceRoot(
+    context.sourcePath,
+    context.sourceFile,
+    current,
+    context.bindings,
+    FETCH_CLIENT_ROOT_EXPORTS,
+  )) {
     return true;
   }
   if (ts.isIdentifier(current)) {
-    return context.roots.clients.has(current.text) || typeLooksLikeFetchClient(context, current);
+    const symbol = sourceRootSymbolForName(context.typeSystem, current);
+    return (symbol != null && context.roots.clients.has(symbol)) || expressionHasFrameworkFetchClientType(context, current);
   }
   if (
     ts.isPropertyAccessExpression(current)
     && current.expression.kind === ts.SyntaxKind.ThisKeyword
   ) {
-    return context.roots.instanceClientMembers.has(current.name.text) || typeLooksLikeFetchClient(context, current);
+    const symbol = sourceRootSymbolForMemberName(context.typeSystem, current.name);
+    return (symbol != null && context.roots.instanceClientMembers.has(symbol)) || expressionHasFrameworkFetchClientType(context, current);
   }
-  return typeLooksLikeFetchClient(context, current);
+  return expressionHasFrameworkFetchClientType(context, current);
+}
+
+function fetchClientRootOwnerIdentity(
+  context: FetchClientReadContext,
+  expression: ts.Expression,
+): IdentityHandle | null {
+  return context.sourceApiRoots.serviceRootIdentityForExpression(
+    context.sourcePath,
+    context.sourceFile,
+    expression,
+    FETCH_CLIENT_ROOT_EXPORTS,
+  )?.identityHandle ?? null;
 }
 
 function expressionCreatesFetchClientRoot(
+  sourcePath: string,
+  sourceFile: ts.SourceFile,
   expression: ts.Expression | null,
   bindings: SourceImportBindings,
+  sourceApiRoots: AureliaSourceApiRootFacts,
 ): boolean {
   if (expression == null) {
     return false;
@@ -590,9 +703,14 @@ function expressionCreatesFetchClientRoot(
   ) {
     return true;
   }
-  return ts.isCallExpression(current)
-    && current.arguments[0] != null
-    && readImportedExportName(current.arguments[0], bindings, FETCH_CLIENT_ROOT_EXPORTS) != null;
+  return expressionCreatesFrameworkServiceRoot(
+    sourceApiRoots,
+    sourcePath,
+    sourceFile,
+    current,
+    bindings,
+    FETCH_CLIENT_ROOT_EXPORTS,
+  );
 }
 
 function expressionCreatesRetryInterceptor(
@@ -612,14 +730,24 @@ function retryInterceptorConfig(
 }
 
 function expressionCreatesHeadersInstance(
+  context: FetchClientReadContext,
   expression: ts.Expression,
 ): boolean {
   const current = unwrapExpression(expression);
-  return ts.isNewExpression(current)
-    && (
-      (ts.isIdentifier(current.expression) && current.expression.text === 'Headers')
-      || (ts.isPropertyAccessExpression(current.expression) && current.expression.name.text === 'Headers')
-    );
+  if (!ts.isNewExpression(current)) {
+    return false;
+  }
+  const constructorName = ts.isPropertyAccessExpression(current.expression)
+    ? current.expression.name
+    : ts.isIdentifier(current.expression)
+      ? current.expression
+      : null;
+  return constructorName != null && symbolMatchesFrameworkDeclarationSource(
+    symbolForExpression(context.checker, constructorName),
+    context.checker,
+    context.sourcePathByFileName,
+    DOM_HEADERS_DECLARATIONS,
+  );
 }
 
 function nodeIsFetchClientTyped(
@@ -629,21 +757,17 @@ function nodeIsFetchClientTyped(
   return typeNodeReferencesImportedExport(node.type ?? null, bindings, FETCH_CLIENT_ROOT_EXPORTS);
 }
 
-function typeLooksLikeFetchClient(
+function expressionHasFrameworkFetchClientType(
   context: FetchClientReadContext,
   expression: ts.Expression,
 ): boolean {
   const type = context.typeSystem.readProgramTypeAtLocation(expression);
-  if (type == null) {
-    return false;
-  }
-  const symbolName = type.symbol?.getName() ?? type.aliasSymbol?.getName() ?? null;
-  if (symbolName === 'HttpClient' || symbolName === 'IHttpClient') {
-    return true;
-  }
-  return type.getProperty('configure') != null
-    && type.getProperty('fetch') != null
-    && type.getProperty('interceptors') != null;
+  return typeMatchesFrameworkDeclarationSource(
+    type,
+    context.checker,
+    context.sourcePathByFileName,
+    FETCH_CLIENT_ROOT_DECLARATIONS,
+  );
 }
 
 function definitelyInvalidConfigureInput(

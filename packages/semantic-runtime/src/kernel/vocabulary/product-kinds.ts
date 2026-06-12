@@ -329,6 +329,14 @@ export const KernelProductKinds = {
   },
   Framework: {
 
+    /** Product kind for a source-backed framework service or container root. */
+    ServiceRoot: defineVocabulary(
+      KernelVocabularyNamespace.Framework,
+      'service-root',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed framework service or container root with explicit evidence basis and provenance.',
+    ),
+
     /** Product kind for an authored framework capability use joined to admission and availability evidence. */
     CapabilityDemand: defineVocabulary(
       KernelVocabularyNamespace.Framework,

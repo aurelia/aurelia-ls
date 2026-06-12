@@ -5,9 +5,8 @@ import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   type BootPackageManifest,
   isHostPathWithin,
-  normalizePosixPath,
+  manifestWorkspacesIncludeProject,
   readPackageManifest,
-  readPackageWorkspacePatterns,
   sameHostPath,
 } from '../boot/host-files.js';
 import {
@@ -19,7 +18,11 @@ import type { SourceSpan } from '../expression/source-span.js';
 import type {
   AddressHandle,
   IdentityHandle,
+  ProductHandle,
 } from '../kernel/handles.js';
+import {
+  DiKeyIdentityKind,
+} from '../kernel/identity.js';
 import { FrameworkIdentity } from '../kernel/identity.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
@@ -34,6 +37,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { uniqueStrings } from '../kernel/collections.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   FrameworkRegistrationCapability,
@@ -95,6 +99,11 @@ import {
   type FrameworkCapabilityPackageEvidenceScope,
 } from './capability-demand.js';
 import { FrameworkProductDetails } from './product-details.js';
+import {
+  FrameworkServiceRoot,
+  FrameworkServiceRootKind,
+  frameworkServiceRootBasisResolvesDiKey,
+} from './service-root.js';
 
 interface CapabilityDemandSite {
   readonly siteKind: FrameworkCapabilityDemandSiteKind;
@@ -104,7 +113,10 @@ interface CapabilityDemandSite {
   readonly admitted: boolean;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly ownerIdentityHandle: IdentityHandle | null;
-  readonly resource: TemplateResourceRuntimeAnalysisEmission;
+  readonly resource?: TemplateResourceRuntimeAnalysisEmission;
+  readonly localKeyParts?: readonly string[];
+  readonly templateSourceAddressHandle?: AddressHandle | null;
+  readonly resourceDefinitionProductHandle?: ProductHandle | null;
   readonly sourceRecords?: readonly KernelStoreRecord[];
 }
 
@@ -129,9 +141,10 @@ export class FrameworkCapabilityDemandMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     templates: TemplateCompilationProjectEmission,
+    serviceRoots: readonly FrameworkServiceRoot[] = [],
   ): FrameworkCapabilityDemandProjectResult {
     const availability = readCapabilityAvailabilityEvidence(project, typeSystem);
-    const publications = capabilityDemandSites(this.store, templates).map((site, index) =>
+    const publications = capabilityDemandSites(this.store, templates, serviceRoots).map((site, index) =>
       this.publishDemand(project, site, availability, index)
     );
     const records = publications.flatMap((publication) => publication.records);
@@ -157,19 +170,13 @@ export class FrameworkCapabilityDemandMaterializer {
     availability: CapabilityAvailabilityEvidenceContext,
     index: number,
   ): CapabilityDemandPublication {
-    const local = [
-      'framework-capability-demand',
-      project.projectKey,
-      localKeyPart(site.resource.compilation.localKey),
-      index.toString(),
-      localKeyPart(site.authoredName),
-    ].join(':');
+    const local = frameworkCapabilityDemandLocalKey(project.projectKey, site, index);
     const evidenceHandle = this.store.handles.evidence(local);
     const provenanceHandle = this.store.handles.provenance(local);
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
     const candidateModuleNames = frameworkRegistrationModuleNamesForCapability(site.requiredCapability);
-    const candidatePackageNames = uniqueStrings(candidateModuleNames.map(packageNameForSpecifier));
+    const candidatePackageNames = uniqueStrings(candidateModuleNames.map(packageNameForSpecifier), 'sorted');
     const packageEvidence = uniquePackageEvidence(
       candidatePackageNames.flatMap((packageName) => availability.byPackageName.get(packageName) ?? []),
     );
@@ -196,8 +203,8 @@ export class FrameworkCapabilityDemandMaterializer {
       site.authoredName,
       site.sourceAddressHandle,
       site.ownerIdentityHandle,
-      site.resource.compilation.unit.templateSource.sourceAddressHandle,
-      site.resource.compilation.definition.productHandle,
+      site.templateSourceAddressHandle ?? site.resource?.compilation.unit.templateSource.sourceAddressHandle ?? null,
+      site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? null,
     );
     const records = [
       ...(site.sourceRecords ?? []),
@@ -236,6 +243,7 @@ export class FrameworkCapabilityDemandMaterializer {
 function capabilityDemandSites(
   store: KernelStore,
   templates: TemplateCompilationProjectEmission,
+  serviceRoots: readonly FrameworkServiceRoot[],
 ): readonly CapabilityDemandSite[] {
   return uniqueDemandSites([
     ...templates.resources,
@@ -245,7 +253,36 @@ function capabilityDemandSites(
     ...bindingCommandCapabilityDemandSites(resource),
     ...resourceCapabilityDemandSites(resource),
     ...expressionResourceCapabilityDemandSites(store, resource),
-  ]));
+  ]).concat(sourceServiceApiCapabilityDemandSites(store, serviceRoots)));
+}
+
+function sourceServiceApiCapabilityDemandSites(
+  store: KernelStore,
+  serviceRoots: readonly FrameworkServiceRoot[],
+): readonly CapabilityDemandSite[] {
+  const providedInterfaceNames = providedInterfaceDiKeyNames(store);
+  return serviceRoots.flatMap((root): readonly CapabilityDemandSite[] => {
+    const descriptor = sourceServiceApiDemandDescriptor(root);
+    if (descriptor == null) {
+      return [];
+    }
+    return [{
+      siteKind: FrameworkCapabilityDemandSiteKind.SourceServiceApi,
+      demandKind: descriptor.demandKind,
+      requiredCapability: descriptor.requiredCapability,
+      authoredName: root.serviceKeyName,
+      admitted: providedInterfaceNames.has(root.serviceKeyName),
+      sourceAddressHandle: root.evidenceSourceAddressHandle ?? root.sourceAddressHandle,
+      ownerIdentityHandle: root.identityHandle,
+      localKeyParts: [
+        'source-service-api',
+        localKeyPart(root.productHandle),
+        localKeyPart(root.serviceKeyName),
+      ],
+      templateSourceAddressHandle: null,
+      resourceDefinitionProductHandle: null,
+    }];
+  });
 }
 
 function syntaxCapabilityDemandSites(
@@ -568,6 +605,35 @@ function capabilityForBuiltInResource(
   }
 }
 
+function sourceServiceApiDemandDescriptor(
+  root: FrameworkServiceRoot,
+): CapabilityDemandDescriptor | null {
+  if (
+    root.rootKind !== FrameworkServiceRootKind.Service
+    || !frameworkServiceRootBasisResolvesDiKey(root.basis)
+  ) {
+    return null;
+  }
+  switch (root.serviceKeyName) {
+    case 'IDialogService':
+    case 'DialogService':
+      return {
+        demandKind: FrameworkCapabilityDemandKind.DialogServiceResolvers,
+        requiredCapability: FrameworkRegistrationCapability.DialogServiceResolvers,
+      };
+    case 'IValidationRules':
+      return {
+        demandKind: FrameworkCapabilityDemandKind.ValidationServiceResolvers,
+        requiredCapability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+      };
+    case 'IHttpClient':
+    case 'HttpClient':
+    case 'ValidationRules':
+    default:
+      return null;
+  }
+}
+
 function compilerWorldAdmitsBuiltInSyntaxGroup(
   resource: TemplateResourceRuntimeAnalysisEmission,
   group: BuiltInSyntaxGroup,
@@ -658,7 +724,7 @@ function uniqueDemandSites(
   const result: CapabilityDemandSite[] = [];
   for (const site of sites) {
     const key = [
-      site.resource.compilation.definition.productHandle,
+      site.resourceDefinitionProductHandle ?? site.resource?.compilation.definition.productHandle ?? site.localKeyParts?.join(':') ?? '',
       site.siteKind,
       site.requiredCapability,
       site.authoredName,
@@ -669,6 +735,43 @@ function uniqueDemandSites(
     }
     seen.add(key);
     result.push(site);
+  }
+  return result;
+}
+
+function frameworkCapabilityDemandLocalKey(
+  projectKey: string,
+  site: CapabilityDemandSite,
+  index: number,
+): string {
+  return [
+    'framework-capability-demand',
+    projectKey,
+    ...(site.localKeyParts ?? [
+      localKeyPart(site.resource?.compilation.localKey ?? 'unknown'),
+      index.toString(),
+      localKeyPart(site.authoredName),
+    ]),
+  ].join(':');
+}
+
+function providedInterfaceDiKeyNames(
+  store: KernelStore,
+): ReadonlySet<string> {
+  const providedIdentityHandles = new Set(
+    store.readClaims()
+      .filter((claim) => claim.predicateKey === KernelVocabulary.Di.ProvidesKey.key)
+      .map((claim) => claim.objectHandle),
+  );
+  const result = new Set<string>();
+  for (const identity of store.readIdentities()) {
+    if (
+      identity.kind === 'di-key-identity'
+      && identity.keyKind === DiKeyIdentityKind.Interface
+      && providedIdentityHandles.has(identity.handle)
+    ) {
+      result.add(identity.interfaceName);
+    }
   }
   return result;
 }
@@ -750,7 +853,7 @@ function sourceImportEvidence(
         ? [specifier.text]
         : [];
     });
-    return uniqueStrings(moduleNames.map(packageNameForSpecifier).filter(isAureliaPackageSpecifier))
+    return uniqueStrings(moduleNames.map(packageNameForSpecifier).filter(isAureliaPackageSpecifier), 'sorted')
       .map((packageName) => new FrameworkCapabilityPackageEvidence(
         FrameworkCapabilityPackageEvidenceKind.SourceImport,
         packageName,
@@ -845,54 +948,4 @@ function nearestWorkspaceManifestForProject(
   }
 
   return null;
-}
-
-function manifestWorkspacesIncludeProject(
-  manifest: BootPackageManifest,
-  manifestRoot: string,
-  projectRoot: string,
-): boolean {
-  const patterns = readPackageWorkspacePatterns(manifest);
-  if (patterns.length === 0) {
-    return false;
-  }
-  const relativeProjectRoot = normalizePosixPath(path.relative(manifestRoot, projectRoot));
-  return relativeProjectRoot.length > 0 && patterns.some((pattern) =>
-    workspacePatternMatchesProject(pattern, relativeProjectRoot)
-  );
-}
-
-function workspacePatternMatchesProject(
-  pattern: string,
-  relativeProjectRoot: string,
-): boolean {
-  const normalizedPattern = normalizeWorkspacePattern(pattern);
-  return globPatternToRegExp(normalizedPattern).test(relativeProjectRoot);
-}
-
-function normalizeWorkspacePattern(pattern: string): string {
-  let normalized = normalizePosixPath(pattern).replace(/^\.\//, '');
-  while (normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1);
-  }
-  return normalized;
-}
-
-function globPatternToRegExp(pattern: string): RegExp {
-  const body = pattern
-    .split('/')
-    .map((segment) => {
-      if (segment === '**') {
-        return '(?:[^/]+/)*[^/]+';
-      }
-      return segment
-        .replace(/[\\^$+?.()|[\]{}]/g, '\\$&')
-        .replace(/\*/g, '[^/]*');
-    })
-    .join('/');
-  return new RegExp(`^${body}$`);
-}
-
-function uniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

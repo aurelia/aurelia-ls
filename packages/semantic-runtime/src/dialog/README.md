@@ -5,6 +5,8 @@ This folder owns semantic-runtime products for source-backed `@aurelia/dialog` d
 The first admitted lane is the static subset that can be proven from TypeScript source before dialog activation: bare
 configuration registration, closed `DialogService.open(...)` settings, and visible child dialog resolver keys. It
 publishes `DialogIssue` products and app diagnostics linked to exact Aurelia framework error codes.
+Framework API recognition is import/DI/container/declaration-backed; local classes with dialog-shaped method names and
+arbitrary `.get(...)` calls are not enough to spend dialog framework authority.
 
 ## Claimed Authorities
 

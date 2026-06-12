@@ -1762,6 +1762,8 @@ function templateCompletionSiteKindForFrameworkCapabilityDemand(
       return TemplateCompletionSiteKind.ExpressionValueConverter;
     case FrameworkCapabilityDemandSiteKind.TemplateBindingBehavior:
       return TemplateCompletionSiteKind.ExpressionBindingBehavior;
+    case FrameworkCapabilityDemandSiteKind.SourceServiceApi:
+      return TemplateCompletionSiteKind.Expression;
   }
 }
 
