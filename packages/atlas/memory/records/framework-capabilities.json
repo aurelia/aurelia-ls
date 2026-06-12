@@ -258,17 +258,18 @@
         "type-system",
         "api"
       ],
-      "summary": "Framework service-root facts are first-class semantic-runtime kernel products used for source API diagnostics, DI-key enrichment, capability demand, and candidate/open boundaries.",
+      "summary": "Framework service-root and capability-demand facts are first-class semantic-runtime kernel products used for source API diagnostics, public capability admission rows, DI-key enrichment, and candidate/open boundaries.",
       "rationale": "Dialog, validation, fetch-client, and future plugin source APIs can all need the same authored evidence: a service/root value came from DI activation, container get, AppTask declaration, framework type annotation, direct constructor, or an unresolved-but-framework-shaped candidate such as non-activation `resolve(...)`, resolver wrappers, local resolve barrels, and classic injection metadata. Keeping this as a `framework.service-root` product plus `framework.open-service-root-candidate` seams with provenance, source/evidence spans, DI-key claims, and demand diagnostics prevents each domain from re-recognizing framework service usage locally or promoting TypeChecker/evaluator hints into positive claims without source-backed admission.",
       "guidance": [
         "Start in `packages/semantic-runtime/src/framework/service-root.ts`, `service-root-materializer.ts`, and `service-root-enrichment-materializer.ts` when a framework service usage must justify diagnostics, capability demand, or cross-domain ownership.",
         "Use `AureliaSourceApiRootFacts` from `source-api-root-recognition.ts` as the hot index over service-root products, source spans, same-source symbols, cross-source aliased symbols, and container roots; do not add parallel span-key maps in dialog, validation, fetch-client, or completion code.",
         "Only DI-resolution-backed service-root bases should join to DI keys or create source-service capability demand. Update `frameworkServiceRootBasisResolvesDiKey(...)` when adding a new basis.",
         "Use `FrameworkCapabilityDemandSiteKind.SourceServiceApi` when an authored DI-backed root references a plugin service key whose framework registration is required. Admission should join the root's `Framework.RootResolvesDiKey` claims through `di/container-chain.ts`, using `DiProductIdentity.containerHandle` plus `Di.ProvidesKey` to prove provider visibility on the consulting container chain; do not fall back to plain service-key-name strings or world-global provider presence. Check framework source semantics before adding a new key: some interfaces, such as fetch-client `IHttpClient`, have default aliases and should not demand app registration.",
-        "Source-service capability demand admission has four states: `admitted` for chain-proven providers, `admitted-chain-unproven` when a provider exists but the consulting chain cannot be proven, `admission-unknown` when no provider exists but same-chain registration-hiding seams or an unmapped consulting container block accusation, and `not-admitted` for missing providers with a mapped consulting chain and no blocking seam. Only `not-admitted` should emit `framework-capability-not-registered`.",
+        "Source-service capability demand admission has four states: `admitted` for chain-proven providers, `admitted-chain-unproven` when a provider exists but the consulting container cannot be mapped, `admission-unknown` when same-chain registration-hiding seams or an unmapped consulting container block accusation without provider proof, and `not-admitted` for missing providers with a mapped consulting chain and no blocking seam. Known sibling/off-chain providers must stay `not-admitted`; do not let world-global provider presence suppress missing-registration diagnostics.",
         "Candidate service-root shapes should publish source-backed `framework.open-service-root-candidate` seams with explicit reason/rollup policy rather than silently dropping or fabricating roots. Non-activation `resolve(...)` sites, including module-scope `definitely-absent` ambient container sites, are candidates rather than positive roots.",
         "Framework declaration-source matching belongs in `type-system/framework-declaration-source.ts`; domain readers should use package-root-aware specs instead of local pnpm/yarn path fragments.",
-        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows. Source-service diagnostics should point to related domain lanes such as `dialog-issues` or `validation-issues`, and expose demand/root handles when detail is requested."
+        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows. Source-service diagnostics should point to related domain lanes such as `dialog-issues` or `validation-issues`, and expose demand/root handles when detail is requested.",
+        "`SemanticAppQueryKind.FrameworkCapabilityDemands` is the public fact surface for capability demand rows. It reports authored use, admission state, package/import evidence, source-file scoping, related issue lane, handles in detail mode, and row-level actionability; MCP should consume it through normal app-query catalog/pass-through rather than a bespoke tool."
       ],
       "nextActionPolicy": "when-touched",
       "anchors": [
@@ -311,6 +312,12 @@
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandRows",
+          "summary": "Public framework-capability-demands projection for authored demand, admission, evidence, source scoping, actionability, and handles."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
           "symbolName": "readFrameworkCapabilityDemandDiagnosticRows",
           "summary": "Public app-diagnostics projection for unadmitted source-service capability demand."
         },
@@ -334,6 +341,11 @@
           "kind": "script",
           "command": "node scripts/contract-service-root-admission-chain.mjs",
           "summary": "Contract for chain-proven source-service admission, admitted-chain-unproven fallback, scoped admission-unknown seams, caller-unmapped containers, and multi-root cross-admission canaries."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-framework-capability-demand-query.mjs",
+          "summary": "Contract for the public capability-demand query, source scoping, page budget behavior, actionability, and continuations."
         },
         {
           "kind": "script",
@@ -371,6 +383,11 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/di/container-chain.ts",
           "symbolName": "DiContainerChainFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandRows"
         },
         {
           "kind": "source-declaration-exists",

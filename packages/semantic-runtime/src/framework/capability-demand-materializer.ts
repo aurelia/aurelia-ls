@@ -361,28 +361,27 @@ class SourceServiceApiAdmissionContext {
       return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
     }
     const resolvedKeyHandles = this.resolvedDiKeyClaimsByRoot.get(root.productHandle) ?? [];
-    const hasWorldProvider = resolvedKeyHandles.some((keyHandle) => this.chainFacts.hasProviderForKey(keyHandle));
     const consultingContainer = this.consultingContainerIdentityForRoot(root);
-    if (!hasWorldProvider) {
-      const blockingOpenSeams = this.registrationHidingOpenSeamsForRoot(root, consultingContainer);
-      if (blockingOpenSeams.length > 0) {
-        return new SourceServiceApiAdmission(
-          FrameworkCapabilityAdmissionState.AdmissionUnknown,
-          blockingOpenSeams.map((seam) => seam.handle),
-        );
-      }
-      return consultingContainer == null
-        ? new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmissionUnknown)
-        : new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
-    }
-
     if (
       consultingContainer != null
       && resolvedKeyHandles.some((keyHandle) => this.chainFacts.providerIsOnConsultingChain(keyHandle, consultingContainer))
     ) {
       return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.Admitted);
     }
-    return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmittedChainUnproven);
+    const blockingOpenSeams = this.registrationHidingOpenSeamsForRoot(root, consultingContainer);
+    if (blockingOpenSeams.length > 0) {
+      return new SourceServiceApiAdmission(
+        FrameworkCapabilityAdmissionState.AdmissionUnknown,
+        blockingOpenSeams.map((seam) => seam.handle),
+      );
+    }
+    if (consultingContainer == null) {
+      const hasWorldProvider = resolvedKeyHandles.some((keyHandle) => this.chainFacts.hasProviderForKey(keyHandle));
+      return hasWorldProvider
+        ? new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmittedChainUnproven)
+        : new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.AdmissionUnknown);
+    }
+    return new SourceServiceApiAdmission(FrameworkCapabilityAdmissionState.NotAdmitted);
   }
 
   private registrationHidingOpenSeamsForRoot(

@@ -128,6 +128,7 @@ import {
 } from './contracts.js';
 import {
   describeAddress,
+  semanticSourceReferenceMatchesFilePath,
   sourceReferenceForParserSpan,
 } from './source-reference.js';
 import {
@@ -1875,7 +1876,7 @@ function sourceReferenceMatchesFile(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
 ): boolean {
   return sourceFile?.filePath == null
-    || (source?.path != null && sourcePathMatchesFileName(source.path, sourceFile.filePath));
+    || semanticSourceReferenceMatchesFilePath(source, sourceFile.filePath);
 }
 
 function sourceReferenceWithinTemplateSpan(

@@ -570,6 +570,13 @@ export function appBuilderExistingAppFactQueryRowsForInputFacet(
           AppBuilderExistingAppFactUseKind.InformPolicySelection,
           'Reports dialog diagnostics when semantic-runtime models them; dialog source generation is not part of the current app-builder v1 floor.',
         ),
+        existingAppFactQueryRow(
+          facet.id,
+          SemanticAppQueryKind.FrameworkCapabilityDemands,
+          AppBuilderExistingAppFactQueryPurpose.PluginProductSurface,
+          AppBuilderExistingAppFactUseKind.InformPolicySelection,
+          'Reports authored framework/plugin capability demands, registration admission, and package/import evidence; absence of issue rows is not proof that a plugin capability is unavailable.',
+        ),
       ];
     default:
       return [];

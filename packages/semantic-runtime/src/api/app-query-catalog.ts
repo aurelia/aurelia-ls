@@ -44,6 +44,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.ValidationIssues, 'validation', 'Validation rule/model issues and validation behavior diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.FetchClientIssues, 'fetch-client', 'Fetch client configuration and retry-interceptor diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.DialogIssues, 'dialog', 'Dialog configuration, service, and child-resolver diagnostics.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
+  queryRow(SemanticAppQueryKind.FrameworkCapabilityDemands, 'framework', 'Authored framework/plugin capability demands with registration admission, package/import availability evidence, and source-backed actionability posture.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true }),
   queryRow(SemanticAppQueryKind.RouterOverview, 'router', 'Summary-first route, viewport, route-tree, navigation, and router issue overview; opt into row samples with page.size or rowPageSize.', 'overview', { pagingKind: 'row-sample', supportsDetail: true }),
   ...semanticRouteQueryDescriptors.map((descriptor) =>
     queryRow(

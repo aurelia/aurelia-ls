@@ -22,7 +22,10 @@ import type {
   SemanticTypeScriptDiagnosticRow,
   SemanticValidationIssueRow,
 } from './contracts.js';
-import type { SemanticSourceReference } from './source-reference.js';
+import {
+  semanticSourceReferenceMatchesFilePath,
+  type SemanticSourceReference,
+} from './source-reference.js';
 
 export function appDiagnosticRows(
   sources: readonly SourceFileAdmission[],
@@ -452,9 +455,5 @@ function diagnosticSourceReferenceMatches(
   source: SemanticSourceReference | null,
   filePath: string,
 ): boolean {
-  if (source == null) {
-    return false;
-  }
-  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
-    || diagnosticSourceReferenceMatches(source.anchor ?? null, filePath);
+  return semanticSourceReferenceMatchesFilePath(source, filePath);
 }

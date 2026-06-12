@@ -238,11 +238,14 @@ import {
   readDialogIssueRows,
 } from './dialog-projections.js';
 import {
+  frameworkCapabilityDemandsDisplayText,
+  readFrameworkCapabilityDemandRows,
   readFrameworkCapabilityDemandDiagnosticRows,
 } from './framework-projections.js';
 import {
   compilerWorldLabel,
   describeAddress,
+  semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
 } from './source-reference.js';
 import {
@@ -303,6 +306,7 @@ import {
   type SemanticDialogIssuesResult,
   type SemanticEvaluationIssuesResult,
   type SemanticFetchClientIssuesResult,
+  type SemanticFrameworkCapabilityDemandsResult,
   type SemanticI18nTranslationBindingsResult,
   type SemanticI18nTranslationKeysResult,
   type SemanticOpenSeamRow,
@@ -2155,17 +2159,6 @@ function semanticOpenSeamRowMatchesSourceFile(
     || row.reasonSources.some((source) => semanticSourceReferenceMatchesFilePath(source.source, filePath));
 }
 
-function semanticSourceReferenceMatchesFilePath(
-  source: SemanticSourceReference | null,
-  filePath: string,
-): boolean {
-  if (source == null) {
-    return false;
-  }
-  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
-    || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
-}
-
 function sourceRoleForAppSourceReference(
   projectKey: string,
   sources: readonly ProjectBootFrame['sourceFiles'][number][],
@@ -2598,6 +2591,7 @@ export class SemanticApp {
       case 'validation':
       case 'fetch-client':
       case 'dialog':
+      case 'framework':
       case 'router':
         return this.answerOverviewSourceDiagnosticQuery(query, answerCurrentQuery);
       case 'observation':
@@ -2660,6 +2654,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.fetchClientIssues(query.page, query.detail));
       case SemanticAppQueryKind.DialogIssues:
         return answerCurrentQuery(() => this.dialogIssues(query.page, query.detail));
+      case SemanticAppQueryKind.FrameworkCapabilityDemands:
+        return answerCurrentQuery(() => this.frameworkCapabilityDemands(query.page, query.detail, query.sourceFile));
       case SemanticAppQueryKind.RouterOverview:
         return answerCurrentQuery(() => this.routerOverview({
           rowPageSize: query.rowPageSize ?? query.page?.size,
@@ -3806,6 +3802,38 @@ export class SemanticApp {
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} @aurelia/dialog issue row(s).`,
       { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  frameworkCapabilityDemands(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+    sourceFile?: SemanticRuntimeSourceFileInput | null,
+  ): SemanticRuntimeAnswer<SemanticFrameworkCapabilityDemandsResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticFrameworkCapabilityDemandsResult>({
+      kind: SemanticAppQueryKind.FrameworkCapabilityDemands,
+      page,
+      detail,
+      sourceFile,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readFrameworkCapabilityDemandRows(
+      this.emission,
+      this.runtime.workspace.store,
+      includeHandles(detail),
+      sourceFile,
+    );
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} framework capability demand row(s).`,
+      {
+        displayText: frameworkCapabilityDemandsDisplayText(paged.rows, rows.length),
+        rows: paged.rows,
+      },
       paged.page,
     );
   }

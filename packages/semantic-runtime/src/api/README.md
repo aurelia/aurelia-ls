@@ -501,6 +501,10 @@ diagnostic suggestion targets the framework capability and includes manifest/imp
 When no local manifest/import evidence exists, the suggestion says so instead of implying the package is already
 available. Diagnostic-action classification treats these rows as app-source framework-capability registration pressure
 with source-edit policy still open, because the template demand site is not itself the bootstrap edit location.
+`FrameworkCapabilityDemands` exposes the underlying authored demand rows directly, including admission state,
+package/import availability evidence, source-file scoping, related issue lanes, and compact actionability posture.
+Use it to inspect registered, missing, unknown, and chain-unproven capability demand facts without changing which rows
+become diagnostics.
 Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
 runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
 behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.

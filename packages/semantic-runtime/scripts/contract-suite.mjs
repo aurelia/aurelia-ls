@@ -260,6 +260,16 @@ const contractSuites = [
   ], 'contract-service-root-admission-chain.mjs', 'Source-service capability admission is chain-proven when possible and degrades to explicit unproven or unknown states without false diagnostics.'),
   contract('framework', 'fast', [
     'framework',
+    'api',
+    'mcp',
+    'continuations',
+    'diagnostics',
+    'configuration',
+    'di',
+    'source-address',
+  ], 'contract-framework-capability-demand-query.mjs', 'Public framework capability-demand query exposes registration admission, package evidence, source scoping, actionability, and continuations.'),
+  contract('framework', 'fast', [
+    'framework',
     'open-seams',
     'source-address',
   ], 'contract-service-root-candidate-rollup.mjs', 'Framework service-root candidates cap detailed seams while preserving an explicit source-backed rollup.'),

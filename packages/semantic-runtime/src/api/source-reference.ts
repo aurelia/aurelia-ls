@@ -10,6 +10,7 @@ import {
   authoredSourceAddressForAnchorHandle,
   isSemanticAddressRecord,
   readSourceAnchorRecord,
+  sourcePathMatchesFileName,
   type SourceAnchorHandle,
 } from '../kernel/source-address.js';
 import type { SourceSpan } from '../expression/source-span.js';
@@ -80,6 +81,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'patterns',
   'relatedInformation',
   'relatedSources',
+  'packageEvidence',
   'component',
   'fallback',
   'routeConfigContext',
@@ -158,6 +160,18 @@ export function semanticSourcePrecisionForReference(
     return anchorPrecision;
   }
   return source.path != null ? InquirySourcePrecision.CarrierSpan : InquirySourcePrecision.NotRequired;
+}
+
+/** Match a public source reference or authored anchor against a requested source-file path. */
+export function semanticSourceReferenceMatchesFilePath(
+  source: SemanticSourceReference | null,
+  filePath: string,
+): boolean {
+  if (source == null) {
+    return false;
+  }
+  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
+    || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
 }
 
 /** Pick the higher-evidence source precision without numeric confidence scoring. */

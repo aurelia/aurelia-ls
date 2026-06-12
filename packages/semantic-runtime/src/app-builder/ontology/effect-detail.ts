@@ -528,6 +528,7 @@ function semanticRuntimeQueryKindsForEffectContract(
         SemanticAppQueryKind.Routes,
         SemanticAppQueryKind.StateStores,
         SemanticAppQueryKind.I18nTranslationKeys,
+        SemanticAppQueryKind.FrameworkCapabilityDemands,
         SemanticAppQueryKind.AppDiagnosticSummary,
       ];
     case AppBuilderEffectContractId.SourcePlanPreview:

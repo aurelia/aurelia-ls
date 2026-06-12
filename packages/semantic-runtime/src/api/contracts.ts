@@ -88,6 +88,20 @@ import type {
   DialogIssueSeverity,
 } from '../dialog/dialog-issue.js';
 import type {
+  FrameworkCapabilityAdmissionState,
+  FrameworkCapabilityAvailabilityState,
+  FrameworkCapabilityDemandKind,
+  FrameworkCapabilityDemandSiteKind,
+  FrameworkCapabilityPackageEvidenceKind,
+  FrameworkCapabilityPackageEvidenceScope,
+} from '../framework/capability-demand.js';
+import type {
+  FrameworkRegistrationCapability,
+} from '../registration/framework-registration-manifest.js';
+import type {
+  FrameworkRegistrationKind,
+} from '../registration/registration-reference.js';
+import type {
   ConfigurationIssueKind,
   ConfigurationIssuePhase,
 } from '../configuration/configuration-issue.js';
@@ -118,6 +132,7 @@ import type {
   AddressHandle,
   ClaimHandle,
   IdentityHandle,
+  OpenSeamHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
@@ -351,6 +366,7 @@ export const enum SemanticAppQueryKind {
   ValidationIssues = 'validation-issues',
   FetchClientIssues = 'fetch-client-issues',
   DialogIssues = 'dialog-issues',
+  FrameworkCapabilityDemands = 'framework-capability-demands',
   RouterOverview = 'router-overview',
   RouterOptions = 'router-options',
   Routes = 'routes',
@@ -426,6 +442,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.ValidationIssues,
   SemanticAppQueryKind.FetchClientIssues,
   SemanticAppQueryKind.DialogIssues,
+  SemanticAppQueryKind.FrameworkCapabilityDemands,
   SemanticAppQueryKind.RouterOverview,
   SemanticAppQueryKind.RouterOptions,
   SemanticAppQueryKind.Routes,
@@ -2374,6 +2391,57 @@ export interface SemanticDialogIssueRow {
 
 export interface SemanticDialogIssuesResult {
   readonly rows: readonly SemanticDialogIssueRow[];
+}
+
+export type SemanticFrameworkCapabilityDemandActionability =
+  | 'registered'
+  | 'missing-registration'
+  | 'registration-status-unknown'
+  | 'provider-visible-chain-unproven';
+
+export interface SemanticFrameworkCapabilityPackageEvidenceRow {
+  readonly evidenceKind: FrameworkCapabilityPackageEvidenceKind | `${FrameworkCapabilityPackageEvidenceKind}`;
+  readonly packageName: string;
+  readonly moduleName: string;
+  readonly scope: FrameworkCapabilityPackageEvidenceScope;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticFrameworkCapabilityDemandRow {
+  readonly projectKey: string;
+  readonly siteKind: FrameworkCapabilityDemandSiteKind | `${FrameworkCapabilityDemandSiteKind}`;
+  readonly demandKind: FrameworkCapabilityDemandKind | `${FrameworkCapabilityDemandKind}`;
+  readonly requiredCapability: FrameworkRegistrationCapability | `${FrameworkRegistrationCapability}`;
+  readonly requiredRegistrationKinds: readonly (FrameworkRegistrationKind | `${FrameworkRegistrationKind}`)[];
+  readonly candidateModuleNames: readonly string[];
+  readonly admissionState: FrameworkCapabilityAdmissionState | `${FrameworkCapabilityAdmissionState}`;
+  readonly availabilityState: FrameworkCapabilityAvailabilityState | `${FrameworkCapabilityAvailabilityState}`;
+  readonly actionability: SemanticFrameworkCapabilityDemandActionability;
+  readonly packageEvidence: readonly SemanticFrameworkCapabilityPackageEvidenceRow[];
+  readonly recommendedModuleName: string | null;
+  readonly authoredName: string;
+  readonly source: SemanticSourceReference | null;
+  readonly templateSource: SemanticSourceReference | null;
+  readonly blockingOpenSeamCount: number;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+  readonly summary: string;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly templateSourceAddressHandle: AddressHandle | null;
+    readonly resourceDefinitionProductHandle: ProductHandle | null;
+    readonly blockingOpenSeamHandles: readonly OpenSeamHandle[];
+  };
+}
+
+export interface SemanticFrameworkCapabilityDemandsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticFrameworkCapabilityDemandRow[];
 }
 
 export interface SemanticRouteConfigComponentRow {

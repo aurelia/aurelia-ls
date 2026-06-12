@@ -1651,7 +1651,7 @@ assert.equal(
 );
 assert.equal(
   existingAppFactDetailAnswer.value.existingAppFactQueryRowCount,
-  12,
+  13,
   'Expected existing-app facts to expose resource, route, and plugin query suppliers.',
 );
 const existingResourceFactDetail = existingAppFactDetailAnswer.value.rows[0]?.inputFacets.find((row) =>
@@ -1691,6 +1691,14 @@ assert.ok(
     && row.useKind === AppBuilderExistingAppFactUseKind.InformPolicySelection
   ) === true,
   'Expected validation plugin facts to inform policy without becoming generated validation-library source.',
+);
+assert.ok(
+  existingPluginFactDetail?.existingAppFactQueryRows.some((row) =>
+    row.queryKind === SemanticAppQueryKind.FrameworkCapabilityDemands
+    && row.purpose === AppBuilderExistingAppFactQueryPurpose.PluginProductSurface
+    && row.useKind === AppBuilderExistingAppFactUseKind.InformPolicySelection
+  ) === true,
+  'Expected framework capability demands to be visible as plugin capability admission/app-fact posture.',
 );
 const compactInputDetailAnswer = answerSemanticRuntimeAppBuilderQuery({
   kind: SemanticRuntimeAppBuilderQueryKind.InputContractDetail,

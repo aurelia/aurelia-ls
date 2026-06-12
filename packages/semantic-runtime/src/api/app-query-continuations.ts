@@ -35,6 +35,7 @@ import {
   type SemanticAppQueryCatalogRow,
   type SemanticAppDiagnosticRow,
   type SemanticAppDiagnosticSummaryRow,
+  type SemanticFrameworkCapabilityDemandRow,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeContinuationRow,
   type SemanticRuntimePageInput,
@@ -245,7 +246,7 @@ function semanticAppQueryContinuationRows(
   addOverviewContinuations(query, seeds);
   addSourceContinuations(query, seeds, sourceFile, page);
   addDiagnosticContinuations(query, result, seeds, sourceFile, page);
-  addDiagnosticValueContinuations(query, result, seeds, page);
+  addDiagnosticValueContinuations(query, result, seeds, sourceFile, page);
   addTemplateContinuations(query, result, seeds, sourceFile, page);
   addRouterContinuations(query, seeds, page);
   addResourceContinuations(query, seeds, page);
@@ -253,6 +254,7 @@ function semanticAppQueryContinuationRows(
   addBindingContinuations(query, seeds, page);
   addRenderingContinuations(query, seeds, page);
   addStateAndI18nContinuations(query, seeds, page);
+  addFrameworkContinuations(query, result, seeds, sourceFile, page);
   addIssueContinuations(query, seeds, page);
 
   return mergeSemanticRuntimeContinuationRows(nextPage, seeds.map((seed) => seedToRow(seed, answerSourcePrecision)));
@@ -473,6 +475,7 @@ function addDiagnosticValueContinuations(
   query: SemanticAppQuery,
   result: SemanticRuntimeAnswer<unknown>,
   seeds: ContinuationSeed[],
+  sourceFile: SemanticRuntimeSourceFileInput | null,
   page: SemanticRuntimePageInput,
 ): void {
   if (query.kind !== SemanticAppQueryKind.AppDiagnostics && query.kind !== SemanticAppQueryKind.AppDiagnosticSummary) {
@@ -499,6 +502,17 @@ function addDiagnosticValueContinuations(
           : InquiryEvidenceStaleness.SourceEpochSensitive,
         blockers: relatedDiagnosticRepairBlockers(relatedRows, relatedQueryKind, sourcePrecision),
       },
+    );
+  }
+  const frameworkRows = frameworkCapabilityDiagnosticRows(relatedRows);
+  if (frameworkRows.length > 0) {
+    seeds.push(
+      inspect(
+        'Inspect framework capability-demand rows behind returned registration diagnostics.',
+        withSourceFile(rowQuery(SemanticAppQueryKind.FrameworkCapabilityDemands, query, page), sourceFile),
+        InquiryEvidenceState.SourceBacked,
+        frameworkCapabilityDiagnosticSourcePrecision(frameworkRows),
+      ),
     );
   }
 }
@@ -954,6 +968,64 @@ function addStateAndI18nContinuations(
         ),
       );
       break;
+  }
+}
+
+function addFrameworkContinuations(
+  query: SemanticAppQuery,
+  result: SemanticRuntimeAnswer<unknown>,
+  seeds: ContinuationSeed[],
+  sourceFile: SemanticRuntimeSourceFileInput | null,
+  page: SemanticRuntimePageInput,
+): void {
+  if (query.kind !== SemanticAppQueryKind.FrameworkCapabilityDemands) {
+    return;
+  }
+  const rows = frameworkCapabilityDemandValueRows(result.value);
+  seeds.push(
+    diagnose(
+      'Compare framework capability demands with unified diagnostic clusters before planning registration work.',
+      withSourceFile(diagnosticQuery(SemanticAppQueryKind.AppDiagnosticSummary, query, page), sourceFile),
+      InquiryEvidenceState.Open,
+    ),
+    inspect(
+      'Inspect configuration issues beside framework registration and package admission posture.',
+      rowQuery(SemanticAppQueryKind.ConfigurationIssues, query, page),
+      InquiryEvidenceState.Open,
+    ),
+    inspect(
+      'Inspect DI issues beside source-service framework capability admission posture.',
+      rowQuery(SemanticAppQueryKind.DiIssues, query, page),
+      InquiryEvidenceState.Open,
+    ),
+  );
+  for (const relatedQueryKind of frameworkCapabilityDemandRelatedQueryKinds(rows)) {
+    if (
+      relatedQueryKind === query.kind
+      || relatedQueryKind === SemanticAppQueryKind.ConfigurationIssues
+      || relatedQueryKind === SemanticAppQueryKind.DiIssues
+    ) {
+      continue;
+    }
+    seeds.push(
+      inspect(
+        `Inspect ${relatedQueryKind} rows related to returned framework capability demands.`,
+        rowQuery(relatedQueryKind, query, page),
+        InquiryEvidenceState.Inferred,
+      ),
+    );
+  }
+  if (rows.some((row) =>
+    row.admissionState === 'admission-unknown'
+    || row.blockingOpenSeamCount > 0
+  )) {
+    seeds.push(
+      inspect(
+        'Inspect open seam sites that may explain unknown framework capability admission.',
+        rowQuery(SemanticAppQueryKind.OpenSeamSites, query, page),
+        InquiryEvidenceState.Open,
+      ),
+    );
   }
 }
 
@@ -1464,6 +1536,49 @@ function relatedDiagnosticSourceReferences(
     sources.push(...('sampleSources' in row ? row.sampleSources : [row.source]));
   }
   return sources;
+}
+
+function frameworkCapabilityDiagnosticRows(
+  rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
+): readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[] {
+  return rows.filter((row) => row.diagnosticKind === 'framework-capability-not-registered');
+}
+
+function frameworkCapabilityDiagnosticSourcePrecision(
+  rows: readonly (SemanticAppDiagnosticRow | SemanticAppDiagnosticSummaryRow)[],
+): InquirySourcePrecision {
+  return semanticSourcePrecisionForReferences(rows.flatMap((row) =>
+    'sampleSources' in row ? row.sampleSources : nullableSourceReferenceRow(row.source)
+  ));
+}
+
+function nullableSourceReferenceRow(
+  source: SemanticSourceReference | null,
+): readonly SemanticSourceReference[] {
+  return source == null ? [] : [source];
+}
+
+function frameworkCapabilityDemandValueRows(
+  value: unknown,
+): readonly SemanticFrameworkCapabilityDemandRow[] {
+  if (value == null || typeof value !== 'object' || !('rows' in value) || !Array.isArray(value.rows)) {
+    return [];
+  }
+  return value.rows.filter((row): row is SemanticFrameworkCapabilityDemandRow =>
+    row != null
+    && typeof row === 'object'
+    && 'requiredCapability' in row
+    && 'admissionState' in row
+    && 'relatedQueryKind' in row
+  );
+}
+
+function frameworkCapabilityDemandRelatedQueryKinds(
+  rows: readonly SemanticFrameworkCapabilityDemandRow[],
+): readonly (SemanticAppQueryKind | `${SemanticAppQueryKind}`)[] {
+  return [...new Set(rows.map((row) => row.relatedQueryKind))].sort((left, right) =>
+    left.localeCompare(right)
+  );
 }
 
 function templateDiagnosticSourcePrecision(value: unknown): InquirySourcePrecision | undefined {

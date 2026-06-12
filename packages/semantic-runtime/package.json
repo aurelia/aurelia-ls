@@ -68,6 +68,7 @@
     "contract:framework-declaration-source-paths": "pnpm build && node scripts/contract-framework-declaration-source-paths.mjs",
     "contract:service-root-v2-edges": "pnpm build && node scripts/contract-service-root-v2-edges.mjs",
     "contract:service-root-admission-chain": "pnpm build && node scripts/contract-service-root-admission-chain.mjs",
+    "contract:framework-capability-demand-query": "pnpm build && node scripts/contract-framework-capability-demand-query.mjs",
     "contract:i18n-binding-lifecycle": "pnpm build && node scripts/contract-i18n-binding-lifecycle.mjs",
     "contract:template-diagnostics": "pnpm build && node scripts/contract-template-diagnostics.mjs",
     "contract:template-completion-source-scope": "pnpm build && node scripts/contract-template-completion-source-scope.mjs",

@@ -11,10 +11,11 @@ post-DI-world claims such as root-to-DI-key and service-root-to-container-root e
 capability admitted in the app world?" Template syntax/resources and source service APIs should share this demand shape
 when they have the same authored-use plus admission plus availability relation. Source service API demands use a
 four-state admission lattice: `admitted` means a provider was proven on the consulting container chain;
-`admitted-chain-unproven` means a provider exists in the world but no consulting chain proof was available;
-`admission-unknown` means no provider was found but either an allow-listed registration-hiding open seam on the
-consulting chain blocks accusation or the demand's consulting container itself could not be mapped; and
-`not-admitted` is the only state that should emit `framework-capability-not-registered`.
+`admitted-chain-unproven` means a provider exists in the world but the demand's consulting container could not be
+mapped; `admission-unknown` means same-chain registration-hiding seams or an unmapped consulting container block
+accusation without provider proof; and `not-admitted` is the only state that should emit
+`framework-capability-not-registered`. Known sibling/off-chain providers are not admission evidence for a mapped
+consulting container.
 
 Consulting-container proof is intentionally derived from existing substrate facts: AppTask roots map through
 configuration sequence membership to the app-root container, activation-backed roots map through resource/class or

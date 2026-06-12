@@ -190,8 +190,20 @@ if (chainValidationDemands.some((demand) => demand.admissionState !== 'admitted'
 if (chainDialogDemands.length < 2) {
   failures.push(`Expected at least two dialog demands for sibling-root and caller-container cases, observed ${chainDialogDemands.length}.`);
 }
-if (chainDialogDemands.some((demand) => demand.admissionState !== 'admitted-chain-unproven')) {
-  failures.push(`Dialog demands should be admitted-chain-unproven, observed ${stateSummary(chainDialogDemands)}.`);
+if (chainDialogDemands.some((demand) => !['not-admitted', 'admitted-chain-unproven'].includes(demand.admissionState))) {
+  failures.push(`Dialog demands should split between not-admitted and admitted-chain-unproven, observed ${stateSummary(chainDialogDemands)}.`);
+}
+if (!chainDialogDemands.some((demand) =>
+  demand.admissionState === 'not-admitted'
+  && ownerRootForDemand(chain, demand)?.basis === 'di-activation-backed'
+)) {
+  failures.push('Expected the cross-root consumer component dialog demand to be not-admitted because the sibling-root provider is not on its consulting chain.');
+}
+if (!chainDialogDemands.some((demand) =>
+  demand.admissionState === 'admitted-chain-unproven'
+  && ownerRootForDemand(chain, demand)?.basis === 'container-get-backed'
+)) {
+  failures.push('Expected the caller-container dialog helper to remain admitted-chain-unproven because its consulting container is still unmapped.');
 }
 if (!chainDialogOwnerRoots.some((root) => root.basis === 'di-activation-backed')) {
   failures.push('Expected a di-activation-backed dialog owner root for the cross-root consumer component.');
@@ -202,8 +214,8 @@ if (!chainDialogOwnerRoots.some((root) => root.basis === 'container-get-backed')
 if (!chainValidationOwnerRoots.some((root) => root.basis === 'di-activation-backed')) {
   failures.push('Expected a di-activation-backed validation owner root for the chain-proven component demand.');
 }
-if (chainDiagnostics.length !== 0) {
-  failures.push(`Chain fixture should not emit source-service registration diagnostics, observed ${chainDiagnostics.length}.`);
+if (chainDiagnostics.length !== 1 || !chainDiagnostics.some((row) => row.missingInput === 'dialog.service-resolvers')) {
+  failures.push(`Chain fixture should emit one source-service registration diagnostic for the off-chain dialog provider, observed ${chainDiagnostics.length}.`);
 }
 if (!providedDiKeyInterfaceNames(chain.store).has('IDialogService')) {
   failures.push('Chain fixture should publish an IDialogService provider in the provider app root.');
@@ -253,6 +265,7 @@ if (failures.length > 0) {
       callerUnmappedDiagnostics: callerUnmappedDiagnostics.length,
       chainDialogDemands: chainDialogDemands.length,
       chainValidationDemands: chainValidationDemands.length,
+      chainDiagnostics: chainDiagnostics.length,
       rootContainers: rootContainerIdentityCount(chain.store),
       childContainers: childContainerIdentityCount(chain.store),
     },
