@@ -128,7 +128,10 @@ pnpm --filter @aurelia-ls/atlas self-check
   Semantic-runtime owns app-local authored capability truth through
   `framework.capability-demand` products. Treat Atlas capability rows as
   navigation/coverage memory, then verify concrete app truth through
-  semantic-runtime demand, registration admission, and package/import evidence.
+  semantic-runtime demand, registration admission, manifest/import evidence, and
+  template diagnostic contracts. Atlas currently routes the product owner through
+  world-construction/app-builder terrain rather than acting as a dedicated
+  capability-demand coverage oracle.
   The current release canary is broader than runtime-html shorthand syntax:
   unregistered `@event` / `:property`, i18n/state plugin syntax, router /
   validation-html / ui-virtualization resource tags or attributes, and i18n /

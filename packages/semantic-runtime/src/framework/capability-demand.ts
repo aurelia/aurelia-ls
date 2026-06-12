@@ -50,6 +50,7 @@ export type FrameworkCapabilityPackageEvidenceScope =
   | 'dependencies'
   | 'peerDependencies'
   | 'devDependencies'
+  | 'optionalDependencies'
   | 'import';
 
 export class FrameworkCapabilityPackageEvidence {

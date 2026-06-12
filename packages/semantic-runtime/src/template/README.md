@@ -602,8 +602,9 @@ Authored framework capability demand is separate from parser success. Optional s
 not admitted the matching framework registration. Plugin-owned syntax, resource tags/attributes, value converters, and
 binding behaviors can also be authored while their package is available but their configuration is not registered.
 `framework/capability-demand-materializer.ts` owns that cross-cutting fact after template compilation: it records the
-authored demand, effective admission state, package/import availability evidence, and a registration-capability fix
-path while public diagnostics project only unmet demands. The producer should read built-in syntax groups, built-in
+authored demand, effective admission state, manifest/import availability evidence, and a registration-capability fix
+path while public diagnostics project only unmet demands. Manifest evidence includes dependency, peer, dev, optional,
+and nearest workspace manifest scopes; source evidence includes static import/export module specifiers. The producer should read built-in syntax groups, built-in
 resource catalog identity, expression AST resource tails, and compiler-world visible-resource lookup; do not teach
 `AttributeSyntax` or attribute classification to reinterpret unregistered shorthand as a binding. Runtime semantics
 remain inert until the capability is registered.

@@ -13,6 +13,7 @@ export interface BootPackageManifest {
   readonly dependencies?: unknown;
   readonly peerDependencies?: unknown;
   readonly devDependencies?: unknown;
+  readonly optionalDependencies?: unknown;
 }
 
 const packageManifestCache = new Map<string, BootPackageManifest | null>();

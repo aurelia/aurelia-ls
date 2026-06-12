@@ -699,6 +699,7 @@ function manifestDependencyEvidence(
     ...manifestDependencyScopeEvidence(manifest.dependencies, 'dependencies', kind),
     ...manifestDependencyScopeEvidence(manifest.peerDependencies, 'peerDependencies', kind),
     ...manifestDependencyScopeEvidence(manifest.devDependencies, 'devDependencies', kind),
+    ...manifestDependencyScopeEvidence(manifest.optionalDependencies, 'optionalDependencies', kind),
   ].map((row) => new FrameworkCapabilityPackageEvidence(
     row.evidenceKind,
     row.packageName,

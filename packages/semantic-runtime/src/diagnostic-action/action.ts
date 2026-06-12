@@ -29,6 +29,8 @@ export enum DiagnosticActionKind {
   InspectOpenSeam = 'inspect-open-seam',
   /** Resolve a runtime-dependent boundary by adding explicit source/configuration or by leaving it intentionally open. */
   ResolveRuntimeBoundary = 'resolve-runtime-boundary',
+  /** Register a framework/plugin capability that authored template syntax or resources already demand. */
+  RegisterFrameworkCapability = 'register-framework-capability',
   /** Improve semantic-runtime substrate because the app shape appears legitimate but the emulator cannot model it yet. */
   ExtendSemanticSubstrate = 'extend-semantic-substrate',
 }
@@ -57,6 +59,8 @@ export enum DiagnosticActionPlanKind {
   SourceWriteabilityAlignment = 'source-writeability-alignment',
   /** Make a runtime-dependent value boundary explicit in app source/configuration, or intentionally keep it open. */
   RuntimeBoundaryDeclaration = 'runtime-boundary-declaration',
+  /** Register an Aurelia framework/plugin configuration or registration group in app source. */
+  FrameworkCapabilityRegistration = 'framework-capability-registration',
   /** Improve semantic-runtime/Atlas substrate because the app shape appears legitimate but is not modeled yet. */
   SemanticSubstrateExtension = 'semantic-substrate-extension',
   /** Inspect the source/type/runtime context before choosing app-source or substrate work. */
@@ -201,6 +205,8 @@ export function diagnosticActionKindForDiagnosticSuggestion(
     case 'configure-node-observer':
     case 'make-method-trackable':
       return DiagnosticActionKind.ResolveRuntimeBoundary;
+    case 'register-framework-capability':
+      return DiagnosticActionKind.RegisterFrameworkCapability;
     case 'remove-duplicate-binding-behavior':
     case 'use-assignable-expression':
       return DiagnosticActionKind.RewriteBindingSource;
@@ -254,6 +260,8 @@ export function diagnosticActionPlanKindForAction(
       return DiagnosticActionPlanKind.SourceWriteabilityAlignment;
     case DiagnosticActionKind.ResolveRuntimeBoundary:
       return DiagnosticActionPlanKind.RuntimeBoundaryDeclaration;
+    case DiagnosticActionKind.RegisterFrameworkCapability:
+      return DiagnosticActionPlanKind.FrameworkCapabilityRegistration;
     case DiagnosticActionKind.ExtendSemanticSubstrate:
       return DiagnosticActionPlanKind.SemanticSubstrateExtension;
     case DiagnosticActionKind.InspectTypeSurface:
@@ -274,6 +282,7 @@ export function diagnosticActionChangeDomainForPlan(
     case DiagnosticActionPlanKind.TemplateSyntaxRewrite:
     case DiagnosticActionPlanKind.SourceAssignmentTypeAlignment:
     case DiagnosticActionPlanKind.SourceWriteabilityAlignment:
+    case DiagnosticActionPlanKind.FrameworkCapabilityRegistration:
       return DiagnosticActionChangeDomain.AppSource;
     case DiagnosticActionPlanKind.RuntimeBoundaryDeclaration:
       return DiagnosticActionChangeDomain.RuntimePolicy;
@@ -299,6 +308,13 @@ export function diagnosticActionPlanReadinessForCluster(
       return DiagnosticActionPlanReadiness.InspectionRequired;
     case DiagnosticActionChangeDomain.AppSource:
       break;
+  }
+
+  if (
+    planKind === DiagnosticActionPlanKind.FrameworkCapabilityRegistration
+    && openReasonKinds.length === 0
+  ) {
+    return DiagnosticActionPlanReadiness.SourceEditPolicyOpen;
   }
 
   if (

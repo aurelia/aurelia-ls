@@ -4,10 +4,19 @@ import { fileURLToPath } from 'node:url';
 import {
   FixtureVerificationRequest,
   createSemanticRuntime,
+  DiagnosticActionChangeDomain,
+  DiagnosticActionKind,
+  DiagnosticActionPlanKind,
+  DiagnosticActionPlanReadiness,
+  DiagnosticActionTargetSourceCoverage,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
   readFixtureVerificationSnapshot,
   SemanticAppQueryKind,
+  diagnosticActionChangeDomainForPlan,
+  diagnosticActionKindForDiagnosticSuggestion,
+  diagnosticActionPlanKindForAction,
+  diagnosticActionPlanReadinessForCluster,
   verifyFixtureEffects,
 } from '../out/index.js';
 
@@ -22,6 +31,8 @@ const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure
 const unregisteredShorthandFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-shorthand-syntax');
 const unregisteredPluginSyntaxFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-syntax');
 const unregisteredPluginResourcesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-resources');
+const unregisteredPluginNoPackageEvidenceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-no-package-evidence');
+const unregisteredPluginOptionalPackageEvidenceFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-optional-package-evidence');
 const registeredPluginCapabilitiesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/registered-plugin-capabilities');
 
 const contracts = [
@@ -595,6 +606,50 @@ const contracts = [
     ],
   ),
   await verifyFixture(
+    unregisteredPluginNoPackageEvidenceFixtureRoot,
+    'template-diagnostics-contract:unregistered-plugin-no-package-evidence',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unregistered plugin resources without package evidence should keep registration diagnostics honest about missing local evidence.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'router.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionKind', 'register-framework-capability'),
+          effectFilter('suggestion.valueTypeDisplay', '@aurelia/router'),
+          effectFilter('suggestion.summary', 'Register RouterConfiguration or DefaultResources from @aurelia/router with the app container. No local manifest or import evidence was found for a package that provides this capability.'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    unregisteredPluginOptionalPackageEvidenceFixtureRoot,
+    'template-diagnostics-contract:unregistered-plugin-optional-package-evidence',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Unregistered plugin resources with optional dependency evidence should report local availability evidence.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'framework-capability-not-registered'),
+          effectFilter('missingInput', 'router.default-resources'),
+          effectFilter('suggestion.suggestionKind', 'register-framework-capability'),
+          effectFilter('suggestion.actionKind', 'register-framework-capability'),
+          effectFilter('suggestion.valueTypeDisplay', '@aurelia/router'),
+          effectFilter('suggestion.summary', 'Register RouterConfiguration or DefaultResources from @aurelia/router with the app container. Availability evidence was found for @aurelia/router.'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
     registeredPluginCapabilitiesFixtureRoot,
     'template-diagnostics-contract:registered-plugin-capabilities',
     [
@@ -615,11 +670,24 @@ const mixedFormCursorProbe = await readMixedFormAssignmentCursorProbe();
 const failures = contracts.flatMap((contract) => contract.verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => `${contract.fixture}: ${result.summary}`));
+const diagnosticActionProbe = readDiagnosticActionProbe();
 if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
 }
 if (mixedFormCursorProbe.overlayAssignmentDiagnostics !== 0) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to suppress assignment-shaped overlay diagnostics when data-flow owns the span, observed ${mixedFormCursorProbe.overlayAssignmentDiagnostics}.`);
+}
+if (diagnosticActionProbe.actionKind !== DiagnosticActionKind.RegisterFrameworkCapability) {
+  failures.push(`Expected register-framework-capability suggestions to classify as ${DiagnosticActionKind.RegisterFrameworkCapability}, observed ${diagnosticActionProbe.actionKind}.`);
+}
+if (diagnosticActionProbe.planKind !== DiagnosticActionPlanKind.FrameworkCapabilityRegistration) {
+  failures.push(`Expected register-framework-capability suggestions to plan as ${DiagnosticActionPlanKind.FrameworkCapabilityRegistration}, observed ${diagnosticActionProbe.planKind}.`);
+}
+if (diagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSource) {
+  failures.push(`Expected framework capability registration to belong to ${DiagnosticActionChangeDomain.AppSource}, observed ${diagnosticActionProbe.changeDomain}.`);
+}
+if (diagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.SourceEditPolicyOpen) {
+  failures.push(`Expected framework capability registration readiness to stay ${DiagnosticActionPlanReadiness.SourceEditPolicyOpen}, observed ${diagnosticActionProbe.readiness}.`);
 }
 
 const summary = {
@@ -633,6 +701,7 @@ const summary = {
     })),
   })),
   mixedFormCursorProbe,
+  diagnosticActionProbe,
 };
 
 if (failures.length > 0) {
@@ -644,6 +713,25 @@ if (failures.length > 0) {
 
 function effectFilter(field, value) {
   return new ExpectedSemanticEffectFilter(field, value);
+}
+
+function readDiagnosticActionProbe() {
+  const actionKind = diagnosticActionKindForDiagnosticSuggestion('register-framework-capability');
+  const planKind = diagnosticActionPlanKindForAction(
+    actionKind,
+    'register-framework-capability',
+    'framework-capability',
+  );
+  return {
+    actionKind,
+    planKind,
+    changeDomain: diagnosticActionChangeDomainForPlan(planKind),
+    readiness: diagnosticActionPlanReadinessForCluster(
+      planKind,
+      DiagnosticActionTargetSourceCoverage.All,
+      [],
+    ),
+  };
 }
 
 async function verifyFixture(fixtureRoot, storeKey, expectedEffects) {

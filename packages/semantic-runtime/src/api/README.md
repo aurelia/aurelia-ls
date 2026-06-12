@@ -498,6 +498,9 @@ Unmet framework capability demands surface as `framework-capability-not-register
 router/validation-html/ui-virtualization built-in resources, and expression-owned value-converter/binding-behavior
 resources. Authored sites remain inert or unresolved when their framework capability is not registered, while the
 diagnostic suggestion targets the framework capability and includes manifest/import availability evidence when present.
+When no local manifest/import evidence exists, the suggestion says so instead of implying the package is already
+available. Diagnostic-action classification treats these rows as app-source framework-capability registration pressure
+with source-edit policy still open, because the template demand site is not itself the bootstrap edit location.
 Weak-member template diagnostics reuse the cursor-info member-owner path and therefore must use each resource's
 runtime-analysis expression world. This keeps diagnostic rows aligned with completion/cursor answers for binding
 behavior lifecycle cases such as i18n `t.bind` evaluate-only keys versus `t-params.bind` source-scope projection.

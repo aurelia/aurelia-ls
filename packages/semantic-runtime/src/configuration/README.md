@@ -227,7 +227,9 @@ plugin resources, value converters, or binding behaviors without admitting the m
 group, semantic-runtime publishes `framework.capability-demand` products from the template/app-world join and projects
 unmet demands as `framework-capability-not-registered` diagnostics. Those products join to this registration manifest
 and to manifest/import availability evidence so callers can distinguish "register the available capability" from "no
-local package evidence yet" without inferring configuration from raw source names.
+local package evidence yet" without inferring configuration from raw source names. Manifest evidence covers dependency,
+peer, dev, optional, and nearest workspace manifests; dynamic import and package-alias resolution remain outside this
+bounded release-trust lane.
 
 Evaluated object values that expose a `register` method are classified as IRegistry-shaped admissions. Imported or
 declaration-only values can also be admitted through the TypeChecker when their static type exposes a callable
