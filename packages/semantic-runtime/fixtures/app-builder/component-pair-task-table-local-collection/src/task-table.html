@@ -1,0 +1,15 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Done</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of taskItems">
+      <td>${taskItem.title}</td>
+      <td>${taskItem.done ? 'Done' : 'Open'}</td>
+    </tr>
+  </tbody>
+</table>

@@ -1,0 +1,945 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 10 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=router-backed-list-detail, files=10, witnesses=80, controlUses=5, expectedEffects=22, handoffNotes=5, decisionBundles=1, issues=0.",
+    "rootDir": ".",
+    "templatePath": null,
+    "sourceTargetPath": null,
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "router-backed-list-detail",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "route-navigation-action"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "native-submit-form"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-button"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "field-group"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-text-input"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-single-select"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-multi-select"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "semantic-runtime-reopen",
+      "control-use-inventory",
+      "existing-app-fact-read",
+      "component-manifest-publication"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "service-class",
+      "state-composition",
+      "route",
+      "binding-data-flow",
+      "service-interaction-binding",
+      "template-compilation",
+      "runtime-controller",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 22,
+    "controlUseInventoryRowCount": 5,
+    "controlUseInventoryRows": [
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-invocation",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "openTask",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open",
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Open",
+        "labelTextSource": "explicit-request",
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "text-input",
+        "innerControlPatternId": "native-text-input",
+        "fieldName": "title",
+        "actionName": null,
+        "bindingExpression": "title",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Title",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "title-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "single-select",
+        "innerControlPatternId": "native-single-select",
+        "fieldName": "assigneeId",
+        "actionName": null,
+        "bindingExpression": "assigneeId",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Assignee",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "assignee-id-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": "state.contacts",
+        "valueDomainExpressionSource": "relationship-collection"
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "field-group",
+        "controlId": "multi-select",
+        "innerControlPatternId": "native-multi-select",
+        "fieldName": "reviewerIds",
+        "actionName": null,
+        "bindingExpression": "reviewerIds",
+        "bindingExpressionSource": "selected-field-name",
+        "handlerExpression": null,
+        "handlerExpressionSource": null,
+        "eventName": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": null,
+        "buttonType": null,
+        "labelText": "Reviewers",
+        "labelTextSource": "selected-field-title",
+        "fieldControlId": "reviewer-ids-field",
+        "fieldControlIdSource": "selected-field-name",
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": "state.contacts",
+        "valueDomainExpressionSource": "relationship-collection"
+      },
+      {
+        "sourceReference": {
+          "sourceKind": "source-lowering-source-plan",
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          "compositionKind": null,
+          "fragmentKinds": [
+            "template-element"
+          ],
+          "fragmentCount": 1
+        },
+        "realizationPolicyId": "inline-native",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "innerControlPatternId": null,
+        "fieldName": null,
+        "actionName": "create",
+        "bindingExpression": null,
+        "bindingExpressionSource": null,
+        "handlerExpression": "create()",
+        "handlerExpressionSource": "selected-action-name",
+        "eventName": "submit",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "buttonText": "Create task",
+        "buttonType": "submit",
+        "labelText": "Create task",
+        "labelTextSource": "explicit-request",
+        "fieldControlId": null,
+        "fieldControlIdSource": null,
+        "describedByIds": [],
+        "messageKind": null,
+        "messageText": null,
+        "messageTextSource": null,
+        "messageId": null,
+        "valueDomainExpression": null,
+        "valueDomainExpressionSource": null
+      }
+    ],
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 18,
+      "requiredCount": 2,
+      "conditionalCount": 4,
+      "optionalCount": 12,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 18,
+          "requiredCount": 2,
+          "conditionalCount": 4,
+          "optionalCount": 12,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceLoweringRouterBackedListDetail"
+          ],
+          "conditionalRequestFieldNames": [
+            "primaryEntityName",
+            "linkText",
+            "fieldNames",
+            "submitButtonText"
+          ],
+          "optionalRequestFieldNames": [
+            "actionName",
+            "createForm",
+            "serviceCollection",
+            "detailRelatedCollections",
+            "sourceTargetPath",
+            "serviceClassName",
+            "loadMethodName",
+            "findMethodName",
+            "createMethodName",
+            "filterMethods",
+            "updateMethods",
+            "queryControls"
+          ]
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 80,
+    "handoffNoteCount": 5,
+    "handoffNotes": [
+      {
+        "kind": "source-pattern-use",
+        "summary": "Concrete source is a recommendable starting scaffold unless an existing app already owns that structure.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-text-input"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-single-select"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-multi-select"
+          }
+        ],
+        "sourceFileRoles": [],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "seed-data-scaffold",
+        "summary": "Generated seed records came from explicit app-builder input and keep the app runnable; replace them or connect them to real persistence when moving beyond scaffold data.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-text-input"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-single-select"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-multi-select"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model",
+          "component",
+          "service"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-text-input"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-single-select"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-multi-select"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 10/10 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-text-input"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-single-select"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-multi-select"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 22 expected semantic effect(s), 5 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "router-backed-list-detail"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "route-navigation-action"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "native-submit-form"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "field-group"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-text-input"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-single-select"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-multi-select"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "component",
+          "domain-model",
+          "state-model",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "service-class",
+          "state-composition",
+          "route",
+          "binding-data-flow",
+          "service-interaction-binding",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
+    "suppliedInputCount": 5,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 1,
+    "decisionBundleDecisionCount": 5,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 188,
+          "contributionCount": 4
+        },
+        {
+          "path": "src/my-app.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 710,
+          "contributionCount": 4
+        },
+        {
+          "path": "src/my-app.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 120,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/task-item-list-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 368,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/routes/task-item-list-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1544,
+          "contributionCount": 26
+        },
+        {
+          "path": "src/routes/task-item-detail-route.ts",
+          "role": "component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 475,
+          "contributionCount": 6
+        },
+        {
+          "path": "src/routes/task-item-detail-route.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 386,
+          "contributionCount": 9
+        },
+        {
+          "path": "src/task-item.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 198,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/contact-entry.ts",
+          "role": "domain-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-domain-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 143,
+          "contributionCount": 0
+        },
+        {
+          "path": "src/task-item-browse-state.ts",
+          "role": "state-model",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-state-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 1715,
+          "contributionCount": 2
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "@aurelia/router",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 452
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 311
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": {
+        "key": "routed-collection-detail.convention",
+        "title": "Routed collection detail",
+        "summary": "Router shell, list route, nested detail route, DI-owned state, route-parameter ID lookup, and direct domain template reads.",
+        "role": "recommendable-source-start",
+        "domainModelPolicy": "caller-applied",
+        "stylePolicy": "none",
+        "dataPolicy": "caller-supplied",
+        "codeEconomyPolicy": "production-terse",
+        "adaptationNotes": [
+          "Domain nouns and seed records come from supplied input; the reusable mechanics are routed list/detail ownership, DI state, and ID-to-object lookup.",
+          "The route parameter is a scalar boundary so the detail route can render before data lookup completes in later service-backed variants.",
+          "Nested viewport layout is a consequence of the routed detail area, not an app-global style policy."
+        ],
+        "parameters": [
+          {
+            "key": "detail-route-parameter",
+            "kind": "route-identity",
+            "applicationPolicy": "source-text-input",
+            "valueShape": "route-parameter-name",
+            "title": "Detail route parameter",
+            "sourceValue": "taskId",
+            "summary": "Rename route path parameter, route-context access, and data-driven link construction together."
+          },
+          {
+            "key": "list-route-path",
+            "kind": "route-identity",
+            "applicationPolicy": "source-text-input",
+            "valueShape": "route-path",
+            "title": "List route path",
+            "sourceValue": "task-assignment-table",
+            "summary": "Rename the list route path together with root navigation links and generated detail navigation defaults."
+          }
+        ],
+        "modules": [
+          {
+            "key": "aurelia-app-shell",
+            "kind": "app-shell",
+            "title": "Aurelia app shell",
+            "summary": "Public Aurelia entrypoint plus root component/template ownership."
+          },
+          {
+            "key": "convention-resource-admission",
+            "kind": "resource-convention",
+            "title": "Convention resource admission",
+            "summary": "Class/file/template naming is intentionally compatible with Aurelia convention resource discovery."
+          },
+          {
+            "key": "router-shell",
+            "kind": "router-admission",
+            "title": "Router shell",
+            "summary": "RouterConfiguration, route config, navigation links, and au-viewport shell wiring."
+          },
+          {
+            "key": "route-link-navigation",
+            "kind": "router-admission",
+            "title": "Route link navigation",
+            "summary": "Templates create static or data-driven route instructions instead of string-only DOM href plumbing."
+          },
+          {
+            "key": "nested-viewport-layout",
+            "kind": "router-admission",
+            "title": "Nested viewport layout",
+            "summary": "A child route area owns its own au-viewport so nested route components render inside the active parent route component."
+          },
+          {
+            "key": "route-context-selection",
+            "kind": "route-context",
+            "title": "Route-owned selection",
+            "summary": "Route params, query values, fragments, or route-context reads own current item selection."
+          },
+          {
+            "key": "route-parameter-selection",
+            "kind": "route-context",
+            "title": "Route parameter selection",
+            "summary": "A route path parameter is the scalar identity for the current domain item or form request."
+          },
+          {
+            "key": "di-state-boundary",
+            "kind": "di-boundary",
+            "title": "DI state boundary",
+            "summary": "Components resolve ordinary state/domain classes through Aurelia DI instead of passing facades around."
+          },
+          {
+            "key": "state-composition",
+            "kind": "state-composition",
+            "title": "State composition",
+            "summary": "A state class owns typed child state/model instances rather than a flat object bag."
+          },
+          {
+            "key": "ordinary-domain-class-model",
+            "kind": "domain-model",
+            "title": "Ordinary domain classes",
+            "summary": "Domain entities and value objects are modeled as ordinary classes with readable properties and getters."
+          },
+          {
+            "key": "list-rendering",
+            "kind": "list-rendering",
+            "title": "List rendering",
+            "summary": "Repeated rows/cards/lists intentionally exercise item-scope template-controller handoff."
+          },
+          {
+            "key": "template-controller-flow",
+            "kind": "template-controller",
+            "title": "Template-controller flow",
+            "summary": "If, repeat, switch, promise, or let scopes are intentional semantic structure rather than markup decoration."
+          }
+        ],
+        "adaptationGroups": [
+          {
+            "key": "route-identity",
+            "title": "Route identity",
+            "summary": "List path and detail route parameter are source-applicable together because route config, route-context reads, and generated navigation links must stay aligned.",
+            "parameterKeys": [
+              "detail-route-parameter",
+              "list-route-path"
+            ]
+          }
+        ],
+        "kind": "source-pattern"
+      }
+    }
+  }
+}

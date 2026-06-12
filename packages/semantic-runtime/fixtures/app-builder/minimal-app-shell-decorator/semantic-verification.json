@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "minimal-app-shell-decorator",
+  "ok": true,
+  "expectedEffects": 9,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder minimal app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder minimal app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder minimal app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder minimal app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Minimal app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Minimal app shell SourcePlan should expose a resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Minimal app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Minimal app shell SourcePlan should hydrate its root component. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Minimal app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 0,
+  "controlUseResults": [],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 6816,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 93,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/app.ts",
+      "textLength": 182,
+      "summary": "Generated SourcePlan file 'src/app.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/app.html",
+      "textLength": 37,
+      "summary": "Generated SourcePlan file 'src/app.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 406,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 9,
+      "jsonLength": 2703,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 6,
+      "jsonLength": 121,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 2,
+      "jsonLength": 49,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 1,
+      "jsonLength": 80,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 0,
+      "jsonLength": 2,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 23,
+      "jsonLength": 8204,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

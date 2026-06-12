@@ -1,0 +1,18 @@
+<template if.bind="item">
+  <article class="item-card" class.bind="item.badge" highlighted.class="item.isHighlighted" padding.style="item.cardPadding" border-color.style="item.cardAccentColor">
+    <h3>${item.name}</h3>
+    <p>${item.summary}</p>
+    <p>${item.priceLabel}</p>
+    <p>${item.stockLabel}</p>
+    <template switch.bind="item.availability">
+      <p case="in-stock">Ready to ship.</p>
+      <p case="limited">Limited stock.</p>
+      <p default-case>Available by backorder.</p>
+    </template>
+    <a load.bind="'/items/' + item.id">View details</a>
+    <button type="button" click.trigger="state.selectItem(item.id)" disabled.bind="!item.inStock">Select</button>
+  </article>
+</template>
+<article else class="item-card">
+  <p>Loading Item...</p>
+</article>

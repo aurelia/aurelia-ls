@@ -1,0 +1,451 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/service-search-task-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "service-search-task-section-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "service search task section explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "searchTaskItems",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "clearTaskItemSearch",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Service Search Task Section",
+                    "baseName": "Service Search Task Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/service-search-task-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "domain-command-action"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "local-view-model-state"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "searchTaskItems",
+                      "statusMemberName": "searchStatusMessage",
+                      "statusText": "Search applied.",
+                      "statusId": "task-search-status"
+                    },
+                    {
+                      "actionName": "clearTaskItemSearch",
+                      "statusMemberName": "clearSearchStatusMessage",
+                      "statusText": "Search cleared.",
+                      "statusId": "task-clear-search-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "app-section"
+                },
+                {
+                  "kind": "control-pattern",
+                  "domain": "control",
+                  "id": "field-group"
+                },
+                {
+                  "kind": "control-pattern",
+                  "domain": "control",
+                  "id": "native-button"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "loading-empty-error-state"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "service-search-task-section"
+                      ]
+                    },
+                    {
+                      "target": "field-group",
+                      "fieldName": "title",
+                      "classTokens": [
+                        "service-search-task-section__search-field"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "searchTaskItems",
+                      "classTokens": [
+                        "service-search-task-section__search-button"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "clearTaskItemSearch",
+                      "classTokens": [
+                        "service-search-task-section__search-button"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "service-search-task-section__status"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "service-search-task-section__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "service-search-task-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "service-search-task-section__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Search service rows",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Review generated query state",
+                      "done": true
+                    },
+                    {
+                      "id": 3,
+                      "title": "Clear task search",
+                      "done": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "serviceCollections": [
+        {
+          "sourceTargetPath": "src/services/task-item-service.ts",
+          "serviceClassName": "TaskItemService",
+          "componentMemberName": "taskItemService",
+          "collectionEntityName": "TaskItem",
+          "recordTypeName": "TaskItemRecord",
+          "loadMethodName": "listTaskItems",
+          "filterMethods": [
+            {
+              "methodName": "searchTaskItemsByTitle",
+              "fieldName": "title",
+              "parameterName": "query",
+              "predicateKind": "text-contains"
+            }
+          ],
+          "queryStates": [
+            {
+              "stateMemberName": "taskItemTitleQuery",
+              "stateTypeText": "string",
+              "initialValueExpression": "''",
+              "inactiveValueExpression": "''",
+              "reloadMethodName": "reloadTaskItemsByTitle",
+              "resultMemberName": "taskItemsPromise",
+              "filterMethodName": "searchTaskItemsByTitle"
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childContent": [
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "field-group"
+              },
+              "fieldName": "title",
+              "bindingExpression": "taskItemTitleQuery",
+              "innerControlPatternId": "native-search-input",
+              "labelText": "Search tasks",
+              "fieldControlId": "task-search-query"
+            }
+          },
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "native-button"
+              },
+              "actionName": "searchTaskItems",
+              "buttonText": "Search tasks"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "searchTaskItems"
+            }
+          },
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "native-button"
+              },
+              "actionName": "clearTaskItemSearch",
+              "buttonText": "Clear search"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "clearTaskItemSearch"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "loading-empty-error-state"
+              },
+              "compositionKind": "loading-empty-error-state",
+              "promiseExpression": "taskItemsPromise",
+              "pendingText": "Loading tasks...",
+              "fulfilledLocalName": "loadedTaskItems",
+              "emptyStateText": "No matching tasks.",
+              "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+              "rejectedLocalName": "error",
+              "rejectedText": "Could not search tasks.",
+              "fulfilledContentComposition": {
+                "targetRef": {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                },
+                "compositionKind": "collection-table",
+                "collectionExpression": "loadedTaskItems",
+                "itemLocalName": "taskItem"
+              }
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "ReturnType<TaskItemService['listTaskItems']>",
+          "asyncDataInitializerExpression": "this.taskItemService.listTaskItems()",
+          "asyncDataMemberMutability": "mutable"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "searchTaskItems",
+          "serviceQueryStateMemberName": "taskItemTitleQuery",
+          "serviceQueryReloadMethodName": "reloadTaskItemsByTitle"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "clearTaskItemSearch",
+          "serviceQueryStateMemberName": "taskItemTitleQuery",
+          "serviceQueryStateValueExpression": "''",
+          "serviceQueryReloadMethodName": "reloadTaskItemsByTitle"
+        }
+      ]
+    }
+  }
+}

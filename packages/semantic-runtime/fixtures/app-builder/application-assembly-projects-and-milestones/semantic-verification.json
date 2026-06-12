@@ -1,0 +1,905 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "application-assembly-projects-and-milestones",
+  "ok": true,
+  "expectedEffects": 18,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder application assembly SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder application assembly SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder application assembly SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder application assembly SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Application assembly SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly SourcePlan should register router options. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly SourcePlan should use route decorator object-literal configs. Observed 2 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly SourcePlan should use child route object-literal configs. Observed 18 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly top-level route areas should target the main viewport. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly child detail routes should target nested detail viewports. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly root shell should declare the main au-viewport. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "route",
+      "summary": "Application assembly child route areas should declare nested detail au-viewports. Observed 4 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Application assembly SourcePlan should compile root and route templates. Observed 9 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Application assembly SourcePlan should hydrate runtime controllers. Observed 106 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction-binding",
+      "summary": "Application assembly SourcePlan should read through generated route state/domain bindings. Observed 29 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-class",
+      "summary": "Application assembly service-backed route area SourcePlan should expose the generated service class. Observed 6 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction",
+      "summary": "Application assembly service-backed route area SourcePlan should expose a generated call into the service boundary. Observed 52 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Application assembly SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 15,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-link-navigation",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: project-detail; params.bind: { projectId: project.id }",
+        "linkText": "Open project",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "project-list-route",
+        "sourceKind": "authored-static-template",
+        "classificationKind": "native-link-navigation",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: project-detail; params.bind: { projectId: project.id }",
+        "linkText": "Open project",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
+          "start": 534,
+          "end": 622
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "name",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "project-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "name",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
+          "start": 138,
+          "end": 155
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "phase",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "project-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "phase",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
+          "start": 261,
+          "end": 279
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "createProject()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create project",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "project-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "createProject()",
+        "handlerExpression": "createProject()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create project",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/project-list-route.html",
+          "start": 313,
+          "end": 358
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-link-navigation",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: milestone-detail; params.bind: { milestoneId: milestone.id }",
+        "linkText": "Open milestone",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "milestone-list-route",
+        "sourceKind": "authored-static-template",
+        "classificationKind": "native-link-navigation",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: milestone-detail; params.bind: { milestoneId: milestone.id }",
+        "linkText": "Open milestone",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/milestone-list-route.html",
+          "start": 208,
+          "end": 304
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-link-navigation",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open assignment",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-static-template",
+        "classificationKind": "native-link-navigation",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: task-item-detail; params.bind: { taskId: taskItem.id }",
+        "linkText": "Open assignment",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
+          "start": 1275,
+          "end": 1366
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 138,
+          "end": 156
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 268,
+          "end": 287
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "projectId",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "projectId",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
+          "start": 399,
+          "end": 421
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create assignment",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "task-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "create()",
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create assignment",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/task-item-list-route.html",
+          "start": 580,
+          "end": 628
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-link-navigation",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: review-item-detail; params.bind: { reviewId: reviewItem.id }",
+        "linkText": "Open review",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-static-template",
+        "classificationKind": "native-link-navigation",
+        "controlPatternId": "native-link-navigation",
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": null,
+        "actionChannelKind": "router-load-navigation",
+        "routeInstruction": "route: review-item-detail; params.bind: { reviewId: reviewItem.id }",
+        "linkText": "Open review",
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 1478,
+          "end": 1571
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 138,
+          "end": 156
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 268,
+          "end": 287
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "reviewer",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "reviewer",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 391,
+          "end": 412
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "createReview()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create review",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "review-item-list-route",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "createReview()",
+        "handlerExpression": "createReview()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create review",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/application-assembly-projects-and-milestones/src/routes/review-item-list-route.html",
+          "start": 647,
+          "end": 691
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 37917,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 188,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/my-app.ts",
+      "textLength": 2205,
+      "summary": "Generated SourcePlan file 'src/my-app.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/my-app.html",
+      "textLength": 226,
+      "summary": "Generated SourcePlan file 'src/my-app.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/app-state.ts",
+      "textLength": 1095,
+      "summary": "Generated SourcePlan file 'src/app-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/project-list-route.ts",
+      "textLength": 301,
+      "summary": "Generated SourcePlan file 'src/routes/project-list-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/project-list-route.html",
+      "textLength": 696,
+      "summary": "Generated SourcePlan file 'src/routes/project-list-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/project-detail-route.ts",
+      "textLength": 470,
+      "summary": "Generated SourcePlan file 'src/routes/project-detail-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/project-detail-route.html",
+      "textLength": 841,
+      "summary": "Generated SourcePlan file 'src/routes/project-detail-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/project.ts",
+      "textLength": 127,
+      "summary": "Generated SourcePlan file 'src/project.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-item.ts",
+      "textLength": 161,
+      "summary": "Generated SourcePlan file 'src/task-item.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/project-browse-state.ts",
+      "textLength": 843,
+      "summary": "Generated SourcePlan file 'src/project-browse-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/milestone-list-route.ts",
+      "textLength": 187,
+      "summary": "Generated SourcePlan file 'src/routes/milestone-list-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/milestone-list-route.html",
+      "textLength": 378,
+      "summary": "Generated SourcePlan file 'src/routes/milestone-list-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/milestone-detail-route.ts",
+      "textLength": 492,
+      "summary": "Generated SourcePlan file 'src/routes/milestone-detail-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/milestone-detail-route.html",
+      "textLength": 258,
+      "summary": "Generated SourcePlan file 'src/routes/milestone-detail-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/milestone.ts",
+      "textLength": 252,
+      "summary": "Generated SourcePlan file 'src/milestone.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/milestone-browse-state.ts",
+      "textLength": 392,
+      "summary": "Generated SourcePlan file 'src/milestone-browse-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-list-route.ts",
+      "textLength": 433,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-list-route.html",
+      "textLength": 1472,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-list-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-detail-route.ts",
+      "textLength": 475,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/task-item-detail-route.html",
+      "textLength": 321,
+      "summary": "Generated SourcePlan file 'src/routes/task-item-detail-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-item-browse-state.ts",
+      "textLength": 1068,
+      "summary": "Generated SourcePlan file 'src/task-item-browse-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/review-item-list-route.ts",
+      "textLength": 734,
+      "summary": "Generated SourcePlan file 'src/routes/review-item-list-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/review-item-list-route.html",
+      "textLength": 1763,
+      "summary": "Generated SourcePlan file 'src/routes/review-item-list-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/review-item-detail-route.ts",
+      "textLength": 472,
+      "summary": "Generated SourcePlan file 'src/routes/review-item-detail-route.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/routes/review-item-detail-route.html",
+      "textLength": 545,
+      "summary": "Generated SourcePlan file 'src/routes/review-item-detail-route.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/review-item.ts",
+      "textLength": 236,
+      "summary": "Generated SourcePlan file 'src/review-item.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/services/review-assignment-service.ts",
+      "textLength": 1298,
+      "summary": "Generated SourcePlan file 'src/services/review-assignment-service.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/reviewer-profile.ts",
+      "textLength": 150,
+      "summary": "Generated SourcePlan file 'src/reviewer-profile.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/review-item-browse-state.ts",
+      "textLength": 1385,
+      "summary": "Generated SourcePlan file 'src/review-item-browse-state.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 444,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 303,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 18,
+      "jsonLength": 6050,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 9,
+      "jsonLength": 175,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 11,
+      "jsonLength": 907,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 15,
+      "jsonLength": 14774,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 243,
+      "jsonLength": 111559,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

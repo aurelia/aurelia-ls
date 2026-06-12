@@ -1,0 +1,7 @@
+<ul if.bind="model" class="inventory-widget">
+  <li repeat.for="item of model.items" class="${item.count <= 2 ? 'low-stock' : 'in-stock'}">
+    <span>${item.label}</span>
+    <strong>${item.count}</strong>
+  </li>
+</ul>
+<p else>No inventory selected.</p>

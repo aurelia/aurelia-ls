@@ -1,0 +1,374 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "component-pair-task-command-actions",
+  "ok": true,
+  "expectedEffects": 9,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Component-pair app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 7 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 6,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "updateTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Update",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "updateTask(taskItem)",
+        "handlerExpression": "updateTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Update",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 415,
+          "end": 451
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "deleteTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "deleteTask(taskItem)",
+        "handlerExpression": "deleteTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 521,
+          "end": 557
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "archiveTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Archive",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "archiveTask(taskItem)",
+        "handlerExpression": "archiveTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Archive",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 627,
+          "end": 664
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "assignTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Assign",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "assignTask(taskItem)",
+        "handlerExpression": "assignTask(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Assign",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 735,
+          "end": 771
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "submitTaskReport()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Submit report",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "submitTaskReport()",
+        "handlerExpression": "submitTaskReport()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Submit report",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 852,
+          "end": 886
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "refreshTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Refresh tasks",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-command-actions",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "refreshTaskItems()",
+        "handlerExpression": "refreshTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Refresh tasks",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-command-actions/src/task-command-actions.html",
+          "start": 932,
+          "end": 966
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 8063,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 140,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-command-actions.ts",
+      "textLength": 954,
+      "summary": "Generated SourcePlan file 'src/task-command-actions.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-command-actions.html",
+      "textLength": 989,
+      "summary": "Generated SourcePlan file 'src/task-command-actions.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 405,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 330,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 9,
+      "jsonLength": 2773,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 6,
+      "jsonLength": 121,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 4,
+      "jsonLength": 337,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 6,
+      "jsonLength": 5725,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 58,
+      "jsonLength": 25384,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

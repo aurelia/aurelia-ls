@@ -1,0 +1,1463 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "routed-searchable-data-table",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Router should expose routed data-table facts after reopen.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "router",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Routed data-table router options should be visible after RouterConfiguration is registered.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table router options should configure low-boilerplate active link styling.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options"
+        },
+        {
+          "field": "activeClass",
+          "value": "active-route"
+        }
+      ]
+    },
+    {
+      "summary": "Data table state source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        }
+      ]
+    },
+    {
+      "summary": "Data table state should expose composed filter, sort, pagination and selection state.",
+      "effectKind": "state-composition",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "ownerClassName",
+          "value": "ItemTableState"
+        }
+      ]
+    },
+    {
+      "summary": "Data table filtered rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "filteredItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table sorted rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "sortedItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table current page rows should use plain getter observation.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "ItemTableState"
+        },
+        {
+          "field": "memberName",
+          "value": "pageItems"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Data table service source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "role",
+          "value": "service-source"
+        },
+        {
+          "field": "className",
+          "value": "ItemService"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed data-table list route config should be visible.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Routed data-table route config should be visible as a source-backed router product.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table list route should target the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config"
+        },
+        {
+          "field": "viewport",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table list route should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed data-table route config should close as an authored decorator object.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table nested route config should close as child route objects.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "child-routes-property"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table detail route pattern should expose itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table detail endpoint should carry itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        },
+        {
+          "field": "parameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table detail route-context read should align to itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context-parameter-read"
+        },
+        {
+          "field": "routePathParameterNames",
+          "value": "itemId"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table static detail link should recognize the concrete itemId.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=1"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table row links should recognize data-driven itemId values.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        },
+        {
+          "field": "parameterValuePairs",
+          "value": "itemId=__au_dynamic_0__"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table viewport instruction tree should carry the source query value.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "queryParamPairs",
+          "value": "ref=toolbar"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table viewport instruction tree should carry the route fragment.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        },
+        {
+          "field": "fragment",
+          "value": "detail"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data-table root template should expose the main viewport.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        },
+        {
+          "field": "name",
+          "value": "main"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed data table controls should expose native value target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose native value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose native value data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose checked target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose checked value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose checked data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose checked collection observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "checked-collection-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose checked collection mutation coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "checked-collection-membership-mutation"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose select option-list mutation observer coupling.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "observerCouplings",
+          "value": "select-option-list-mutation-observer"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table controls should expose debounce binding behavior application.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "debounce"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table list should expose list-renderer component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "list-renderer"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table list should materialize header repeat controllers.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table list should materialize row synthetic views.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table list should observe direct DI state rows.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.pageItems"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Routed data table list should observe the active sort column directly.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.sort.column"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table has root, list route, detail route, and data-table custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has a component-composition host role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "component-composition-host"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has an event-surface component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "event-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 4,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table component calls the DI-owned state layer.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "component-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table state calls the injected service boundary.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "service",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "state-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "service-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has class interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "strategy",
+          "value": "class-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has class-token value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-attribute-tokens"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has class interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has class-toggle value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has class-toggle data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has style interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "strategy",
+          "value": "style-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has style-rule value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-attribute-rules"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has style interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-attribute-rules"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has style-property value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has style-property data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-property-value"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table exposes observed dependencies for direct filter search binding.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.filters.searchQuery"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Routed searchable data table has route-context topology products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-context"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has au-viewport products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has ViewportAgent products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has route-recognizer pattern products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-pattern"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has route-recognizer endpoint products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-endpoint"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has route-recognizer state products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-recognizer-state"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has TypedNavigationInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "typed-navigation-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has ViewportInstruction products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has ViewportInstructionTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "viewport-instruction-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has RecognizedRoute products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "recognized-route"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has RouteTree products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-tree"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has RouteNode products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-node"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has ComponentAgent handoff products.",
+      "effectKind": "route",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "component-agent"
+        }
+      ]
+    },
+    {
+      "summary": "Routed searchable data table has routed-component roles.",
+      "effectKind": "component-role",
+      "scope": "route",
+      "topologyNodeKind": "route",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "routed-component"
+        }
+      ]
+    }
+  ]
+}

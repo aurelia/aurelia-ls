@@ -1,0 +1,365 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/service-create-task-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "service-create-task-section-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "service create task section explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Service Create Task Section",
+                    "baseName": "Service Create Task Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/service-create-task-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "domain-command-action"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "local-view-model-state"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task saved.",
+                      "statusId": "task-create-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "app-section"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "native-submit-form"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "loading-empty-error-state"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "service-create-task-section"
+                      ]
+                    },
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "service-create-task-section__form"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "service-create-task-section__status"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "service-create-task-section__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "service-create-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "service-create-task-section__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Open service write boundary",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Verify generated create method",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "serviceCollections": [
+        {
+          "sourceTargetPath": "src/services/task-item-service.ts",
+          "serviceClassName": "TaskItemService",
+          "componentMemberName": "taskItemService",
+          "collectionEntityName": "TaskItem",
+          "recordTypeName": "TaskItemRecord",
+          "loadMethodName": "listTaskItems",
+          "createMethods": [
+            {
+              "methodName": "createTaskItem",
+              "inputFieldNames": [
+                "title",
+                "done"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childCompositions": [
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "native-submit-form"
+            },
+            "compositionKind": "native-submit-form",
+            "fieldNames": [
+              "title",
+              "done"
+            ],
+            "actionName": "create",
+            "submitButtonText": "Create task"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "action-feedback-status"
+            },
+            "compositionKind": "action-feedback-status",
+            "actionName": "create"
+          },
+          {
+            "targetRef": {
+              "kind": "application-pattern",
+              "domain": "application-pattern",
+              "id": "loading-empty-error-state"
+            },
+            "compositionKind": "loading-empty-error-state",
+            "promiseExpression": "taskItemsPromise",
+            "pendingText": "Loading tasks...",
+            "fulfilledLocalName": "loadedTaskItems",
+            "emptyStateText": "No tasks yet.",
+            "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+            "rejectedLocalName": "error",
+            "rejectedText": "Could not load tasks.",
+            "fulfilledContentComposition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "collection-table"
+              },
+              "compositionKind": "collection-table",
+              "collectionExpression": "loadedTaskItems",
+              "itemLocalName": "taskItem"
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "ReturnType<TaskItemService['listTaskItems']>",
+          "asyncDataInitializerExpression": "this.taskItemService.listTaskItems()",
+          "asyncDataMemberMutability": "mutable"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "create",
+          "serviceMemberName": "taskItemService",
+          "serviceMethodName": "createTaskItem",
+          "serviceCallResultMemberName": "taskItemsPromise",
+          "serviceCallArgumentExpressions": [
+            "this.title",
+            "this.done"
+          ]
+        }
+      ]
+    }
+  }
+}

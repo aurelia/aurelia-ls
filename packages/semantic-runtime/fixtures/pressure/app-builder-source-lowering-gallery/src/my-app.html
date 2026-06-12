@@ -1,0 +1,237 @@
+<input value.bind="title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input value.bind="title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" aria-label="Explicit gallery title">
+<input type="email" value.bind="contactEmail" required class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="url" value.bind="websiteUrl" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="tel" value.bind="supportPhone" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="password" value.bind="accessCode" minlength="8" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="search" value.bind="filterText" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="time" value.bind="appointmentTime" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="datetime-local" value.bind="scheduledAtLocal" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="month" value.bind="billingMonth" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="week" value.bind="reviewWeek" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<textarea value.bind="description" maxlength="240" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field"></textarea>
+<input type="number" value-as-number.bind="quantity" required min="0" max="10" step="1" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="date" value.bind="dueDate" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="range" value-as-number.bind="quantity" min="0" max="10" step="1" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<input type="checkbox" checked.bind="enabled" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+<fieldset>
+  <legend>Gallery field</legend>
+  <label repeat.for="option of labelOptions">
+    <input type="checkbox" checked.bind="labels" model.bind="option.value" class="gallery-control" data-au-role="gallery-control">
+    <span>${option.title}</span>
+  </label>
+</fieldset>
+<fieldset>
+  <legend>Gallery field</legend>
+  <label repeat.for="option of priorityOptions">
+    <input type="radio" name="priority" checked.bind="priority" model.bind="option.value" class="gallery-control" data-au-role="gallery-control">
+    <span>${option.title}</span>
+  </label>
+</fieldset>
+<select value.bind="priority" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+  <option repeat.for="option of priorityOptions" model.bind="option.value">${option.title}</option>
+</select>
+<select value.bind="priority" matcher.bind="matchOption" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+  <option repeat.for="priorityOption of priorityOptions" model.bind="priorityOption.value">${priorityOption.title}</option>
+</select>
+<select multiple value.bind="labels" class="gallery-control" data-au-role="gallery-control" aria-label="Gallery field">
+  <option repeat.for="option of labelOptions" model.bind="option.value">${option.title}</option>
+</select>
+<button type="button" click.trigger="save()">Save</button>
+<button type="button" dblclick.trigger="save()">Double save</button>
+<div>
+  <label for="title-field">Gallery field</label>
+  <input value.bind="title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" id="title-field" aria-describedby="title-field-help title-field-error title-field-status">
+  <p id="title-field-help">Use a concise value.</p>
+  <p id="title-field-error" role="alert">A value is required.</p>
+  <p id="title-field-status" role="status">Ready.</p>
+</div>
+<div>
+  <label for="explicit-description-field">Explicit description</label>
+  <textarea value.bind="description" maxlength="240" class="gallery-control" data-au-role="gallery-control" id="explicit-description-field" aria-describedby="explicit-description-field-help explicit-description-field-error explicit-description-field-status"></textarea>
+  <p id="explicit-description-field-help">Use a concise value.</p>
+  <p id="explicit-description-field-error" role="alert">A value is required.</p>
+  <p id="explicit-description-field-status" role="status">Ready.</p>
+</div>
+<p>Use a concise value.</p>
+<p id="explicit-gallery-error" role="alert">Explicit gallery error.</p>
+<a load="route: gallery-item-detail; params.bind: { itemId: items[0].id }">Open item</a>
+<p if.bind="items.length === 0">No items yet.</p>
+<ul else class="gallery-collection">
+  <li repeat.for="item of items">
+    <strong>${item.title}</strong>
+    <span>Description: ${item.description}</span>
+    <span>Priority: ${item.priority}</span>
+    <span>Due: ${item.dueDate}</span>
+  </li>
+</ul>
+<p if.bind="items.length === 0">No cards yet.</p>
+<section else class="gallery-collection">
+  <article repeat.for="item of items">
+    <h3>${item.title}</h3>
+    <p>${item.description}</p>
+    <strong>Priority: ${item.priority}</strong>
+    <p>Due: ${item.dueDate}</p>
+  </article>
+</section>
+<p if.bind="items.length === 0">No rows yet.</p>
+<table else class="gallery-table">
+  <thead>
+    <tr>
+      <th>
+        <button type="button" click.trigger="sortBy('title')">Title</button>
+      </th>
+      <th>Qty</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="item of items">
+      <td>${item.title}</td>
+      <td>${item.quantity}</td>
+      <td>
+        <button type="button" click.trigger="save()">Action</button>
+        <button type="button" click.trigger="adjustStock(item, -1)">Decrease</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<section promise.bind="itemsPromise" class="gallery-status">
+  <p pending>Loading...</p>
+  <template then="loadedItems">
+    <p if.bind="loadedItems.length === 0">Nothing loaded.</p>
+  </template>
+  <p catch="error">Loading failed.</p>
+</section>
+<section promise.bind="itemsPromise" class="gallery-status">
+  <p pending>Loading with fulfilled content...</p>
+  <template then="loadedItems">
+    <p if.bind="loadedItems.length === 0">No loaded rows.</p>
+    <template else>
+      <p if.bind="loadedItems.length === 0">No loaded rows.</p>
+      <ul else class="gallery-collection">
+        <li repeat.for="loadedItem of loadedItems">
+          <strong>${loadedItem.title}</strong>
+          <span>Description: ${loadedItem.description}</span>
+          <span>Priority: ${loadedItem.priority}</span>
+          <span>Due: ${loadedItem.dueDate}</span>
+        </li>
+      </ul>
+    </template>
+  </template>
+  <p catch="error">Loading with fulfilled content failed.</p>
+</section>
+<p if.bind="saveStatusMessage" role="status" id="gallery-save-status" class="gallery-action-status">${saveStatusMessage}</p>
+<form submit.trigger="save()">
+  <div>
+    <label for="title-field-2">Title</label>
+    <input value.bind="title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" id="title-field-2" aria-describedby="title-field-2-help title-field-2-error title-field-2-status">
+    <p id="title-field-2-help">Use a concise value.</p>
+    <p id="title-field-2-error" role="alert">A value is required.</p>
+    <p id="title-field-2-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="description-field">Description</label>
+    <textarea value.bind="description" maxlength="240" class="gallery-control" data-au-role="gallery-control" id="description-field" aria-describedby="description-field-help description-field-error description-field-status"></textarea>
+    <p id="description-field-help">Use a concise value.</p>
+    <p id="description-field-error" role="alert">A value is required.</p>
+    <p id="description-field-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="quantity-field">Quantity</label>
+    <input type="number" value-as-number.bind="quantity" required min="0" max="10" step="1" class="gallery-control" data-au-role="gallery-control" id="quantity-field" aria-describedby="quantity-field-help quantity-field-error quantity-field-status">
+    <p id="quantity-field-help">Use a concise value.</p>
+    <p id="quantity-field-error" role="alert">A value is required.</p>
+    <p id="quantity-field-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="due-date-field">Due Date</label>
+    <input type="date" value.bind="dueDate" class="gallery-control" data-au-role="gallery-control" id="due-date-field" aria-describedby="due-date-field-help due-date-field-error due-date-field-status">
+    <p id="due-date-field-help">Use a concise value.</p>
+    <p id="due-date-field-error" role="alert">A value is required.</p>
+    <p id="due-date-field-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="enabled-field">Enabled</label>
+    <input type="checkbox" checked.bind="enabled" class="gallery-control" data-au-role="gallery-control" id="enabled-field" aria-describedby="enabled-field-help enabled-field-error enabled-field-status">
+    <p id="enabled-field-help">Use a concise value.</p>
+    <p id="enabled-field-error" role="alert">A value is required.</p>
+    <p id="enabled-field-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="priority-field">Priority</label>
+    <select value.bind="priority" class="gallery-control" data-au-role="gallery-control" id="priority-field" aria-describedby="priority-field-help priority-field-error priority-field-status">
+      <option repeat.for="option of priorityOptions" model.bind="option.value">${option.title}</option>
+    </select>
+    <p id="priority-field-help">Use a concise value.</p>
+    <p id="priority-field-error" role="alert">A value is required.</p>
+    <p id="priority-field-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="labels-field">Labels</label>
+    <select multiple value.bind="labels" class="gallery-control" data-au-role="gallery-control" id="labels-field" aria-describedby="labels-field-help labels-field-error labels-field-status">
+      <option repeat.for="option of labelOptions" model.bind="option.value">${option.title}</option>
+    </select>
+    <p id="labels-field-help">Use a concise value.</p>
+    <p id="labels-field-error" role="alert">A value is required.</p>
+    <p id="labels-field-status" role="status">Ready.</p>
+  </div>
+  <button type="submit">Save item</button>
+</form>
+<form submit.trigger="save()">
+  <div>
+    <label for="title-field-3">Title</label>
+    <input value.bind="draftItem.title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" id="title-field-3" aria-describedby="title-field-3-help title-field-3-error title-field-3-status">
+    <p id="title-field-3-help">Use a concise value.</p>
+    <p id="title-field-3-error" role="alert">A value is required.</p>
+    <p id="title-field-3-status" role="status">Ready.</p>
+  </div>
+  <div>
+    <label for="enabled-field-2">Enabled</label>
+    <input type="checkbox" checked.bind="draftItem.enabled" class="gallery-control" data-au-role="gallery-control" id="enabled-field-2" aria-describedby="enabled-field-2-help enabled-field-2-error enabled-field-2-status">
+    <p id="enabled-field-2-help">Use a concise value.</p>
+    <p id="enabled-field-2-error" role="alert">A value is required.</p>
+    <p id="enabled-field-2-status" role="status">Ready.</p>
+  </div>
+  <button type="submit" disabled.bind="!draftItem.canSubmit">Save draft</button>
+</form>
+<section class="gallery-section">
+  <form submit.trigger="save()">
+    <div>
+      <label for="title-field-4">Title</label>
+      <input value.bind="title" required minlength="2" maxlength="80" class="gallery-control" data-au-role="gallery-control" id="title-field-4" aria-describedby="title-field-4-help title-field-4-error title-field-4-status">
+      <p id="title-field-4-help">Use a concise value.</p>
+      <p id="title-field-4-error" role="alert">A value is required.</p>
+      <p id="title-field-4-status" role="status">Ready.</p>
+    </div>
+    <div>
+      <label for="enabled-field-3">Enabled</label>
+      <input type="checkbox" checked.bind="enabled" class="gallery-control" data-au-role="gallery-control" id="enabled-field-3" aria-describedby="enabled-field-3-help enabled-field-3-error enabled-field-3-status">
+      <p id="enabled-field-3-help">Use a concise value.</p>
+      <p id="enabled-field-3-error" role="alert">A value is required.</p>
+      <p id="enabled-field-3-status" role="status">Ready.</p>
+    </div>
+    <button type="submit">Add gallery item</button>
+  </form>
+  <p if.bind="items.length === 0">No gallery items yet.</p>
+  <table else class="gallery-table">
+    <thead>
+      <tr>
+        <th>
+          <button type="button" click.trigger="sortBy('title')">Title</button>
+        </th>
+        <th>Qty</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="item of items">
+        <td>${item.title}</td>
+        <td>${item.quantity}</td>
+        <td>
+          <button type="button" click.trigger="save()">Action</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>

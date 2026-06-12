@@ -1,0 +1,18 @@
+<h1 t="dashboard.title"></h1>
+<p t.bind="titleKey"></p>
+<button click.dispatch:main="dispatch()">Dispatch</button>
+
+<button load="orders">Orders</button>
+<au-viewport></au-viewport>
+
+<ul>
+  <li virtual-repeat.for="item of items">${item}</li>
+</ul>
+
+<validation-container>
+  <div validation-errors.bind="errors"></div>
+</validation-container>
+
+<p>${titleKey | t}</p>
+<input value.bind="displayName & validate">
+<section textcontent.bind="dashboardState & state"></section>

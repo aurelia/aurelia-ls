@@ -1,0 +1,43 @@
+<section>
+  <h2>Tasks</h2>
+  <form submit.trigger="create()">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <div>
+      <label for="assignee-field">Assignee</label>
+      <select value.bind="assignee" matcher.bind="state.matchContactEntry" id="assignee-field">
+        <option repeat.for="contactEntry of state.contacts" model.bind="contactEntry">${contactEntry.fullName}</option>
+      </select>
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="task-object-assignment-create-status">${createStatusMessage}</p>
+  <p if.bind="state.taskItems.length === 0">No tasks yet.</p>
+  <table else>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Assignee</th>
+        <th>Done</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of state.taskItems">
+        <td>${taskItem.title}</td>
+        <td>${state.assigneeLabelForTaskItem(taskItem)}</td>
+        <td>${taskItem.done ? 'Done' : 'Open'}</td>
+        <td>
+          <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <au-viewport name="detail"></au-viewport>
+</section>

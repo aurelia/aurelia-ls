@@ -1,0 +1,25 @@
+<section promise.bind="itemsPromise">
+  <p pending>Loading gallery items...</p>
+  <template then="loadedItems">
+    <p if.bind="loadedItems.length === 0">No gallery items yet.</p>
+    <template else>
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Enabled</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="item of loadedItems">
+            <td>${item.title}</td>
+            <td>
+              <input type="checkbox" checked.to-view="item.enabled" disabled aria-label="Enabled">
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+  </template>
+  <p catch>Could not load gallery items.</p>
+</section>

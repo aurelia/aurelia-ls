@@ -1,0 +1,45 @@
+<section>
+  <h2>Assignments</h2>
+  <form submit.trigger="create()">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" required id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <div>
+      <label for="project-id-field">Project</label>
+      <select value.bind="projectId" id="project-id-field">
+        <option repeat.for="project of state.projects" value.bind="project.id">${project.name}</option>
+      </select>
+    </div>
+    <button type="submit">Create assignment</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="assignment-create-status">${createStatusMessage}</p>
+  <p if.bind="state.taskItems.length === 0">No assignments yet.</p>
+  <table else>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Project</th>
+        <th>Done</th>
+        <th>Open</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of state.taskItems">
+        <td>${taskItem.title}</td>
+        <td>
+          <a load.bind="'/projects/' + taskItem.projectId">${state.projectLabelForTaskItem(taskItem)}</a>
+        </td>
+        <td>${taskItem.done ? 'Done' : 'Open'}</td>
+        <td>
+          <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open assignment</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <au-viewport name="detail"></au-viewport>
+</section>

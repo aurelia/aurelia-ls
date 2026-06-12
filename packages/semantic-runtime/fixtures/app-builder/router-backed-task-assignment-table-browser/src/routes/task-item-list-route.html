@@ -1,0 +1,46 @@
+<section>
+  <h2>Tasks</h2>
+  <form submit.trigger="create()">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="assignee-id-field">Assignee</label>
+      <select value.bind="assigneeId" id="assignee-id-field">
+        <option repeat.for="contactEntry of state.contacts" value.bind="contactEntry.contactId">${contactEntry.fullName}</option>
+      </select>
+    </div>
+    <div>
+      <label for="reviewer-ids-field">Reviewers</label>
+      <select multiple value.bind="reviewerIds" id="reviewer-ids-field">
+        <option repeat.for="contactEntry of state.contacts" value.bind="contactEntry.contactId">${contactEntry.fullName}</option>
+      </select>
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="state.taskItems.length === 0">No tasks yet.</p>
+  <table else>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Done</th>
+        <th>Assignee</th>
+        <th>Reviewers</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of state.taskItems">
+        <td>${taskItem.title}</td>
+        <td>${taskItem.done ? 'Done' : 'Open'}</td>
+        <td>${state.assigneeLabelForTaskItem(taskItem)}</td>
+        <td>${state.reviewersLabelForTaskItem(taskItem)}</td>
+        <td>
+          <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <au-viewport name="detail"></au-viewport>
+</section>

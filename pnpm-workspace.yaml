@@ -3,3 +3,22 @@ packages:
   - "examples/*"
   - "playground"
   - "playground/*"
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  aurelia: "link:aurelia/packages/aurelia"
+  "@aurelia/kernel": "link:aurelia/packages/kernel"
+  "@aurelia/metadata": "link:aurelia/packages/metadata"
+  "@aurelia/platform": "link:aurelia/packages/platform"
+  "@aurelia/platform-browser": "link:aurelia/packages/platform-browser"
+  "@aurelia/runtime": "link:aurelia/packages/runtime"
+  "@aurelia/runtime-html": "link:aurelia/packages/runtime-html"
+  "@aurelia/expression-parser": "link:aurelia/packages/expression-parser"
+  "@aurelia/template-compiler": "link:aurelia/packages/template-compiler"
+  "@aurelia/fetch-client": "link:aurelia/packages/fetch-client"
+  "@aurelia/router": "link:aurelia/packages/router"
+  "@aurelia/route-recognizer": "link:aurelia/packages/route-recognizer"
+  "@aurelia/testing": "link:aurelia/packages/testing"
+  "@aurelia/i18n": "link:aurelia/packages/i18n"

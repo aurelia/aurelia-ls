@@ -1,0 +1,622 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "state-store-list",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "@aurelia/state plugin configuration should admit state template resources.",
+      "effectKind": "dependency-injection",
+      "scope": "di",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Default @aurelia/state store should materialize from StateDefaultConfiguration.init(...).",
+      "effectKind": "state-store",
+      "scope": "app",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "name",
+          "value": "default"
+        },
+        {
+          "field": "isDefault",
+          "value": true
+        },
+        {
+          "field": "initialStateKind",
+          "value": "object"
+        },
+        {
+          "field": "optionsOrHandlerKind",
+          "value": "action-handler"
+        },
+        {
+          "field": "actionHandlerCount",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "summary": "Named filters @aurelia/state store should materialize from withStore(...).",
+      "effectKind": "state-store",
+      "scope": "app",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "name",
+          "value": "filters"
+        },
+        {
+          "field": "isDefault",
+          "value": false
+        },
+        {
+          "field": "initialStateKind",
+          "value": "object"
+        },
+        {
+          "field": "optionsOrHandlerKind",
+          "value": "action-handler"
+        },
+        {
+          "field": "actionHandlerCount",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Default & state binding behavior should materialize as a runtime application.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "binding-behavior",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "state"
+        }
+      ]
+    },
+    {
+      "summary": "Named & state binding behavior should preserve the static store argument.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "binding-behavior",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "state"
+        },
+        {
+          "field": "staticArgumentValues",
+          "value": "filters"
+        }
+      ]
+    },
+    {
+      "summary": "State command should expose store-state value flow into a native input.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "state"
+        },
+        {
+          "field": "sourceName",
+          "value": "draft"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        }
+      ]
+    },
+    {
+      "summary": "Default & state interpolation should read title from the default store scope.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "content"
+        },
+        {
+          "field": "sourceName",
+          "value": "title"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "title"
+        },
+        {
+          "field": "sourceType",
+          "value": "string"
+        },
+        {
+          "field": "targetProperty",
+          "value": "textContent"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "text-content"
+        }
+      ]
+    },
+    {
+      "summary": "Named & state interpolation should read label from the filters store scope.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "content"
+        },
+        {
+          "field": "sourceName",
+          "value": "label"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "label"
+        },
+        {
+          "field": "sourceType",
+          "value": "string"
+        },
+        {
+          "field": "targetProperty",
+          "value": "textContent"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "text-content"
+        }
+      ]
+    },
+    {
+      "summary": "Repeat should read tasks from the default store scope.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "property"
+        },
+        {
+          "field": "sourceName",
+          "value": "tasks"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "tasks"
+        },
+        {
+          "field": "sourceType",
+          "value": "readonly TaskItem[]"
+        },
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "items"
+        }
+      ]
+    },
+    {
+      "summary": "Disabled binding should keep the store-scope draft comparison displayable.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "property"
+        },
+        {
+          "field": "sourceName",
+          "value": "draft === \"\""
+        },
+        {
+          "field": "sourceRootName",
+          "value": "draft"
+        },
+        {
+          "field": "sourceType",
+          "value": "boolean"
+        },
+        {
+          "field": "targetProperty",
+          "value": "disabled"
+        }
+      ]
+    },
+    {
+      "summary": "Dispatch commands should expose store action payload value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "state-dispatch"
+        },
+        {
+          "field": "sourceOperationKind",
+          "value": "state-dispatch-action"
+        },
+        {
+          "field": "channelKind",
+          "value": "state-dispatch-action"
+        }
+      ]
+    },
+    {
+      "summary": "Input dispatch payload should refine $event.target.value through the authored input element.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "state-dispatch"
+        },
+        {
+          "field": "targetProperty",
+          "value": "input"
+        },
+        {
+          "field": "sourceOperationKind",
+          "value": "state-dispatch-action"
+        },
+        {
+          "field": "runtimeValueType",
+          "value": "{ type: \"setDraft\"; value: string }"
+        }
+      ]
+    },
+    {
+      "summary": "Input dispatch payload should observe $event.target.value from the authored input.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "state-dispatch"
+        },
+        {
+          "field": "sourceName",
+          "value": "$event.target.value"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "$event"
+        },
+        {
+          "field": "memberName",
+          "value": "value"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Default & state title interpolation should publish store-scope observed dependencies.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "content"
+        },
+        {
+          "field": "sourceName",
+          "value": "title"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "title"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Named & state label interpolation should publish filters-store observed dependencies.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "content"
+        },
+        {
+          "field": "sourceName",
+          "value": "label"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "label"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Repeat should publish store-scope tasks observed dependencies.",
+      "effectKind": "binding-observed-dependency",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "property"
+        },
+        {
+          "field": "sourceName",
+          "value": "tasks"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "tasks"
+        },
+        {
+          "field": "dependencyKind",
+          "value": "template-expression-read"
+        }
+      ]
+    },
+    {
+      "summary": "Generated state-store list app has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Generated state-store list app has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Generated state-store list app has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Generated state-store list app has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated state-store list app has a root custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 1,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated state-store list app has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Generated state-store list app has an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated state-store list app has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated state-store list app has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Generated state-store list app has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

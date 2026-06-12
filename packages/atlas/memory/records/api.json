@@ -1,0 +1,867 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:expression-parser-facade",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "expression",
+        "parser",
+        "api"
+      ],
+      "summary": "ExpressionParser is the public non-owning parser facade over completed-input, iterator, interpolation, and custom expression result families.",
+      "rationale": "The parser facade should remain parser machinery rather than a kernel materializer. Callers decide value ownership and wrap parser publications in products only when the publication becomes semantically useful.",
+      "guidance": [
+        "Start here when a public parse entry family, base-span context, or parser result algebra boundary changes.",
+        "Keep parser publication non-owning; template/compiler/value-site layers decide product ownership.",
+        "Do not add another adapter layer above this facade just to smooth over a feature-local parse case."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-parser.ts",
+          "symbolName": "ExpressionParser",
+          "line": 60,
+          "summary": "Public expression parser facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/README.md",
+          "summary": "Expression parser package intent and non-owning parser boundary."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ExpressionParser",
+          "filePath": "packages/semantic-runtime/src/expression/expression-parser.ts",
+          "minLineCount": 80
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:semantic-runtime-api-facade",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "mcp",
+        "lsp",
+        "app-opening",
+        "app-builder",
+        "open-seams",
+        "evaluation"
+      ],
+      "summary": "SemanticRuntime and SemanticApp are intentionally the in-process boot/open-app facade, not a second materialization layer.",
+      "rationale": "The API README explicitly keeps runtime.ts as the boot/app facade while pushing public contracts, row projections, and query-family answerers into focused modules. Future authoring or LSP expansion should preserve that boundary rather than letting runtime.ts become another private summary table.",
+      "guidance": [
+        "Use SemanticRuntime for workspace boot, app opening, project selection, cursor-locus convenience methods, and app-world cache policy.",
+        "Use SemanticApp for public query dispatch and compact app-level query methods. Non-router dispatch is grouped by semantic app query catalog group before calling focused family methods; move substrate-family answerers into focused modules when the facade starts owning projection logic beyond dispatch.",
+        "MCP and IDE/LSP should consume the same semantic-runtime public API and catalog surfaces. Treat MCP as an IDE-for-AI adapter over semantic-runtime, not as a lower-fidelity or separate reasoning layer.",
+        "When a capability matters to both AI and human developers, design it once in semantic-runtime as a transport-neutral affordance answer, then let MCP, IDE, CLI, or tests choose presentation and retention policy.",
+        "The retired recipe-authoring catalog, guidance, orientation, and recipe-plan surfaces should not be revived as API facade methods. Future app generation belongs in app-builder after its typed menu, source-plan, and verification contracts are ready.",
+        "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
+        "Keep app-query catalog group filters discoverable from likely user vocabulary. Open-seam queries remain canonically grouped under diagnostics, but `group: \"open-seams\"` is a supported alias for rows with `supportsOpenSeamFilters` so MCP users can find the site/summary/raw drill-down path without knowing the diagnostic grouping first.",
+        "Use `SemanticApp.answerCatalogQuery(...)` as the runtime facade's app-query-family dispatch boundary. If a new public app-query group appears, update the catalog row, grouped dispatch, and contract canaries together rather than adding an ungrouped case to `ask(...)`.",
+        "Public adapters should call claim-backed runtime catalog methods such as `appQueryCatalog` and routed app-query helpers instead of raw readSemantic* helpers when the result crosses a transport boundary.",
+        "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
+        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and generation-specific orientation belongs to future app-builder APIs rather than the overview DTO.",
+        "MCP onboarding guidance should be canonical, app-agnostic, and contract-backed. Server instructions, workflow prompts, and the orientation markdown resource should share one orientation module that teaches the golden path: workspace overview, retained app overview with small samples, catalog, rollup-first summaries, focused rows/cursor, catalog-shaped file scoping, and analysis-depth auto-selection.",
+        "When AppOverview or another default overview shows breakdowns derived from a paged row family, label them as samples. Global totals may be shown as totals, but boundary/source/reason breakdowns from the returned `open-seam-sites` page must not read as full-app distributions.",
+        "Open-seam counts in public MCP/IDE-facing answers must be immediately navigable: summary text should include primary and reason-source samples, `OpenSeams`, `OpenSeamSummary`, and `OpenSeamSites` should accept sourceFile/sourceRole/openSeamKindKey/openSeamReasonKind filters, and continuations plus query-claim identity should preserve those filters when moving between site, cluster, and raw rows.",
+        "Open-seam raw, summary, site, and overview displays should prefer authored `path:line:column` samples when source ranges are available. Byte-offset labels are acceptable as structured source-reference identity, but first-read text should not force users or AIs to translate offsets before acting.",
+        "`OpenSeamSummary` should distinguish raw derivation row counts from `uniqueSiteCount`. Cluster queries are often the first drill-down an MCP user tries, and raw counts alone can make repeated evaluator derivations look like hundreds of independent user problems.",
+        "Open-seam rows are not diagnostics. Public MCP/IDE surfaces should project factual `attempt` and `boundary` interpretation from the controlled seam vocabulary so large clusters explain which semantic operation hit which boundary without inventing confidence, severity, or adapter-local classifications.",
+        "Default public seam overview should prefer `open-seam-sites` over raw rows: repeated evaluator derivations can create many raw seams at one authored span, so first-read answers must distinguish unique authored sites from raw derivation rows, include attempt/boundary/reason-kind summaries, and preserve raw rows only as drill-down detail.",
+        "When a caller is already on raw open-seam rows, continuation ordering should still teach rollup-first: offer `open-seam-summary` before unique-site or raw-row drill-downs unless the caller asked for a narrower site-oriented intent.",
+        "Open-seam site ordering should prefer authored app/template/style/root-document roles before test/example, tooling, generated, declaration, external, or unknown rows; raw-row count is only a secondary sort inside the same role band.",
+        "Open-seam site rows should join factual application topology roles when available. `sourceRole=app-source` is boot/admission evidence; `applicationFileRoles` such as component-source, entrypoint, route-source, service-source, state-source, or model-source give public answers better context without turning seams into severity or actionability labels.",
+        "Open-seam site rows should also join compact static-evaluation origins when available. `staticEvaluationOrigins` explains whether the source was a direct app-source evaluation root, a module-graph dependency from another root, or both; this is factual context, not severity or actionability.",
+        "Use `pressure:app-api -- --query open-seam-sites` as the broad fixture canary for unique seam-site totals. The pressure harness should treat intentional non-app fixture roots as skipped, not failures, so fixture collection shape does not hide real app-world seam pressure.",
+        "Named MCP open-seam overview may treat `sourceFilePath` as a row filter when explicit `sourceFile` is absent. Generic app-query should keep `sourceFilePath` as project/app selection and `sourceFile` as the row filter so the public envelope remains precise.",
+        "Source-role open-seam filtering is factual boot/admission evidence, not severity, priority, or suppression policy. Use it to drill into app-source/tooling-script/generated/declaration/external pressure while keeping higher-level actionability decisions out of the MCP adapter.",
+        "Resource-level open seams should preserve lower evaluator or host-boundary reason kinds instead of replacing them with empty resource opens. Bindable, resource metadata, and watch convergence should use the shared convergence helpers so source ranges, reason kinds, and compact uncertainty summaries survive into public seam-site rows.",
+        "Open bindable configuration should not fabricate confident defaults. Preserve explicit fields from an open `@bindable(...)` object, but report open setter/configuration facts and use the neutral default binding mode when membership did not close.",
+        "Public app-query selectors that a query family cannot consume should return `unsupported` with accepted query-kind menus instead of being silently catalog-shaped away. Keep `diagnosticProjection` separate from selectors: it may be a continuation target-policy hint even when the current source query does not consume it.",
+        "Public answers carry both coarse `outcome` and precise `closure`. Use `closure` for transport/UI decisions about paging, open semantic facts, ambiguity, reroutes, and unsupported selectors; keep `outcome` backward-compatible for hit/miss/partial/unsupported grouping.",
+        "Public app-query answers should expose the analysis depth actually used when an app world answered the query. Presentation prose should say depth is auto-selected/auto-raised by query policy rather than teaching callers a manual prerequisite step.",
+        "MCP text previews are part of the trust surface, not decoration: bounded row previews should preserve identity fields, source labels, and source spans even when structuredContent carries the full row payload.",
+        "MCP `tools/list` schemas should be described but compact. Put one-line field purpose/default/use hints in schemas, keep workflow prose in the orientation resource and catalogs, and preserve a measured startup-surface budget in the adversarial MCP contract.",
+        "Public row pagination is bounded by both row count and estimated row JSON payload size. If dense row families make structuredContent large, improve or reuse `pageRows(...)` and `SemanticRuntimePageResult` payload-budget metadata instead of hiding rows in the MCP adapter.",
+        "Treat `partial` as a normal successful answer state for dense row families. Contracts, MCP tools, IDE clients, and fixture verifiers that need complete row sets must walk `page.nextCursor` to exhaustion instead of assuming one large `page.size` request returns all rows."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime",
+          "line": 384,
+          "summary": "Workspace boot and app-opening facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp",
+          "line": 2083,
+          "summary": "Opened app-world query facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerCatalogQuery",
+          "line": 2167,
+          "summary": "Catalog-group public app-query dispatch boundary for non-router query families."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerOverviewSourceDiagnosticQuery",
+          "line": 2200,
+          "summary": "Grouped overview, source, diagnostics, evaluation, configuration, DI, plugin issue, and router overview query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-projections.ts",
+          "symbolName": "openSeamSummaryRows",
+          "summary": "Open-seam clustering keeps raw counts, unique site counts, sample sources, and sample source ranges so large seam counts have source-backed drill-down affordances."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-projections.ts",
+          "symbolName": "openSeamSiteRows",
+          "summary": "Open-seam site projection groups raw derivation rows by authored source span and seam kind, with application-role and static-evaluation-origin context, for public MCP/IDE trust surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/open-seam-interpretation.ts",
+          "symbolName": "semanticOpenSeamAttemptForKind",
+          "summary": "Controlled open-seam vocabulary interpretation for public attempted-operation and boundary projections."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-ambient-globals",
+          "summary": "Contract proving filtered open-seam summary/raw rows and app overview expose concrete source samples."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-interpretation",
+          "summary": "Contract proving every controlled open-seam vocabulary key has a public attempt and boundary interpretation."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-sites",
+          "summary": "Contract proving repeated evaluator derivations collapse into unique authored open-seam sites while raw-row counts, source-role filters, application file roles, static-evaluation origins, line/column sample displays, source-role-preserving continuations, and the `group=open-seams` catalog alias remain visible."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --query open-seam-sites",
+          "summary": "Broad fixture pressure canary for unique authored open-seam sites, raw-row coverage, and skipped non-app fixture roots."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+          "summary": "Contract proving evaluator-produced seam rows and public seam-site projections expose machine-readable reason kinds."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-tooling-script-source-role",
+          "summary": "Contract proving diagnostics-visible tooling scripts do not inflate app-world open-seam overviews."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-import-meta-dependencies",
+          "summary": "Contract proving resource dependency open seams expose resource-specific reason kinds without evaluator syntax noise."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:resource-bindable-boundary-config",
+          "summary": "Contract proving open bindable configuration spreads carry resource and host-boundary reason kinds without fabricating bindable mode/setter certainty."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-filter-preflight",
+          "summary": "Contract proving unsupported app-query selectors return unsupported answers with accepted query-kind menus instead of silently dropping filters."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:source-reference-carriers",
+          "summary": "Contract proving public row DTO source-reference carrier keys include nested seam summary samples and remain reachable by the shared source-reference collector."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving MCP orientation instructions/resource, compact described schemas, strict envelopes, source-file selector honesty, analysis-depth visibility, workspace continuations, row-count and byte-budget page clamps, source-preserving row previews, cursor vocabulary, and error-remedy text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "Canonical app-agnostic MCP orientation text shared by server instructions, prompts, and resource reads."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tool-schemas.ts",
+          "summary": "Public MCP input schema boundary with compact described fields and sourceFile/sourceFilePath selector guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/answer-helpers.ts",
+          "symbolName": "pageRows",
+          "summary": "Public row pagination helper with row-count and estimated row JSON payload bounds."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimePageResult",
+          "summary": "Public page metadata including row-count clamp and row payload budget fields."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerClosure",
+          "summary": "Public answer closure vocabulary that distinguishes complete, paged, open, ambiguous, reroute, and unsupported answers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convergence-support.ts",
+          "symbolName": "convergenceOpenForRead",
+          "summary": "Shared resource convergence helper that folds evaluator open seams and value uncertainty into reason-coded resource opens."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerObservationStateQuery",
+          "line": 2252,
+          "summary": "Grouped observation, state, and i18n query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerResourceTemplateRenderingQuery",
+          "line": 2286,
+          "summary": "Grouped resource, template, and rendering query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerBindingControlQuery",
+          "line": 2318,
+          "summary": "Grouped binding and control query dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "SemanticAppTemplateQueries",
+          "summary": "Template-family query boundary for template rows, completions, cursor info, and template diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "readSemanticAppQueryCatalog",
+          "summary": "Semantic-runtime-owned generic app query vocabulary for public adapters."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-identity.ts",
+          "symbolName": "semanticAppQueryKey",
+          "summary": "Shared app-query key, locus, and invalidation epoch identity helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-policy.ts",
+          "symbolName": "shouldDisposeAppAfterRoutedQuery",
+          "summary": "Routed app-query default profile, analysis-depth, materialization, and app-retention policy helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/router-overview.ts",
+          "symbolName": "readSemanticRouterOverview",
+          "summary": "Summary-first router overview with opt-in row samples."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.analysisCacheOverview",
+          "summary": "Session-retention overview for cached app epochs, query claims, and kernel density."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQuery",
+          "summary": "Single-query app router that applies catalog depth, query-claim, and profile retention policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQueries",
+          "summary": "Batch routed app-query answer boundary that returns child answers plus compact app construction profile before optional disposal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.clearAnalysisCache",
+          "summary": "App-world reclaim boundary that disposes cached app epochs and answer/session sidecars while retaining the booted runtime."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "heading": "Semantic Runtime API",
+          "summary": "API boundary intent and split guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
+          "symbolName": "SemanticRuntimeAppBuilderQueryKind",
+          "summary": "Current public app-builder query-kind catalog without starter menu/golden generation lanes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "SemanticRuntime",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "minLineCount": 200,
+          "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "SemanticApp",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "minLineCount": 300,
+          "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "SemanticAppTemplateQueries",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "minLineCount": 70,
+          "minMethodCount": 4
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-06-11"
+    },
+    {
+      "id": "frontier:app-diagnostics-substrate",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "diagnostics",
+        "framework-errors",
+        "authoring"
+      ],
+      "summary": "Semantic-runtime diagnostics have an app-level aggregation query over ordinary TypeScript and tsconfig diagnostics plus modeled Aurelia issue lanes; use this as domain guidance when diagnostic work is touched, not as a default autonomous frontier while framework-error gaps are closed.",
+      "rationale": "TypeScript diagnostics come from the semantic-runtime TypeSystemProject Program/tsconfig epoch, including tsconfig read/parse/option diagnostics and per-source Program diagnostics. Template diagnostics cover parser, compiler, binding data-flow, and runtime AST expression-call pressure; resource convergence contributes bindable/process-content/watch/controller watcher issue products; configuration contributes source/API and framework-service issue products; and DI contributes container/resource/ambient-resolve issue products. Atlas framework.errors currently reports no active mapped diagnostic gaps, so this record should steer future diagnostic work only when a new exact framework-error, ordinary TypeScript diagnostic, or authoring-policy pressure appears. Product-owned issue records should remain in the substrate that owns the framework behavior, then aggregate through AppDiagnostics.",
+      "guidance": [
+        "This frontier is nextActionPolicy=when-touched: do not choose it as an unfiltered autonomous next task while `pressure:framework-errors` continues to report zero active mapped diagnostic gaps.",
+        "Start here when a framework error frontier points at non-template source such as @watch, bindable metadata, DI resolver calls, router config, AppTask/customization callbacks, observer service configuration, or package configuration.",
+        "Do not attach framework-error-code authority at the API boundary. Add or reuse a product-owned issue/diagnostic record in the substrate that owns the framework behavior, then let the API aggregate it.",
+        "Keep template diagnostics as one diagnostic source, not the only diagnostics contract. AppDiagnostics currently aggregates TypeScript, configuration, DI, template, resource, router, and route-recognizer diagnostic products by source locus while preserving diagnosticDomain and relatedQueryKind.",
+        "Keep ordinary TypeScript diagnostics TypeSystemProject-owned. Do not shell out to tsc from MCP or rebuild a local TypeScript Program in API code; use the shared Program/tsconfig epoch, including config root filenames and config diagnostics, and expose rows through typescript-diagnostics / typescript-diagnostic-summary plus the unified app diagnostic surfaces.",
+        "When aggregating diagnostics, collect unpaged rows from each owning diagnostic family before applying the app-level page. Child-query paging before aggregation creates misleading pressure counts.",
+        "Weak-owner template diagnostic suggestions should keep action targets source-bearing. For source-independent owner shapes such as any, prefer the value-producing type annotation or return type source route when one exists; if no navigable owner route exists, target the expression source rather than emitting owner-type:no-source.",
+        "Repair cluster keys should stay compact fingerprints over grouping input. Source spans, member hints, owner/value types, and edit loci belong in the structured action-target and member-hint rows, not in a URL-encoded public key. `contract:template-diagnostics` guards this token-economy rule directly.",
+        "Use Atlas framework.errors diagnostic frontiers and likelySemanticRuntimeOwner hints to choose the owning substrate, then inspect exact framework usage rows before adding framework-code links.",
+        "For broad fixture sweeps, use compact app-pressure fixture-owner rows (`templates.diagnostic-error-code-fixtures`, `app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, `bindings.target-access-error-code-fixtures`, and `router.error-code-fixtures`) before doing isolated runs. These rows point exact framework codes at public fixture keys while custom/external roots collapse to `custom-root`.",
+        "Treat runtime-html ast* as partial and binding-utils-owned: AUR0103 missing value converter, AUR0101 missing binding behavior, and AUR0102 duplicate authored binding behavior are template diagnostic rows with resource-registration or expression-rewrite suggestions; other runtime-html ast labels are dormant until exact framework usage and semantic owner are modeled.",
+        "Treat runtime-html node* as partial across configuration, observation, and controller ownership. AUR0653 is claimed for duplicate NodeObserverLocator mappings through ConfigurationIssue; AUR0652 is claimed through target-access/template diagnostics only for the exact dirty-check-disabled observer lookup path; host-node controller codes still need controller topology semantics before they can be claimed.",
+        "Treat runtime Scope static API nullish guards as configuration source/API diagnostics: AUR0203/AUR0204 are ConfigurationIssue rows from direct Scope.fromParent/getContext/create calls, not rendered template lookup misses.",
+        "Treat runtime-html invalid* as partial: AUR0227/AUR0229 bindable decorator errors and AUR0766 processContent hook errors are ResourceIssue products, while runtime computed_not_getter / AUR0228 is an ObservationIssue from source-backed @computed(...) call-form decorators on non-getter/non-method targets. AUR0769/AUR0771 need app-root platform host state or Aurelia instance lifecycle modeling before they can be claimed.",
+        "Treat runtime-html compiler_attr_mapper_duplicate_mapping / AUR0719 as configuration-service pressure: AppTask-time AttrMapper duplicate useMapping/useGlobalMapping calls surface through ConfigurationIssue and AppDiagnostics under the configuration domain.",
+        "Treat runtime-html watch* as complete through ResourceIssue products. Treat runtime-html controller* as split by owning framework path: AUR0501 is a resource-definition issue, AUR0506 is a resource watcher issue, and AUR0507/AUR0508 are runtime controller observer-setup issues. Lifecycle-state controller errors still need controller-state emulation before they can be claimed.",
+        "Treat runtime-html au* as partial and AuCompose-owned: AUR0805/AUR0809 are static setter diagnostics through RuntimeControllerIssue when lowered bindable SetPropertyInstruction values are invalid; AUR0806 is a static string component/view-model lookup diagnostic against the parent hydration-context container; composition controller run/deactivate errors still need lifecycle modeling before they can be claimed.",
+        "Runtime-html branch link-hook diagnostics are RuntimeControllerIssue rows: AUR0810 for else without a previous if sibling, AUR0815 for case/default-case without a parent switch controller, and AUR0816 for duplicate default-case controllers under one switch.",
+        "Runtime-html promise-result link-hook diagnostics are RuntimeControllerIssue rows: AUR0813 for pending/then/catch controllers that are not rendered under the synthetic view of a parent promise.resolve controller.",
+        "Runtime-html renderer-dispatch diagnostics are RuntimeRendererIssue rows when no binding/controller product exists yet. As of 2026-05-13 RefBindingRenderer view.ref maps to not_supported_view_ref_api / AUR0750, custom-element-host named misses map to ref_not_found / AUR0751 after same-node custom attribute targets are checked, controller/component refs on ordinary elements map to node_is_not_a_host / AUR0762, named custom-element fallback on ordinary elements maps to node_is_not_a_host2 / AUR0763, and SpreadValueRenderer invalid targets map to spreading_invalid_target / AUR0820 through runtime-renderer-framework-error template/app diagnostics.",
+        "Runtime-html IViewFactory diagnostics are controller-activation pressure, not generic DI. Ordinary custom elements/custom attributes that resolve IViewFactory during instance activation map to view_factory_provider_not_ready / AUR0755 through RuntimeControllerIssue; template controllers receive the prepared provider and should not be diagnosed.",
+        "Runtime-html portal static activation diagnostics are RuntimeControllerIssue rows over inline multi-binding props: AUR0779 for unsupported literal InsertPosition, AUR0811 for strict empty target, and AUR0812 for strict missing target. The API should surface these as framework-code template/app diagnostics only after the compiler substrate has lowered the portal attribute's secondary grammar; neighboring HTML attributes are not portal bindable props."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-diagnostics.ts",
+          "symbolName": "appDiagnosticRows",
+          "summary": "App-level diagnostic aggregation over owning diagnostic products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics",
+          "summary": "TypeScript diagnostic projection over the shared semantic-runtime TypeSystemProject Program/tsconfig epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics",
+          "summary": "Ordinary TypeScript Program and tsconfig diagnostic reader."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "readSemanticTemplateDiagnostics",
+          "summary": "Template diagnostic projection for template-owned parser/compiler/binding issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/configuration-projections.ts",
+          "symbolName": "readConfigurationIssueRows",
+          "summary": "Configuration issue projection for configuration-owned framework diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/resource-projections.ts",
+          "symbolName": "readResourceIssueRows",
+          "summary": "Resource issue projection for resource-owned framework diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/di-projections.ts",
+          "symbolName": "readDiIssueRows",
+          "summary": "DI issue projection for DI-owned framework diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticAppQueryKind",
+          "summary": "Public query enum exposing TemplateDiagnostics, ResourceIssues, DiIssues, and AppDiagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-frontiers",
+          "summary": "Framework error-code frontiers with exact semantic-runtime coverage and likely owner hints."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-diagnostics.ts",
+          "symbolName": "appDiagnosticRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/configuration-projections.ts",
+          "symbolName": "readConfigurationIssueRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/resource-projections.ts",
+          "symbolName": "readResourceIssueRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/di-projections.ts",
+          "symbolName": "readDiIssueRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "readSemanticTemplateDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticAppQueryKind"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-22"
+    },
+    {
+      "id": "decision:semantic-project-shape-open-policy",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "boot",
+        "project-shape",
+        "monorepo"
+      ],
+      "summary": "Project-shape triage is the formal app/resource-library/package policy for openApp, LSP-style project selection, and workspace-child package context.",
+      "rationale": "External monorepos can contain real Aurelia apps, resource libraries, Aurelia-adjacent packages, and non-Aurelia packages. Boot must cheaply classify those frames from local manifest dependencies, ancestor workspace manifests that explicitly include child packages, source roles, and Aurelia facade activation/source signals, while app-world construction must fail closed when no app-shaped default exists instead of opening an arbitrary app-source package as a fake app.",
+      "guidance": [
+        "Use SemanticProjectShapeKind and SemanticProjectAnalysisKind before adding another app-like heuristic.",
+        "Carry SemanticProjectAureliaDependencyOrigin and SemanticProjectShapeReasonCount through summaries when monorepo selection feels surprising; do not flatten workspace-context evidence into an unlabeled dependency count.",
+        "Keep Atlas workspace.architecture aligned with this policy: it should surface workspace-manifest dependency mechanisms and bounded file-inventory source signals for package frames whose tsconfig omits app source.",
+        "Default openApp() should choose only an aurelia-app project; resource-library authoring must be selected explicitly by projectKey or sourceFilePath.",
+        "Keep project-shape detection in boot/admission: source roles and manifest/workspace membership are allowed there, but do not recognize resources, routes, DI, templates, or configuration products there.",
+        "Pressure scripts may select aurelia-resource-library frames for authoring/LSP pressure, but missing app roots in those frames are not app-startup failures."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/boot/project-shape.ts",
+          "symbolName": "readSemanticProjectShape",
+          "summary": "Manifest/workspace/source-role/source-signal project-shape classifier."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime",
+          "summary": "Default app-opening policy: pick aurelia-app or fail closed."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/boot/README.md",
+          "summary": "Boot boundary and project-shape triage notes."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "API project selection and monorepo pressure policy."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/boot/project-shape.ts",
+          "symbolName": "readSemanticProjectShape"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:mcp-app-world-heap-budget",
+      "kind": "pressure-frontier",
+      "domains": [
+        "mcp",
+        "semantic-runtime",
+        "api",
+        "performance",
+        "world-construction"
+      ],
+      "summary": "MCP app overview needs explicit heap and inquiry-depth pressure while app-world construction remains heavy.",
+      "rationale": "Workspace/project discovery can cheaply identify app-shaped projects in larger monorepos, but opening a selected app-world can exceed Node's default heap before MCP can return a shaped error. The MCP launch can use a larger heap for local preview, but the durable product answer is app-world profiling and inquiry-depth control so app-developer tools pay only for the substrate needed by the question. The app pressure lane can now narrow deep opening by project key or project root while preserving broad workspace discovery.",
+      "guidance": [
+        "Use this frontier when MCP app overview, semantic-runtime app opening, or large-app hand-testing shows heap, latency, or app-world construction pressure.",
+        "Prefer project-scoped opening after workspace overview has selected a project; do not make broad package-tsconfig discovery the default path for every app-world query in a monorepo.",
+        "Use an analysis-depth ladder for MCP first reads: runtime-topology can surface useful route/resource pressure when full binding-observation is too expensive.",
+        "Rely on semantic-runtime's default `openApp()` runtime-topology tier and query-catalog minimum-depth rows before asking for binding-observation.",
+        "When topology-depth selected app opening is still slow, inspect template compilation/runtime-analysis timings first; runtime rendering and scope construction can dominate before binding-observation products are even requested.",
+        "Use semantic-runtime `pressure:app-api` project-key or project-root filters for selected-app profiling before adding a one-off probe.",
+        "Use `aurelia_analysis_cache_overview` while hand-testing long-lived MCP sessions; request kernel breakdowns when the question is what the session is retaining, and use `aurelia_clear_analysis_cache` to clear app epochs. Do not describe this as clearing the whole runtime session: boot/source-discovery workspace kernel records and preserved TypeScript dependency/lib SourceFiles may intentionally remain.",
+        "For one-off routed MCP-style calls, use `answerAppQuery(...)` / `answerAppQueries(...)` with `appRetention='dispose-app'` and `typeSystemDependencyCacheClearPolicy` so app-world products, nested app query claims, and dependency SourceFile cache disposal are recorded on the runtime query claim.",
+        "Interpret RSS and rssOther together with heap-total, heap-used, dependency-cache counters, V8 heap statistics, and query-claim net kernel deltas. V8 can retain process heap capacity after semantic products and dependency SourceFiles have been reclaimed.",
+        "Profile app-world construction by phase before refactoring; likely owners include SemanticRuntime.openApp, AureliaAppWorldProjectConstructionFrame, TypeSystemProject, template runtime analysis, and query-depth policy.",
+        "Keep the MCP workaround operational and visible, but do not treat a larger heap as the product fix."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime",
+          "summary": "Workspace boot, project selection, and app-opening facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "Phase owner for app-world construction and timings."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "symbolName": "AureliaMcpSemanticRuntimeAdapter",
+          "summary": "MCP adapter surface that forwards app overview and app query requests."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/session-registry.ts",
+          "symbolName": "SemanticRuntimeSessionRegistry",
+          "summary": "Long-lived MCP session registry that now forwards semantic-runtime cache overview."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/session-registry.ts",
+          "symbolName": "SemanticRuntimeSessionRegistry.clearAnalysisCache",
+          "summary": "MCP cache-clear aggregation that distinguishes disposed app epochs from retained workspace-kernel session state and dependency-cache preserve policy."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving cache-clear display and structured results explain remaining app epochs, retained workspace-kernel records, and dependency-cache preserve policy."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/mcp/README.md",
+          "summary": "Local MCP launch and heap-budget note."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/WORKBENCH.md",
+          "summary": "Generalized large-app app-world heap pressure note."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/README.md",
+          "summary": "Documented app pressure project filters."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "symbolName": "AureliaMcpSemanticRuntimeAdapter"
+        }
+      ],
+      "createdAt": "2026-05-16",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "decision:mcp-preview-prioritizes-idiomatic-code-economy",
+      "kind": "decision",
+      "domains": [
+        "mcp",
+        "api",
+        "semantic-runtime",
+        "app-builder",
+        "app-building",
+        "token-economy",
+        "observation",
+        "router",
+        "plugins"
+      ],
+      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia answers; app generation belongs only behind the typed app-builder semantic-runtime facade.",
+      "rationale": "A not-yet-complete au-compose or router/viewport model can be explained for an early preview, but a tool that repeatedly guides AI toward verbose or suboptimal Aurelia code undermines the product thesis. Aurelia's short-term MCP value is trust: low-token answers that help agents write small, readable, object-oriented Aurelia apps using core observation, common routing, plugins, and advertised patterns.",
+      "guidance": [
+        "Use this decision before expanding public MCP prompts, tools, or app-generation output.",
+        "Keep the MCP package a thin adapter over semantic-runtime query families; do not classify diagnostics, app-building taste, or source-plan policy in the transport layer.",
+        "For current public preview behavior, prioritize analysis answers that help agents write compact Aurelia: diagnostics including ordinary TypeScript diagnostics, app/router/template/binding facts, continuations, and concise prompt workflows.",
+        "Treat the MCP orientation module as the public cold-start teaching source. It should teach sequencing and affordances, not app-specific canaries or product facts that belong in semantic-runtime answers.",
+        "Keep startup token economy measurable: schema descriptions are valuable, but they should remain terse and the adversarial MCP contract should fail if `tools/list` grows beyond the current described-schema budget.",
+        "Prioritize low-boilerplate Aurelia guidance in future app-builder outputs: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by domain shape, and expected-effect verification.",
+        "Keep core observation high priority: ordinary template reads, proxy-observed domain state, value channels, binding data-flow, and the patterns that make forwarding getters unnecessary.",
+        "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
+        "Treat au-compose as lower priority for the first public cut unless it blocks a common advertised pattern or an existing semantic-runtime query surface.",
+        "When a public MCP answer would be verbose, improve the semantic-runtime summary query or structuredContent shape before accepting token-heavy guidance as the preview behavior.",
+        "Expose app-builder through MCP only as a thin forwarder over `SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`; do not put generation policy, catalog joins, source-fragment construction, or source-plan interpretation in the transport.",
+        "MCP app-builder detail requests should be proved at the schema and adapter boundary. The shell may accept public query envelopes such as `controlManifestDetail`, but it must forward them to semantic-runtime unchanged rather than reconstructing app-builder rows locally.",
+        "Public generation should remain staged: typed menu, source-plan preview, generated SourcePlan, and semantic verification promises before any host writes files."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "symbolName": "AureliaMcpSemanticRuntimeAdapter",
+          "summary": "Thin MCP adapter that should forward compact semantic-runtime answers rather than owning product semantics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tool-schemas.ts",
+          "symbolName": "appBuilderQueryInputSchema",
+          "summary": "MCP schema boundary that should stay aligned with semantic-runtime app-builder query envelopes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/prompts.ts",
+          "symbolName": "registerAureliaSemanticRuntimePrompts",
+          "summary": "Public workflow prompts orchestrate stable tools without owning product facts or source edits."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "Canonical orientation module used by server instructions, prompts, and the orientation resource."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime",
+          "summary": "Public semantic-runtime API boundary used by the MCP shell."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
+          "symbolName": "SemanticRuntimeAppBuilderQueryKind",
+          "summary": "Public app-builder query vocabulary for typed menu/source-plan workflow answers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "readSemanticAppQueryCatalog",
+          "summary": "Public query vocabulary and paging affordance source for MCP generic query tools."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/README.md",
+          "summary": "Future app-generation direction and AI-first app-builder algebra."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan",
+          "summary": "Source artifact boundary app-builder should emit before any host write policy."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
+          "summary": "Contract proving MCP pass-through for app-query continuations and app-builder detail request envelopes."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "Contract proving public MCP startup orientation, compact described schema surface, source-file selector honesty, and onboarding affordance claims."
+        }
+      ],
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-06-11"
+    },
+    {
+      "id": "reuse:runtime-resource-local-binding-ownership",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "template",
+        "observation",
+        "provenance",
+        "recursive-rendering"
+      ],
+      "summary": "Public binding-family API rows should be source-owned by the authored resource before using recursive aggregate render ownership.",
+      "rationale": "Recursive child custom-element rendering is necessary topology evidence, but aggregate render rows can duplicate binding facts under parent resources. Diagnostics, app summaries, and authoring verification need the exact template that authored the binding source span, especially for captured wrapper attributes whose runtime binding renders inside a child component.",
+      "guidance": [
+        "Use resource-local runtime binding helpers before projecting binding, target-access, target-operation, source-operation, binding-behavior, value-channel, data-flow, or observed-dependency rows from a resource runtime analysis.",
+        "Prefer authored source-span containment in the resource template as the row owner. Captured `...$attrs` expressions remain owned by the parent usage template that authored them, even when the inner binding renders inside the wrapper component.",
+        "Treat render-controller ownership as a fallback only when a row has no exact source span. If that fallback becomes common, thread sharper source addresses or render contexts instead of widening ownership.",
+        "Keep recursive aggregate render products available for controller topology, child scopes, wrapper captures, and component-role evidence; do not remove them just to make API row ownership simpler.",
+        "When template diagnostics show a correct expression source but a broader template carrier, inspect runtime-resource ownership before adding diagnostic-local correction code."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts",
+          "summary": "Resource-local row selection helpers for runtime binding-family API projections."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "sourceSpanAddressForAddress",
+          "summary": "Narrowing helper that follows kernel addresses to exact source spans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "summary": "Binding-family public row projections consume the resource-local helper."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "API rule for recursive aggregate rendering versus resource-local public binding rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Template substrate note that aggregate child rendering is topology evidence, not row ownership."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime-resource-ownership.ts",
+          "symbolName": "resourceLocalBindingDataFlows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "sourceSpanAddressForAddress"
+        }
+      ],
+      "createdAt": "2026-05-19",
+      "updatedAt": "2026-05-19"
+    },
+    {
+      "id": "decision:mcp-preview-release-tarball",
+      "kind": "decision",
+      "domains": [
+        "mcp",
+        "release",
+        "api",
+        "semantic-runtime",
+        "typescript"
+      ],
+      "summary": "The MCP preview release uses a generated GitHub Release tarball installed project-locally for trusted diagnostics, with direct URL npx reserved for quick trials.",
+      "rationale": "npm publishing is intentionally out of scope for the first preview, and monorepo git installs would force every user into workspace build mechanics. A generated two-file tarball keeps the workspace package private and inlines the workspace-only semantic-runtime dependency. Because au-mcp statically imports TypeScript, the trusted diagnostic path is installing the tarball as a dev dependency in the app so Node resolves the peer TypeScript package from the project-local install context.",
+      "guidance": [
+        "Use `pnpm --filter @aurelia-ls/mcp release:pack` to build the staged tarball; do not mutate `packages/mcp/package.json` into a publishable manifest.",
+        "Keep the artifact to `au-mcp.js` plus generated `package.json`; if assets become necessary, re-check the bundle safety premise before shipping.",
+        "Keep TypeScript external as a peer dependency and back the supported range with semantic-runtime compatibility contracts.",
+        "Recommend project-local dev-dependency install for serious analysis so TypeScript diagnostics can report `relation=same-package`; document direct URL npx only as a quick trial path.",
+        "Use `pnpm --filter @aurelia-ls/mcp probe:release-tarball` before uploading a GitHub Release asset; after upload, run one hosted-URL npx smoke before sharing install docs.",
+        "Use `pnpm --filter @aurelia-ls/mcp probe:project-local-install` to prove the trusted install path resolves TypeScript from the consuming project.",
+        "Do not add npm publish scripts or registry credential assumptions until the release mechanism is deliberately changed."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/esbuild.mjs",
+          "summary": "Release tarball staging and bundling script."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/scripts/probe-release-tarball.mjs",
+          "summary": "Clean-temp install smoke for the generated tarball."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/scripts/probe-project-local-install.mjs",
+          "summary": "Project-local install smoke that proves same-package TypeScript resolution through the public MCP diagnostics query."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/mcp/RELEASE.md",
+          "summary": "Temporary GitHub Release tarball runbook with project-local trusted install and direct npx trial guidance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/mcp/esbuild.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/mcp/scripts/probe-release-tarball.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/mcp/scripts/probe-project-local-install.mjs"
+        }
+      ],
+      "createdAt": "2026-06-11",
+      "updatedAt": "2026-06-11"
+    }
+  ]
+}

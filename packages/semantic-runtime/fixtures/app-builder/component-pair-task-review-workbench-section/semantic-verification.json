@@ -1,0 +1,590 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "component-pair-task-review-workbench-section",
+  "ok": true,
+  "expectedEffects": 9,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Component-pair app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 15 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 12,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "create()",
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 937,
+          "end": 979
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 206,
+          "end": 224
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 336,
+          "end": 355
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "assigneeId",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-single-select",
+        "controlId": "single-select",
+        "bindingExpression": "assigneeId",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 465,
+          "end": 488
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-multi-select",
+        "controlId": "multi-select",
+        "bindingExpression": "reviewerIds",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-multi-select",
+        "controlId": "multi-select",
+        "bindingExpression": "reviewerIds",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 744,
+          "end": 768
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-boolean-checkbox",
+        "innerControlPatternId": null,
+        "controlId": "checkbox",
+        "bindingExpression": "selectedTaskItemIds.includes(taskItem.id)",
+        "handlerExpression": "toggleTaskItemSelection(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "change",
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "selectedTaskItemIds.includes(taskItem.id)",
+        "handlerExpression": "toggleTaskItemSelection(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "change",
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 2102,
+          "end": 2161
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "deleteSelectedTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete selected",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "deleteSelectedTaskItems()",
+        "handlerExpression": "deleteSelectedTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete selected",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 1467,
+          "end": 1508
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "sortByTitle()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Task",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "sortByTitle()",
+        "handlerExpression": "sortByTitle()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Task",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 1696,
+          "end": 1725
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-search-input",
+        "innerControlPatternId": null,
+        "controlId": "search-input",
+        "bindingExpression": "titleFilter",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-search-input",
+        "controlId": "search-input",
+        "bindingExpression": "titleFilter",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 1798,
+          "end": 1822
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "previousTaskItemsPage()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Previous",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "previousTaskItemsPage()",
+        "handlerExpression": "previousTaskItemsPage()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Previous",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 2642,
+          "end": 2681
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "nextTaskItemsPage()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Next",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "nextTaskItemsPage()",
+        "handlerExpression": "nextTaskItemsPage()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Next",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 2840,
+          "end": 2875
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "deleteSelectedTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete selected",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "task-review-workbench-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "deleteSelectedTaskItems()",
+        "handlerExpression": "deleteSelectedTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Delete selected",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-review-workbench-section/src/task-review-workbench-section.html",
+          "start": 1467,
+          "end": 1508
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 9755,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 165,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-review-workbench-section.ts",
+      "textLength": 4116,
+      "summary": "Generated SourcePlan file 'src/task-review-workbench-section.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/task-review-workbench-section.html",
+      "textLength": 2991,
+      "summary": "Generated SourcePlan file 'src/task-review-workbench-section.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 414,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 357,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 9,
+      "jsonLength": 2773,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 6,
+      "jsonLength": 121,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 8,
+      "jsonLength": 663,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 12,
+      "jsonLength": 11762,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 102,
+      "jsonLength": 50326,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

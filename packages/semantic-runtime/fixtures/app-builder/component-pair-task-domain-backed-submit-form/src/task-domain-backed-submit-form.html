@@ -1,0 +1,11 @@
+<form submit.trigger="saveDraft()">
+  <div>
+    <label for="title-field">Title</label>
+    <input value.bind="taskDraft.title" required id="title-field">
+  </div>
+  <div>
+    <label for="done-field">Done</label>
+    <input type="checkbox" checked.bind="taskDraft.done" id="done-field">
+  </div>
+  <button type="submit" disabled.bind="!taskDraft.canSubmit">Save draft</button>
+</form>

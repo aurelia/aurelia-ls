@@ -1,0 +1,1207 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "multi-step-state-backed-form",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Validation plugin configuration should admit DI and validation-html resources.",
+      "effectKind": "dependency-injection",
+      "scope": "di",
+      "topologyNodeKind": "plugin",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": []
+    },
+    {
+      "summary": "Wizard state source should be visible in app topology.",
+      "effectKind": "dependency-injection",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Wizard state should own a composed domain object.",
+      "effectKind": "state-composition",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "ownerClassName",
+          "value": "AppState"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component stylesheet should be visible as a style resource.",
+      "effectKind": "style-resource",
+      "scope": "style",
+      "topologyNodeKind": "style",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "ownerKind",
+          "value": "component"
+        },
+        {
+          "field": "assetKind",
+          "value": "component-stylesheet"
+        }
+      ]
+    },
+    {
+      "summary": "Root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Form component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Wizard form should expose target access for native value bindings.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose observer-backed value channels for native value bindings.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose TypeChecker-backed data flow for native value bindings.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose target access for checked bindings.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose checked observer value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose TypeChecker-backed data flow for checked bindings.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should expose primitive model value domains for nullable plan selection.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "primitiveValueDomainDisplays",
+          "value": "null"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should materialize repeat template-controller hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should materialize repeat synthetic-view hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should materialize conditional step template controllers.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "conditional"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "optional"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard form should materialize blur validate binding behavior applications.",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "topologyNodeKind": "binding-behavior",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "behaviorName",
+          "value": "validate"
+        },
+        {
+          "field": "staticArgumentValues",
+          "value": "blur"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard validation error presentation should expose validation-errors target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "lookup",
+          "value": "observer"
+        },
+        {
+          "field": "strategy",
+          "value": "setter-observer"
+        },
+        {
+          "field": "isObservable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Wizard validation error presentation should expose validation-errors value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "channelKind",
+          "value": "raw-property"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard validation error presentation should expose validation-errors from-view data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "controller-view-model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "errors"
+        },
+        {
+          "field": "direction",
+          "value": "target-to-source"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceAssignmentKind",
+          "value": "runtime-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Multi-step form app has root and wizard custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Multi-step form app has an app-root component role.",
+      "effectKind": "component-role",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "app-root"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has a data-entry component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "data-entry-surface"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Multi-step form app has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 2,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Multi-step form app has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Multi-step form app has class token target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "strategy",
+          "value": "class-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has class-token value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-attribute-tokens"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has class interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has class-toggle value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "channelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has class-toggle data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-toggle"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has style interpolation target access.",
+      "effectKind": "binding-target-access",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "strategy",
+          "value": "style-attribute-accessor"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has style-rule value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "channelKind",
+          "value": "style-attribute-rules"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has style interpolation data flow.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "style"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "style-attribute-rules"
+        },
+        {
+          "field": "valueSiteKind",
+          "value": "plain-attribute-interpolation"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has submit listener value channels.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "listener"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "submit"
+        },
+        {
+          "field": "targetOperationKind",
+          "value": "event-listener-add"
+        },
+        {
+          "field": "channelKind",
+          "value": "event-handler-invocation"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has click listener value channels for wizard navigation.",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "bindingKind",
+          "value": "listener"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "click"
+        },
+        {
+          "field": "targetOperationKind",
+          "value": "event-listener-add"
+        },
+        {
+          "field": "channelKind",
+          "value": "event-handler-invocation"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app binds name validation errors directly to field presentation classes.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "sourceName",
+          "value": "nameErrors.length > 0 ? \"field-stack field-invalid\" : \"field-stack\""
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app binds email validation errors directly to field presentation classes.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "class"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "class-attribute-tokens"
+        },
+        {
+          "field": "sourceName",
+          "value": "emailErrors.length > 0 ? \"field-stack field-invalid\" : \"field-stack\""
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has a state service-class row.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "AppState"
+        }
+      ]
+    },
+    {
+      "summary": "Wizard component calls the DI-owned state layer.",
+      "effectKind": "service-interaction",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "consumerRole",
+          "value": "component-source"
+        },
+        {
+          "field": "targetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "operationKind",
+          "value": "call"
+        },
+        {
+          "field": "isSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Wizard progress binds DI-owned state directly.",
+      "effectKind": "service-interaction-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingSourceName",
+          "value": "state.progressPercent"
+        },
+        {
+          "field": "bindingSourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "bindingTargetProperty",
+          "value": "style"
+        },
+        {
+          "field": "interactionTargetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "interactionTargetClassName",
+          "value": "AppState"
+        },
+        {
+          "field": "interactionMemberName",
+          "value": "progressPercent"
+        },
+        {
+          "field": "interactionOperationKind",
+          "value": "read"
+        },
+        {
+          "field": "interactionIsSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Wizard back button calls the DI-owned state layer directly.",
+      "effectKind": "service-interaction-binding",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "bindingSourceName",
+          "value": "state.previousStep()"
+        },
+        {
+          "field": "bindingSourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "bindingTargetProperty",
+          "value": "click"
+        },
+        {
+          "field": "interactionTargetRole",
+          "value": "state-source"
+        },
+        {
+          "field": "interactionTargetClassName",
+          "value": "AppState"
+        },
+        {
+          "field": "interactionMemberName",
+          "value": "previousStep"
+        },
+        {
+          "field": "interactionOperationKind",
+          "value": "call"
+        },
+        {
+          "field": "interactionIsSelfInteraction",
+          "value": false
+        }
+      ]
+    },
+    {
+      "summary": "Wizard name input writes into the state-owned domain object directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.profile.name"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "targetKind",
+          "value": "node"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "raw-property"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Wizard contact radios write into the state-owned domain object directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.profile.contactMethod"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "checked-radio-value"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Wizard plan select writes into the state-owned domain object directly.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.profile.planTier"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "targetProperty",
+          "value": "value"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "select-single-option-value"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        },
+        {
+          "field": "targetToSourceAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Wizard feature checkboxes mutate the domain feature id collection.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "sourceName",
+          "value": "state.profile.featureIds"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "state"
+        },
+        {
+          "field": "targetProperty",
+          "value": "checked"
+        },
+        {
+          "field": "valueChannelKind",
+          "value": "checked-collection-membership"
+        },
+        {
+          "field": "sourceToTargetAssignable",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app exposes wizard domain canSubmit as a computed observer source.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "OnboardingProfile"
+        },
+        {
+          "field": "memberName",
+          "value": "canSubmit"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app observes state progress as a computed observer source.",
+      "effectKind": "computed-observer-source",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "className",
+          "value": "AppState"
+        },
+        {
+          "field": "memberName",
+          "value": "progressPercent"
+        },
+        {
+          "field": "observerKind",
+          "value": "computed-observer"
+        },
+        {
+          "field": "triggerKind",
+          "value": "accessor-descriptor"
+        },
+        {
+          "field": "dependencyMode",
+          "value": "proxy-auto-track"
+        }
+      ]
+    },
+    {
+      "summary": "Multi-step form app has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

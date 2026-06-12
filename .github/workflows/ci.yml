@@ -14,8 +14,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: Test & Coverage
+  # PR 35 preview CI is scoped to semantic-runtime and MCP release confidence.
+  # Legacy compiler/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
+  semantic-runtime:
+    name: Semantic Runtime Contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,300 +32,84 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11.5.2
           run_install: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
         env:
           PNPM_APPROVE_BUILDS: esbuild
 
-      - name: Cache Aurelia node_modules
-        id: cache-aurelia-npm
-        uses: actions/cache@v4
+      - name: Build semantic runtime
+        run: pnpm --filter @aurelia-ls/semantic-runtime build
+
+      - name: Check public query/type-system contracts
+        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route diagnostics --route inquiry --route kernel --route type-system --skip-build
+
+      - name: Check open-seam release contracts
+        run: node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
+
+  mcp-preview:
+    name: MCP Preview Pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          path: aurelia/node_modules
-          key: aurelia-node-modules-${{ hashFiles('aurelia/package-lock.json') }}
+          submodules: recursive
 
-      - name: Install Aurelia runtime dependencies
-        if: steps.cache-aurelia-npm.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: aurelia
-
-      - name: Cache Aurelia build output
-        id: cache-aurelia-build
-        uses: actions/cache@v4
-        with:
-          path: |
-            aurelia/packages/addons/dist
-            aurelia/packages/aurelia/dist
-            aurelia/packages/compat-v1/dist
-            aurelia/packages/dialog/dist
-            aurelia/packages/expression-parser/dist
-            aurelia/packages/fetch-client/dist
-            aurelia/packages/i18n/dist
-            aurelia/packages/kernel/dist
-            aurelia/packages/metadata/dist
-            aurelia/packages/platform/dist
-            aurelia/packages/platform-browser/dist
-            aurelia/packages/route-recognizer/dist
-            aurelia/packages/router/dist
-            aurelia/packages/router-direct/dist
-            aurelia/packages/router-html/dist
-            aurelia/packages/runtime/dist
-            aurelia/packages/runtime-html/dist
-            aurelia/packages/state/dist
-            aurelia/packages/store-v1/dist
-            aurelia/packages/template-compiler/dist
-            aurelia/packages/testing/dist
-            aurelia/packages/ui-virtualization/dist
-            aurelia/packages/validation/dist
-            aurelia/packages/validation-html/dist
-            aurelia/packages/validation-i18n/dist
-            aurelia/packages/web-components/dist
-          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
-          restore-keys: |
-            aurelia-build-
-
-      - name: Build Aurelia runtime
-        if: steps.cache-aurelia-build.outputs.cache-hit != 'true'
-        run: npm run build
-        working-directory: aurelia
-
-      - name: Cache aurelia2-plugins node_modules
-        id: cache-plugins-npm
-        uses: actions/cache@v4
-        with:
-          path: aurelia2-plugins/node_modules
-          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
-
-      - name: Install aurelia2-plugins dependencies
-        if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: aurelia2-plugins
-      - name: Use local Aurelia packages for aurelia2-plugins
-        shell: bash
+      - name: Verify submodules
         run: |
-          set -euo pipefail
-          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
-          pkg_dirs=()
-          for dir in ../aurelia/packages/*; do
-            if [ -f "$dir/package.json" ]; then
-              pkg_dirs+=("$dir")
-            fi
-          done
-          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
-        working-directory: aurelia2-plugins
+          git submodule status --recursive
+          test -f aurelia/package.json
+          test -f aurelia2-plugins/packages/aurelia2-table/package.json
 
-      - name: Cache aurelia2-plugins build output
-        id: cache-plugins-build
-        uses: actions/cache@v4
+      - uses: pnpm/action-setup@v4
         with:
-          path: |
-            aurelia2-plugins/packages/*/dist
-          key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
-          restore-keys: |
-            aurelia2-plugins-build-
+          version: 11.5.2
+          run_install: false
 
-      - name: Build aurelia2-plugins
-        if: steps.cache-plugins-build.outputs.cache-hit != 'true'
-        run: npm run build
-        working-directory: aurelia2-plugins
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Bundle VS Code extension
-        run: pnpm -w build && npm run bundle
-        working-directory: packages/vscode
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PNPM_APPROVE_BUILDS: esbuild
 
-      - name: Lint
-        run: pnpm lint:compiler
+      - name: Smoke Atlas source maps
+        run: pnpm --filter @aurelia-ls/atlas smoke
 
-      - name: Install Playwright
-        run: npx playwright install chromium --with-deps
+      - name: Probe source stdio MCP
+        run: pnpm --filter @aurelia-ls/mcp probe:stdio
 
-      - name: Test with coverage
-        run: pnpm test:cov
+      - name: Check MCP surface contracts
+        run: pnpm --filter @aurelia-ls/mcp contract:adversarial-surface
 
-      - name: Layer 0 golden tests
-        run: pnpm -w build && npx vitest run --config playground/vitest.config.ts --test-name-pattern "Layer 0"
+      - name: Check MCP continuation pass-through
+        run: pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through
 
-      - name: Upload coverage artifacts
-        if: always()
+      - name: Pack MCP preview tarball
+        run: pnpm --filter @aurelia-ls/mcp release:pack
+
+      - name: Probe release tarball
+        run: pnpm --filter @aurelia-ls/mcp probe:release-tarball
+
+      - name: Probe project-local install
+        run: pnpm --filter @aurelia-ls/mcp probe:project-local-install
+
+      - name: Upload MCP preview tarball
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: coverage
-          if-no-files-found: ignore
-
-      # Download base branch coverage for comparison (if available)
-      - name: Download base coverage
-        id: download-base-coverage
-        if: github.event_name == 'pull_request'
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ci.yml
-          branch: ${{ github.base_ref }}
-          name: coverage
-          path: coverage-base
-        continue-on-error: true
-
-      - name: Check base coverage exists
-        id: check-base-coverage
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -f "coverage-base/coverage-summary.json" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Coverage Report (with comparison)
-        if: always() && steps.check-base-coverage.outputs.exists == 'true'
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          file-coverage-mode: changes
-          name: Tests
-          json-summary-compare-path: coverage-base/coverage-summary.json
-
-      - name: Coverage Report (without comparison)
-        if: always() && steps.check-base-coverage.outputs.exists != 'true'
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          file-coverage-mode: changes
-          name: Tests
-
-  e2e:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Verify submodules
-        run: |
-          git submodule status --recursive
-          test -f aurelia/package.json
-          test -f aurelia2-plugins/packages/aurelia2-table/package.json
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-          run_install: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install
-        env:
-          PNPM_APPROVE_BUILDS: esbuild
-
-      - name: Cache Aurelia node_modules
-        id: cache-aurelia-npm
-        uses: actions/cache@v4
-        with:
-          path: aurelia/node_modules
-          key: aurelia-node-modules-${{ hashFiles('aurelia/package-lock.json') }}
-
-      - name: Install Aurelia runtime dependencies
-        if: steps.cache-aurelia-npm.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: aurelia
-
-      - name: Cache Aurelia build output
-        id: cache-aurelia-build
-        uses: actions/cache@v4
-        with:
-          path: |
-            aurelia/packages/addons/dist
-            aurelia/packages/aurelia/dist
-            aurelia/packages/compat-v1/dist
-            aurelia/packages/dialog/dist
-            aurelia/packages/expression-parser/dist
-            aurelia/packages/fetch-client/dist
-            aurelia/packages/i18n/dist
-            aurelia/packages/kernel/dist
-            aurelia/packages/metadata/dist
-            aurelia/packages/platform/dist
-            aurelia/packages/platform-browser/dist
-            aurelia/packages/route-recognizer/dist
-            aurelia/packages/router/dist
-            aurelia/packages/router-direct/dist
-            aurelia/packages/router-html/dist
-            aurelia/packages/runtime/dist
-            aurelia/packages/runtime-html/dist
-            aurelia/packages/state/dist
-            aurelia/packages/store-v1/dist
-            aurelia/packages/template-compiler/dist
-            aurelia/packages/testing/dist
-            aurelia/packages/ui-virtualization/dist
-            aurelia/packages/validation/dist
-            aurelia/packages/validation-html/dist
-            aurelia/packages/validation-i18n/dist
-            aurelia/packages/web-components/dist
-          key: aurelia-build-${{ hashFiles('aurelia/packages/*/src/**') }}
-          restore-keys: |
-            aurelia-build-
-
-      - name: Build Aurelia runtime
-        if: steps.cache-aurelia-build.outputs.cache-hit != 'true'
-        run: npm run build
-        working-directory: aurelia
-
-      - name: Cache aurelia2-plugins node_modules
-        id: cache-plugins-npm
-        uses: actions/cache@v4
-        with:
-          path: aurelia2-plugins/node_modules
-          key: aurelia2-plugins-node-modules-${{ hashFiles('aurelia2-plugins/package-lock.json', 'aurelia/package-lock.json', 'aurelia/packages/*/package.json') }}
-
-      - name: Install aurelia2-plugins dependencies
-        if: steps.cache-plugins-npm.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: aurelia2-plugins
-      - name: Use local Aurelia packages for aurelia2-plugins
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf node_modules/@aurelia node_modules/aurelia packages/*/node_modules/@aurelia packages/*/node_modules/aurelia
-          pkg_dirs=()
-          for dir in ../aurelia/packages/*; do
-            if [ -f "$dir/package.json" ]; then
-              pkg_dirs+=("$dir")
-            fi
-          done
-          npm install --no-save --no-package-lock --force "${pkg_dirs[@]}"
-        working-directory: aurelia2-plugins
-
-      - name: Cache aurelia2-plugins build output
-        id: cache-plugins-build
-        uses: actions/cache@v4
-        with:
-          path: |
-            aurelia2-plugins/packages/*/dist
-          key: aurelia2-plugins-build-${{ hashFiles('aurelia2-plugins/packages/*/src/**') }}
-          restore-keys: |
-            aurelia2-plugins-build-
-
-      - name: Build aurelia2-plugins
-        if: steps.cache-plugins-build.outputs.cache-hit != 'true'
-        run: npm run build
-        working-directory: aurelia2-plugins
-
-      - name: Install Playwright
-        run: npx playwright install chromium --with-deps
-
-      - name: Build packages
-        run: pnpm -w build
-
-      - name: Run E2E tests
-        run: npx vitest run --config playground/vitest.config.ts
+          name: aurelia-ls-mcp-preview
+          path: packages/mcp/.release/*.tgz
+          if-no-files-found: error
+          include-hidden-files: true

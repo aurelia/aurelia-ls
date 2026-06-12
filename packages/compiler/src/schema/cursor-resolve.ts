@@ -784,7 +784,7 @@ function findValueConverterAtOffset(
   offset: number,
 ): { name: string; exprId: ExprId; span?: SourceSpan } | null {
   for (const entry of exprTable) {
-    const hit = findPipeNameAtOffset(entry.ast as ExprNode, offset, 'ValueConverter');
+    const hit = findPipeNameAtOffset(entry.ast, offset, 'ValueConverter');
     if (hit) return { name: hit.name, exprId: entry.id, span: hit.span };
   }
   return null;
@@ -795,7 +795,7 @@ function findBindingBehaviorAtOffset(
   offset: number,
 ): { name: string; exprId: ExprId; span?: SourceSpan } | null {
   for (const entry of exprTable) {
-    const hit = findPipeNameAtOffset(entry.ast as ExprNode, offset, 'BindingBehavior');
+    const hit = findPipeNameAtOffset(entry.ast, offset, 'BindingBehavior');
     if (hit) return { name: hit.name, exprId: entry.id, span: hit.span };
   }
   return null;

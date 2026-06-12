@@ -51,7 +51,7 @@ export function planOverlay(linked: LinkModule, scope: ScopeModule, opts: Synthe
       templateCount: scope.templates.length,
     });
 
-    const exprIndex = indexExprTable(linked.exprTable as readonly ExprTableEntry[] | undefined);
+    const exprIndex = indexExprTable(linked.exprTable);
     const templates: TemplateOverlayPlan[] = [];
 
     /**

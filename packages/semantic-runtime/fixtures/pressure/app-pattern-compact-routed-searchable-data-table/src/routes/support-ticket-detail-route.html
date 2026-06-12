@@ -1,0 +1,15 @@
+<section class="detail-card">
+  <a load="tickets">Back to support tickets</a>
+
+  <let supportTicket.bind="state.readSupportTicket(routeParams.ticketId)"></let>
+  <template if.bind="supportTicket">
+    <h2>${supportTicket.nameLabel}</h2>
+    <dl>
+      <dt>Name</dt>
+      <dd>${supportTicket.nameLabel}</dd>
+      <dt>Opened from</dt>
+      <dd>${routeParams.ref ?? 'support tickets'}</dd>
+    </dl>
+  </template>
+  <p else>Loading Support Ticket ${routeParams.ticketId}...</p>
+</section>

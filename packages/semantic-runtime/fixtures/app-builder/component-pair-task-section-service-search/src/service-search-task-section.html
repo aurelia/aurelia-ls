@@ -1,0 +1,33 @@
+<section class="service-search-task-section">
+  <div class="service-search-task-section__search-field">
+    <label for="task-search-query">Search tasks</label>
+    <input type="search" value.bind="taskItemTitleQuery" id="task-search-query">
+  </div>
+  <button type="button" click.trigger="searchTaskItems()" class="service-search-task-section__search-button">Search tasks</button>
+  <p if.bind="searchStatusMessage" role="status" id="task-search-status">${searchStatusMessage}</p>
+  <button type="button" click.trigger="clearTaskItemSearch()" class="service-search-task-section__search-button">Clear search</button>
+  <p if.bind="clearSearchStatusMessage" role="status" id="task-clear-search-status">${clearSearchStatusMessage}</p>
+  <section promise.bind="taskItemsPromise" class="service-search-task-section__status">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No matching tasks.</p>
+      <template else>
+        <table class="service-search-task-section__table" data-au-role="service-search-task-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Done</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="service-search-task-section__row">
+              <td>${taskItem.title}</td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error">Could not search tasks.</p>
+  </section>
+</section>

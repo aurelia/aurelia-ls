@@ -1,0 +1,11 @@
+<section>
+  <article
+    class="product-card ${availabilityClass} ${featured ? `featured-${tone}` : ''}"
+    style="--accent: ${accentColor}; ${hidden ? 'display: none;' : ''}"
+  >
+    <h2>${title}</h2>
+    <p class="${stockCount > 0 ? 'in-stock' : 'sold-out'} ${`tone-${tone}`}">
+      ${summary}
+    </p>
+  </article>
+</section>

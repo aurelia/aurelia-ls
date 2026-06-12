@@ -1,0 +1,199 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/task-preferences.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "task-preferences-named-value-sets-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task preferences named value-set choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "savePreferences",
+                      "kind": "save",
+                      "scope": "form",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text",
+                      "defaultValue": "Update onboarding notes"
+                    },
+                    {
+                      "name": "priority",
+                      "title": "Priority",
+                      "valueKind": "choice",
+                      "defaultValue": "normal"
+                    },
+                    {
+                      "name": "reviewType",
+                      "title": "Review Type",
+                      "valueKind": "choice",
+                      "defaultValue": "manual"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-value-sets",
+                  "value": [
+                    {
+                      "name": "priorityOptions",
+                      "title": "Priorities",
+                      "valueKind": "choice",
+                      "options": [
+                        {
+                          "value": "low",
+                          "title": "Low"
+                        },
+                        {
+                          "value": "normal",
+                          "title": "Normal"
+                        },
+                        {
+                          "value": "urgent",
+                          "title": "Urgent"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "reviewTypeOptions",
+                      "title": "Review types",
+                      "valueKind": "choice",
+                      "options": [
+                        {
+                          "value": "manual",
+                          "title": "Manual"
+                        },
+                        {
+                          "value": "peer",
+                          "title": "Peer"
+                        },
+                        {
+                          "value": "automated",
+                          "title": "Automated"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Preferences",
+                    "baseName": "Task Preferences"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/task-preferences.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "native-submit-form"
+        },
+        "compositionKind": "native-submit-form",
+        "fieldNames": [
+          "title",
+          "priority",
+          "reviewType"
+        ],
+        "fieldControlSelections": [
+          {
+            "fieldName": "priority",
+            "innerControlPatternId": "native-single-select",
+            "valueSetName": "priorityOptions",
+            "optionLocalName": "priorityOption"
+          },
+          {
+            "fieldName": "reviewType",
+            "innerControlPatternId": "native-radio-group",
+            "valueSetName": "reviewTypeOptions",
+            "optionLocalName": "reviewTypeOption"
+          }
+        ],
+        "actionName": "savePreferences",
+        "submitButtonText": "Save choices"
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "savePreferences",
+          "methodBodyStatements": "this.title = this.title.trim();"
+        }
+      ]
+    }
+  }
+}

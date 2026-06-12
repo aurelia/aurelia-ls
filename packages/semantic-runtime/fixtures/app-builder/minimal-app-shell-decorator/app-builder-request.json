@@ -1,0 +1,49 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "sourceLoweringAppShell": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "app-shell"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "minimal-app-shell-decorator-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "minimal app shell explicit decorator choices",
+          "decisions": [
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Aurelia Decorator App"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "decorator"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "explicit-resource-declarations"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

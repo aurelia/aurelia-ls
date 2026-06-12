@@ -1,0 +1,13 @@
+<section>
+  <h2>Tasks</h2>
+  <p if.bind="state.taskItems.length === 0">No tasks yet.</p>
+  <ul else>
+    <li repeat.for="taskItem of state.taskItems">
+      <span>${taskItem.title}</span>
+      <span>Assignee: ${state.assigneeLabelForTaskItem(taskItem)}</span>
+      <span>Reviewers: ${state.reviewersLabelForTaskItem(taskItem)}</span>
+      <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>

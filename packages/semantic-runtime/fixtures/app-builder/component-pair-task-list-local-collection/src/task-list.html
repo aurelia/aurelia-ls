@@ -1,0 +1,7 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<ul else>
+  <li repeat.for="taskItem of taskItems">
+    <strong>${taskItem.title}</strong>
+    <span>Done: ${taskItem.done ? 'Done' : 'Open'}</span>
+  </li>
+</ul>

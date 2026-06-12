@@ -1,0 +1,64 @@
+<let request.bind="state.readRequest(requestId)"></let>
+<template if.bind="request != null">
+  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="state.submitRequest(requestId)">
+  <p t="form.summary" t-params.bind="{ requestId }"></p>
+
+    <field-shell
+      input-id="customer-name"
+      label="Name"
+      type="text"
+      value.bind="request.customerName">
+    </field-shell>
+
+    <field-shell
+      input-id="email"
+      label="Email"
+      type="email"
+      value.bind="request.email">
+    </field-shell>
+
+    <label>
+      <input type="checkbox" checked.bind="request.urgent">
+      Urgent
+    </label>
+
+    <fieldset>
+      <legend t="form.contactPreference"></legend>
+      <label>
+        <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
+        Email
+      </label>
+      <label>
+        <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
+        Phone
+      </label>
+    </fieldset>
+
+    <label for="primary-topic">Primary topic</label>
+    <select id="primary-topic" value.bind="request.primaryTopic">
+      <option model.bind="null">Choose...</option>
+      <option model.bind="state.hardwareTopic">Hardware</option>
+      <option model.bind="state.billingTopic">Billing</option>
+      <option model.bind="state.supportTopic">Support</option>
+    </select>
+
+    <label for="assignee">Assignee</label>
+    <select id="assignee" value.bind="request.assignee" matcher.bind="state.sameSupportAgent">
+      <option model.bind="null">Unassigned</option>
+      <option repeat.for="agent of state.supportAgents" model.bind="agent">${agent.name}</option>
+    </select>
+
+    <label for="topics">Additional topics</label>
+    <select id="topics" multiple value.bind="request.topics">
+      <option model.bind="state.hardwareTopic">Hardware</option>
+      <option model.bind="state.billingTopic">Billing</option>
+      <option model.bind="state.supportTopic">Support</option>
+    </select>
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" value.bind="request.notes"></textarea>
+
+    <button type="submit" disabled.bind="!request.canSubmit" t="[title]form.submit;form.submit"></button>
+  </form>
+</template>
+<p else>Loading request...</p>

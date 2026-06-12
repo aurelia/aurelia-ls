@@ -1,0 +1,20 @@
+<form submit.trigger="savePreferences()">
+  <div>
+    <label for="title-field">Title</label>
+    <input value.bind="title" id="title-field">
+  </div>
+  <div>
+    <label for="priority-field">Priority</label>
+    <select value.bind="priority" id="priority-field">
+      <option repeat.for="priorityOption of priorityOptions" model.bind="priorityOption.value">${priorityOption.title}</option>
+    </select>
+  </div>
+  <fieldset>
+    <legend>Review Type</legend>
+    <label repeat.for="reviewTypeOption of reviewTypeOptions">
+      <input type="radio" name="review-type" checked.bind="reviewType" model.bind="reviewTypeOption.value">
+      <span>${reviewTypeOption.title}</span>
+    </label>
+  </fieldset>
+  <button type="submit">Save choices</button>
+</form>

@@ -1,0 +1,391 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "intent:source-plan-boundary",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "source-plan",
+        "app-builder",
+        "fixtures",
+        "edits"
+      ],
+      "summary": "SourcePlan is the neutral source artifact boundary; SourcePlanAssembly owns generated file assembly policy and configuration admission fragments before any host writes files.",
+      "rationale": "App-builder, fixture materialization, diagnostics-to-action, and future editing all need source artifacts, but none of those callers should own ad-hoc file envelopes, text-authority propagation, or package-tooling side channels.",
+      "guidance": [
+        "Start in source-plan when generated source needs file roles, edit policy, text authority, source-pattern metadata, or project tooling rather than app-builder-local file models.",
+        "Use SourcePlanAssembly when a generator creates multiple SourcePlanFile artifacts under one root, policy, and text-authority lifetime. This is the intended replacement for repeated SourcePlanFile/SourcePlanText constructor blocks in concrete source lowerers.",
+        "Use AppBuilderSourcePlanAssembly for app-builder generated-app or source-starting lowerers that need the app-builder baseline conflict/formatting/tooling policy, generated text authority, configured entrypoint admission, dependency evidence, and runnable project tooling. Concrete source lowerers should not restate that transaction locally.",
+        "Use SourcePlanContribution when generated file text is assembled from lower-level source facts. TypeScript imports and source fragments should stay available beside final text so MCP/IDE callers can explain which framework mechanism, app-builder part invocation, or app-builder source-lowering target produced a file without reparsing source.",
+        "Keep SourcePlan contributions and verification row families available internally, but do not assume every public SourcePlan answer should ship the full ledger. App-builder public SourcePlan projections expose generated text, contribution counts, witness counts, control-use counts, expected-effect counts/kinds, request-field summaries, and compact handoff/result-boundary notes by default; `includeSourcePlanContributions`, `includeSourcePlanWitnessRows`, `includeControlUseInventoryRows`, `includeExpectedEffectRows`, `includeSourceLoweringRequestFields`, and `includeDecisionBundleExpansionRows` are explicit provenance/verification detail flags.",
+        "Preserve both app-builder source-lowering invocation and app-builder source-lowering composition origins. A one-target control fragment and a top-level Native Submit Form wrapper are different provenance layers, and SourcePlanContribution should keep both visible beside delegated part-source origins.",
+        "Preserve direct app-builder source-lowering target origins when a fragment does not come from a part invocation or composition member. `SourceLoweringTarget` origins are the neutral handoff for generated support declarations such as local view-model state type aliases and option members.",
+        "Treat TypeScript top-level declaration fragments as a first-class generated-source category beside class-member fragments. Custom-element pair assembly should keep top-level declarations outside the class body while still carrying their SourcePlan contribution origins.",
+        "Use custom-element pair SourcePlan assembly when a source-lowering composition produces a template and companion invocations produce TypeScript class members. The pair assembler is a file/artifact boundary over existing fragments; it should not turn class-member invocations into standalone SourcePlan targets or hide the template/composition provenance layer.",
+        "Treat app-builder source-lowering `sourceLoweringTargetRefs` and `effectContractIds` as the read-model bridge into SourcePlan effects. They identify which ontology rows and promised effect contracts explain a generated fragment; they do not prove that the final SourcePlan has been reopened or verified.",
+        "Use TypeScriptImportRequirement plus typescript-import-source helpers for static import assembly. Source lowerers should publish import requirements and let source-plan merge them instead of formatting local import blocks. Preserve the distinction between value imports and type-only imports so generated app code does not create runtime imports for type surfaces.",
+        "The TypeScript import renderer groups package/bare imports before relative imports while preserving caller order within each group. Keep that grouping inside typeScriptImportStatements/mergeTypeScriptImportRequirements instead of making routed or app-builder source lowerers hand-sort imports.",
+        "Use TypeScriptSourceText/typeScriptSourceText when a complete generated TypeScript file is assembled from body text plus base imports and source fragments. That helper keeps import rendering and SourcePlanContribution rows in sync, including origin-bearing fragment imports, instead of forcing callers to collapse fragments into anonymous import requirements.",
+        "Use configuredAureliaEntrypointFile for entrypoint source. It spends the same TypeScriptImportRequirement lane for the default Aurelia import, root component import, configuration imports, and contribution-backed registration expressions.",
+        "Use aureliaRegistrationChain when entrypoint source needs to format Aurelia registration calls. A single simple registration such as RouterConfiguration should stay compact, while multiple registrations or multiline registration expressions should remain expanded.",
+        "Use the router-owned route-configuration source serializer when generated source needs `@route(...)` object literals. It owns multiline route-array/object formatting, including trailing commas, so app-builder routed fixtures do not grow local route text serializers.",
+        "Use SourcePlanProjectTooling for package dependencies, scripts, package manifests, browser root documents, build configs, tsconfig files, and local declaration files. Do not hide runnable-project requirements as ordinary app source files.",
+        "Use AureliaConfigurationAdmissionSource for framework/plugin entrypoint admission. App-builder source lowerers should request router, state, i18n, validation-html, or future configuration fragments instead of restating package imports, registration expressions, and dependency specifiers inline.",
+        "Preserve configuration admission source authority through SourcePlanContributionOriginKind.AureliaConfigurationAdmission. Configuration imports and registration expressions should carry AureliaConfigurationAdmissionKind origin rows so previews and future IDE/MCP affordances can explain entrypoint source without reparsing text.",
+        "Use SourcePattern on complete generated SourcePlans when callers need to distinguish source-text relation to caller domain, style, data, code economy, reusable modules, and analyzer pressure. SourcePattern should describe generated-source shape without owning app-builder menu taste.",
+        "Use SourcePatternParameter and sourcePatternParameterApplications when caller values are meant to adapt generated source. Source-applicable parameters must be reflected by the lowered SourcePattern source values, and non-applied/advisory/unknown/duplicate/invalid values should become typed workflow issues rather than silent fallbacks.",
+        "Use source-name.ts for generated name word-splitting and common case rendering before adding app-builder-local naming helpers. App-builder may expose convenience adapters, but the source-plan substrate owns the shared normalization policy because future edit planning and fixture materialization need the same source naming behavior.",
+        "When app-builder wraps app-builder source-lowering fragments in a SourcePlan preview, SourceRoot and SourceTargetPath may arrive either as resolved rootDir/templatePath transport fields or as SourcePlacement facet payloads. These are one placement model; conflicts should block with typed issues rather than establishing hidden precedence.",
+        "Keep SourcePlan neutral: app-builder owns generation intent and taste, fixture verification owns semantic promises, diagnostics-to-action owns repair intent, and future edit application owns host write policy.",
+        "SourcePlan contribution origins may carry raw string identities for product-specific concepts to preserve the neutral boundary. Product-specific coverage rows should split expected typed identities from observed raw origin text instead of widening product request or catalog types to anonymous strings.",
+        "A complete SourcePlan means the source text is available for preview/materialization; it is not permission to write files or overwrite user source. App-builder SourcePlan handoff notes may tell an AI/host to write returned `sourcePlan.files` rows and apply returned project tooling, but that instruction is a boundary statement for an external materialization surface, not an app-builder lowerer side effect.",
+        "App-builder SourcePlan contributions should carry current source-lowering target/invocation/composition origins, not deleted starter composition evidence.",
+        "Direct app-builder SourcePlan target admission is centralized through `directSourcePlanTargetFrame` plus descriptor-backed issue policy in `directSourcePlanTargetIssues`. New direct SourcePlan targets should add explicit descriptors for target support, missing/unknown/unsupported target issues, availability issues, and input-gate issues, then reuse the frame for preflight rows, target refs, and effect contract ids rather than cloning app-shell/router/state preflight checks.",
+        "`componentPairSourcePlan` is the app-builder component-pair phase that crosses into neutral SourcePlan artifact assembly. Earlier component-pair phases own selection, nested lowerings, local-state derivation, fragments, and issues; they should remain app-builder internals unless a future source/edit surface needs them directly.",
+        "Routed collection/detail SourcePlan expected effects should stay grouped by semantic promise family: app/state shape, route configuration source shape, route consumption/runtime reads, and template/runtime effects. These helpers describe post-reopen fixture-verification promises, not executable source-lowering policy."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan",
+          "summary": "Neutral source artifact plan emitted before any host writes files."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlanAssembly",
+          "summary": "Stateful source-plan assembler carrying policy and text authority across generated files."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/source-plan-assembly.ts",
+          "symbolName": "AppBuilderSourcePlanAssembly",
+          "summary": "App-builder source-plan transaction carrying generated-source policy, entrypoint admission, dependency evidence, and runnable project tooling."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlanContribution",
+          "summary": "File-local generated-source ledger for import requirements and source fragments before final text assembly."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlanContributionOriginKind",
+          "summary": "Enum-backed contribution-origin families for app-builder part invocations, app-builder source-lowering invocations/compositions/direct targets, and framework configuration admissions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/part-source-invocation.ts",
+          "symbolName": "AppBuilderSourceFragmentOriginKind",
+          "summary": "App-builder generated-fragment origin vocabulary, including direct app-builder source-lowering target origins that map into SourcePlanContributionOriginKind."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/part-source-invocation.ts",
+          "symbolName": "AppBuilderPartSourceFragmentKind",
+          "summary": "App-builder generated-fragment kind vocabulary including TypeScript top-level declaration fragments."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-composition.ts",
+          "symbolName": "appBuilderSourceLoweringComposition",
+          "summary": "App-builder source-lowering composition bridge whose fragments should preserve top-level composition and child invocation origins when assembled into SourcePlan files."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-placement.ts",
+          "symbolName": "sourcePlanPlacement",
+          "summary": "App-builder SourcePlan placement resolver that keeps direct transport fields and supplied SourcePlacement facets in one conflict-checked model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-selection.ts",
+          "symbolName": "appBuilderSourceLoweringSourcePlanFrame",
+          "summary": "App-builder SourcePlan selected-lowering frame that dispatches one explicit source-lowering branch before the neutral SourcePlan artifact is projected."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+          "symbolName": "componentPairSourcePlan",
+          "summary": "App-builder component-pair phase that assembles validated template/TypeScript fragments into neutral custom-element pair or root app-shell SourcePlan artifacts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+          "symbolName": "directSourcePlanTargetFrame",
+          "summary": "Shared direct SourcePlan target admission frame that owns preflight, preflight row, target refs, effect contract ids, and descriptor-backed target issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+          "symbolName": "directSourcePlanTargetIssues",
+          "summary": "Shared direct SourcePlan target gate that maps target support, preflight availability, and input-gate states through explicit issue descriptors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/effect-target.ts",
+          "symbolName": "appBuilderEffectContractIdsForTargetRef",
+          "summary": "App-builder graph bridge from app-builder ontology target refs to associated effect contract ids for generated-fragment effect navigation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+          "symbolName": "TypeScriptImportRequirement",
+          "summary": "Neutral static TypeScript import requirement merged by source-plan import assembly."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+          "symbolName": "typeScriptImportStatements",
+          "summary": "Generated TypeScript import renderer that groups package/bare imports before relative imports while preserving caller order within each group."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-source-text.ts",
+          "symbolName": "typeScriptSourceText",
+          "summary": "Neutral TypeScript source-text assembler that keeps rendered imports and source-plan contributions aligned."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/package-tooling.ts",
+          "symbolName": "SourcePlanProjectTooling",
+          "summary": "Structured package/build sidecar for runnable generated projects, including package metadata, root documents, build config, tsconfig, and local declarations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-configuration-admission-source.ts",
+          "symbolName": "AureliaConfigurationAdmissionSource",
+          "summary": "Neutral entrypoint imports, registrations, and package dependencies for framework/plugin admission."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-configuration-admission-kind.ts",
+          "symbolName": "AureliaConfigurationAdmissionKind",
+          "summary": "Enum-backed framework/plugin admission identity carried by entrypoint source-plan contributions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-entrypoint-source-plan.ts",
+          "symbolName": "aureliaRegistrationChain",
+          "summary": "Entrypoint registration-chain formatter that keeps simple single registrations compact while preserving multiline registration expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-configuration-source.ts",
+          "symbolName": "routerRouteConfigurationObjectExpressionSourceText",
+          "summary": "Router-owned route configuration object serializer for reviewable generated route trees."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+          "symbolName": "appBuilderRoutedCollectionDetailSourcePlanExpectedEffects",
+          "summary": "SourcePlan-to-expected-effect bridge that reads routed collection/detail route parameter metadata before projecting fixture-verification promises."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+          "symbolName": "routedCollectionDetailRouteConfigurationExpectedEffects",
+          "summary": "Routed collection/detail route-configuration expected-effect group for router options, route config carriers, and viewport targets."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/source-plan-expected-effects.ts",
+          "symbolName": "routedCollectionDetailRouteConsumptionExpectedEffects",
+          "summary": "Routed collection/detail route-consumption expected-effect group for viewport declarations and route-parameter reads."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "sourcePlanAureliaConfigurationAdmissionOrigin",
+          "summary": "Source-plan origin constructor for framework configuration admission contributions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePattern",
+          "summary": "Reusable source-pattern metadata carried by source plans without owning caller intent."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "sourcePatternParameterApplications",
+          "summary": "Proof row calculator for caller-supplied source-pattern values against lowered source."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-pattern-modules.ts",
+          "symbolName": "SourcePatternModules",
+          "summary": "Shared source-pattern module vocabulary for app shell, resources, router, state, forms, plugins, and composition."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+          "symbolName": "appBuilderCustomElementPairSourcePlan",
+          "summary": "App-builder custom-element SourcePlan pair assembler for companion TypeScript/template artifacts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+          "symbolName": "appBuilderCustomElementClassFileArtifact",
+          "summary": "SourcePlan TypeScript class artifact builder that preserves imported top-level declaration and class-member fragment contributions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-name.ts",
+          "symbolName": "sourceNameWords",
+          "summary": "Shared source-name word-splitting substrate for generated source plans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-name.ts",
+          "symbolName": "lowerCamelSourceName",
+          "summary": "Shared lower-camel renderer for generated source names."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-name.ts",
+          "symbolName": "pascalSourceName",
+          "summary": "Shared Pascal-case renderer for generated source names."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-name.ts",
+          "symbolName": "kebabSourceName",
+          "summary": "Shared kebab-case renderer for generated source names."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:source-plan-admission-origins",
+          "summary": "Focused contract proving framework/plugin configuration admissions keep SourcePlan contribution origins and compact simple registration formatting through generated entrypoints."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlanAssembly"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/source-plan-assembly.ts",
+          "symbolName": "AppBuilderSourcePlanAssembly"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePlanContribution"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/effect-target.ts",
+          "symbolName": "appBuilderEffectContractIdsForTargetRef"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-direct.ts",
+          "symbolName": "directSourcePlanTargetIssues"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/ontology/source-lowering-source-plan-component-pair.ts",
+          "symbolName": "componentPairSourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+          "symbolName": "TypeScriptImportRequirement"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-import-source.ts",
+          "symbolName": "typeScriptImportStatements"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/typescript-source-text.ts",
+          "symbolName": "typeScriptSourceText"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+          "symbolName": "appBuilderCustomElementPairSourcePlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/custom-element-pair-source-plan.ts",
+          "symbolName": "appBuilderCustomElementClassFileArtifact"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/part-source-invocation.ts",
+          "symbolName": "AppBuilderSourceFragmentOriginKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/part-source-invocation.ts",
+          "symbolName": "AppBuilderPartSourceFragmentKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/package-tooling.ts",
+          "symbolName": "SourcePlanProjectTooling"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-configuration-admission-source.ts",
+          "symbolName": "AureliaConfigurationAdmissionSource"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-configuration-admission-kind.ts",
+          "symbolName": "AureliaConfigurationAdmissionKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/aurelia-entrypoint-source-plan.ts",
+          "symbolName": "aureliaRegistrationChain"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/route-configuration-source.ts",
+          "symbolName": "routerRouteConfigurationObjectExpressionSourceText"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "sourcePlanAureliaConfigurationAdmissionOrigin"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "SourcePattern"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
+          "symbolName": "sourcePatternParameterApplications"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-pattern-modules.ts",
+          "symbolName": "SourcePatternModules"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/source-plan/source-name.ts",
+          "symbolName": "sourceNameWords"
+        }
+      ],
+      "createdAt": "2026-05-30",
+      "updatedAt": "2026-06-07"
+    }
+  ]
+}

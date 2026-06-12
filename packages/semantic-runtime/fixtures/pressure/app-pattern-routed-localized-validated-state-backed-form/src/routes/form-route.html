@@ -1,0 +1,8 @@
+<section>
+  <h1 t="app.title"></h1>
+  <p>Mode: ${routeParams.mode ?? 'edit'}; tags: ${routeTagCount}</p>
+
+  <state-backed-form request-id.bind="routeParams.requestId"></state-backed-form>
+
+  <p t="app.submitted" t-params.bind="{ count: state.submittedCount }"></p>
+</section>

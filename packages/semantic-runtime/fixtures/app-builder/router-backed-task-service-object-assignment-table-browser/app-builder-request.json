@@ -1,0 +1,276 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "actionName": "openTask",
+      "linkText": "Open",
+      "createForm": {
+        "actionName": "create",
+        "fieldNames": [
+          "title",
+          "done",
+          "assignee"
+        ],
+        "submitButtonText": "Create task"
+      },
+      "serviceCollection": {
+        "sourceTargetPath": "src/services/task-object-assignment-service.ts",
+        "serviceClassName": "TaskObjectAssignmentService",
+        "loadMethodName": "loadAssignedTasks",
+        "findMethodName": "loadAssignedTask",
+        "createMethodName": "addAssignedTask"
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "task-service-object-assignment-table-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task service object assignment table explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Contact",
+                      "entityTypeName": "ContactEntry",
+                      "collectionMemberName": "contacts",
+                      "identityMemberName": "contactId",
+                      "identityValueKind": "string"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "openTask",
+                      "kind": "custom",
+                      "scope": "navigation",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done",
+                        "assignee"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "assignee",
+                      "title": "Assignee",
+                      "kind": "reference-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "assignee",
+                      "localValueKind": "object",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": true
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "relationshipName": "assignee",
+                      "header": "Assignee",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    },
+                    {
+                      "actionName": "openTask",
+                      "header": "Action",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Service Object Assignment Table Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "task-service-object-assignments"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "taskId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task assignment saved.",
+                      "statusId": "task-service-object-assignment-create-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "records": [
+                        {
+                          "id": 1,
+                          "title": "Review the assignment flow",
+                          "done": false,
+                          "assignee": "ada"
+                        },
+                        {
+                          "id": 2,
+                          "title": "Publish the handoff notes",
+                          "done": true,
+                          "assignee": "grace"
+                        }
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "records": [
+                        {
+                          "contactId": "ada",
+                          "fullName": "Ada Lovelace",
+                          "email": "ada@example.test"
+                        },
+                        {
+                          "contactId": "grace",
+                          "fullName": "Grace Hopper",
+                          "email": "grace@example.test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

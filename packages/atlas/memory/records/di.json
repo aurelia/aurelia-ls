@@ -1,0 +1,590 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:aurelia-app-frame-materializer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "di",
+        "application",
+        "world-construction"
+      ],
+      "summary": "AureliaAppFrameMaterializer is the configuration frontier that materializes Aurelia facade, root container, AppRootConfig, and AppRoot products for a sequence.",
+      "rationale": "The app frame is the bridge between recognized configuration flow and the spendable app/container/root products used by DI, controller, lifecycle, and rendering work. Keeping it explicit avoids pushing root-admission behavior into configuration recognition or app-world composition.",
+      "guidance": [
+        "Start here when work touches Aurelia facade admission, root container products, app-root config, AppRoot identity, or AppRootUsesConfig claims.",
+        "Keep app-frame products distinct from per-step configuration products and app-world project phase orchestration.",
+        "Use configuration README and DI world-construction guidance before changing root container or app-root semantics."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
+          "symbolName": "AureliaAppFrameMaterializer",
+          "line": 108,
+          "summary": "Aurelia facade/root-container/AppRoot admission frame materializer."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "AureliaAppFrameMaterializer",
+          "filePath": "packages/semantic-runtime/src/configuration/aurelia-app-frame-materializer.ts",
+          "minLineCount": 300,
+          "minMethodCount": 10
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:container-child-materializer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "controller",
+        "recursive-rendering"
+      ],
+      "summary": "ContainerChildMaterializer is the DI frontier for runtime-created child containers, self resolvers, and context resolver slots at controller/container boundaries.",
+      "rationale": "Recursive rendering, route component activation, and controller creation need child-container semantics without forcing those responsibilities into the broad DI world constructor or the Container class itself. This materializer is the hook for controller-local DI products.",
+      "guidance": [
+        "Start here when controller, route, or rendering work creates child containers or context resolver slots.",
+        "Keep child-container publication separate from root/app frame creation and broad DI world construction.",
+        "Use framework.di and framework.rendering before changing resolver slot semantics at runtime-created boundaries."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-materializer.ts",
+          "symbolName": "ContainerChildMaterializer",
+          "line": 128,
+          "summary": "Runtime-created child container materializer."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ContainerChildMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/container-materializer.ts",
+          "minLineCount": 250,
+          "minMethodCount": 10
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:container",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "world-construction"
+      ],
+      "summary": "Container is large and intentionally close to the Aurelia DI concept it emulates.",
+      "rationale": "The user explicitly prefers direct framework-concept naming over emulator suffix sprawl. Container size should be judged by framework fidelity and DI flow clarity, not by a generic small-class target.",
+      "guidance": [
+        "Compare to framework.di before splitting Container.",
+        "If new DI behavior appears, decide whether it belongs in Container, world construction, or publication rather than adding compatibility shims.",
+        "Keep auLink mirroring and framework DI semantics visible when refactoring."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container.ts",
+          "symbolName": "Container",
+          "line": 53,
+          "summary": "Semantic-runtime DI container shape."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.di",
+          "projection": "summary",
+          "summary": "Framework DI facts and relationships."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "Container",
+          "filePath": "packages/semantic-runtime/src/di/container.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:di-world-constructor",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "world-construction",
+        "kernel-publication"
+      ],
+      "summary": "DiWorldConstructor is the current broad DI world-construction pressure point.",
+      "rationale": "This class is adjacent to evaluator-backed DI closure, registration publication, resolver effects, and product-record emission. It should be read before adding another local DI world or registration materialization path.",
+      "guidance": [
+        "Check framework.di and framework.admission before extending this constructor from app pressure alone.",
+        "Framework registration effects can emit resolver slots, resource slots, app tasks, and root-shared factory slots; keep `registerFactory(...)` effects as `ContainerFactorySlot` products instead of modeling them as resolver shortcuts.",
+        "ValidationHtmlConfiguration uses this lane for the `IValidationController` factory while ValidationConfiguration/ValidationHtmlConfiguration also contribute validation service resolvers.",
+        "If repeated record construction appears, look for publication helpers before moving behavior into KernelStore.",
+        "Treat split decisions as framework-interface splits, not generic small-class cleanup."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "symbolName": "DiWorldConstructor",
+          "line": 425,
+          "summary": "DI world construction class."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "symbolName": "DiRegistrationSpendingFrame",
+          "line": 134,
+          "summary": "Registration spending work frame used during DI world construction."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.di",
+          "projection": "summary",
+          "summary": "Framework DI grounding lane."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.admission",
+          "projection": "world-formation",
+          "summary": "Framework admission world-formation lane."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "DiWorldConstructor",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiRegistrationSpendingFrame",
+          "filePath": "packages/semantic-runtime/src/di/world-constructor.ts",
+          "minLineCount": 100,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:resolver",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "resolver",
+        "world-construction"
+      ],
+      "summary": "Resolver is the semantic-runtime DI resolver model and should remain close to the Aurelia framework resolver concept.",
+      "rationale": "Resolver is auLink-backed and participates in container slots, registration spending, and framework resolver effects. Treat it as a semantic model rather than a generic data carrier or local publication detail.",
+      "guidance": [
+        "Inspect Resolver before changing resolver slot products, registration strategies, or container lookup behavior.",
+        "Resolver slots should retain the modeled resolver object when DI publication owns it; do not fall back to resolver product handles when a framework-shaped method such as getFactory needs resolver state.",
+        "ResolverStrategy mirrors Aurelia's numeric resolver strategy enum; cached callback registration stores cached state on a callback resolver, and invalid strategy values claim invalid_resolver_strategy / AUR0005.",
+        "Resolver wrapper calls such as newInstanceOf(...) are source-recognized as resolver keys; invalid_new_instance_on_interface / AUR0017 is exact only when the container state is proven fresh and the wrapped interface has no default registration.",
+        "Use InstanceProvider for contextual provider semantics and no_instance_provided / AUR0013; keep it at provider-resolution level until a source/runtime lifecycle path proves a diagnostic.",
+        "Keep resolver model changes grounded in framework.di rather than local app pressure alone.",
+        "If resolver publication grows, route record emission through DI publication materializers instead of inflating Resolver."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/resolver.ts",
+          "symbolName": "Resolver",
+          "line": 74,
+          "summary": "Semantic-runtime resolver model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/instance-provider.ts",
+          "symbolName": "InstanceProvider",
+          "summary": "Semantic-runtime InstanceProvider model for contextual DI providers."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.di",
+          "projection": "relationships",
+          "summary": "Framework DI resolver relationship grounding."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "Resolver",
+          "filePath": "packages/semantic-runtime/src/di/resolver.ts",
+          "minLineCount": 140,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/instance-provider.ts",
+          "symbolName": "InstanceProvider"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:di-world-publication-materializers",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "kernel-publication",
+        "registration",
+        "resources"
+      ],
+      "summary": "DI world-publication materializers publish registries, resolvers, resource slots, self resolvers, app tasks, issue products, source evidence, claims, and open seams for DI world construction.",
+      "rationale": "DI world construction has several distinct publication lanes. Keeping them grouped under one durable record makes future cleanup start from the common publication layer before moving behavior into Container or DiWorldConstructor.",
+      "guidance": [
+        "Start here when work touches DI resolver, registry, resource slot, self resolver, app-task, issue, source, claim, or open-seam records.",
+        "Keep publication helpers in world-publication.ts unless a framework DI concept deserves its own direct semantic model.",
+        "If repeated KernelStoreRecord construction returns in DI, inspect these materializers before adding another local emitter."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "symbolName": "DiRegistryPublicationMaterializer",
+          "line": 310,
+          "summary": "DI registry publication materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "symbolName": "DiResolverPublicationMaterializer",
+          "line": 673,
+          "summary": "DI resolver and resolver-slot publication materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "symbolName": "DiResourceSlotPublicationMaterializer",
+          "line": 879,
+          "summary": "DI resource-slot publication materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "symbolName": "DiContainerSelfResolverPublicationMaterializer",
+          "line": 1102,
+          "summary": "DI container self-resolver publication materializer."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "kernel-records",
+          "filters": {
+            "filePath": "packages/semantic-runtime/src/di/world-publication.ts"
+          },
+          "summary": "Kernel record construction pressure in DI publication."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "DiRegistryPublicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "minLineCount": 140,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiResolverPublicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "minLineCount": 180,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiResourceSlotPublicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "minLineCount": 200,
+          "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiContainerSelfResolverPublicationMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/world-publication.ts",
+          "minLineCount": 120,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "decision:di-issues-own-kernel-resource-duplicates",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "DI owns source-backed container issue products for exact kernel diagnostics that match modeled DI execution contexts.",
+      "rationale": "Aurelia's kernel has multiple DI diagnostic paths with different runtime phases. Source/static resource registration warns and skips when a local resource key already exists, while registerResolver can throw for resolver-backed resource-key insertion. Ambient resolve(...) throws no_active_container_for_resolve only when the framework current container is absent, and null_undefined_key only after an active container tries to resolve a nullish key. The inject helper throws invalid_inject_decorator_usage only for rejected TC39 decorator contexts. Semantic-runtime must keep those paths separate by execution context and decorator target kind.",
+      "guidance": [
+        "Use DiIssues for source/static-resource duplicate key publication and cite kernel ErrorNames.resource_already_exists / AUR0007.",
+        "Keep the first modeled severity as warning because this is the framework register(...) warn/skip path, not the registerResolver(...) throw path.",
+        "Use DiResolveCallSite execution-context and active-container expectation before citing kernel ErrorNames.no_active_container_for_resolve / AUR0016; module/static evaluation can spend exact authority, instance activation and caller-dependent calls cannot.",
+        "Use DiResolveCallSite nullish key arguments before citing kernel ErrorNames.null_undefined_key / AUR0014; only container-activation contexts can spend that exact authority for ambient resolve because definitely-absent contexts throw AUR0016 first.",
+        "Use DiInjectDecoratorSite target-kind recognition before citing kernel ErrorNames.invalid_inject_decorator_usage / AUR0022; class and field targets are valid, method/getter/setter/accessor targets are exact invalid contexts under the TC39 decorator runtime, and legacy parameter decorators stay unclaimed until modeled separately.",
+        "Use DiDependencyCycleIssueMaterializer for source-visible singleton activation cycles reached from concrete container.get(...) entries before citing cyclic_dependency / AUR0003.",
+        "DI source API issue sites should carry boot-admitted source-file handles and publish spans through sourceSpanAddressForSite; do not re-resolve issue source from filenames on scanner-owned paths.",
+        "Use DiRegistrationSpendingCascade recursion detection before citing unable_auto_register / AUR0006; this is a registration-cascade guard, not a generic container API syntax issue.",
+        "Do not add more kernel framework-error constants until the DI, registration, resolver, or evaluator substrate owns the exact framework behavior."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/di-issue.ts",
+          "symbolName": "DiIssue",
+          "summary": "Source-backed DI issue product."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/di-issue-publication.ts",
+          "symbolName": "DiIssuePublisher",
+          "summary": "DI issue product publisher for kernel-backed resource and resolve-call diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/framework-error-code.ts",
+          "symbolName": "DiFrameworkErrorCode",
+          "summary": "Exact kernel framework error-code labels used by DI."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/resolve-call-recognition.ts",
+          "symbolName": "DiResolveCallSite",
+          "summary": "Import-aware ambient resolve call recognition with execution context and active-container expectation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/resolve-call-issues.ts",
+          "symbolName": "DiResolveCallIssueMaterializer",
+          "summary": "Source-backed materializer for exact ambient resolve diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/inject-decorator-recognition.ts",
+          "symbolName": "DiInjectDecoratorSite",
+          "summary": "Import-aware inject-family decorator recognition with exact target-kind classification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/inject-decorator-issues.ts",
+          "symbolName": "DiInjectDecoratorIssueMaterializer",
+          "summary": "Source-backed materializer for exact invalid inject decorator diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "semantic-references",
+          "filters": {
+            "packageId": "kernel"
+          },
+          "summary": "Kernel framework-error coverage lane."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/di/di-issue.ts"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiIssuePublisher",
+          "filePath": "packages/semantic-runtime/src/di/di-issue-publication.ts",
+          "minLineCount": 90,
+          "minMethodCount": 2
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/resolve-call-issues.ts",
+          "symbolName": "DiResolveCallIssueMaterializer"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiResolveCallIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/resolve-call-issues.ts",
+          "minLineCount": 65,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/inject-decorator-recognition.ts",
+          "symbolName": "DiInjectDecoratorSite"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiInjectDecoratorIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/inject-decorator-issues.ts",
+          "minLineCount": 45,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/di-projections.ts"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "decision:container-api-key-shape-before-diagnostics",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "container",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "Container lookup/invoke diagnostics must flow through runtime-facing key shape, not syntax-only recognition.",
+      "rationale": "Aurelia's Container branches on the runtime key value: direct invoke rejects native functions before container state, get/getResolver validate nullish keys before lookup, _jitRegister rejects non-functions and intrinsic constructors after resolver lookup misses, then reaches the configured default resolver, and getFactory can depend on an existing factory or resolver state. Semantic-runtime therefore needs ContainerLookupKey, resolver-object-backed slots, ContainerConfiguration default-resolver policy, and lookup failure states before claiming broad kernel errors such as AUR0002, AUR0009, or AUR0015.",
+      "guidance": [
+        "Use container-key.ts and container-lookup.ts before adding DI diagnostics for container.get/getResolver/getFactory/invoke behavior.",
+        "Only cite no_construct_native_fn / AUR0015 for method-local paths such as container.invoke(Array) and container.getFactory(Array) where framework source proves container state cannot change the outcome.",
+        "Container lookup answers carry exact framework authority for failed JIT/factory/default-resolver branches once the emulator has performed a concrete lookup: none_resolver_found / AUR0002, unable_jit_non_constructor / AUR0009, no_jit_intrinsic_type / AUR0010, no_jit_interface / AUR0012, and no_construct_native_fn / AUR0015.",
+        "Container.getFactory must consult resolver state for non-function keys before failing; if there is no modeled resolver object behind a resolver slot, treat that as substrate pressure rather than inventing a syntax-only diagnostic.",
+        "Treat no_factory / AUR0004 as intentionally unclaimed for the stock Container model because it guards custom IContainer implementations whose getFactory returns null.",
+        "Cite none_resolver_found / AUR0002 as a `DiIssue` product only when the receiver is traced to a stock DefaultResolver.none configuration and the key shape has passed the framework's earlier _jitRegister guards.",
+        "Cite null_resolver_from_register / AUR0011 as a `DiIssue` product only when a fresh stock createContainer().get(...) entry uses a source-visible registry key whose register(...) body definitely returns null or undefined.",
+        "Cite invalid_new_instance_on_interface / AUR0017 as a `DiIssue` product only when a fresh stock createContainer().get(newInstanceOf/newInstanceForScope(...)) entry wraps a source-visible Aurelia interface key created without a default registration callback.",
+        "Leave unable_resolve_key / AUR0008 intentionally unclaimed for the stock Container model unless semantic-runtime admits corrupted/external parent traversal state; Aurelia's ordinary Container.get paths return before that defensive throw.",
+        "Cite unable_jit_non_constructor / AUR0009, no_jit_intrinsic_type / AUR0010, or no_jit_interface / AUR0012 as `DiIssue` products only when source-local runtime identity or a future modeled container-state join proves the resolver/factory maps missed.",
+        "Do not cite unable_jit_non_constructor / AUR0009 from direct registration object maps or stable syntax-shaped keys; object-map registration is legitimate and stable keys are container-state dependent.",
+        "If container API recognition misses a real Aurelia receiver, improve TypeChecker/source-declaration grounding in container-api-recognition.ts rather than falling back to method-name heuristics."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-key.ts",
+          "symbolName": "ContainerLookupKey",
+          "summary": "Runtime-facing DI key request shape used by container lookup branches."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-lookup.ts",
+          "symbolName": "ContainerLookupFailureKind",
+          "summary": "Container lookup failure branch vocabulary for exact framework errors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-api-recognition.ts",
+          "symbolName": "DiContainerApiCallSite",
+          "summary": "Type-backed source recognition for Aurelia container API calls."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-api-issues.ts",
+          "symbolName": "DiContainerApiIssueMaterializer",
+          "summary": "Source-backed container API issue materializer for method-local framework failures."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "usages",
+          "filters": {
+            "packageId": "kernel",
+            "codeNamePrefix": "no"
+          },
+          "summary": "Framework grounding for kernel no* container lookup and resolver failures."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-key.ts",
+          "symbolName": "ContainerLookupKey"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-api-recognition.ts",
+          "symbolName": "DiContainerApiCallSite"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-api-issues.ts",
+          "symbolName": "DiContainerApiIssueMaterializer"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "DiContainerApiIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/container-api-issues.ts",
+          "minLineCount": 70,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "frontier:di-dependency-cycle-issues",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "di",
+        "framework-errors",
+        "diagnostics",
+        "world-construction"
+      ],
+      "summary": "DiDependencyCycleIssueMaterializer owns exact kernel cyclic_dependency diagnostics for closed source-visible singleton activation graphs.",
+      "rationale": "Aurelia throws cyclic_dependency when a singleton resolver is re-entered during activation. Semantic-runtime can claim that framework path only when it can form a closed graph from singleton providers, instance-time resolve(...) dependencies, and a concrete container.get(...) entry point.",
+      "guidance": [
+        "Start here before extending cyclic_dependency / AUR0003 coverage beyond interface singleton providers and instance-time resolve(...) dependencies.",
+        "Keep this as a source-backed DI graph materializer until controller activation can contribute richer runtime-current-container state.",
+        "If the graph needs more provider kinds, ground the provider semantics in framework.di and registration effects before adding app-shaped shortcuts."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
+          "symbolName": "DiDependencyCycleIssueMaterializer",
+          "line": 60,
+          "summary": "Source-visible dependency-cycle issue materializer."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "kernel",
+            "query": "cyclic_dependency"
+          },
+          "summary": "Framework error-code grounding for cyclic_dependency."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "DiDependencyCycleIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
+          "minLineCount": 55,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-15"
+    }
+  ]
+}

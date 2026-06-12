@@ -1,0 +1,10 @@
+<section>
+  <a load="../">Back</a>
+  <article if.bind="milestone">
+    <section>
+      <h2>${milestone.title}</h2>
+      <p>Target Date: ${milestone.targetDateLabel}</p>
+    </section>
+  </article>
+  <p else>No milestone found for this route.</p>
+</section>

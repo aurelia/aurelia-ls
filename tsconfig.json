@@ -9,6 +9,9 @@
     { "path": "packages/language-server" },
     { "path": "packages/vscode" },
     { "path": "packages/integration-harness" },
-    { "path": "packages/semantic-workspace" }
+    { "path": "packages/semantic-workspace" },
+    { "path": "packages/semantic-runtime" },
+    { "path": "packages/mcp" },
+    { "path": "packages/atlas" }
   ]
 }

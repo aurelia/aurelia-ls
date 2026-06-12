@@ -1,0 +1,407 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:framework-capability-terrain",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-capabilities",
+        "aurelia-framework",
+        "app-builder",
+        "semantic-runtime",
+        "mcp"
+      ],
+      "summary": "Atlas owns a framework.capabilities terrain that answers what Aurelia can do, how app authors express it, and where each framework capability is selected or admitted.",
+      "rationale": "App-builder lowering exposed a granularity error by treating convention, decorator metadata, and inline/local custom elements as co-equal choices. The raw evidence already exists across framework resources, corpus, router, observation, discovery, and auLink, and the curated framework.capabilities lens now gives future consumer projections a compact starting terrain without encoding app-builder policy, MCP guidance, or semantic-runtime coverage as row data.",
+      "guidance": [
+        "Use `framework.capabilities` before further durable app-builder lowering-axis expansion. It starts curated and source-backed, then points at existing framework/resource/router/observation/corpus/auLink evidence rather than using broad text heuristics as row identity.",
+        "Each capability row should distinguish framework concept, app-author source form, locality, resource kind/source support when resource-scoped, framework effect, typed prerequisites, consequences, framework-local constraints, and evidence.",
+        "Use locality as a first-class dimension: app-global, package/global registration, resource-local, template-local, area-local, binding-site, and route-local are not interchangeable.",
+        "Do not use a single policy-nature enum for capability rows. Resource declaration carriers, framework effects, and requirements are separate axes because resource source support, runtime effect, and prerequisite shape are not co-equal.",
+        "Keep resource source algebra resource-scoped: convention, decorator, static $au, define-call, and AttributePattern.create belong with concrete resource kinds rather than with route configuration, template syntax, DI APIs, or package tooling.",
+        "Use effects for what the framework or framework-adjacent tooling actually does, such as resource definition, resource visibility, DI registration, binding data flow, source observation, route recognition, viewport composition, or tooling transforms.",
+        "Use typed requirements when a capability needs another capability, package, or tooling feature. For example, CSS modules are a styling capability expressed through package tooling and require a css-modules transform rather than being a policy nature.",
+        "Keep styling capability rows focused on configuration, stylesheet discovery/pairing, registry wiring, dependency injection, and asset topology. Do not make semantic-runtime own CSS design semantics unless the product direction changes later.",
+        "Use `framework.capabilities -- --projection=matrix` when the question is about concrete resource-kind/source-form combinations; this avoids reading shared source-form rows as if every supported resource kind were the current subject.",
+        "Use `framework.capabilities -- --projection=grounding --groundingStrength=corpus-backed` before deriving consumer policy. Grounding is a neutral projection over evidence and prerequisites, not a readiness judgement or field on the pure capability row.",
+        "Use `framework.capabilities -- --projection=evidence --groundingStrength=corpus-backed` to find capability rows that currently depend on corpus evidence before app-builder or MCP derives durable guidance.",
+        "Use `framework.capabilities -- --projection=evidence-trace --targetRows=... --targetEvidenceRows=...` when a descriptor must be joined to backing lens rows and source anchors. This projection is intentionally heavier and Atlas-local.",
+        "Treat `auLink` as a grounding signal for framework concepts mirrored by semantic-runtime, not as proof that a capability exists or as row-level coverage state.",
+        "Start v1 from framework/source-backed areas: resource/source forms and local templates, style/Shadow DOM/tooling policies, router admission and viewport mechanics, state/observation/binding, template controllers/composition, and DI/configuration/plugin admissions.",
+        "Consumer projections such as app-builder, MCP, semantic-runtime coverage, and public guidance may join against this terrain, but the capability rows themselves should remain framework-pure.",
+        "App-builder reconciliation should keep consumer lanes separate: lowering axes describe policy and source-shape choices; source-derived part rows describe concrete parts that realize binding channels, template controllers, router resources, composition resources, state commands, value converters, and binding behaviors; source-derived composition rows describe generated pattern effects; source-derived source-plan rows describe generated entrypoint/configuration admission.",
+        "Keep resource authoring forms separate from built-in/plugin resource inventory. `framework.resources` owns built-in framework resource convergence; `plugin.architecture` owns public plugin resource surfaces; app-builder should use both before choosing how to create or use resources.",
+        "Router admission can be app-global, while route patterns, route context reads, navigation instructions, and viewport outlets remain separate framework capabilities with their own localities and prerequisites.",
+        "Actionless form submit prevention is a framework app-root configuration capability, not an app-builder form heuristic. The pure capability row should expose the default prevention behavior and the `allowActionlessForm` override; app-builder can later decide when generated forms should rely on it or surface explicit submit policy.",
+        "Observation capability rows should distinguish proxy observation, ordinary getter observation, explicit @computed dependencies, collection observation, and target observer channels without prescribing app-builder code style.",
+        "State plugin capability rows should distinguish store admission from `& state`, `.state`, `.dispatch`, and `@fromState`. App-builder may use those rows, but the rows themselves should stay grounded in the framework plugin registrations, command lowering, binding scopes, and store lookup behavior.",
+        "Do not use framework bundles such as StandardConfiguration as the ontology. Bundles are discovery and admission conveniences; the capabilities carried by bundles should remain visible independently."
+      ],
+      "nextActionPolicy": "proactive",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/lens-contracts.ts",
+          "symbolName": "LensId",
+          "summary": "framework.capabilities is a first-class Atlas lens id."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "answerFrameworkCapabilities",
+          "summary": "Implemented capability terrain answerer and curated row inventory."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "catalog",
+          "summary": "Primary capability terrain projection for framework orientation before consumer-specific policy is applied."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkObserverCapability",
+          "summary": "Existing framework discovery capability vocabulary for observation/reactivity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRouterCapability",
+          "summary": "Existing framework discovery capability vocabulary for router entities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkExpressionCapability",
+          "summary": "Existing framework discovery capability vocabulary for expression/parser entities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRenderingCapability",
+          "summary": "Existing framework discovery capability vocabulary for rendering/lifecycle structures."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/framework/discovery-seeds.ts",
+          "symbolName": "FrameworkExportCapability",
+          "summary": "Existing package-export capability vocabulary used by framework discovery and bundle analysis."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.resources",
+          "projection": "convergence",
+          "summary": "Framework resource convergence evidence for built-ins, source carriers, admission, syntax, and materialization."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "doc-snippets",
+          "summary": "Docs/tests corpus evidence for app-author source forms such as local templates, styles, router, bindings, and plugins."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Router/viewport/route-context/route-tree relationship evidence for admission and area navigation capabilities."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "relationships",
+          "summary": "Observation and binding observer evidence for proxy/getter/collection/binding capability rows."
+        },
+        {
+          "kind": "lens",
+          "lensId": "bridge.aulink",
+          "projection": "anchors",
+          "summary": "Grounding signal for framework concepts already mirrored through auLink."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringAxis",
+          "summary": "Current app-builder lowering axes that should be rechecked against the framework capability terrain."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-root.ts",
+          "symbolName": "AppRootConfig",
+          "summary": "Semantic-runtime mirror of IAppRootConfig, including allowActionlessForm provenance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "answerFrameworkCapabilities"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FrameworkCapabilityDomain"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkObserverCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRouterCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkExpressionCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-entities.ts",
+          "symbolName": "FrameworkRenderingCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/framework/discovery-seeds.ts",
+          "symbolName": "FrameworkExportCapability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/app-builder/aurelia-lowering-option.ts",
+          "symbolName": "AppBuilderAureliaLoweringAxis"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/app-root.ts",
+          "symbolName": "AppRootConfig"
+        }
+      ],
+      "createdAt": "2026-05-26",
+      "updatedAt": "2026-06-04"
+    },
+    {
+      "id": "frontier:source-derived-capability-map",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-capabilities",
+        "aurelia-framework",
+        "semantic-runtime"
+      ],
+      "summary": "Source-derived framework inventory, clusters, coverage, and reverse-coverage are Atlas evidence lanes for auditing framework.capabilities, not capability identity by themselves.",
+      "rationale": "The curated capability rows remain the conceptual capability terrain. Source-derived inventory and clusters are valuable review handles because they put framework resources, compiler instructions, renderer products, expression entities, observation entities, and relation facets on the table. They should not be treated as forced ontology: source-file co-location and instruction targets can suggest groupings, but a framework capability may span files, one file may contain several capabilities, and some inventory constructs are implementation details rather than app-author capabilities. auLink reverse coverage is a semantic-runtime mirror signal, not a completeness criterion.",
+      "guidance": [
+        "DONE: framework.capabilities exposes curated projections (summary/catalog/matrix/evidence/evidence-trace/grounding) and source-derived evidence projections (inventory/coverage/reverse-coverage/clusters), backed by framework-capability-territory.ts.",
+        "Treat `inventory` as concrete framework evidence, not as a list of user-facing capabilities. It currently joins catalog-shaped families (resources, expression, observation, compiler, rendering) and relation-graph families (router, DI, admission) into one typed stream.",
+        "Treat `clusters` as candidate grouping evidence. Source-file co-location and binding-command instruction target are useful for resource/compiler/rendering review, but they are not enough to declare a capability boundary without human/model review against framework semantics.",
+        "Current cluster gap: expression and observation families each collapse to one `unfiled` cluster because their source rows do not carry declaration source spans. Fix the source/projection substrate before using those clusters for ontology accounting.",
+        "Forward `coverage` distinguishes exact source-derived construct identity, broad capability-kind coverage, broad-only coverage, and internal implementation constructs. Broad-only means an author-facing construct is covered by a curated framework capability kind but not represented as an exact named built-in/plugin row; internal constructs such as renderers stay visible without counting as app-author capability gaps. Replace or supplement this with explicit reviewed grounding/cluster membership before calling an inventory construct category-grounded.",
+        "Reverse coverage is an auLink mirror signal for semantic-runtime alignment. Use it to find product mirror gaps and split-brain, not to decide whether a framework capability exists.",
+        "A future accounting view should keep five dimensions separate: curated capability row, source-derived construct, reviewed cluster/evidence membership, auLink mirror status, and downstream consumer readiness. Do not collapse those dimensions into one completeness score.",
+        "Tool-time-only surfaces such as evaluation mini-VM, type-system, inquiry, API, app-builder, and fixture-verification are product substrates or consumers. They are not missing framework capabilities merely because they appear in semantic-runtime or Atlas.",
+        "Collection observers and dirty checking should be treated as capability/mirror/accounting questions, not as permanent 80/20 exclusions unless a later reviewed policy says so.",
+        "Remaining tooling: wire orient to advertise inventory/coverage/reverse-coverage/clusters; collapse standalone framework:territory/capability-coverage/reverse-coverage scripts into thin wrappers only if the unified framework.capabilities script remains ergonomic."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkCapabilityClusters",
+          "summary": "Candidate source-derived clustering; useful evidence handle, not capability identity by itself."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FRAMEWORK_CAPABILITY_ROWS",
+          "summary": "Curated capability rows that may cite source-derived evidence after review."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "clusters",
+          "summary": "Candidate cluster projection for auditing framework inventory groupings."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.capabilities",
+          "projection": "reverse-coverage",
+          "summary": "auLink mirror coverage signal for semantic-runtime alignment."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-territory.ts",
+          "symbolName": "frameworkCapabilityClusters"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-capability-lenses.ts",
+          "symbolName": "FRAMEWORK_CAPABILITY_ROWS"
+        }
+      ],
+      "createdAt": "2026-05-29",
+      "updatedAt": "2026-05-30"
+    },
+    {
+      "id": "reuse:framework-service-root-substrate",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "framework-capabilities",
+        "kernel",
+        "di",
+        "diagnostics",
+        "type-system",
+        "api"
+      ],
+      "summary": "Framework service-root and capability-demand facts are first-class semantic-runtime kernel products used for source API diagnostics, public capability admission rows, DI-key enrichment, and candidate/open boundaries.",
+      "rationale": "Dialog, validation, fetch-client, and future plugin source APIs can all need the same authored evidence: a service/root value came from DI activation, container get, AppTask declaration, framework type annotation, direct constructor, or an unresolved-but-framework-shaped candidate such as non-activation `resolve(...)`, resolver wrappers, local resolve barrels, and classic injection metadata. Keeping this as a `framework.service-root` product plus `framework.open-service-root-candidate` seams with provenance, source/evidence spans, DI-key claims, and demand diagnostics prevents each domain from re-recognizing framework service usage locally or promoting TypeChecker/evaluator hints into positive claims without source-backed admission.",
+      "guidance": [
+        "Start in `packages/semantic-runtime/src/framework/service-root.ts`, `service-root-materializer.ts`, and `service-root-enrichment-materializer.ts` when a framework service usage must justify diagnostics, capability demand, or cross-domain ownership.",
+        "Use `AureliaSourceApiRootFacts` from `source-api-root-recognition.ts` as the hot index over service-root products, source spans, same-source symbols, cross-source aliased symbols, and container roots; do not add parallel span-key maps in dialog, validation, fetch-client, or completion code.",
+        "Only DI-resolution-backed service-root bases should join to DI keys or create source-service capability demand. Update `frameworkServiceRootBasisResolvesDiKey(...)` when adding a new basis.",
+        "Use `FrameworkCapabilityDemandSiteKind.SourceServiceApi` when an authored DI-backed root references a plugin service key whose framework registration is required. Admission should join the root's `Framework.RootResolvesDiKey` claims through `di/container-chain.ts`, using `DiProductIdentity.containerHandle` plus `Di.ProvidesKey` to prove provider visibility on the consulting container chain; do not fall back to plain service-key-name strings or world-global provider presence. Check framework source semantics before adding a new key: some interfaces, such as fetch-client `IHttpClient`, have default aliases and should not demand app registration.",
+        "Source-service capability demand admission has four states: `admitted` for chain-proven providers, `admitted-chain-unproven` when a provider exists but the consulting container cannot be mapped, `admission-unknown` when same-chain registration-hiding seams or an unmapped consulting container block accusation without provider proof, and `not-admitted` for missing providers with a mapped consulting chain and no blocking seam. Known sibling/off-chain providers must stay `not-admitted`; do not let world-global provider presence suppress missing-registration diagnostics.",
+        "Candidate service-root shapes should publish source-backed `framework.open-service-root-candidate` seams with explicit reason/rollup policy rather than silently dropping or fabricating roots. Non-activation `resolve(...)` sites, including module-scope `definitely-absent` ambient container sites, are candidates rather than positive roots.",
+        "Framework declaration-source matching belongs in `type-system/framework-declaration-source.ts`; domain readers should use package-root-aware specs instead of local pnpm/yarn path fragments.",
+        "App diagnostics should consume framework capability demand/source-root products through `api/framework-projections.ts` and diagnostic-action classification before adding domain-local repair/action rows. Source-service diagnostics should point to related domain lanes such as `dialog-issues` or `validation-issues`, and expose demand/root handles when detail is requested.",
+        "`SemanticAppQueryKind.FrameworkCapabilityDemands` is the public fact surface for capability demand rows. It reports authored use, admission state, package/import evidence, source-file scoping, related issue lane, handles in detail mode, and row-level actionability; MCP should consume it through normal app-query catalog/pass-through rather than a bespoke tool."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root.ts",
+          "symbolName": "FrameworkServiceRoot",
+          "summary": "First-class service-root product detail and basis predicate."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-materializer.ts",
+          "symbolName": "FrameworkServiceRootMaterializer",
+          "summary": "Publishes container/service roots and candidate seams from authored source and source API facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-enrichment-materializer.ts",
+          "symbolName": "FrameworkServiceRootEnrichmentMaterializer",
+          "summary": "Post-DI-world enrichment that adds RootResolvesDiKey and RootUsesContainerRoot claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/source-api-root-recognition.ts",
+          "symbolName": "AureliaSourceApiRootFacts",
+          "summary": "Hot source API root index over DI scanners, AppTask callbacks, and materialized service-root products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/framework/capability-demand-materializer.ts",
+          "symbolName": "FrameworkCapabilityDemandMaterializer",
+          "summary": "Source-service API demand and chain-scoped admission joins against framework registration evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/di/container-chain.ts",
+          "symbolName": "DiContainerChainFacts",
+          "summary": "Shared read-only DI chain helper over DiProductIdentity.containerHandle and Di.ProvidesKey facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandRows",
+          "summary": "Public framework-capability-demands projection for authored demand, admission, evidence, source scoping, actionability, and handles."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandDiagnosticRows",
+          "summary": "Public app-diagnostics projection for unadmitted source-service capability demand."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "frameworkDeclarationSourceSpec",
+          "summary": "Package-root-aware framework declaration source matching for TypeChecker-backed framework API recognition."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-source-service-api-demand.mjs",
+          "summary": "Contract for source-service API roots, diagnostics, demand products, diagnostic-action targets, related query lanes, and no false provided-key admission."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-v2-edges.mjs",
+          "summary": "Contract for aliased resolve roots, module-scope resolve candidates, local resolve barrels, container resolver wrappers, and classic inject metadata."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-admission-chain.mjs",
+          "summary": "Contract for chain-proven source-service admission, admitted-chain-unproven fallback, scoped admission-unknown seams, caller-unmapped containers, and multi-root cross-admission canaries."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-framework-capability-demand-query.mjs",
+          "summary": "Contract for the public capability-demand query, source scoping, page budget behavior, actionability, and continuations."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-service-root-candidate-rollup.mjs",
+          "summary": "Contract for candidate service-root seam cap and explicit rollup behavior."
+        },
+        {
+          "kind": "script",
+          "command": "node scripts/contract-framework-declaration-source-paths.mjs",
+          "summary": "Contract for framework declaration source package-root/path matching without admitting lookalike packages."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root.ts",
+          "symbolName": "FrameworkServiceRoot"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-materializer.ts",
+          "symbolName": "FrameworkServiceRootMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/service-root-enrichment-materializer.ts",
+          "symbolName": "FrameworkServiceRootEnrichmentMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/framework/source-api-root-recognition.ts",
+          "symbolName": "AureliaSourceApiRootFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/di/container-chain.ts",
+          "symbolName": "DiContainerChainFacts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/framework-projections.ts",
+          "symbolName": "readFrameworkCapabilityDemandDiagnosticRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "frameworkDeclarationSourceSpec"
+        }
+      ],
+      "createdAt": "2026-06-12",
+      "updatedAt": "2026-06-12"
+    }
+  ]
+}

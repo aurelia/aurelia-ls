@@ -1,0 +1,5 @@
+{
+  "optionalDependencies": {
+    "@aurelia/router": "^2.0.0"
+  }
+}

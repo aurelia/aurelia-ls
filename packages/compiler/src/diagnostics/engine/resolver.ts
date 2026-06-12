@@ -39,7 +39,7 @@ function resolveAureliaCode(
   catalog: DiagnosticsCatalog,
 ): DiagnosticCodeResolution {
   if (catalog[code]) {
-    return { code: code as DiagnosticCode };
+    return { code: code };
   }
   return { code: null, issues: [unknownCodeIssue(code)] };
 }

@@ -1,0 +1,484 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:kernel-store",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "provenance",
+        "product-records"
+      ],
+      "summary": "KernelStore is large, central, and currently intentional as the product-record substrate.",
+      "rationale": "Large-class pressure should not automatically split the store. The important question is whether higher-level publication helpers and provenance concepts keep record construction precise and explainable.",
+      "guidance": [
+        "Treat KernelStore size as intentional unless new work adds unrelated policy or source-specific publication behavior.",
+        "Prefer improving product-record publication helpers before pushing more responsibilities into KernelStore.",
+        "Use KernelStore mark/dispose only for query-boundary reclamation of answer-local records and sidecars; app-world invalidation still needs an explicit epoch policy. Disposal summaries should include reclaimed record-handle character mass so one-off answer telemetry can separate logical disposal from transient handle-string bulk.",
+        "KernelHandleFactory compacts broad store/local key parts because handles are hot session links, not semantic payload. If a consumer needs more readable identity, add the source/product/detail field that owns that meaning rather than widening handle strings globally.",
+        "Use fieldProvenanceWhenDistinct when a materializer has owning source/product provenance plus optional field-specific witnesses. Repeating the owner provenance as field provenance is usually representation noise unless the field-provenance array intentionally carries configured-field presence.",
+        "Use product.vocabulary and product.architecture kernel-records when judging whether record shapes are coherent."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore",
+          "line": 88,
+          "summary": "Central kernel product-record store."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/handles.ts",
+          "symbolName": "KernelHandleFactory",
+          "summary": "Store-local handle minting and compaction policy."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.vocabulary",
+          "projection": "summary",
+          "summary": "Vocabulary rows that define record/product language."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "KernelStore",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "reuse:authored-source-text-cache",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "source",
+        "template",
+        "diagnostics",
+        "overlay"
+      ],
+      "summary": "AuthoredSourceTextCache is the shared raw-file text reader for source-span slicing and cursor offset conversion.",
+      "rationale": "Template markup can be decoded or source-mapped while diagnostics, overlays, cursor inquiries, and future edit surfaces still need exact authored HTML or TypeScript host text. Centralizing the raw read/cache and line math prevents API/template-local filesystem readers from drifting.",
+      "guidance": [
+        "Use AuthoredSourceTextCache when a product already has a source path/span and needs to slice raw authored text or convert offsets to line/character positions.",
+        "Use AuthoredSourceTextCache for app-source text scans that read authored project files, including boot project-shape source-signal scans; boot package/tsconfig discovery and evaluation module-host reads have separate lifetimes.",
+        "Do not replace this with TemplateSource.markup unless the consumer only needs decoded compiler input and not authored-source coordinates.",
+        "Resource convergence should use the same cache for conventional/imported external template text so template-file reads, decoded metadata, diagnostics, cursor loci, and overlays stay on one authored-text boundary.",
+        "I18n imported JSON key spans should use the evaluator asset-module helper over this cache so source addresses point at authored JSON properties rather than the generated module wrapper.",
+        "Use product.architecture source-file read pressure before adding new direct readFileSync, existsSync, or line-offset helpers in semantic-runtime.",
+        "If a future source epoch or content-hash layer appears, thread it through this cache boundary instead of adding local defensive reads in diagnostics, overlays, or completion."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
+          "symbolName": "AuthoredSourceTextCache",
+          "summary": "Shared authored source text cache and line/offset helper boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-type-system-overlay-expression.ts",
+          "symbolName": "TemplateTypeSystemOverlayExpressionProjector",
+          "summary": "Overlay expression projector slices authored source through the shared cache."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "templateSourceText",
+          "summary": "Template diagnostics and cursor paths use the shared cache for source text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "readImportedHtmlTemplate",
+          "summary": "Resource convergence reads imported/conventional external HTML through the shared cache before metadata stripping."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/asset-module.ts",
+          "symbolName": "authoredAssetModuleSpanForNode",
+          "summary": "Asset module source-span helper maps generated JSON module nodes back through the shared authored source cache."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
+          "summary": "Product architecture pressure prints source-file read pressure from call-site rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/authored-source-text.ts",
+          "symbolName": "AuthoredSourceTextCache"
+        }
+      ],
+      "createdAt": "2026-05-24",
+      "updatedAt": "2026-05-24"
+    },
+    {
+      "id": "frontier:open-seam-reason-provenance",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "open-seam",
+        "provenance",
+        "diagnostics",
+        "repair"
+      ],
+      "status": "active",
+      "nextActionPolicy": "when-touched",
+      "summary": "OpenSeam carries a primary unresolved site plus optional reasonSources for adjacent source/evidence sites that contributed individual reason kinds.",
+      "rationale": "Router href target pressure exposed the shape: the seam is correctly owned by the dynamic href value, but `router-href-click-interception-target-open` is contributed by the host target attribute. The kernel now has an OpenSeam.reasonSources carrier, router dynamic href seams publish source-bearing reason rows for the value, externality, and target-open facts, and authoring repair suggestions can choose action targets from those rows. Similar multi-site reasons can appear in binding value channels, observer selection, and framework error projections, so new consumers should extend the shared reason-source primitive instead of adding caller-local side tables.",
+      "guidance": [
+        "Treat `OpenSeam.addressHandle` as the primary unresolved seam site, not proof that every `reasonKind` came from the same source span.",
+        "When a repair or diagnostic needs to act on one reason inside a multi-reason seam, use `OpenSeam.reasonSources` and API `reasonSources` rows before adding feature-local evidence tables.",
+        "API `reasonSources` rows should carry query-time `sourceRange` when their address resolves to authored text. Keep line/column derivation out of durable kernel records; the kernel owns address/evidence handles and the API owns public location projection.",
+        "Keep compact open-seam summaries stable for routing, but preserve exact reason-level provenance through structured rows when the product needs edit targets or hover explanation.",
+        "Producer-owned reason kinds should be carried into OpenSeam at publication time. Static evaluator seams now prove this path through `EvaluationOpenSeam.reasonKinds`; extend producer threading before adding downstream classifiers.",
+        "When one semantic layer wraps lower-level open seams into a higher product boundary, carry existing `reasonKinds` through the intermediate carrier before publication. `ConfigurationRecognitionOpen` and `RegistrationRecognitionOpen` preserve evaluator reasons for this purpose; add producer-specific reason taxonomy only when the higher layer owns a genuinely new reason.",
+        "Public open-seam site rows should not expose empty `reasonKinds` when the producer has already emitted a prose open reason. The current pressure-fixture census found and closed the binding-data-flow parser-open gap through `binding-source-unsupported-expression`; repeat this producer-level audit before adding display heuristics.",
+        "Public summary answers should distinguish raw derivation row counts from unique authored seam-site counts structurally, not only in prose. Raw `open-seams` display samples should dedupe repeated derivation rows for breadth while preserving raw structured rows for deep inspection.",
+        "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
+        "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/open-seam.ts",
+          "symbolName": "OpenSeam",
+          "summary": "Current first-class open seam record with a primary address/evidence handle, reasonKinds, and optional reasonSources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-open-seam.ts",
+          "symbolName": "recordsForSourceOpenSeam",
+          "summary": "Shared source-backed open-seam publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/seams.ts",
+          "symbolName": "EvaluationOpenSeam",
+          "summary": "Evaluator-local seam carrier that preserves producer reason kinds until kernel publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+          "symbolName": "openSeamReasonKindsForDataFlow",
+          "summary": "Binding data-flow seam reason bridge; malformed or incomplete parser expressions fall back to binding-source-unsupported-expression instead of empty public reason sets."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-public-quality",
+          "summary": "Broad pressure-fixture sweep for public open-seam trust: raw/site/summary totals, reasonKinds, source ranges, static-evaluation origin uniqueness, and paging completeness."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:open-seam-sites",
+          "summary": "Contract proving repeated derivation rows collapse into unique authored sites while summary totals, raw display samples, source roles, application roles, static-evaluation origins, reason filters, and continuations stay public."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-open-seam-reasons",
+          "summary": "Contract proving evaluator-produced open seams preserve reason kinds through public seam projections."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:configuration-open-seam-reasons",
+          "summary": "Contract proving evaluator reason kinds survive the configuration product-boundary handoff."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:router-dynamic-pattern",
+          "summary": "Contract proving router dynamic href reasonSources preserve source-bearing reason provenance and authored source ranges."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "hrefClickInterceptionFacts",
+          "summary": "Router href click-interception facts can contribute reason kinds from host attributes and router options."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/diagnostic-action/action.ts",
+          "symbolName": "DiagnosticActionKind",
+          "summary": "Diagnostics-to-action owns future repair/action classification before host edit planning spends OpenSeam source evidence."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/router-dynamic-pattern",
+          "summary": "Pressure fixture now includes a dynamic href seam whose target-open reason is contributed by the host target attribute."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/open-seam.ts",
+          "symbolName": "OpenSeam"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "hrefClickInterceptionFacts"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-06-10"
+    },
+    {
+      "id": "frontier:product-detail-catalog",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "product-details",
+        "inquiry"
+      ],
+      "summary": "ProductDetailCatalog is the hot in-memory sidecar for typed product details keyed by durable MaterializedProduct handles.",
+      "rationale": "Rich TypeScript checker objects, framework models, and current-run materializer details do not belong in durable kernel records, but inquiry and downstream materializers need typed access to them. ProductDetailCatalog is the explicit product-owned contract layer between durable handles and hot details.",
+      "guidance": [
+        "Start here when a materializer or inquiry needs to attach, read, or enumerate rich details for a materialized product.",
+        "Define a ProductDetailSlot for a product-owned contract instead of using generic payload escape hatches.",
+        "Keep duplicate-detail and product-kind checks strict so hot details remain tied to committed durable products.",
+        "ProductDetailEntry carries the owning MaterializedProduct envelope; derive envelope facts there before copying product, identity, address, or provenance handles into a detail shape.",
+        "Use ProductDetailCatalog.addAll(...) and addAllIfAbsent(...) for homogeneous materializer emission row families whose details already carry product handles; keep nullable or conditional detail attachment explicit at the call site.",
+        "ProductDetailCatalog participates in kernel mark/dispose so query-local product details can be reclaimed with their envelopes; durable app-world product invalidation still belongs to an app epoch policy.",
+        "Use the opt-in detail-density telemetry lane before changing product-detail retention. If direct string mass is mostly handle fields, treat that as representation or inquiry-depth pressure instead of dropping navigable handles.",
+        "Use unique direct string counts beside total direct string characters before assuming string repetition is the memory bug; detail-density is logical payload evidence, not exact heap ownership.",
+        "Use the detail-density envelope-echo rows to distinguish product envelope duplication from new semantic payload. A high echo count points at derived-reference or query-depth design, not at a random source-payload blob.",
+        "ProductDetailCatalog binds detail objects to their owning MaterializedProduct envelope and normalizes exact own-field echoes such as productHandle, identityHandle, sourceAddressHandle, addressHandle, primaryIdentityHandle, and provenanceHandle into non-enumerable envelope-backed accessors. If detail-density still reports envelope echoes, check whether the detail bypassed ProductDetailCatalog or whether the field is deliberately not the owning envelope.",
+        "Use non-envelope handle rows before refactoring detail classes: they usually represent cross-product navigation links, while envelope echoes may be derivable from the ProductDetailEntry or owning MaterializedProduct envelope.",
+        "Use non-handle string rows to see scalar payload after handle-shaped strings are removed from the logical mass."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "symbolName": "ProductDetailCatalog",
+          "line": 48,
+          "summary": "Hot typed product-detail catalog."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "symbolName": "ProductDetailSlot",
+          "line": 13,
+          "summary": "Typed product-detail slot contract."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "line": 83,
+          "summary": "Bulk detail attachment for homogeneous emitted product-detail row families."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ProductDetailCatalog",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:hot-detail-catalog",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "hot-details",
+        "performance",
+        "inquiry"
+      ],
+      "summary": "HotDetailCatalog is the epoch-local sidecar for typed details that should not become durable MaterializedProduct envelopes.",
+      "rationale": "Memory telemetry showed that some rich child surfaces, especially TypeChecker member rows owned by projected type shapes, are useful to in-process analysis but too numerous or too low-level to justify product envelopes. HotDetailCatalog keeps those details typed, mark/disposable, and query-visible without promoting them into durable kernel products.",
+      "guidance": [
+        "Start here when a materializer needs typed in-memory detail access but the detail has no independent product-kind navigation, claims, provenance, or cross-inquiry durability requirement.",
+        "Prefer ProductDetailCatalog when the detail expands a committed MaterializedProduct; prefer HotDetailCatalog when the detail is owned by another product and should follow that product or query epoch's lifetime.",
+        "Keep hot detail slots explicit and documented; do not use hot details as generic payload storage for facts that should become kernel products or claims.",
+        "HotDetailCatalog participates in kernel mark/dispose so query-local hot rows can be reclaimed with answer-local products.",
+        "Use detail-density telemetry to distinguish hot-detail object count from direct string/array field mass; TypeChecker member hot details often retain handle-shaped navigation strings even when they avoid durable product envelopes.",
+        "Hot details have no owning MaterializedProduct envelope, so their handle-shaped fields usually report as non-envelope handles and should be treated as current-epoch navigation rather than envelope echo."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/hot-details.ts",
+          "symbolName": "HotDetailCatalog",
+          "summary": "Epoch-local typed hot detail catalog."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/hot-details.ts",
+          "symbolName": "HotDetailSlot",
+          "summary": "Typed hot-detail slot contract."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Kernel docs describing hot details as the lower-cost sidecar beside product details."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "HotDetailCatalog",
+          "filePath": "packages/semantic-runtime/src/kernel/hot-details.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:kernel-sidecar-indexes",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "sidecar-indexes",
+        "memory",
+        "inquiry"
+      ],
+      "summary": "Kernel sidecar indexes are named acceleration structures that mirror kernel/product-detail lifetimes.",
+      "rationale": "Query-local products and hot details may be disposed after an answer is shaped, but private indexes can otherwise retain stale TypeChecker carriers, members, and other rich detail objects. Registering sidecar indexes with KernelStore makes their lifetime explicit and visible in telemetry.",
+      "guidance": [
+        "Start here when a cache/index points at product details, hot details, TypeChecker carriers, or query-local materialized products.",
+        "Register store-local acceleration indexes with KernelStore.registerSidecarIndex(...) instead of hiding them in package-level WeakMaps with no disposal contract.",
+        "Use sidecar index telemetry rows to check whether an index is retaining answer-local work after QueryClaimGraph disposal.",
+        "`contract:type-projection-lifetime` proves the TypeChecker type-shape sidecar prunes with product-detail disposal and reprojects fresh details after the same local key is reused.",
+        "Do not turn sidecar indexes into semantic storage; durable semantics still belong in kernel records, claims, identities, products, product details, or hot details with explicit lifetimes."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.registerSidecarIndex",
+          "summary": "Registers named store-local indexes that prune on kernel disposal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "typeShapeIndexForStore",
+          "summary": "TypeChecker type-shape projector index registered as a kernel sidecar index."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Kernel docs describing sidecar indexes as named disposable acceleration structures."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:type-projection-lifetime",
+          "summary": "Contract proving a registered sidecar index drops disposed product-detail references."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "registerSidecarIndex"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "typeShapeIndexForStore"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-24"
+    },
+    {
+      "id": "decision:kernel-handle-compaction",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "handles",
+        "telemetry",
+        "memory"
+      ],
+      "summary": "Kernel handles are compactable session transport links, not durable semantic identities.",
+      "rationale": "Telemetry showed recursive local-key handles retaining millions of repeated characters in hot app worlds. The kernel already stores semantic identity, source coordinates, product kind, and provenance in typed records, so handle strings can trade some readability for memory without becoming semantic truth.",
+      "guidance": [
+        "Do not parse kernel handles to recover product kind, source identity, route keys, DI keys, or type identity; read the typed records instead.",
+        "When a consumer needs stable identity across stores, model that as a domain field or semantic identity rather than relying on handle text.",
+        "Store-key handle parts may compact more aggressively than local-key parts because the store/workspace identity is repeated on every handle and is not the semantic local key.",
+        "Keep compact handle readable prefixes short. The hash guards store-local uniqueness, while typed records own semantic identity and explanation.",
+        "Treat new long handle families as local-key design pressure first, then handle compaction pressure only when the handle is legitimately transport-only.",
+        "Use semantic-runtime telemetry handle-character breakdowns before widening handle compaction or adding per-family string interning.",
+        "Use source-span role and source-file role breakdowns before changing address storage; exact source-span duplication was low on the mixed-form canary, so broad address savings likely need representation/inquiry-policy work rather than simple de-duplication."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/handles.ts",
+          "symbolName": "serializeKernelHandle",
+          "summary": "Serializes compactable store-local kernel handles."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Design Rules",
+          "summary": "Kernel-local handle identity and compactness guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/kernel-density.ts",
+          "symbolName": "SemanticRuntimeKernelDensitySnapshot",
+          "summary": "Telemetry row that reports handle-character pressure."
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "reuse:source-backed-issue-publication",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "diagnostics",
+        "kernel-publication"
+      ],
+      "summary": "Source-backed diagnostics that become semantic issue products should reuse the kernel issue-publication primitive.",
+      "rationale": "Dialog, fetch-client, state, and validation issue publishers share the same evidence/provenance/identity/materialized-product/materialization envelope while retaining domain-specific issue objects and identity records. The shared primitive keeps product publication coherent without forcing every package to grow one-off publication classes.",
+      "guidance": [
+        "Use publishIssueProduct when a diagnostic is a materialized semantic product with domain-owned issue details.",
+        "Keep source-span creation in the caller when the caller owns exact authored source ranges; pass the resulting address handle into the issue product publication.",
+        "Use issue-publication type aliases or object literals for pure publication envelopes; add a class only when the publication object has behavior or state across calls.",
+        "If a new issue identity kind is added, make sure KernelStore indexes that identity kind in both pending batch validation and committed record expansion."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/issue-publication.ts",
+          "symbolName": "publishIssueProduct",
+          "summary": "Shared issue product publication primitive."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Kernel-local guidance for source-backed open seams and issue publication."
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

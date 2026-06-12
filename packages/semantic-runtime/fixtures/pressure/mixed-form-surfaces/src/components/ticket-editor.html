@@ -1,0 +1,69 @@
+<form
+  if.bind="ticket"
+  submit.trigger="submit()"
+  class="ticket-editor ticket-${ticketId} ${preferredChannels.length === 0 ? 'missing-channel' : 'has-channel'}"
+  data-ticket.attr="ticketId">
+  <label for="customer-name">Customer</label>
+  <input id="customer-name" value.bind="customerName">
+
+  <label for="customer-email">Email</label>
+  <input
+    id="customer-email"
+    type="email"
+    value.bind="customerEmail"
+    aria-invalid.attr="emailErrors.length > 0">
+  <p repeat.for="message of emailErrors">${message}</p>
+
+  <loose-picklist
+    label="Fulfillment"
+    value.bind="fulfillmentMethod"
+    options.bind="fulfillmentOptions">
+  </loose-picklist>
+
+  <fieldset>
+    <legend>Contact channels</legend>
+    <label>
+      <input type="checkbox" model.bind="emailChannel" checked.bind="preferredChannels">
+      Email
+    </label>
+    <label>
+      <input type="checkbox" model.bind="phoneChannel" checked.bind="preferredChannels">
+      Phone
+    </label>
+    <label>
+      <input type="checkbox" model.bind="smsChannel" checked.bind="preferredChannels">
+      SMS
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Channel consent</legend>
+    <label>
+      <input type="checkbox" model.bind="emailChannel" checked.bind="channelConsent">
+      Email consent
+    </label>
+    <label>
+      <input type="checkbox" model.bind="phoneChannel" checked.bind="channelConsent">
+      Phone consent
+    </label>
+    <label>
+      <input type="checkbox" model.bind="smsChannel" checked.bind="channelConsent">
+      SMS consent
+    </label>
+  </fieldset>
+
+  <label for="ticket-tags">Tags</label>
+  <select id="ticket-tags" multiple value.bind="requestedTags">
+    <option repeat.for="tag of tagOptions" model.bind="tag">${tag}</option>
+  </select>
+
+  <label for="priority">Priority</label>
+  <input id="priority" type="number" value.bind="priority">
+
+  <label for="floor">Loose floor field</label>
+  <input id="floor" value.bind="looseFloor">
+
+  <button type="submit" disabled.bind="ticketId == ''">
+    Save ticket
+  </button>
+</form>

@@ -1,0 +1,19 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Done</th>
+      <th>Complete</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of taskItems">
+      <td>${taskItem.title.toUpperCase()}</td>
+      <td>${taskItem.done ? 'Done' : 'Open'}</td>
+      <td>
+        <button type="button" click.trigger="complete(taskItem)">Complete</button>
+      </td>
+    </tr>
+  </tbody>
+</table>

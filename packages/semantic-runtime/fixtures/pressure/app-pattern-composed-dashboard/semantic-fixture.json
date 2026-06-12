@@ -1,0 +1,488 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-pattern-pressure",
+  "pressureOrigin": "migrated-app-pattern",
+  "appPatternKey": "composed-dashboard",
+  "expectedEffects": [
+    {
+      "summary": "Project should reopen as an Aurelia app.",
+      "effectKind": "project-shape",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Dashboard state source should be visible in app topology.",
+      "effectKind": "service-class",
+      "scope": "di",
+      "topologyNodeKind": "state-model",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "role",
+          "value": "state-source"
+        },
+        {
+          "field": "className",
+          "value": "DashboardState"
+        }
+      ]
+    },
+    {
+      "summary": "App root should be visible after reopen.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": "entrypoint",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Root component should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "app-root",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Dashboard root component should use an external template.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Chart widget should be a custom element.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Dashboard root should expose list-renderer component role.",
+      "effectKind": "component-role",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "roleKind",
+          "value": "list-renderer"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root should materialize dynamic AuCompose candidates.",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "flushMode",
+          "value": "async"
+        },
+        {
+          "field": "componentResolutionKind",
+          "value": "type-candidate"
+        },
+        {
+          "field": "resolvedComponentCount",
+          "value": 2
+        },
+        {
+          "field": "compiledTemplateCount",
+          "value": 2
+        },
+        {
+          "field": "candidateResourceAnalysisState",
+          "value": "complete"
+        },
+        {
+          "field": "candidateResourceAnalysisCount",
+          "value": 2
+        },
+        {
+          "field": "activationHandoffKinds",
+          "value": "model-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root should materialize a closed static AuCompose child controller.",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "componentResolutionKind",
+          "value": "static-value"
+        },
+        {
+          "field": "staticComponentName",
+          "value": "inventory-widget"
+        },
+        {
+          "field": "composedChildControllerCount",
+          "value": 1
+        },
+        {
+          "field": "composedChildControllerCreationKinds",
+          "value": "custom-element"
+        },
+        {
+          "field": "activationHandoffKinds",
+          "value": "model-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root should materialize scoped template-only AuCompose context.",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "discriminator",
+      "filters": [
+        {
+          "field": "componentResolutionKind",
+          "value": "template-only"
+        },
+        {
+          "field": "modelResolutionKind",
+          "value": "absent"
+        },
+        {
+          "field": "hasTemplateBinding",
+          "value": true
+        },
+        {
+          "field": "scopeBehavior",
+          "value": "scoped"
+        },
+        {
+          "field": "flushMode",
+          "value": "async"
+        },
+        {
+          "field": "tag",
+          "value": "aside"
+        },
+        {
+          "field": "hasCompositionBinding",
+          "value": true
+        },
+        {
+          "field": "hasComposingBinding",
+          "value": true
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root resolves a promise-valued AuCompose component input.",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "componentInputFulfillmentKind",
+          "value": "promise"
+        },
+        {
+          "field": "componentResolutionKind",
+          "value": "static-value"
+        },
+        {
+          "field": "resolvedComponentNames",
+          "value": "inventory-widget"
+        },
+        {
+          "field": "composedChildControllerCount",
+          "value": 1
+        },
+        {
+          "field": "activationHandoffKinds",
+          "value": "model-assignable"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root resolves a promise-valued AuCompose template input.",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "templateInputFulfillmentKind",
+          "value": "promise"
+        },
+        {
+          "field": "componentResolutionKind",
+          "value": "template-only"
+        },
+        {
+          "field": "hasTemplateBinding",
+          "value": true
+        },
+        {
+          "field": "scopeBehavior",
+          "value": "scoped"
+        },
+        {
+          "field": "flushMode",
+          "value": "async"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root should materialize repeat template-controller hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "template-controller"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "instruction-sequence"
+        }
+      ]
+    },
+    {
+      "summary": "Dashboard root should materialize repeat synthetic-view hydration.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "template-controller",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "creationKind",
+          "value": "synthetic-view"
+        },
+        {
+          "field": "templateControllerFlowKind",
+          "value": "iteration"
+        },
+        {
+          "field": "childViewCardinality",
+          "value": "many"
+        },
+        {
+          "field": "childViewRenderingState",
+          "value": "expanded-aggregate"
+        },
+        {
+          "field": "hydrationHandoffKind",
+          "value": "synthetic-view"
+        }
+      ]
+    },
+    {
+      "summary": "Chart widget should repeat points directly from its activated model.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "definitionName",
+          "value": "chart-widget"
+        },
+        {
+          "field": "sourceName",
+          "value": "model.points"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "items"
+        }
+      ]
+    },
+    {
+      "summary": "Inventory widget should repeat items directly from its activated model.",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "topologyNodeKind": "template-binding",
+      "cardinality": "present",
+      "count": null,
+      "role": "signature",
+      "filters": [
+        {
+          "field": "definitionName",
+          "value": "inventory-widget"
+        },
+        {
+          "field": "sourceName",
+          "value": "model.items"
+        },
+        {
+          "field": "sourceRootName",
+          "value": "model"
+        },
+        {
+          "field": "targetProperty",
+          "value": "items"
+        }
+      ]
+    },
+    {
+      "summary": "Composed dashboard has package manifest tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "package-manifest",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest"
+        }
+      ]
+    },
+    {
+      "summary": "Composed dashboard has TypeScript project tooling.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config"
+        }
+      ]
+    },
+    {
+      "summary": "Composed dashboard has local asset module declarations.",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "topologyNodeKind": "build-tool",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration"
+        }
+      ]
+    },
+    {
+      "summary": "Composed dashboard has an app root.",
+      "effectKind": "app-root",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Composed dashboard has root and widget custom elements.",
+      "effectKind": "component",
+      "scope": "resource",
+      "topologyNodeKind": "component",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Composed dashboard has external templates.",
+      "effectKind": "external-template",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Composed dashboard has compiled template facts.",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "topologyNodeKind": "template",
+      "cardinality": "at-least",
+      "count": 3,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Composed dashboard has runtime controller facts.",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "topologyNodeKind": "component",
+      "cardinality": "present",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    },
+    {
+      "summary": "Composed dashboard has no open semantic seams.",
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "topologyNodeKind": null,
+      "cardinality": "absent",
+      "count": null,
+      "role": "baseline",
+      "filters": []
+    }
+  ]
+}

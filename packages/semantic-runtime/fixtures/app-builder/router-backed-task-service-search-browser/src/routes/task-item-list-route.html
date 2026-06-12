@@ -1,0 +1,37 @@
+<section>
+  <h2>Tasks</h2>
+  <div>
+    <label for="task-search-query">Search tasks</label>
+    <input type="search" value.bind="taskItemTitleQuery" id="task-search-query">
+  </div>
+  <button type="button" click.trigger="searchTaskItems()">Search tasks</button>
+  <p if.bind="searchStatusMessage" role="status" id="task-search-status">${searchStatusMessage}</p>
+  <button type="button" click.trigger="clearTaskItemSearch()">Clear search</button>
+  <p if.bind="clearSearchStatusMessage" role="status" id="task-clear-search-status">${clearSearchStatusMessage}</p>
+  <section promise.bind="taskItemsPromise">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+      <table else>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Done</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="taskItem of loadedTaskItems">
+            <td>${taskItem.title}</td>
+            <td>${taskItem.done ? 'Done' : 'Open'}</td>
+            <td>
+              <a load="route: task-item-detail; params.bind: { taskId: taskItem.id }">Open</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+    <p catch>Could not load tasks.</p>
+  </section>
+  <au-viewport name="detail"></au-viewport>
+</section>

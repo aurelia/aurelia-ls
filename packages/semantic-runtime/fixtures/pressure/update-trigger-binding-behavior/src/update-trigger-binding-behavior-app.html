@@ -1,0 +1,11 @@
+<input value.bind="message & updateTrigger:'blur'">
+<input value.bind="message & updateTrigger">
+<span textcontent.to-view="message & updateTrigger:'blur'"></span>
+<div id.two-way="elementId & updateTrigger:'change'"></div>
+<input value.bind="message & signal">
+<button click.trigger="save() & signal:'refresh'">Signal listener</button>
+<button click.trigger="save() & self">Self listener</button>
+<input value.bind="message & self">
+<input value.bind="message & attr">
+<button click.trigger="save() & attr">Attr listener</button>
+<input value.bind="message & throttle:100 & debounce:100">

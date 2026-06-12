@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "decision:markdown-is-backing-not-primary-memory",
+      "kind": "decision",
+      "domains": [
+        "atlas",
+        "memory",
+        "docs",
+        "autonomy"
+      ],
+      "summary": "JSON memory, README files, workbenches, and .temp notes have distinct jobs; Atlas memory is the queryable navigation surface.",
+      "rationale": "The user called out false positives and compaction drift from stale or oversized markdown, and later noted that the repo had effectively gained two storage systems: JSON records and markdown notes. This is intentional only when JSON carries the queryable durable handle, README files carry stable boundary maps, workbenches carry rolling context, and .temp stays scratch unless promoted.",
+      "guidance": [
+        "Add memory records for durable intent that future Codex should retrieve by domain, path, symbol, lens, live-check kind, or query.",
+        "Use package READMEs for stable ownership and boundary rules, and link them from memory records through doc anchors.",
+        "Use workbenches for rolling context only while a subsystem is settling; promote durable rules into JSON memory or an owning README.",
+        "Treat .temp notes and autonomous ledgers as scratch/review material; promote their essence before relying on them after a commit boundary.",
+        "Do not encode transient autonomous-loop protocol in durable memory.",
+        "When a note can become resolved or stale, give it a liveCheck instead of prose-only status.",
+        "Use memory:write for record creation, upsert, removal, and shard selection instead of hand-maintaining duplicate ids across shard JSON."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/memory/README.md",
+          "heading": "Information Ownership",
+          "summary": "Intentional split between JSON memory, READMEs, workbenches, and .temp scratch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
+          "symbolName": "AtlasMemoryRecord",
+          "summary": "Atlas memory record schema."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
+          "symbolName": "upsertRecord",
+          "summary": "Structured writer for durable memory record updates."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas memory",
+          "summary": "Compact CLI surface for the memory lens."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas memory:write",
+          "summary": "Structured CLI surface for updating durable memory records."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "guidance",
+          "summary": "Queryable durable guidance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
+          "symbolName": "AtlasMemoryRecord"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
+          "symbolName": "upsertRecord"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    }
+  ]
+}

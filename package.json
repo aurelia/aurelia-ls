@@ -1,6 +1,7 @@
 {
   "name": "aurelia-ls",
   "private": true,
+  "packageManager": "pnpm@11.5.2",
   "workspaces": [
     "packages/*",
     "examples/*",
@@ -8,28 +9,7 @@
     "playground/*"
   ],
   "engines": {
-    "node": ">=18.17 <23"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "overrides": {
-      "aurelia": "link:aurelia/packages/aurelia",
-      "@aurelia/kernel": "link:aurelia/packages/kernel",
-      "@aurelia/metadata": "link:aurelia/packages/metadata",
-      "@aurelia/platform": "link:aurelia/packages/platform",
-      "@aurelia/platform-browser": "link:aurelia/packages/platform-browser",
-      "@aurelia/runtime": "link:aurelia/packages/runtime",
-      "@aurelia/runtime-html": "link:aurelia/packages/runtime-html",
-      "@aurelia/expression-parser": "link:aurelia/packages/expression-parser",
-      "@aurelia/template-compiler": "link:aurelia/packages/template-compiler",
-      "@aurelia/fetch-client": "link:aurelia/packages/fetch-client",
-      "@aurelia/router": "link:aurelia/packages/router",
-      "@aurelia/route-recognizer": "link:aurelia/packages/route-recognizer",
-      "@aurelia/testing": "link:aurelia/packages/testing",
-      "@aurelia/i18n": "link:aurelia/packages/i18n"
-    }
+    "node": ">=22.13 <25"
   },
   "scripts": {
     "build": "tsc -b",
@@ -47,6 +27,7 @@
     "pretest:vitest:cov": "pnpm -w build",
     "test:vitest:cov": "node scripts/run-vitest.mjs --coverage",
     "test:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage",
+    "test:semantic-runtime": "pnpm --filter @aurelia-ls/semantic-runtime build",
     "test:compiler": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler",
     "test:compiler:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/compiler",
     "test:10-lower": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/10-lower",
@@ -94,12 +75,12 @@
     "esbuild": "^0.24.0",
     "playwright": "^1.49.1",
     "@types/vscode": "^1.90.0",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
     "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^9.39.1",
     "globals": "^15.12.0",
-    "typescript": "^5.5.4",
+    "typescript": "^6.0.3",
     "vite": "^6.0.3",
     "vitest": "^4.0.16"
   }

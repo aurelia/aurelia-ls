@@ -1,0 +1,778 @@
+import type { SourceProject } from "../../source/index.js";
+import { repoRelativePath } from "../../source/path.js";
+import { readFrameworkObserverEntities } from "./framework-observer-entities.js";
+import {
+  frameworkEmulationValue,
+  readFrameworkEmulationObligations,
+  type FrameworkEmulationObligationKind,
+  type FrameworkEmulationObligationRow,
+} from "./framework-emulation-view.js";
+import type { FrameworkObserverEntityRow } from "./framework-entities.js";
+
+/** Stable schema marker for the human-readable framework emulation symbol report. */
+export const FRAMEWORK_EMULATION_SYMBOLS_REPORT_SCHEMA_VERSION =
+  "atlas-framework-emulation-symbols-report-v0" as const;
+
+/** Deterministic human-readable framework emulation symbol report. */
+export interface FrameworkEmulationSymbolsReport {
+  /** Report schema marker. */
+  readonly schemaVersion: typeof FRAMEWORK_EMULATION_SYMBOLS_REPORT_SCHEMA_VERSION;
+  /** Markdown report body. */
+  readonly markdown: string;
+  /** Compact counts that help scripts report what was regenerated. */
+  readonly stats: FrameworkEmulationSymbolsReportStats;
+}
+
+/** Compact stats for a generated framework emulation symbol report. */
+export interface FrameworkEmulationSymbolsReportStats {
+  /** Total emulation obligation rows included in the report basis. */
+  readonly obligationRows: number;
+  /** Total observer entity rows included in the report basis. */
+  readonly observerRows: number;
+  /** Direct values admitted by StandardConfiguration before expansion. */
+  readonly directStandardConfigurationRows: number;
+  /** Framework-level createInterface defaults included in the report. */
+  readonly interfaceDefaults: number;
+  /** DI materialization slot rows included in the report. */
+  readonly materializationSlots: number;
+  /** DI dependency-read rows included in the report. */
+  readonly dependencyReads: number;
+  /** Variable-carried DI dependency-read rows included in the report. */
+  readonly variableDependencyReads: number;
+  /** Rows whose semantic-runtime interpretation is intentionally provisional. */
+  readonly provisionalInterpretationRows: number;
+  /** UTF-8 byte length of the Markdown body. */
+  readonly markdownBytes: number;
+}
+
+interface NamedGroup<TRow> {
+  readonly key: string;
+  readonly rows: readonly TRow[];
+}
+
+interface FrameworkEmulationReportBasis {
+  readonly rollup: ReturnType<typeof frameworkEmulationValue>;
+  readonly materializeRows: readonly FrameworkEmulationObligationRow[];
+  readonly resourceRows: readonly FrameworkEmulationObligationRow[];
+  readonly compilerRows: readonly FrameworkEmulationObligationRow[];
+  readonly hydrationRows: readonly FrameworkEmulationObligationRow[];
+  readonly virtualizationRows: readonly FrameworkEmulationObligationRow[];
+  readonly handoffRows: readonly FrameworkEmulationObligationRow[];
+  readonly variableConstructionRows: readonly FrameworkEmulationObligationRow[];
+  readonly resourceFindRows: readonly FrameworkEmulationObligationRow[];
+  readonly constructionDependencyRows: readonly FrameworkEmulationObligationRow[];
+}
+
+/** Build the deterministic Markdown golden for StandardConfiguration, emulation, and observer placement. */
+export function createFrameworkEmulationSymbolsReport(
+  sourceProject: SourceProject,
+): FrameworkEmulationSymbolsReport {
+  const rows = readFrameworkEmulationObligations(sourceProject, {});
+  const observers = readFrameworkObserverEntities(sourceProject, {});
+  const markdown = renderFrameworkEmulationSymbolsMarkdown(
+    sourceProject,
+    rows,
+    observers,
+  );
+  return {
+    schemaVersion: FRAMEWORK_EMULATION_SYMBOLS_REPORT_SCHEMA_VERSION,
+    markdown,
+    stats: {
+      obligationRows: rows.length,
+      observerRows: observers.length,
+      directStandardConfigurationRows: directStandardConfigurationRows(rows).length,
+      interfaceDefaults: interfaceAdmissionRows(rows).length,
+      materializationSlots: rowsFor(rows, "materialize-di-key").length,
+      dependencyReads: rowsFor(rows, "resolve-dependency").length,
+      variableDependencyReads: variableDependencyRows(rows).length,
+      provisionalInterpretationRows: provisionalRows(rows).length,
+      markdownBytes: Buffer.byteLength(markdown, "utf8"),
+    },
+  };
+}
+
+function renderFrameworkEmulationSymbolsMarkdown(
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  observers: readonly FrameworkObserverEntityRow[],
+): string {
+  const basis = frameworkEmulationReportBasis(rows);
+  const md: string[] = [];
+  appendReportPreamble(md);
+  appendCompositionSections(md, basis, observers);
+  appendConfigurationSections(md, sourceProject, rows, basis);
+  appendDiMaterializationSections(md, sourceProject, rows, basis);
+  appendResourceSections(md, sourceProject, rows, basis);
+  appendCompilerRenderingSections(md, sourceProject, basis);
+  appendObserverSections(md, observers);
+
+  return `${md.join("\n").trimEnd()}\n`;
+}
+
+function frameworkEmulationReportBasis(
+  rows: readonly FrameworkEmulationObligationRow[],
+): FrameworkEmulationReportBasis {
+  const dependencyRows = rowsFor(rows, "resolve-dependency");
+  const exactDependencyRows = dependencyRows.filter(
+    (row) => row.targetExpression === undefined,
+  );
+  return {
+    rollup: frameworkEmulationValue(rows),
+    materializeRows: rowsFor(rows, "materialize-di-key"),
+    resourceRows: rowsFor(rows, "admit-built-in-resource"),
+    compilerRows: rows.filter((row) => row.layer === "jit-compilation"),
+    hydrationRows: rows.filter((row) => row.layer === "resolved-hydration"),
+    virtualizationRows: rowsFor(rows, "virtualize-template-controller"),
+    handoffRows: rows.filter(
+      (row) =>
+        row.mode === "typescript-handoff" ||
+        row.layer === "typechecker-reactivity",
+    ),
+    variableConstructionRows: variableDependencyRows(rows),
+    resourceFindRows: exactDependencyRows.filter(
+      (row) => row.targetKind === "find",
+    ),
+    constructionDependencyRows: exactDependencyRows.filter(
+      (row) => row.targetKind !== "find",
+    ),
+  };
+}
+
+function appendReportPreamble(md: string[]): void {
+  md.push("# Framework Emulation Symbols");
+  md.push("");
+  md.push(
+    "Generated by `createApi().frameworkEmulationSymbolsReport()` from `framework.composition:emulation` and `framework.observation:entities` substrates. This is the level-two human map: enough to eyeball the composition without reading the full answer envelope.",
+  );
+  md.push("");
+  md.push(
+    "Do not hand-edit this snapshot or treat its counts as standing documentation. Re-run `pnpm --filter @aurelia-ls/atlas report:framework-emulation` before using exact totals or rows as evidence.",
+  );
+  md.push("");
+}
+
+function appendCompositionSections(
+  md: string[],
+  basis: FrameworkEmulationReportBasis,
+  observers: readonly FrameworkObserverEntityRow[],
+): void {
+  md.push("## Composition Rollup");
+  md.push("");
+  md.push(table(["axis", "counts"], [
+    ["layers", countText(basis.rollup.layers)],
+    ["modes", countText(basis.rollup.modes)],
+    ["obligation kinds", countText(basis.rollup.obligationKinds)],
+    ["interpretation status", countText(basis.rollup.interpretationStatuses)],
+    [
+      "observer kinds",
+      countText(countFlat(observers.flatMap((row) => row.observerKinds))),
+    ],
+    [
+      "observer capabilities",
+      countText(countFlat(observers.flatMap((row) => row.observerCapabilities))),
+    ],
+  ]));
+
+  md.push("## Composition Meaning");
+  md.push("");
+  md.push(table(["composition layer", "meaning for semantic-runtime"], [
+    [
+      "application-world / ecmascript-evaluation",
+      "Evaluate framework registration/configuration source to admit DI keys, resources, and nested registries.",
+    ],
+    [
+      "di-world / ecmascript-evaluation",
+      "Materialize DI resolvers and dependency reads faithfully enough to know what gets constructed or queried.",
+    ],
+    [
+      "resource-catalog / semantic-runtime-emulator",
+      "Built-in resources admitted into the world; semantic-runtime needs faithful resource descriptors and compiler-visible names.",
+    ],
+    [
+      "jit-compilation / semantic-runtime-emulator",
+      "Runtime JIT compiler behavior that semantic-runtime needs to emulate for definition/instruction production.",
+    ],
+    [
+      "expression-language / semantic-runtime-emulator",
+      "Expression parser entities and AST surfaces that semantic-runtime models before template/typechecker handoff.",
+    ],
+    [
+      "router-runtime / semantic-runtime-emulator",
+      "Router, route-tree, viewport, route-recognizer, and navigation relationships that semantic-runtime models as route products.",
+    ],
+    [
+      "rendering-runtime / semantic-runtime-emulator",
+      "Controller, rendering, and view-structure relationships that semantic-runtime models around hydration products.",
+    ],
+    [
+      "resolved-hydration / semantic-runtime-emulator",
+      "Hydration/rendering facts that can be resolved once compiled instructions and DI resources exist.",
+    ],
+    [
+      "template-controller-virtualization / virtualized-runtime",
+      "Runtime behavior that exists but must be virtualized because actual data-dependent view creation is not statically available.",
+    ],
+    [
+      "typechecker-reactivity / typescript-handoff",
+      "Binding, observer, accessor, and reactive behavior where Atlas should hand off to TypeChecker-backed semantic-runtime modeling.",
+    ],
+  ]));
+}
+
+function appendConfigurationSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
+  md.push("## StandardConfiguration Direct Admissions");
+  md.push("");
+  md.push(
+    "These are the symbols admitted directly by `runtime-html:StandardConfiguration`, before nested registry/default expansion.",
+  );
+  md.push("");
+  md.push(table(["symbol/value", "kind", "composition", "source"], directStandardConfigurationRows(rows).map((row) => [
+    cleanName(row.targetName),
+    cleanName(row.targetKind),
+    composition(row),
+    sourceLoc(sourceProject, row),
+  ])));
+
+  md.push("## Nested Registry And Registration Expansion");
+  md.push("");
+  md.push(
+    "These rows explain why a single admitted registry/class expands into more concrete framework symbols. This is where registration helpers and metadata start to matter.",
+  );
+  md.push("");
+  md.push(table(["owner/path", "admitted symbols", "kind(s)", "composition", "source lens"], nestedRegistrationGroups(rows).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map(composition))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
+  ])));
+
+  md.push("## createInterface Defaults And Anonymous Boundaries");
+  md.push("");
+  md.push(
+    "These are not ordinary StandardConfiguration entries. They are framework-level interface defaults that become DI materialization obligations. Anonymous providers are named as boundaries instead of dumping object/class expressions.",
+  );
+  md.push("");
+  md.push(table(["default symbol/value", "admission kind", "composition", "source"], interfaceAdmissionRows(rows).map((row) => [
+    cleanName(row.targetName),
+    cleanName(row.targetKind),
+    composition(row),
+    sourceLoc(sourceProject, row),
+  ])));
+  md.push("");
+  md.push("Interface materialization view:");
+  md.push("");
+  md.push(table(["DI key", "default/provider", "strategy", "source"], interfaceMaterializationRows(basis.materializeRows).map((row) => [
+    cleanName(row.ownerName),
+    cleanName(row.targetName),
+    cleanName(row.targetKind),
+    sourceLoc(sourceProject, row),
+  ])));
+  md.push("");
+  md.push("Anonymous default-provider boundaries:");
+  md.push("");
+  md.push(table(["DI key", "provider boundary", "strategy", "source"], anonymousMaterializationRows(basis.materializeRows).map((row) => [
+    cleanName(row.ownerName),
+    cleanName(row.targetName),
+    cleanName(row.targetKind),
+    sourceLoc(sourceProject, row),
+  ])));
+}
+
+function appendDiMaterializationSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
+  md.push("## DI Resolver Materialization Slots");
+  md.push("");
+  md.push(
+    "Every materialized DI key/provider pair currently visible from the evaluated framework world, excluding resource type/factory carrier rows. Resource discovery and resource instance lifetime are modeled separately below.",
+  );
+  md.push("");
+  md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], namedGroupsBy(basis.materializeRows, (row) => row.ownerName).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map(composition))),
+    list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+  ])));
+
+  md.push("## Resource Catalog Slots And Instance Lifetime");
+  md.push("");
+  md.push(
+    "Resource catalog admission is not the same fact as resource instance construction. Template resources are discovered as resource definitions, then CE/CA/TC view models are created per `container.invoke(def.Type)` during hydration. Runtime renderers are singleton `IRenderer` providers registered by `renderer(...)` and consumed through `getAll(IRenderer)`.",
+  );
+  md.push("");
+  md.push(table(["resource kind", "instance lifetime", "symbols", "source lens"], resourceLifetimeRows(rows)));
+
+  md.push("## Resource Catalog Reads (`find`)");
+  md.push("");
+  md.push(
+    "These are catalog lookups, not recursive construction dependencies. They matter for resource identity and compiler/hydration lookup, but should not be pulled as DI closure.",
+  );
+  md.push("");
+  md.push(table(["owner/provider", "resource kind(s)", "lookup target(s)", "source"], namedGroupsBy(basis.resourceFindRows, (row) => row.ownerName).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+  ])));
+
+  md.push("## Construction Dependency Reads (`get`, `getAll`, `resolve`, `invoke`)");
+  md.push("");
+  md.push(
+    "These are the dependency reads that do affect construction/materialization pressure. They are intentionally separate from resource `find` reads.",
+  );
+  md.push("");
+  md.push(table(["owner/provider", "access", "dependency keys", "source"], namedGroupsBy(basis.constructionDependencyRows, (row) => `${row.ownerName}::${row.targetKind}`).map((group) => {
+    const [owner = "", access = ""] = group.key.split("::");
+    return [
+      cleanName(owner),
+      cleanName(access),
+      list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+      list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+    ];
+  })));
+
+  md.push("## Variable-Key Construction Reads");
+  md.push("");
+  md.push(
+    "These are container construction reads where the key or constructable type is carried by runtime value flow. They are source-backed, but they are not stable DI key identities and should not seed DI closure.",
+  );
+  md.push("");
+  md.push(table(["owner/provider", "access", "variable key/type expression", "checker type", "source"], basis.variableConstructionRows.map((row) => [
+    cleanName(row.ownerName),
+    cleanName(row.targetKind),
+    row.targetExpression ?? row.targetName,
+    row.targetType ?? "",
+    sourceLoc(sourceProject, row),
+  ])));
+}
+
+function appendResourceSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
+  md.push("## Built-In Resources And Semantic-Runtime Placement");
+  md.push("");
+  md.push(
+    "This combines the ECMAScript-emulated resource catalog with the TypeChecker handoff families, so the section shows where each built-in resource family lands in the composition.",
+  );
+  md.push("");
+  md.push(table(["resource/target kind", "unique symbols", "instance lifetime", "symbols", "composition", "packages"], resourcePlacementRows(rows, basis.resourceRows)));
+}
+
+function appendCompilerRenderingSections(
+  md: string[],
+  sourceProject: SourceProject,
+  basis: FrameworkEmulationReportBasis,
+): void {
+  md.push("## JIT Compiler Obligations");
+  md.push("");
+  md.push(table(["compiler area", "rows", "operations / targets", "source lens"], namedGroupsBy(basis.compilerRows, (row) => row.obligationKind).map((group) => [
+    cleanName(group.key),
+    String(group.rows.length),
+    list(uniqueCleanNames(group.rows.flatMap((row) => [row.ownerName, row.targetName]))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
+  ])));
+
+  md.push("## Hydration And Rendering Boundary");
+  md.push("");
+  md.push(table(["hydration target kind", "rows", "owners", "targets", "source lens"], namedGroupsBy(basis.hydrationRows, (row) => row.targetKind).map((group) => [
+    cleanName(group.key),
+    String(group.rows.length),
+    list(uniqueCleanNames(group.rows.map((row) => row.ownerName)), 40),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName)), 60),
+    list(uniqueCleanStrings(group.rows.map(lens))),
+  ])));
+
+  md.push("## Template Controller Virtualization");
+  md.push("");
+  md.push(table(["template controller / virtualized symbol", "source package(s)", "source"], uniqueRowsBy(basis.virtualizationRows, (row) => `${row.targetKind}:${row.targetName}:${sourceLoc(sourceProject, row)}`)
+    .slice()
+    .sort((left, right) => cleanName(left.targetName).localeCompare(cleanName(right.targetName)))
+    .map((row) => [
+      cleanName(row.targetName),
+      packageOf(sourceProject, row),
+      sourceLoc(sourceProject, row),
+    ])));
+
+  md.push("## Provisional TypeChecker Handoff");
+  md.push("");
+  md.push(
+    "These source-backed rows mark where Atlas can already see a boundary into binding, observer, accessor, and reactive behavior. The boundary is intentionally provisional and approximate: it is a navigation aid for semantic-runtime work, not a complete TypeChecker behavior graph. Handoff confidence is depth-sensitive: root/controller-owned binding materialization can be deterministic while bindings under template-controller-created synthetic views may be speculative because the owning controllers are speculative even when the compiled instructions are deterministic.",
+  );
+  md.push("");
+  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], namedGroupsBy(basis.handoffRows, (row) => row.ownerName).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map((row) => row.interpretationStatus ?? "source-visible"))),
+    list(uniqueCleanNames(group.rows.map((row) => `${row.obligationKind}:${row.targetKind}`))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
+  ])));
+}
+
+function appendObserverSections(
+  md: string[],
+  observers: readonly FrameworkObserverEntityRow[],
+): void {
+  md.push("## Observer Catalog By Kind");
+  md.push("");
+  md.push(table(["observer kind", "symbols"], namedGroupsBy(observers.flatMap((observer) =>
+    observer.observerKinds.map((kind) => ({ kind, observer }))
+  ), (row) => row.kind).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
+  ])));
+
+  md.push("## Observer Catalog By Capability");
+  md.push("");
+  md.push(table(["capability", "symbols"], namedGroupsBy(observers.flatMap((observer) =>
+    observer.observerCapabilities.map((capability) => ({ capability, observer }))
+  ), (row) => row.capability).map((group) => [
+    cleanName(group.key),
+    list(uniqueCleanNames(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
+  ])));
+
+  md.push("## Observer Symbols");
+  md.push("");
+  md.push(table(["observer symbol", "kind(s)", "capabilities", "packages"], observers
+    .slice()
+    .sort((left, right) => left.exportEntry.exportName.localeCompare(right.exportEntry.exportName))
+    .map((observer) => [
+      cleanName(observer.exportEntry.exportName),
+      list(uniqueCleanNames(observer.observerKinds)),
+      list(uniqueCleanNames(observer.observerCapabilities)),
+      cleanName(observer.packageId),
+    ])));
+}
+
+function rowsFor(
+  rows: readonly FrameworkEmulationObligationRow[],
+  kind: FrameworkEmulationObligationKind,
+): readonly FrameworkEmulationObligationRow[] {
+  return rows.filter((row) => row.obligationKind === kind);
+}
+
+function variableDependencyRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows.filter(
+    (row) =>
+      row.obligationKind === "resolve-dependency" &&
+      row.targetExpression !== undefined,
+  );
+}
+
+function provisionalRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows.filter((row) => row.interpretationStatus !== undefined);
+}
+
+function directStandardConfigurationRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rowsFor(rows, "evaluate-registration")
+    .filter((row) => row.ownerName === "runtime-html:StandardConfiguration")
+    .slice()
+    .sort(compareTargetRows);
+}
+
+function nestedRegistrationGroups(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly NamedGroup<FrameworkEmulationObligationRow>[] {
+  return namedGroupsBy(
+    rowsFor(rows, "evaluate-registration").filter(
+      (row) =>
+        row.ownerName !== "runtime-html:StandardConfiguration" &&
+        row.ownerName !== "framework:createInterface-defaults" &&
+        row.targetKind !== "interface-default",
+    ),
+    (row) => row.ownerName,
+  );
+}
+
+function interfaceAdmissionRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rowsFor(rows, "evaluate-registration")
+    .filter(
+      (row) =>
+        row.ownerName === "framework:createInterface-defaults" ||
+        row.targetKind === "interface-default",
+    )
+    .slice()
+    .sort(compareTargetRows);
+}
+
+function interfaceMaterializationRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows
+    .filter(
+      (row) =>
+        /^I[A-Z]/u.test(row.ownerName) ||
+        cleanName(row.targetName).startsWith("["),
+    )
+    .slice()
+    .sort(compareOwnerRows);
+}
+
+function anonymousMaterializationRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows
+    .filter((row) => cleanName(row.targetName).startsWith("["))
+    .slice()
+    .sort(compareOwnerRows);
+}
+
+function resourcePlacementRows(
+  allRows: readonly FrameworkEmulationObligationRow[],
+  resourceRows: readonly FrameworkEmulationObligationRow[],
+): readonly string[][] {
+  const catalog = (kind: string): readonly FrameworkEmulationObligationRow[] =>
+    resourceRows.filter((row) => row.targetKind === kind);
+  const handoff = (kind: string): readonly FrameworkEmulationObligationRow[] =>
+    allRows.filter(
+      (row) =>
+        (row.mode === "typescript-handoff" ||
+          row.layer === "typechecker-reactivity") &&
+        row.targetKind === kind,
+    );
+  const templateControllers = allRows.filter(
+    (row) =>
+      row.obligationKind === "virtualize-template-controller" &&
+      !row.targetName.includes(".") &&
+      row.targetName !== "link" &&
+      row.targetName !== "template-controller",
+  );
+  return [
+    resourcePlacementRow("attribute-pattern", catalog("attribute-pattern")),
+    resourcePlacementRow("binding-command", catalog("binding-command")),
+    resourcePlacementRow("binding-behavior", handoff("binding-behavior")),
+    resourcePlacementRow("custom-attribute", catalog("custom-attribute")),
+    resourcePlacementRow("custom-element", catalog("custom-element")),
+    resourcePlacementRow("renderer", catalog("renderer")),
+    resourcePlacementRow("template-controller", templateControllers),
+    resourcePlacementRow("value-converter", handoff("value-converter")),
+  ];
+}
+
+function resourcePlacementRow(
+  label: string,
+  rows: readonly FrameworkEmulationObligationRow[],
+): string[] {
+  return [
+    label,
+    String(uniqueCleanNames(rows.map((row) => row.targetName)).length),
+    list(uniqueCleanStrings(rows.map((row) => row.runtimeLifetime ?? ""))),
+    list(uniqueCleanNames(rows.map((row) => row.targetName))),
+    list(uniqueCleanStrings(rows.map(composition))),
+    list(uniqueCleanStrings(rows.map((row) => row.packageId ?? packageOf(null, row)))),
+  ];
+}
+
+function resourceLifetimeRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly string[][] {
+  const resourceRows = rows.filter(
+    (row) => row.runtimeLifetime !== undefined,
+  );
+  return namedGroupsBy(
+    resourceRows,
+    (row) => `${row.targetKind}::${row.runtimeLifetime}`,
+  ).map((group) => {
+    const [kind = "", lifetime = ""] = group.key.split("::");
+    return [
+      cleanName(kind),
+      cleanName(lifetime),
+      list(uniqueCleanNames(group.rows.map((row) => row.targetName)), 80),
+      list(uniqueCleanStrings(group.rows.map(lens))),
+    ];
+  });
+}
+
+function uniqueRowsBy<TRow>(
+  rows: readonly TRow[],
+  keyForRow: (row: TRow) => string,
+): readonly TRow[] {
+  const seen = new Set<string>();
+  const result: TRow[] = [];
+  for (const row of rows) {
+    const key = keyForRow(row);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
+}
+
+function countFlat(values: readonly string[]): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
+  for (const value of values) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function countText(counts: Readonly<Record<string, number>>): string {
+  return Object.entries(counts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, count]) => `${key}: ${count}`)
+    .join("<br>");
+}
+
+function namedGroupsBy<TRow>(
+  rows: readonly TRow[],
+  keyForRow: (row: TRow) => string,
+): readonly NamedGroup<TRow>[] {
+  const groups = new Map<string, TRow[]>();
+  for (const row of rows) {
+    const key = keyForRow(row);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, [row]);
+    } else {
+      group.push(row);
+    }
+  }
+  return [...groups.entries()]
+    .map(([key, groupRows]) => ({ key, rows: groupRows }))
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function uniqueCleanNames(values: readonly unknown[]): readonly string[] {
+  return uniqueCleanStrings(values.map(cleanName));
+}
+
+function uniqueCleanStrings(values: readonly unknown[]): readonly string[] {
+  return [
+    ...new Set(
+      values
+        .filter((value) => value !== undefined && value !== null)
+        .map(String)
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+function list(values: readonly string[], max = Number.POSITIVE_INFINITY): string {
+  const slice = values.slice(0, max);
+  const rest = values.length - slice.length;
+  return `${slice.join(", ")}${rest > 0 ? ` (+${rest} more)` : ""}`;
+}
+
+function table(headers: readonly string[], rows: readonly (readonly string[])[]): string {
+  if (rows.length === 0) {
+    return "_None observed._\n";
+  }
+  return [
+    `| ${headers.map(cell).join(" | ")} |`,
+    `| ${headers.map(() => "---").join(" | ")} |`,
+    ...rows.map((row) => `| ${row.map(cell).join(" | ")} |`),
+    "",
+  ].join("\n");
+}
+
+function cell(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\|/gu, "\\|")
+    .replace(/\r?\n/gu, "<br>");
+}
+
+function cleanName(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (raw.length === 0) {
+    return "(unnamed)";
+  }
+  if (/^class\s*\{/u.test(raw)) {
+    return "[anonymous class default]";
+  }
+  if (/^\{/u.test(raw)) {
+    return "[object literal default]";
+  }
+  return truncate(raw.replace(/\s+/gu, " "), 140);
+}
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+}
+
+function composition(row: FrameworkEmulationObligationRow): string {
+  return `${row.layer} / ${row.mode}`;
+}
+
+function lens(row: FrameworkEmulationObligationRow): string {
+  return `${row.sourceLens}:${row.sourceProjection}`;
+}
+
+function sourceLoc(
+  sourceProject: SourceProject,
+  row: FrameworkEmulationObligationRow,
+): string {
+  const source = row.source;
+  if (source === undefined) {
+    return "";
+  }
+  return `${repoRelativeSourcePath(sourceProject, source.filePath)}:${source.start.line + 1}`;
+}
+
+function packageOf(
+  sourceProject: SourceProject | null,
+  row: FrameworkEmulationObligationRow,
+): string {
+  if (row.packageId !== undefined) {
+    return row.packageId;
+  }
+  const source = row.source;
+  if (source === undefined) {
+    return "";
+  }
+  const relativePath =
+    sourceProject === null
+      ? source.filePath.replace(/\\/gu, "/")
+      : repoRelativeSourcePath(sourceProject, source.filePath);
+  return relativePath.match(/^aurelia\/packages\/([^/]+)/u)?.[1] ?? "";
+}
+
+function repoRelativeSourcePath(
+  sourceProject: SourceProject,
+  filePath: string,
+): string {
+  return repoRelativePath(sourceProject.repoRoot, filePath)
+    ?? filePath.replace(/\\/gu, "/");
+}
+
+function compareTargetRows(
+  left: FrameworkEmulationObligationRow,
+  right: FrameworkEmulationObligationRow,
+): number {
+  return (
+    cleanName(left.targetName).localeCompare(cleanName(right.targetName)) ||
+    cleanName(left.targetKind).localeCompare(cleanName(right.targetKind))
+  );
+}
+
+function compareOwnerRows(
+  left: FrameworkEmulationObligationRow,
+  right: FrameworkEmulationObligationRow,
+): number {
+  return (
+    cleanName(left.ownerName).localeCompare(cleanName(right.ownerName)) ||
+    cleanName(left.targetName).localeCompare(cleanName(right.targetName))
+  );
+}

@@ -338,10 +338,10 @@ function converge(
 ): ProjectSemanticsDiscoveryResult {
   // Prepare convergence inputs
   const candidateOverrides = createDiscoveryConvergenceOverrides(
-    characterized.resources as ResourceDef[],
-    characterized.templateMetaCandidates as ResourceDef[],
+    characterized.resources,
+    characterized.templateMetaCandidates,
     config?.packagePath,
-    characterized.matchSources as Map<ResourceDef, MatchSource>,
+    characterized.matchSources,
   );
   const allResources = [
     ...characterized.resources,
@@ -352,7 +352,7 @@ function converge(
     ...Array.from(characterized.localTemplateAuthorities.values()),
   ];
   const catalogGaps = characterized.gaps.map(analysisGapToCatalogGap);
-  const catalogConfidence = catalogConfidenceFromGaps(characterized.gaps as AnalysisGap[]);
+  const catalogConfidence = catalogConfidenceFromGaps(characterized.gaps);
 
   // 3a. Assemble semantics
   const {
@@ -425,7 +425,7 @@ function converge(
 
   // Optional: strip AST node references for memory
   if (config?.stripSourcedNodes) {
-    stripSourcedNodes(characterized.resources as ResourceDef[]);
+    stripSourcedNodes(characterized.resources);
   }
 
   return {
@@ -445,8 +445,8 @@ function converge(
     templates,
     inlineTemplates,
     diagnostics: allDiagnostics,
-    recognizedBindingCommands: characterized.bindingCommands as RecognizedBindingCommand[],
-    recognizedAttributePatterns: characterized.attributePatterns as RecognizedAttributePattern[],
+    recognizedBindingCommands: characterized.bindingCommands,
+    recognizedAttributePatterns: characterized.attributePatterns,
     facts: characterized.facts,
   };
 }

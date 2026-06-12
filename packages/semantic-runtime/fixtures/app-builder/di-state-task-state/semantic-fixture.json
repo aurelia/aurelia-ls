@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "semantic-generated-app-fixture.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "di-state-task-state",
+  "title": "DI task state class",
+  "description": "Standalone DI state-class SourcePlan that spends caller domain fields, seed records, and explicit TypeScript source placement without app-shell or router wiring.",
+  "appBuilderRequestPath": "app-builder-request.json",
+  "appBuilderResponsePath": "app-builder-response.json",
+  "expectedEffects": [],
+  "expectedEffectKinds": [],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen",
+    "control-use-inventory"
+  ],
+  "ontologyTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "di-state-class"
+    }
+  ],
+  "controlUseInventoryRows": [],
+  "sourcePlanWitnessRows": [
+    {
+      "rowKind": "policy",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "conflictPolicy": "must-not-exist",
+      "formattingPolicy": "app-builder-baseline",
+      "packageToolingPolicy": "not-modeled"
+    },
+    {
+      "rowKind": "file-artifact",
+      "effectContractId": "source-plan-preview",
+      "rootDir": ".",
+      "hasCompleteFileText": true,
+      "filePath": "src/task-state.ts",
+      "fileRole": "state-model",
+      "fileLanguage": "typescript",
+      "fileEditKind": "create",
+      "fileOperationKind": "create-state-model",
+      "textAuthority": "app-builder-generated",
+      "hasText": true
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/paginated-task-table.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "paginated-task-table-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "paginated task table component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Paginated Task Table",
+                    "baseName": "Paginated Task Table"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/paginated-task-table.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "collection-query-features",
+                  "value": [
+                    {
+                      "featureId": "local-pagination",
+                      "pageSize": 2,
+                      "initiallyEnabled": true,
+                      "summary": "The caller chose local pagination and supplied the page size plus control expressions explicitly."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Write project brief",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Confirm launch checklist",
+                      "done": true
+                    },
+                    {
+                      "id": 3,
+                      "title": "Review onboarding notes",
+                      "done": false
+                    },
+                    {
+                      "id": 4,
+                      "title": "Send stakeholder update",
+                      "done": true
+                    },
+                    {
+                      "id": 5,
+                      "title": "Archive planning notes",
+                      "done": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "collection-table"
+        },
+        "compositionKind": "collection-table",
+        "collectionExpression": "pagedTaskItems",
+        "itemLocalName": "taskItem",
+        "emptyStateText": "No tasks yet.",
+        "emptyStateConditionExpression": "taskItems.length === 0",
+        "paginationPreviousHandlerExpression": "previousTaskItemsPage()",
+        "paginationNextHandlerExpression": "nextTaskItemsPage()",
+        "paginationCurrentPageExpression": "taskItemsPage",
+        "paginationPageCountExpression": "taskItemsPageCount",
+        "paginationPreviousButtonText": "Previous",
+        "paginationNextButtonText": "Next"
+      }
+    }
+  }
+}

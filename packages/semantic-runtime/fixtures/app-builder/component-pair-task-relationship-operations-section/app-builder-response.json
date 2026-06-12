@@ -1,0 +1,415 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=src/task-relationship-operations-section.html, target=src/task-relationship-operations-section.ts, source=component-pair, files=3, witnesses=99, controlUses=7, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
+    "rootDir": ".",
+    "templatePath": "src/task-relationship-operations-section.html",
+    "sourceTargetPath": "src/task-relationship-operations-section.ts",
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "component-pair",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "app-section"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "collection-table"
+      },
+      {
+        "kind": "control-pattern",
+        "domain": "control",
+        "id": "native-button"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "local-view-model-state"
+      },
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "domain-command-action"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "existing-app-fact-read",
+      "semantic-runtime-reopen",
+      "component-manifest-publication",
+      "control-use-inventory"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "resource-definition",
+      "template-compilation",
+      "runtime-controller",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 9,
+    "controlUseInventoryRowCount": 7,
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 36,
+      "requiredCount": 4,
+      "conditionalCount": 22,
+      "optionalCount": 10,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 36,
+          "requiredCount": 4,
+          "conditionalCount": 22,
+          "optionalCount": 10,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceTargetPath",
+            "templatePath",
+            "sourceLoweringComponentPair"
+          ],
+          "conditionalRequestFieldNames": [
+            "sourceTargetPath",
+            "serviceClassName",
+            "collectionEntityName",
+            "loadMethodName",
+            "methodName",
+            "fieldName",
+            "parameterName",
+            "methodName",
+            "inputFieldNames",
+            "methodName",
+            "inputFieldNames",
+            "stateMemberName",
+            "stateTypeText",
+            "initialValueExpression",
+            "inactiveValueExpression",
+            "reloadMethodName",
+            "resultMemberName",
+            "filterMethodName",
+            "applyActionName",
+            "applyButtonText",
+            "clearActionName",
+            "clearButtonText"
+          ],
+          "optionalRequestFieldNames": [
+            "sourceLoweringTemplateInvocations",
+            "serviceCollections",
+            "componentMemberName",
+            "recordTypeName",
+            "filterMethods",
+            "predicateKind",
+            "createMethods",
+            "updateMethods",
+            "queryStates",
+            "queryControls"
+          ]
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 99,
+    "handoffNoteCount": 4,
+    "handoffNotes": [
+      {
+        "kind": "seed-data-scaffold",
+        "summary": "Generated seed records came from explicit app-builder input and keep the app runnable; replace them or connect them to real persistence when moving beyond scaffold data.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "state-model",
+          "component",
+          "service"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 3/3 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 7 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-section"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "collection-table"
+          },
+          {
+            "kind": "control-pattern",
+            "domain": "control",
+            "id": "native-button"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "local-view-model-state"
+          },
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "resource-definition",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
+    "suppliedInputCount": 7,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 1,
+    "decisionBundleDecisionCount": 7,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 186,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/task-relationship-operations-section.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 5592,
+          "contributionCount": 23
+        },
+        {
+          "path": "src/task-relationship-operations-section.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 2080,
+          "contributionCount": 57
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 421
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 378
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": null
+    }
+  }
+}

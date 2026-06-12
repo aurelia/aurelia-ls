@@ -1,0 +1,115 @@
+<section class="data-table ${state.filters.hasActiveFilters ? 'has-filters' : 'all-results'}">
+  <div class="table-toolbar">
+    <div>
+      <h2>Items</h2>
+      <p class="summary" if.bind="!state.isLoading">
+        Showing ${state.startResult}-${state.endResult} of ${state.totalResults} items
+        <span if.bind="state.selection.hasSelection">(${state.selection.count} selected)</span>
+      </p>
+    </div>
+    <button type="button" click.trigger="state.clearSelection()" disabled.bind="!state.selection.hasSelection">
+      Clear selection
+    </button>
+  </div>
+
+  <div class="filter-grid">
+    <label class="filter-field">
+      <span>Search</span>
+      <input type="search" value.bind="state.filters.searchQuery & debounce:300" placeholder="Search name">
+    </label>
+    <label class="filter-field">
+      <span>Category</span>
+      <select value.bind="state.filters.selectedCategory">
+        <option repeat.for="option of state.filters.categoryOptions" model.bind="option.value">${option.label}</option>
+      </select>
+    </label>
+
+    <label class="filter-field">
+      <span>Status</span>
+      <select value.bind="state.filters.selectedStatus">
+        <option repeat.for="option of state.filters.statusOptions" model.bind="option.value">${option.label}</option>
+      </select>
+    </label>
+
+    <label class="filter-field">
+      <span>Only flagged</span>
+      <input type="checkbox" checked.bind="state.filters.onlyFlagged">
+    </label>
+
+    <label class="filter-field">
+      <span>Per page</span>
+      <select value.bind="state.pagination.pageSize">
+        <option repeat.for="size of state.pagination.pageSizes" model.bind="size">${size}</option>
+      </select>
+    </label>
+  </div>
+
+  <button type="button" if.bind="state.filters.hasActiveFilters" click.trigger="state.resetFilters()">
+    Reset filters
+  </button>
+
+  <div class="selection-meter" aria-hidden="true">
+    <span style="width: ${state.selectionPercent}%" background-color.style="state.selection.hasSelection ? '#0f766e' : '#64748b'"></span>
+  </div>
+
+  <p if.bind="state.isLoading">Loading items...</p>
+  <div else class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>
+            <input
+              type="checkbox"
+              checked.to-view="state.allPageSelected"
+              indeterminate.to-view="state.somePageSelected"
+              change.trigger="state.togglePageSelection()"
+              disabled.bind="state.pageItems.length === 0"
+              aria-label="Select page">
+          </th>
+          <th
+            repeat.for="column of state.columns; key.bind: column.key"
+            click.trigger="state.sortBy(column.key)"
+            class="sortable ${state.sort.column === column.key ? 'sorted' : ''}"
+            numeric.class="column.numeric">
+            ${column.label}
+            <span if.bind="state.sort.column === column.key">${state.sort.direction}</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          repeat.for="item of state.pageItems; key.bind: item.id"
+          selected.class="state.selection.selectedItemIds.has(item.id)">
+          <td>
+            <input type="checkbox" model.bind="item.id" checked.bind="state.selection.selectedItemIds" aria-label="Select ${item.nameLabel}">
+          </td>
+          <td>${item.nameLabel}</td>
+          <td><span class.bind="item.categoryClass">${item.categoryLabel}</span></td>
+          <td><span class.bind="item.statusClass">${item.statusLabel}</span></td>
+          <td>${item.updatedDateLabel}</td>
+          <td class="numeric">${item.countLabel}</td>
+          <td>${item.flaggedLabel}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="empty-state" if.bind="state.pageItems.length === 0">
+      <p>No items match the current filters.</p>
+      <button type="button" click.trigger="state.resetFilters()">Clear filters</button>
+    </div>
+  </div>
+
+  <footer class="table-footer" if.bind="state.totalPages > 1">
+    <button type="button" click.trigger="state.previousPage()" disabled.bind="state.pagination.page === 1">
+      Previous
+    </button>
+    <span repeat.for="page of state.pages">
+      <button type="button" click.trigger="state.goToPage(page)" class="${page === state.pagination.page ? 'active' : ''}">
+        ${page}
+      </button>
+    </span>
+    <button type="button" click.trigger="state.nextPage()" disabled.bind="state.pagination.page === state.totalPages">
+      Next
+    </button>
+  </footer>
+</section>

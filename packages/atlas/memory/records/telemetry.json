@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:semantic-runtime-detail-density",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "telemetry",
+        "detail-density",
+        "performance",
+        "kernel"
+      ],
+      "summary": "Semantic-runtime detail-density telemetry is the opt-in shallow sidecar x-ray for product-detail and hot-detail memory representation pressure.",
+      "rationale": "Memory work needs a way to distinguish envelope-handle echoes, non-envelope navigation handles, local keys, string mass, and array mass without recursively walking TypeScript/checker/app object graphs. The detail-density lane intentionally stays shallow and read-only so it can guide product-detail, hot-detail, and query-claim retention decisions without becoming another semantic model.",
+      "guidance": [
+        "Use detail-density when product-detail or hot-detail retention looks suspicious, but treat it as logical payload attribution rather than exact heap ownership.",
+        "Keep SemanticRuntimeDetailShapeBuilder as a one-shape work frame: it has a real accumulation lifetime and is clearer as a class than as scattered one-off helper functions.",
+        "Keep SemanticRuntimeDetailDensityAccumulator as the per-detail-kind pass accumulator. It owns cross-entry counters and set/map state for one grouped density row; avoid flattening that lifetime into the top-level row reader.",
+        "Do not make detail-density recursive by default. Recursing into TypeScript ASTs, checker objects, parent links, or full product graphs would turn a cheap representation x-ray into the memory problem being measured.",
+        "When envelope-handle echoes dominate, first check ProductDetailCatalog normalization or detail ownership before dropping navigable fields.",
+        "Use handle-kind rows before changing detail classes: address-heavy rows usually point at source precision, product-heavy rows at runtime topology, and identity-heavy hot rows at declaration or owner identity.",
+        "HotDetailCatalog hides exact entry-handle echoes such as productHandle; remaining hot-detail handles should be treated as semantic owner/declaration/source lanes unless a durable record can derive them.",
+        "When non-envelope handle fields dominate, treat them as navigation topology pressure: move or compress them only after deciding which product, hot detail, or query claim should own that relation.",
+        "Keep this telemetry lane opt-in through includeDetailDensity and phase/profile switches; ordinary public answers should not pay for high-cardinality sidecar scans.",
+        "Use aggregate phase-memory and phase-kernel rows before deep memory refactors. They show peak construction pressure and phase-owned product volume even when routed answer disposal returns final kernel growth to zero.",
+        "Phase kernel breakdowns and phase detail-density must be store-marker/delta based. Do not reintroduce full-store before/after breakdown snapshots inside phase measurement; large apps can have hundreds of nested template phases."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/detail-density.ts",
+          "symbolName": "readSemanticRuntimeDetailDensityRows",
+          "summary": "Aggregates shallow product-detail and hot-detail shape rows by detail kind."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/detail-density.ts",
+          "symbolName": "SemanticRuntimeDetailDensityAccumulator",
+          "summary": "Per-detail-kind accumulator that aggregates direct field, handle-kind, envelope-echo, local-key, and constructor counts into one row."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/detail-density.ts",
+          "symbolName": "SemanticRuntimeDetailShapeBuilder",
+          "summary": "One-shape work frame that accumulates direct array, string, handle, envelope-echo, and local-key counts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.readTelemetrySnapshot",
+          "summary": "Opt-in entry point that reads detail-density rows beside kernel count snapshots."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.readDensitySince",
+          "summary": "Marker-based phase-local kernel breakdown row reader."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.readDetailDensitySince",
+          "summary": "Marker-based phase-local detail-density reader for product details and hot details."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/phase.ts",
+          "symbolName": "measureSemanticRuntimePhase",
+          "summary": "Phase profiler that keeps before/after snapshots cheap and attaches marker-based delta rows when breakdowns are enabled."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/telemetry/README.md",
+          "summary": "Telemetry lane documentation and design rules."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "SemanticRuntimeDetailDensityAccumulator",
+          "filePath": "packages/semantic-runtime/src/telemetry/detail-density.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        },
+        {
+          "kind": "product-large-class",
+          "className": "SemanticRuntimeDetailShapeBuilder",
+          "filePath": "packages/semantic-runtime/src/telemetry/detail-density.ts",
+          "minLineCount": 90,
+          "minMethodCount": 4
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:semantic-runtime-app-telemetry",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "telemetry",
+        "performance",
+        "inquiry",
+        "analysis-depth"
+      ],
+      "summary": "The app telemetry profiler is the reusable surface for comparing app-world construction, inquiry projection, query-claim retention, and analysis-depth cost.",
+      "rationale": "Semantic-runtime memory work is a CPU/memory/inquiry-algebra trade-off. The profiler must keep construction phases, public query cost, TypeScript Program composition, query-claim storage, and depth/profile groupings visible before a cache, compression pass, or materialization split is chosen.",
+      "guidance": [
+        "Run this lane before adding cache policy, changing app-opening defaults, trimming product details, or moving work between app construction and public query answers.",
+        "Use Work Router route `semantic-runtime.app-telemetry` for app-world construction, routed-query payload, continuation-envelope, and query-claim profiler work; avoid entering telemetry only through a neighboring query-claim or memory route when the profiler itself is the question.",
+        "Prefer aggregate output for broad pressure, but read the grouped root/depth/profile rows before interpreting global totals. Global totals reveal total load; grouped rows reveal which analysis depth or inquiry profile introduced it.",
+        "Use grouped timing leaders when one aggregate run spans multiple depths or profiles. They keep the leading phase costs attached to the root/depth/profile group so a profile comparison does not require immediate narrower reruns. TypeSystem inner phases are part of the aggregate timing lane so Program/checker cost stays visible beside the outer app-world phase.",
+        "Use the project compiler-options cache row to separate repeated boot/input wiring from TypeScript Program construction. Hits there show shared tsconfig/path-mapping shape reuse; they do not mean dependency SourceFiles or app-world products were retained.",
+        "Treat app-world-free query lanes as first-class canaries. If source/catalog/orientation queries can answer without opening an app world, keep them on the runtime-level claim graph instead of forcing TypeScript Program or template construction.",
+        "App-world-free static-evaluation work may surface through answer-envelope telemetry. Interpret `appWorldFreeProfile` as runtime-boundary cost attribution, not as evidence that an app epoch was opened.",
+        "Use query-claim telemetry to separate retained answer DTOs, answer-local kernel products, routed app disposal, and TypeScript dependency cache cleanup. The claim graph is the layer immediately before API answers, not another durable semantic model.",
+        "Use `SEMANTIC_RUNTIME_TELEMETRY_QUERY_REPEAT` when checking whether the claim graph actually reuses retained answers or whether a public query still rematerializes inside one runtime/app session. `SEMANTIC_RUNTIME_TELEMETRY_REPEAT` repeats whole sessions and answers a different question.",
+        "Read query value bytes, full answer-envelope bytes, and continuation count/bytes together before changing continuation presentation or MCP guidance. A low-value payload can still have meaningful envelope/token pressure when continuations are rich.",
+        "Use direct `--fixture` and `--root` CLI narrowing for focused app telemetry; environment variables remain useful for scripted sweeps, but CLI loci are easier to audit in captured command lines.",
+        "When a product-detail row dominates, pair detail-density with phase/grouped telemetry before changing the representation. Some handle mass is topology or source precision; some is envelope echo that can be normalized away."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
+          "summary": "CLI profiler for app-world construction, routed query answers, phase memory/kernel deltas, grouped aggregates, and query-claim retention."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerProfile",
+          "summary": "Optional answer-envelope telemetry for runtime-boundary profiling without changing public answer values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Lazy answer-boundary storage for query outcomes, retained answer values, disposal summaries, and nested query composition."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "summary": "Public query catalog that declares minimum analysis depth and app-world boundary policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/README.md",
+          "summary": "Package-level instructions for app telemetry, external pressure hygiene, and depth-first large-app profiling."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/README.md",
+          "summary": "Query-claim graph and answer-boundary design notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerProfile"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "readSemanticAppQueryCatalog"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-24"
+    }
+  ]
+}

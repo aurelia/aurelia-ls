@@ -51,18 +51,15 @@ When the analysis hits a limit — a dynamic registration pattern, a third-party
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
 cd aurelia-ls
 
-# Build the Aurelia framework (submodule)
-cd aurelia
-npm ci
-npm run build
-cd ..
-
 # Build aurelia-ls
 pnpm install
 pnpm run build
 ```
 
-The submodule is a temporary setup while we work towards full bi-directional compatibility with the Aurelia framework.
+The repo links Aurelia framework packages from the `aurelia/` submodule through
+`pnpm-workspace.yaml` overrides, so the submodule must be initialized. The MCP
+and semantic-runtime preview paths do not require building the Aurelia submodule
+itself.
 
 ## Documentation
 

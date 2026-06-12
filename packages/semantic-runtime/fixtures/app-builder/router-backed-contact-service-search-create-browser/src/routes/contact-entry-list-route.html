@@ -1,0 +1,67 @@
+<section>
+  <h2>Contacts</h2>
+  <div>
+    <label for="contact-search-query">Search contacts</label>
+    <input type="search" value.bind="contactNameQuery" id="contact-search-query">
+  </div>
+  <button type="button" click.trigger="searchContacts()">Search contacts</button>
+  <p if.bind="searchStatusMessage" role="status" id="contact-search-status">${searchStatusMessage}</p>
+  <button type="button" click.trigger="clearContactSearch()">Clear search</button>
+  <p if.bind="clearSearchStatusMessage" role="status" id="contact-clear-search-status">${clearSearchStatusMessage}</p>
+  <form submit.trigger="createContact()">
+    <div>
+      <label for="full-name-field">Full Name</label>
+      <input value.bind="fullName" required minlength="2" maxlength="80" id="full-name-field">
+    </div>
+    <div>
+      <label for="email-field">Email</label>
+      <input type="email" value.bind="email" required maxlength="120" id="email-field">
+    </div>
+    <div>
+      <label for="website-url-field">Website</label>
+      <input type="url" value.bind="websiteUrl" maxlength="160" id="website-url-field">
+    </div>
+    <div>
+      <label for="support-phone-field">Support Phone</label>
+      <input type="tel" value.bind="supportPhone" maxlength="32" pattern="[0-9+() -]{7,}" id="support-phone-field">
+    </div>
+    <div>
+      <label for="active-field">Active</label>
+      <input type="checkbox" checked.bind="active" id="active-field">
+    </div>
+    <button type="submit">Create contact</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="contact-create-status">${createStatusMessage}</p>
+  <section promise.bind="contactsPromise">
+    <p pending>Loading contacts...</p>
+    <template then="loadedContacts">
+      <p if.bind="loadedContacts.length === 0">No contacts yet.</p>
+      <table else>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Website</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="contactEntry of loadedContacts">
+            <td>${contactEntry.fullName}</td>
+            <td>${contactEntry.email}</td>
+            <td>${contactEntry.websiteUrl}</td>
+            <td>${contactEntry.supportPhone}</td>
+            <td>${contactEntry.active ? 'Active' : 'Inactive'}</td>
+            <td>
+              <a load="route: contact-entry-detail; params.bind: { contactId: contactEntry.contactId }">Open</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+    <p catch>Could not load contacts.</p>
+  </section>
+  <au-viewport name="detail"></au-viewport>
+</section>

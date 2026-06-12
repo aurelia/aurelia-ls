@@ -1,0 +1,302 @@
+{
+  "outcome": "hit",
+  "summary": "Previewed app-builder ontology SourcePlan with 3 file(s) and 0 issue(s).",
+  "value": {
+    "displayText": "App-builder SourcePlan preview: root=., template=none, target=none, source=app-shell, files=3, witnesses=23, controlUses=0, expectedEffects=9, handoffNotes=4, decisionBundles=1, issues=0.",
+    "rootDir": ".",
+    "templatePath": null,
+    "sourceTargetPath": null,
+    "issueCount": 0,
+    "issues": [],
+    "sourceLoweringSelectionKind": "app-shell",
+    "sourceLoweringResultDetailsIncluded": false,
+    "ontologyTargetRefs": [
+      {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "app-shell"
+      }
+    ],
+    "effectContractIds": [
+      "source-plan-preview",
+      "semantic-runtime-reopen"
+    ],
+    "expectedEffectKinds": [
+      "project-tooling",
+      "project-shape",
+      "resource-definition",
+      "template-compilation",
+      "runtime-controller",
+      "open-seam-closure"
+    ],
+    "expectedEffectCount": 9,
+    "controlUseInventoryRowCount": 0,
+    "sourceLoweringRequestFieldSummary": {
+      "requestFieldCount": 2,
+      "requiredCount": 2,
+      "conditionalCount": 0,
+      "optionalCount": 0,
+      "hasRequiredRequestFields": true,
+      "surfaces": [
+        {
+          "surfaceKind": "source-plan-preview",
+          "requestFieldCount": 2,
+          "requiredCount": 2,
+          "conditionalCount": 0,
+          "optionalCount": 0,
+          "requiredRequestFieldNames": [
+            "rootDir",
+            "sourceLoweringAppShell"
+          ],
+          "conditionalRequestFieldNames": [],
+          "optionalRequestFieldNames": []
+        }
+      ]
+    },
+    "sourcePlanWitnessCount": 23,
+    "handoffNoteCount": 4,
+    "handoffNotes": [
+      {
+        "kind": "source-pattern-use",
+        "summary": "Concrete source is a recommendable starting scaffold unless an existing app already owns that structure.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-shell"
+          }
+        ],
+        "sourceFileRoles": [],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "business-behavior-caller-owned",
+        "summary": "App-builder generated Aurelia source structure, bindings, DI/router wiring, and selected source-lowering mechanics; ordinary TypeScript domain rules and business policy remain caller/AI-owned unless they are explicit generated source facts.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-shell"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "materialization-instruction",
+        "summary": "To materialize this preview, write the 3/3 returned sourcePlan.files row(s) that include complete text under ., apply returned projectTooling/package setup when present, then reopen the app through semantic-runtime; this query does not write files.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-shell"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": []
+      },
+      {
+        "kind": "semantic-verification-contract",
+        "summary": "This SourcePlan declares 9 expected semantic effect(s), 0 generated control-use row(s), and generated source/tooling witnesses for verification after materialization; the preview itself has not written files or reopened the generated app.",
+        "targetRefs": [
+          {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "app-shell"
+          }
+        ],
+        "sourceFileRoles": [
+          "entrypoint",
+          "root-component",
+          "template",
+          "project-config"
+        ],
+        "expectedEffectKinds": [
+          "project-tooling",
+          "project-shape",
+          "resource-definition",
+          "template-compilation",
+          "runtime-controller",
+          "open-seam-closure"
+        ]
+      }
+    ],
+    "suppliedInputCount": 2,
+    "explicitSuppliedInputCount": 0,
+    "decisionBundleCount": 1,
+    "decisionBundleDecisionCount": 2,
+    "sourcePlan": {
+      "rootDir": ".",
+      "policy": {
+        "conflictPolicy": "must-not-exist",
+        "formattingPolicy": "app-builder-baseline",
+        "packageToolingPolicy": "app-builder-baseline",
+        "kind": "source-plan-policy"
+      },
+      "hasCompleteFileText": true,
+      "files": [
+        {
+          "path": "src/main.ts",
+          "role": "entrypoint",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-entrypoint",
+          "textAuthority": "app-builder-generated",
+          "textLength": 93,
+          "contributionCount": 2
+        },
+        {
+          "path": "src/app.ts",
+          "role": "root-component",
+          "language": "typescript",
+          "editKind": "create",
+          "operationKind": "create-component-view-model",
+          "textAuthority": "app-builder-generated",
+          "textLength": 182,
+          "contributionCount": 3
+        },
+        {
+          "path": "src/app.html",
+          "role": "template",
+          "language": "html",
+          "editKind": "create",
+          "operationKind": "create-component-template",
+          "textAuthority": "app-builder-generated",
+          "textLength": 37,
+          "contributionCount": 1
+        }
+      ],
+      "projectTooling": {
+        "packageManager": "host-selected",
+        "buildToolPolicy": "app-builder-baseline",
+        "dependencies": [
+          {
+            "specifier": "@aurelia/runtime-html",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "aurelia",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "dependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "@aurelia/vite-plugin",
+            "versionRange": "^2.0.0-rc.1",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "typescript",
+            "versionRange": "^6.0.3",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          },
+          {
+            "specifier": "vite",
+            "versionRange": "^7.0.2",
+            "scope": "devDependency",
+            "kind": "source-plan-package-dependency"
+          }
+        ],
+        "scripts": [
+          {
+            "name": "dev",
+            "command": "vite",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "build",
+            "command": "vite build",
+            "kind": "source-plan-package-script"
+          },
+          {
+            "name": "check",
+            "command": "tsc -p tsconfig.json --noEmit",
+            "kind": "source-plan-package-script"
+          }
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "fileKind": "package-manifest",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 406
+          },
+          {
+            "path": "index.html",
+            "fileKind": "root-document",
+            "language": "html",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
+          },
+          {
+            "path": "vite.config.ts",
+            "fileKind": "build-config",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 307
+          },
+          {
+            "path": "tsconfig.json",
+            "fileKind": "typescript-config",
+            "language": "json",
+            "textAuthority": "app-builder-generated",
+            "textLength": 317
+          },
+          {
+            "path": "src/aurelia-assets.d.ts",
+            "fileKind": "module-declaration",
+            "language": "typescript",
+            "textAuthority": "app-builder-generated",
+            "textLength": 152
+          }
+        ]
+      },
+      "pattern": {
+        "key": "minimal-app-shell.decorator",
+        "title": "Minimal explicit-resource app shell",
+        "summary": "Aurelia entrypoint plus root component/template with the smallest runnable source shape.",
+        "role": "recommendable-source-start",
+        "domainModelPolicy": "domain-neutral",
+        "stylePolicy": "none",
+        "dataPolicy": "none",
+        "codeEconomyPolicy": "production-terse",
+        "adaptationNotes": [
+          "The source is intentionally domain-neutral and should be used as a runnable shell before feature/domain mechanics are added.",
+          "The resource carrier is the only semantic variant in this source pattern."
+        ],
+        "parameters": [],
+        "modules": [
+          {
+            "key": "aurelia-app-shell",
+            "kind": "app-shell",
+            "title": "Aurelia app shell",
+            "summary": "Public Aurelia entrypoint plus root component/template ownership."
+          },
+          {
+            "key": "explicit-resource-definition",
+            "kind": "resource-definition",
+            "title": "Explicit resource definition",
+            "summary": "Resource metadata is declared at the source site instead of relying on convention discovery."
+          }
+        ],
+        "adaptationGroups": [],
+        "kind": "source-pattern"
+      }
+    }
+  }
+}

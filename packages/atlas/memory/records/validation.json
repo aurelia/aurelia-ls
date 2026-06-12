@@ -1,0 +1,213 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:validation-rule-source-diagnostics",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "validation",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "ValidationSourceIssueMaterializer owns exact @aurelia/validation source-rule DSL and model-rule hydration diagnostics.",
+      "rationale": "@aurelia/validation throws several framework errors from source-authored fluent rule construction, property-accessor parsing, model-rule hydration, and group-rule callback shapes. Semantic-runtime now owns the closed static subset as ValidationIssue products and app diagnostics, while live custom rule execution and serialized payload surfaces remain intentionally separate future products.",
+      "guidance": [
+        "Start here before adding validation diagnostics or changing validation framework-error dispositions.",
+        "Use framework.errors for the validation package and the framework validation sources before spending another AUR41xx authority row.",
+        "Keep validation source-rule diagnostics separate from validation-html binding behavior; validation-html template semantics should stay in template/binding lanes unless the issue is genuinely rule-source owned.",
+        "Validation/app topology rows may report validation ownership from positive validation-html `& validate` applications, validation package configuration admissions, validation service resolve sites, or validation source-rule issue rows; do not confuse that taste signal with the narrower ValidationIssue diagnostic product lane.",
+        "The generated `validated-state-backed-form` app-pattern fixture is the positive ownership canary for validation-html: it should materialize `validate` through `BindingBehaviorApplications`, expose any static validation trigger through `staticArgumentValues`, satisfy `validation-controller-usage`, and avoid producing ValidationIssue diagnostics.",
+        "`dynamic-keyed-validation` is the contrastive validation-html pressure canary: repeat-local keyed writes such as `person[field] & validate` and nested keyed writes such as `person[addressField][line1Field] & validate` should remain analyzable as binding-behavior applications plus runtime-assignable two-way data flows without becoming a generated authoring recommendation.",
+        "Current exact source-owned codes are AUR4101 rule_provider_no_rule_found, AUR4102 unable_to_parse_accessor_function, AUR4105 hydrate_rule_unsupported, AUR4106 hydrate_rule_invalid_name, and AUR4108 group_rule_invalid_execution_result.",
+        "Do not claim AUR4100, AUR4103, or AUR4104 until semantic-runtime admits serialized validation payloads; do not claim AUR4107 or AUR4109 until it admits live validation rule execution or custom rule return values."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/validation-source-issue-materializer.ts",
+          "symbolName": "ValidationSourceIssueMaterializer",
+          "summary": "Source-backed validation issue materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/framework-error-code.ts",
+          "symbolName": "ValidationFrameworkErrorCode",
+          "summary": "Exact @aurelia/validation framework code links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/README.md",
+          "summary": "Validation lane ownership and remaining intentionally unclaimed authorities."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form",
+          "summary": "Recommendable validation-html app-pattern fixture with positive validation ownership."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors",
+          "summary": "Pressure fixture for the exact validation source-rule diagnostics."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation",
+          "summary": "Pressure fixture for validation-html binding behavior over dynamic keyed writable source expressions."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation",
+          "summary": "Focused contract for validate binding-behavior rows, dynamic keyed writable data-flow rows, observed dependencies, and no false diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "validation"
+          },
+          "summary": "Validation framework-error disposition view."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Pressure harness includes validation issue and app-diagnostic summaries."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/validation/validation-source-issue-materializer.ts",
+          "symbolName": "ValidationSourceIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/validation/framework-error-code.ts",
+          "symbolName": "ValidationFrameworkErrorCode"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/validation-rule-source-errors-app.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation/src/dynamic-keyed-validation-app.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-dynamic-keyed-validation.mjs"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-20"
+    },
+    {
+      "id": "frontier:validation-html-binding-property-info",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "validation",
+        "validation-html",
+        "template",
+        "binding",
+        "framework-errors",
+        "app-builder"
+      ],
+      "summary": "Validation-html validate binding behavior and ValidationController property-info semantics need a shared substrate before bridge role evidence is complete.",
+      "rationale": "Aurelia's validate binding behavior evaluates trigger, controller, and rule arguments at bind time, registers the rendered PropertyBinding with ValidationController, and later derives object/propertyName through ValidationController.getPropertyInfo. Semantic-runtime already models the closed bind-time diagnostics and AUR4205 parser-owned property-expression issue, but Atlas bridge evidence still lacks a validation relationship row for validation-html:ValidationController. Treat that as missing relationship substrate, not as an invitation to attach a generic role.",
+      "guidance": [
+        "Start here when work touches `& validate`, ValidationController property path extraction, validation-html AUR4200-AUR4206 dispositions, or validated form fixture facts.",
+        "Ground changes in `ValidateBindingBehavior._processBindingExpressionArgs`, `_ensureController`, `_ensureTrigger`, `_getTarget`, and `ValidationController.getPropertyInfo` before changing semantic-runtime template behavior.",
+        "Keep AUR4200-AUR4204 as validate bind-time checks and AUR4205 as parser-owned property-expression support; leave AUR4206 unclaimed unless semantic-runtime admits malformed or foreign framework AST objects.",
+        "Do not close the `validation-html:ValidationController` bridge no-role row with a generic resource or DI label. The role should come from a validation binding-behavior/property-info relationship substrate joined to framework-error authority.",
+        "Migrated validated form app-pattern fixtures should prove positive validation ownership through `BindingBehaviorApplications`, static trigger argument facts, and `validation-controller-usage` taste without adding view-model forwarding getters only for validation metadata.",
+        "Contrastive fixtures such as dynamic keyed validation should stay analysis pressure: they may prove writable data-flow and validate application facts without becoming recommendable app-builder output."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior.ts",
+          "symbolName": "ValidateBindingBehavior",
+          "summary": "Semantic-runtime validate binding-behavior bind-time semantics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior.ts",
+          "symbolName": "ValidationController",
+          "summary": "Semantic-runtime validation controller property-expression issue model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
+          "symbolName": "RuntimeBindingBehaviorMaterializer",
+          "summary": "Materializes validate binding-behavior applications and issues from rendered bindings."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form",
+          "summary": "Positive validation-html app-pattern fixture."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation",
+          "summary": "Contrastive validate binding-behavior pressure fixture."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation",
+          "summary": "Focused contract for dynamic keyed validation behavior/data-flow closure."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-frontiers",
+          "filters": {
+            "packageId": "validation-html"
+          },
+          "summary": "Validation-html AUR4200-AUR4206 framework-error authority."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "fixture-seeds",
+          "filters": {
+            "concept": "validation"
+          },
+          "summary": "Docs/tests seed pressure for validate binding behavior and validation result presentation."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior.ts",
+          "symbolName": "ValidateBindingBehavior"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior.ts",
+          "symbolName": "ValidationController"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
+          "symbolName": "RuntimeBindingBehaviorMaterializer"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/app-pattern-validated-state-backed-form/src/components/state-backed-form.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation/src/dynamic-keyed-validation-app.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-dynamic-keyed-validation.mjs"
+        }
+      ],
+      "createdAt": "2026-05-19",
+      "updatedAt": "2026-05-26"
+    }
+  ]
+}

@@ -1,0 +1,431 @@
+{
+  "schemaVersion": "semantic-fixture-verification.v1",
+  "fixtureRole": "app-builder-generated-app-contract",
+  "fixtureId": "component-pair-task-section-service-search-create-complete",
+  "ok": true,
+  "expectedEffects": 12,
+  "effectResults": [
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling. Observed 5 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-tooling",
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "project-shape",
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "resource-definition",
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "template-compilation",
+      "summary": "Component-pair app shell SourcePlan should compile its root template. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "runtime-controller",
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component. Observed 23 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "open-seam-closure",
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams. Observed 0 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-class",
+      "summary": "Component-pair service collection SourcePlan should expose the generated service class. Observed 1 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction",
+      "summary": "Component-pair service collection SourcePlan should expose a generated call into the service boundary. Observed 14 matching semantic fact(s)."
+    },
+    {
+      "outcome": "satisfied",
+      "effectKind": "service-interaction-binding",
+      "summary": "Component-pair service collection SourcePlan should bind template reads back to the service-backed member. Observed 3 matching semantic fact(s)."
+    }
+  ],
+  "expectedControlUseRows": 7,
+  "controlUseResults": [
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit"
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "create()",
+        "handlerExpression": "create()",
+        "actionChannelKind": "containing-form-submit",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "submit",
+        "buttonText": "Create task",
+        "buttonType": "submit",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 1177,
+          "end": 1219
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-text-input",
+        "controlId": "text-input",
+        "bindingExpression": "title",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 995,
+          "end": 1013
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-boolean-checkbox",
+        "controlId": "checkbox",
+        "bindingExpression": "done",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 1125,
+          "end": 1144
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "complete(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Complete",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "complete(taskItem)",
+        "handlerExpression": "complete(taskItem)",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Complete",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 2288,
+          "end": 2322
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "field-group",
+        "innerControlPatternId": "native-search-input",
+        "controlId": "search-input",
+        "bindingExpression": "taskItemTitleQuery",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-value-channel",
+        "controlPatternId": "native-search-input",
+        "controlId": "search-input",
+        "bindingExpression": "taskItemTitleQuery",
+        "handlerExpression": null,
+        "actionChannelKind": null,
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": null,
+        "buttonText": null,
+        "buttonType": null,
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 210,
+          "end": 241
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "searchTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Search tasks",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "searchTaskItems()",
+        "handlerExpression": "searchTaskItems()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Search tasks",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 299,
+          "end": 332
+        }
+      }
+    },
+    {
+      "outcome": "satisfied",
+      "expected": {
+        "controlPatternId": "native-button",
+        "innerControlPatternId": null,
+        "controlId": null,
+        "bindingExpression": null,
+        "handlerExpression": "clearTaskItemSearch()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Clear search",
+        "buttonType": "button"
+      },
+      "actual": {
+        "definitionName": "service-search-create-complete-task-section",
+        "sourceKind": "authored-runtime-binding",
+        "classificationKind": "native-button-action",
+        "controlPatternId": "native-button",
+        "controlId": null,
+        "bindingExpression": "clearTaskItemSearch()",
+        "handlerExpression": "clearTaskItemSearch()",
+        "actionChannelKind": "direct-control-event",
+        "routeInstruction": null,
+        "linkText": null,
+        "eventName": "click",
+        "buttonText": "Clear search",
+        "buttonType": "button",
+        "source": {
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-section-service-search-create-complete/src/service-search-create-complete-task-section.html",
+          "start": 539,
+          "end": 576
+        }
+      }
+    }
+  ],
+  "generatedSourceQualityResults": [],
+  "generatedAppBuilderIdempotencyResults": [
+    {
+      "outcome": "satisfied",
+      "rowFamily": "appBuilderResponse",
+      "rowCount": null,
+      "jsonLength": 11611,
+      "summary": "Generated app-builder contract row family 'appBuilderResponse' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/main.ts",
+      "textLength": 203,
+      "summary": "Generated SourcePlan file 'src/main.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/service-search-create-complete-task-section.ts",
+      "textLength": 1581,
+      "summary": "Generated SourcePlan file 'src/service-search-create-complete-task-section.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/service-search-create-complete-task-section.html",
+      "textLength": 2528,
+      "summary": "Generated SourcePlan file 'src/service-search-create-complete-task-section.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/services/task-item-service.ts",
+      "textLength": 1551,
+      "summary": "Generated SourcePlan file 'src/services/task-item-service.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "package.json",
+      "textLength": 428,
+      "summary": "Generated project tooling file 'package.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "index.html",
+      "textLength": 399,
+      "summary": "Generated project tooling file 'index.html' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "vite.config.ts",
+      "textLength": 307,
+      "summary": "Generated project tooling file 'vite.config.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "tsconfig.json",
+      "textLength": 317,
+      "summary": "Generated project tooling file 'tsconfig.json' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "path": "src/aurelia-assets.d.ts",
+      "textLength": 152,
+      "summary": "Generated project tooling file 'src/aurelia-assets.d.ts' matches the stored app-builder request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffects",
+      "rowCount": 12,
+      "jsonLength": 3690,
+      "summary": "Generated app-builder contract row family 'expectedEffects' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "expectedEffectKinds",
+      "rowCount": 9,
+      "jsonLength": 189,
+      "summary": "Generated app-builder contract row family 'expectedEffectKinds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "effectContractIds",
+      "rowCount": 5,
+      "jsonLength": 131,
+      "summary": "Generated app-builder contract row family 'effectContractIds' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "ontologyTargetRefs",
+      "rowCount": 11,
+      "jsonLength": 939,
+      "summary": "Generated app-builder contract row family 'ontologyTargetRefs' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "controlUseInventoryRows",
+      "rowCount": 7,
+      "jsonLength": 6718,
+      "summary": "Generated app-builder contract row family 'controlUseInventoryRows' matches the stored request output."
+    },
+    {
+      "outcome": "satisfied",
+      "rowFamily": "sourcePlanWitnessRows",
+      "rowCount": 81,
+      "jsonLength": 39577,
+      "summary": "Generated app-builder contract row family 'sourcePlanWitnessRows' matches the stored request output."
+    }
+  ],
+  "failures": []
+}

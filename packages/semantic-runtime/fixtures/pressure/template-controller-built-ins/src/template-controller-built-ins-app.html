@@ -1,0 +1,85 @@
+<template>
+  <section if.bind="selectedProduct">
+    <p>${selectedProduct.label}</p>
+  </section>
+  <p else>${fallbackMessage.toUpperCase()}</p>
+
+  <section if.bind="currentItem.kind === 'book'">
+    <p>${bookOnly(currentItem)} ${currentItem.pages}</p>
+  </section>
+  <section else>
+    <p>${notBookOnly(currentItem)}</p>
+  </section>
+
+  <section if.bind="typeof currentPrimitive === 'string'">
+    <p>${stringOnly(currentPrimitive)}</p>
+  </section>
+  <section else>
+    <p>${numberOnly(currentPrimitive)}</p>
+  </section>
+
+  <section if.bind="'pages' in probedItem">
+    <p>${bookOnly(probedItem)}</p>
+  </section>
+  <section else>
+    <p>${notBookOnly(probedItem)}</p>
+  </section>
+
+  <section if.bind="mixedProduct instanceof physicalProductType">
+    <p>${physicalOnly(mixedProduct)} ${mixedProduct.shippingWeight}</p>
+  </section>
+  <section else>
+    <p>${digitalOnly(mixedProduct)}</p>
+  </section>
+
+  <section with.bind="selectedProduct">
+    <button type="button" click.trigger="$parent.selectProduct(id)">${label}</button>
+    <span>${labelLength()}</span>
+  </section>
+
+  <dl>
+    <template repeat.for="arrayProduct of products">
+      <dt>${arrayProduct.label}</dt>
+    </template>
+
+    <template repeat.for="[key, product] of productEntries">
+      <dt>${key}</dt>
+      <dd>${product.label} ${product.labelLength()} ${$index} ${$length}</dd>
+    </template>
+
+    <template repeat.for="setProduct of productSet">
+      <dd>${setProduct.label}</dd>
+    </template>
+
+    <template repeat.for="repeatIndex of repeatCount">
+      <dd>${repeatIndex.toFixed()}</dd>
+    </template>
+  </dl>
+
+  <section promise.resolve="productPromise">
+    <p pending>${statusMessage}</p>
+    <p then="resolved">${resolved.label} ${resolved.labelLength()}</p>
+    <p catch="reason">${formatReason(reason)}</p>
+  </section>
+
+  <template switch.bind="mode">
+    <p case="list">${listTitle} ${listOnly(mode)}</p>
+    <p case="detail">${detailTitle} ${detailOnly(mode)}</p>
+    <p default-case>${fallbackMessage} ${otherOnly(mode)}</p>
+  </template>
+
+  <template switch.bind="modeGroup">
+    <p case.bind="['list', 'detail']">${listOrDetailOnly(modeGroup)}</p>
+    <p default-case>${otherOnly(modeGroup)}</p>
+  </template>
+
+  <template switch.bind="fallMode">
+    <p case="value:list; fall-through:true">${listOnly(fallMode)}</p>
+    <p case="detail">${listOrDetailOnly(fallMode)}</p>
+    <p default-case>${otherOnly(fallMode)}</p>
+  </template>
+
+  <template portal="target: body">
+    <p>${portalMessage}</p>
+  </template>
+</template>

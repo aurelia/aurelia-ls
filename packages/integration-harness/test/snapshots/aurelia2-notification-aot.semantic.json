@@ -781,7 +781,7 @@
               "attribute": "position",
               "name": "position",
               "primary": false,
-              "type": { "kind": "ts", "name": "NotificationPosition" }
+              "type": { "kind": "ts", "name": "NotificationPosition | null" }
             }
           },
           "boundary": true,
@@ -1289,7 +1289,7 @@
                   "attribute": "position",
                   "name": "position",
                   "primary": false,
-                  "type": { "kind": "ts", "name": "NotificationPosition" }
+                  "type": { "kind": "ts", "name": "NotificationPosition | null" }
                 }
               },
               "boundary": true,
@@ -1725,7 +1725,7 @@
               "location": { "end": 794, "file": "aurelia2-plugins/packages/aurelia2-notification/src/au-notification-host.ts", "pos": 732 },
               "origin": "source",
               "state": "known",
-              "value": "NotificationPosition"
+              "value": "NotificationPosition | null"
             }
           }
         },

@@ -1,0 +1,21 @@
+<main
+  class="support-workspace ${shellTone} ${selectedTicketId == '' ? 'empty-ticket' : 'active-ticket'}"
+  class.bind="shellClasses"
+  data-selected-ticket.attr="selectedTicketId">
+  <header>
+    <h1>Support desk intake</h1>
+    <label for="ticket-selector">Ticket</label>
+    <select id="ticket-selector" value.bind="selectedTicketId">
+      <option repeat.for="ticketId of ticketIds" model.bind="ticketId">${ticketId}</option>
+    </select>
+    <p if.bind="weakMetadata">${weakMetadata.source}</p>
+    <p>${shellTone.label}</p>
+  </header>
+
+  <ticket-editor
+    ticket-id.bind="selectedTicketId"
+    draft.bind="selectedTicket"
+    on-commit.bind="commitTicket"
+    data-ticket-id.bind="selectedTicketId">
+  </ticket-editor>
+</main>

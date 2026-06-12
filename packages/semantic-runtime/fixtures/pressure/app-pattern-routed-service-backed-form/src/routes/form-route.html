@@ -1,0 +1,8 @@
+<section>
+  <h1>Service Request ${routeParams.requestId}</h1>
+  <p>Mode: ${routeParams.mode ?? 'edit'}; tags: ${routeTagCount}</p>
+
+  <state-backed-form request-id.bind="routeParams.requestId"></state-backed-form>
+
+  <p>Submissions: ${state.submittedCount}</p>
+</section>

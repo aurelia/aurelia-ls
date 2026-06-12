@@ -1,0 +1,440 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-service-backed-load-save",
+  "appPatternKey": "app-builder-source-lowering-service-backed-load-save",
+  "expectedEffects": [
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has TypeScript and build project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder component-pair app shell SourcePlan has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair app shell SourcePlan should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair app shell SourcePlan should expose its root resource definition.",
+      "topologyNodeKind": null,
+      "effectKind": "resource-definition",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair app shell SourcePlan should compile its root template.",
+      "topologyNodeKind": "template",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair app shell SourcePlan should hydrate its root component.",
+      "topologyNodeKind": "component",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair app shell SourcePlan should have no open semantic seams.",
+      "topologyNodeKind": null,
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "cardinality": "absent",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair service collection SourcePlan should expose the generated service class.",
+      "topologyNodeKind": null,
+      "effectKind": "service-class",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair service collection SourcePlan should expose a generated call into the service boundary.",
+      "topologyNodeKind": null,
+      "effectKind": "service-interaction",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Component-pair service collection SourcePlan should bind template reads back to the service-backed member.",
+      "topologyNodeKind": null,
+      "effectKind": "service-interaction-binding",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    }
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "loading-empty-error-state"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "collection-table"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "async-data-source"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "service-backed-load-save"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "sourceLoweringSourcePlan.rootDir",
+      "ownerKind": "source-plan",
+      "fieldId": "root-dir",
+      "requestFieldName": "rootDir",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.templatePath",
+      "ownerKind": "source-plan",
+      "fieldId": "template-path",
+      "requestFieldName": "templatePath",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceTargetPath",
+      "ownerKind": "source-plan",
+      "fieldId": "source-target-path",
+      "requestFieldName": "sourceTargetPath",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair",
+      "ownerKind": "source-plan",
+      "fieldId": "source-lowering-component-pair",
+      "requestFieldName": "sourceLoweringComponentPair",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 5
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition",
+      "ownerKind": "component-pair-template",
+      "fieldId": "source-lowering-composition",
+      "requestFieldName": "sourceLoweringComposition",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 9
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.promiseExpression",
+      "ownerKind": "composition",
+      "fieldId": "promise-expression",
+      "requestFieldName": "promiseExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.pendingText",
+      "ownerKind": "composition",
+      "fieldId": "pending-text",
+      "requestFieldName": "pendingText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.fulfilledLocalName",
+      "ownerKind": "composition",
+      "fieldId": "fulfilled-local-name",
+      "requestFieldName": "fulfilledLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.rejectedText",
+      "ownerKind": "composition",
+      "fieldId": "rejected-text",
+      "requestFieldName": "rejectedText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.fulfilledContentComposition",
+      "ownerKind": "composition",
+      "fieldId": "fulfilled-content-composition",
+      "requestFieldName": "fulfilledContentComposition",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 4
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.fulfilledContentComposition.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.fulfilledContentComposition.collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringComposition.fulfilledContentComposition.itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "component-pair-service-collections",
+      "requestFieldName": "serviceCollections",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].sourceTargetPath",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-source-target-path",
+      "requestFieldName": "sourceTargetPath",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].serviceClassName",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-class-name",
+      "requestFieldName": "serviceClassName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].componentMemberName",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-component-member-name",
+      "requestFieldName": "componentMemberName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].collectionEntityName",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-entity-name",
+      "requestFieldName": "collectionEntityName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].recordTypeName",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-record-type-name",
+      "requestFieldName": "recordTypeName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.serviceCollections[0].loadMethodName",
+      "ownerKind": "component-pair-service-collection",
+      "fieldId": "service-collection-load-method-name",
+      "requestFieldName": "loadMethodName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations[0].sourceLoweringInvocation",
+      "ownerKind": "component-pair-class-member",
+      "fieldId": "source-lowering-invocation",
+      "requestFieldName": "sourceLoweringInvocation",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 4
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations[0].asyncDataMemberName",
+      "ownerKind": "component-pair-class-member",
+      "fieldId": "async-data-member-name",
+      "requestFieldName": "asyncDataMemberName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations[0].asyncDataPromiseType",
+      "ownerKind": "component-pair-class-member",
+      "fieldId": "async-data-promise-type",
+      "requestFieldName": "asyncDataPromiseType",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringComponentPair.sourceLoweringClassMemberInvocations[0].asyncDataInitializerExpression",
+      "ownerKind": "component-pair-class-member",
+      "fieldId": "async-data-initializer-expression",
+      "requestFieldName": "asyncDataInitializerExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    }
+  ]
+}

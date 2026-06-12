@@ -1,0 +1,17 @@
+<section>
+  <h2>Milestones</h2>
+  <section promise.bind="milestonesPromise">
+    <p pending>Loading milestones...</p>
+    <template then="loadedMilestones">
+      <p if.bind="loadedMilestones.length === 0">No milestones yet.</p>
+      <ul else>
+        <li repeat.for="milestone of loadedMilestones">
+          <span>${milestone.title}</span>
+          <a load="route: milestone-detail; params.bind: { milestoneId: milestone.id }">Open milestone</a>
+        </li>
+      </ul>
+    </template>
+    <p catch>Could not load milestones.</p>
+  </section>
+  <au-viewport name="detail"></au-viewport>
+</section>

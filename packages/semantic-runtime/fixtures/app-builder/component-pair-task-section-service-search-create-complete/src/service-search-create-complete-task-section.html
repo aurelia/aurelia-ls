@@ -1,0 +1,50 @@
+<section class="service-search-create-complete-task-section">
+  <div class="service-search-create-complete-task-section__field">
+    <label for="task-search-query">Search tasks</label>
+    <input type="search" value.bind="taskItemTitleQuery" id="task-search-query">
+  </div>
+  <button type="button" click.trigger="searchTaskItems()" class="service-search-create-complete-task-section__button">Search tasks</button>
+  <p if.bind="searchStatusMessage" role="status" id="task-search-status">${searchStatusMessage}</p>
+  <button type="button" click.trigger="clearTaskItemSearch()" class="service-search-create-complete-task-section__button">Clear search</button>
+  <p if.bind="clearSearchStatusMessage" role="status" id="task-clear-search-status">${clearSearchStatusMessage}</p>
+  <form submit.trigger="create()" class="service-search-create-complete-task-section__form">
+    <div class="service-search-create-complete-task-section__field">
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="task-create-status">${createStatusMessage}</p>
+  <p if.bind="completeStatusMessage" role="status" id="task-complete-status">${completeStatusMessage}</p>
+  <section promise.bind="taskItemsPromise" class="service-search-create-complete-task-section__status">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No matching tasks.</p>
+      <template else>
+        <table class="service-search-create-complete-task-section__table" data-au-role="service-search-create-complete-task-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Done</th>
+              <th>Complete</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="service-search-create-complete-task-section__row">
+              <td>${taskItem.title}</td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
+              <td>
+                <button type="button" click.trigger="complete(taskItem)">Complete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error">Could not load searched tasks.</p>
+  </section>
+</section>

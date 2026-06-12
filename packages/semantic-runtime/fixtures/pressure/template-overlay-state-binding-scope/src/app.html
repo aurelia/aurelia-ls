@@ -1,0 +1,12 @@
+<template>
+  <h1>${title & state}</h1>
+  <p>${label & state:'filters'}</p>
+  <button disabled.bind="draft === '' & state">Add</button>
+  <ul>
+    <li repeat.for="task of tasks & state">
+      <span>${task.title}</span>
+      <small>${$parent.title}</small>
+    </li>
+  </ul>
+  <task-list tasks.bind="tasks & state"></task-list>
+</template>

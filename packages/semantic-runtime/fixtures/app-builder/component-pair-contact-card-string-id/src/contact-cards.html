@@ -1,0 +1,16 @@
+<p if.bind="contacts.length === 0">No contacts yet.</p>
+<section else>
+  <article repeat.for="contact of contacts">
+    <h3>${contact.fullName}</h3>
+    <p>
+      <a href.bind="'mailto:' + (contact.email)" external>${contact.email}</a>
+    </p>
+    <p>
+      <a href.bind="contact.websiteUrl" external>${contact.websiteUrl}</a>
+    </p>
+    <p>
+      <a href.bind="'tel:' + (contact.supportPhone)" external>${contact.supportPhone}</a>
+    </p>
+    <p>Active: ${contact.active ? 'Active' : 'Inactive'}</p>
+  </article>
+</section>

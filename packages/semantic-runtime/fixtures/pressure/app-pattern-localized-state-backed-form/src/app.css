@@ -1,0 +1,30 @@
+main {
+  display: grid;
+  gap: 1rem;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.form-ready {
+  border-color: #2f7d32;
+}
+
+.form-pending {
+  border-color: #9e3a2d;
+}
+
+.field-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field-invalid {
+  border-left: 0.25rem solid #9e3a2d;
+  padding-left: 0.75rem;
+}
+
+.error {
+  color: #9e3a2d;
+  margin: 0;
+}

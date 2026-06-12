@@ -1,0 +1,401 @@
+import { BasisKind } from "./basis.js";
+import { EvidenceKind } from "./evidence.js";
+
+/** Stable id for one substrate contract. */
+export const enum SubstrateId {
+  /** Static repository terrain map. */
+  RepoTerrain = "repo.terrain",
+  /** Source files and source text. */
+  SourceFiles = "source.files",
+  /** TypeScript program and declaration structure. */
+  TypeScriptProgram = "typescript.program",
+  /** TypeScript TypeChecker facts. */
+  TypeScriptChecker = "typescript.checker",
+  /** Product-owned vocabulary terms and slots. */
+  ProductVocabulary = "product.vocabulary",
+  /** Product-owned semantic-runtime source architecture substrate. */
+  ProductArchitecture = "product.architecture",
+  /** Admitted workspace package topology and app integration source surfaces. */
+  WorkspaceArchitecture = "workspace.architecture",
+  /** Public Aurelia plugin source surfaces used as external app pressure. */
+  PluginArchitecture = "plugin.architecture",
+  /** Aurelia router framework source architecture. */
+  FrameworkRouter = "framework.router",
+  /** Aurelia documentation and framework tests for fixture and authoring pressure. */
+  FrameworkCorpus = "framework.corpus",
+  /** Product-to-framework auLink anchors. */
+  ProductAuLink = "product.aulink",
+  /** Framework static evaluator substrate. */
+  FrameworkStaticEvaluator = "framework.static-evaluator",
+  /** Framework DI substrate. */
+  FrameworkDi = "framework.di",
+  /** Framework resource convergence substrate. */
+  FrameworkResources = "framework.resources",
+  /** Framework configuration/bundle admission substrate. */
+  FrameworkAdmission = "framework.admission",
+  /** Framework API facets, shape edges, member slots, and usage rows. */
+  FrameworkApi = "framework.api",
+  /** Atlas static contracts. */
+  AtlasContracts = "atlas.contracts",
+  /** Atlas filesystem-backed memory store joined to live source pressure. */
+  AtlasMemory = "atlas.memory",
+  /** Typed work-routing ontology that joins Atlas memory, source architecture, and framework corpus pressure. */
+  AtlasWorkRouter = "atlas.work-router",
+}
+
+/** Broad substrate family. */
+export const enum SubstrateKind {
+  /** Repository map or terrain declarations. */
+  RepoMap = "repo-map",
+  /** Source text and source addressing. */
+  Source = "source",
+  /** TypeScript program or checker substrate. */
+  TypeScript = "typescript",
+  /** Product-owned semantic substrate. */
+  Product = "product",
+  /** Framework semantic substrate. */
+  Framework = "framework",
+  /** Atlas self-description substrate. */
+  Atlas = "atlas",
+}
+
+/** Trust model for interpreting substrate output. */
+export const enum SubstrateTrust {
+  /** Substrate is exact within its declared contract. */
+  Exact = "exact",
+  /** Substrate derives facts from a compiler/checker/source model. */
+  Derived = "derived",
+  /** Substrate derives facts from an explicit static model and records unmodeled cases as open seams. */
+  ModeledStatic = "modeled-static",
+  /** Substrate is a steering signal rather than proof. */
+  Steering = "steering",
+}
+
+/** Static contract for one substrate used by one or more lenses. */
+export interface SubstrateContract {
+  /** Stable substrate id. */
+  readonly id: SubstrateId;
+  /** Broad substrate family. */
+  readonly kind: SubstrateKind;
+  /** Trust model for answers produced from this substrate. */
+  readonly trust: SubstrateTrust;
+  /** Grounded explanation of the substrate's responsibility. */
+  readonly summary: string;
+  /** Basis kinds this substrate can spend. */
+  readonly basisKinds: readonly BasisKind[];
+  /** Evidence kinds this substrate can produce. */
+  readonly produces: readonly EvidenceKind[];
+  /** Other substrates this substrate depends on. */
+  readonly dependsOn?: readonly SubstrateId[];
+}
+
+/** Runtime snapshot identity for a substrate implementation. */
+export interface SubstrateSnapshot {
+  /** Contract this snapshot implements. */
+  readonly contractId: SubstrateId;
+  /** Session, project, commit, or snapshot identity. */
+  readonly identity: string;
+  /** Optional schema or source version. */
+  readonly version?: string;
+  /** Grounded summary of what this snapshot contains. */
+  readonly summary: string;
+}
+
+/** Port implemented by future hot-session substrates. */
+export interface SubstratePort<
+  TSnapshot extends SubstrateSnapshot = SubstrateSnapshot,
+> {
+  /** Static contract this port satisfies. */
+  readonly contract: SubstrateContract;
+  /** Read the current snapshot identity without running a lens. */
+  snapshot(): TSnapshot;
+}
+
+/** Substrate contracts known to Atlas. */
+export const SubstrateCatalog: readonly SubstrateContract[] = [
+  {
+    id: SubstrateId.RepoTerrain,
+    kind: SubstrateKind.RepoMap,
+    trust: SubstrateTrust.Exact,
+    summary: "Static map of active, deferred, and external repository terrain.",
+    basisKinds: [BasisKind.AtlasContract],
+    produces: [EvidenceKind.MaintenanceSignal],
+  },
+  {
+    id: SubstrateId.SourceFiles,
+    kind: SubstrateKind.Source,
+    trust: SubstrateTrust.Exact,
+    summary:
+      "Filesystem or git-tree source text, source ranges, and file identity.",
+    basisKinds: [BasisKind.SourceText, BasisKind.GitTree],
+    produces: [EvidenceKind.SourceSpan],
+  },
+  {
+    id: SubstrateId.TypeScriptProgram,
+    kind: SubstrateKind.TypeScript,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "TypeScript program structure, module graph, symbols, and declarations.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [EvidenceKind.Symbol, EvidenceKind.SourceSpan],
+    dependsOn: [SubstrateId.SourceFiles],
+  },
+  {
+    id: SubstrateId.TypeScriptChecker,
+    kind: SubstrateKind.TypeScript,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "TypeChecker facts: apparent types, signatures, reference roles, and typed flow evidence.",
+    basisKinds: [BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.TypeFact,
+      EvidenceKind.CallSite,
+      EvidenceKind.Symbol,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.ProductVocabulary,
+    kind: SubstrateKind.Product,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Product vocabulary definitions and allowed self-description terms.",
+    basisKinds: [BasisKind.ProductVocabulary],
+    produces: [
+      EvidenceKind.VocabularyTerm,
+      EvidenceKind.ProductClaim,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.ProductArchitecture,
+    kind: SubstrateKind.Product,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Semantic-runtime source areas, modules, import dependencies, and declaration surfaces derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.Symbol,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.WorkspaceArchitecture,
+    kind: SubstrateKind.Source,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Admitted workspace package topology, manifests, build-tool signals, Aurelia entrypoint signals, and Aurelia integration source surfaces derived from source files and the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram, BasisKind.SourceText],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram, SubstrateId.SourceFiles],
+  },
+  {
+    id: SubstrateId.PluginArchitecture,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Import/receiver-aware public Aurelia plugin package surfaces, resources, registries, DI registrations, AppTasks, router hooks, and template references derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.FrameworkRouter,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Aurelia router and route-recognizer source architecture: ordered route-config/navigation flow, route-recognizer parser/state/endpoint/candidate mechanics, self-audit rows, normalized router relationships, route context, route tree, viewport-agent, DI, resource, and lifecycle surfaces derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.FrameworkCorpus,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Steering,
+    summary:
+      "Aurelia documentation files, framework test files, documentation code fences, and test call-site snippets scanned as fixture and authoring pressure seeds.",
+    basisKinds: [BasisKind.SourceText],
+    produces: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
+    dependsOn: [SubstrateId.SourceFiles],
+  },
+  {
+    id: SubstrateId.ProductAuLink,
+    kind: SubstrateKind.Product,
+    trust: SubstrateTrust.ModeledStatic,
+    summary: "Narrow product-to-framework anchors declared through auLink.",
+    basisKinds: [BasisKind.AuLink],
+    produces: [EvidenceKind.AuLinkAnchor, EvidenceKind.SourceSpan],
+    dependsOn: [SubstrateId.TypeScriptChecker],
+  },
+  {
+    id: SubstrateId.FrameworkStaticEvaluator,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Static evaluator for framework world-construction closures and explicit open seams.",
+    basisKinds: [BasisKind.StaticEvaluator],
+    produces: [
+      EvidenceKind.OpenSeam,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.TypeFact,
+    ],
+    dependsOn: [SubstrateId.TypeScriptChecker],
+  },
+  {
+    id: SubstrateId.FrameworkDi,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Framework DI keys, registration writes, lookup reads, provider associations, and evaluator-backed closure limits.",
+    basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.DiLookup,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
+  },
+  {
+    id: SubstrateId.FrameworkResources,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Framework resource carriers, package exports, bundle admissions, syntax products, and materialization convergence rows.",
+    basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
+  },
+  {
+    id: SubstrateId.FrameworkAdmission,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Framework configuration and bundle admissions derived from evaluator effects and TypeChecker-classified DI/resource/registry targets.",
+    basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
+  },
+  {
+    id: SubstrateId.FrameworkApi,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Aurelia framework API facets, declaration merges, implementation shape edges, normalized member slots, and repo-wide TypeChecker-resolved usage rows.",
+    basisKinds: [BasisKind.TypeScriptProgram, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.Symbol,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptChecker],
+  },
+  {
+    id: SubstrateId.AtlasContracts,
+    kind: SubstrateKind.Atlas,
+    trust: SubstrateTrust.Exact,
+    summary:
+      "Atlas answer, lens, terrain, vocabulary, and substrate contracts.",
+    basisKinds: [BasisKind.AtlasContract],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.OpenSeam,
+    ],
+    dependsOn: [SubstrateId.RepoTerrain],
+  },
+  {
+    id: SubstrateId.AtlasMemory,
+    kind: SubstrateKind.Atlas,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Durable JSON memory records joined to live product-architecture, atlas.self, and source existence checks so agent guidance can go stale or resolve explicitly.",
+    basisKinds: [
+      BasisKind.HumanJudgement,
+      BasisKind.TypeScriptProgram,
+      BasisKind.SourceText,
+    ],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    dependsOn: [
+      SubstrateId.SourceFiles,
+      SubstrateId.TypeScriptProgram,
+      SubstrateId.ProductArchitecture,
+    ],
+  },
+  {
+    id: SubstrateId.AtlasWorkRouter,
+    kind: SubstrateKind.Atlas,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Typed work-route ontology that turns domains, roles, source anchors, lens anchors, memory domains, auLink ids, and framework corpus concepts into structural next-work entrypoints without relying on fuzzy task search.",
+    basisKinds: [
+      BasisKind.AtlasContract,
+      BasisKind.HumanJudgement,
+      BasisKind.TypeScriptProgram,
+      BasisKind.SourceText,
+    ],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    dependsOn: [
+      SubstrateId.AtlasContracts,
+      SubstrateId.AtlasMemory,
+      SubstrateId.ProductArchitecture,
+      SubstrateId.FrameworkCorpus,
+    ],
+  },
+];
+
+/** Return one substrate contract or fail loudly on static contract drift. */
+export function findSubstrateContract(id: SubstrateId): SubstrateContract {
+  const contract = SubstrateCatalog.find((entry) => entry.id === id);
+  if (contract === undefined) {
+    throw new Error(`Unknown substrate contract: ${id}`);
+  }
+  return contract;
+}

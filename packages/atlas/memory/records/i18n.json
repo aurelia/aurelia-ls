@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:i18n-translation-binding-lifecycle",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "i18n",
+        "template",
+        "diagnostics"
+      ],
+      "summary": "I18n TranslationBinding lifecycle rows and target semantics are modeled after runtime rendering joins key and parameter bindings on the same target element.",
+      "rationale": "Aurelia i18n does not treat each t/t.bind/t-params.bind attribute as an isolated binding lifetime. The renderer retrieves or creates one TranslationBinding per target and t-params.bind calls useParameter(...), while I18nKeyEvaluationResult parses semicolon-delimited key expressions such as [title]key;key into runtime target attributes. Semantic-runtime must group rendered TranslationBinding products by target and parse static key-expression targets before projecting positive api.I18nTranslationBindings rows or publishing RuntimeBindingIssue products for AUR4000/AUR4001/AUR4002.",
+      "guidance": [
+        "Inspect framework i18n TranslationBinding and translation renderers before changing this lane; the join point is TranslationBinding.useParameter(...).",
+        "Keep translation-key catalog products separate from translation-binding lifecycle diagnostics: catalog completion comes from configuration resources, while lifecycle errors come from rendered binding products.",
+        "Treat framework CustomExpression pressure in this lane as translation binding/key-expression pressure first: TranslationBindingCommand uses CustomExpression as an opaque carrier for static translation attribute raw values, and TranslationBinding.create reparses the value as interpolation.",
+        "Keep dynamic key and parameter expression lifecycles distinct while entering both through the shared runtime binding source-expression projector. TranslationBinding.bind evaluates the key expression without first calling astBind(...), so binding behaviors unwrap evaluate-only there; t-params.bind uses ParameterBinding.bind and can apply source-scope-changing binding behaviors such as & state.",
+        "Use i18n cursor/completion canaries when touching expression context: t.bind should complete through evaluate-only view-model scope even with & state, while t-params.bind should complete through bind-time state source-scope projection.",
+        "Use api.I18nTranslationBindings and i18n-translation-binding expected effects when a fixture or future app-builder output needs to prove successful rendered t/t.bind/t-params.bind lifecycles; rows expose normalized targetProperties/targetKinds because the compiler target for t itself is not the same as TranslationBinding's runtime write target.",
+        "When i18n lifecycle diagnostics need a binding expression AST, use the shared template expression product helpers rather than re-owning expression product-detail reads in i18n.",
+        "Rendered TranslationBinding products are runtime expression bindings for source-expression, overlay, cursor, and i18n lifecycle consumers. Translation key bindings stay lifecycle-owned; t-params.bind also publishes source-only data-flow for parameter object typing. Neither form owns a generic value-channel, and generic open accessor/observer seams for t/t-params are a guard bug.",
+        "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific diagnostic rows; the translation-key catalog has its own query/effect lane."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/key-evaluation-result.ts",
+          "symbolName": "I18nKeyEvaluationResult",
+          "summary": "Static mirror of framework i18n key-expression attribute parsing and target defaulting."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-groups.ts",
+          "symbolName": "i18nTranslationBindingGroups",
+          "summary": "Shared positive/negative target-element grouping primitive for rendered i18n TranslationBinding products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
+          "symbolName": "I18nTranslationBindingIssueMaterializer",
+          "summary": "Semantic-runtime materializer for TranslationBinding.create/bind diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationBindingRows",
+          "summary": "Public row projection for rendered TranslationBinding target groups."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/framework-error-code.ts",
+          "symbolName": "I18nTranslationBindingFrameworkErrorCode",
+          "summary": "Exact framework error-code links for AUR4000, AUR4001, and AUR4002."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/i18n-translation-binding-errors/src/i18n-translation-binding-errors-app.html",
+          "summary": "Synthetic pressure fixture for i18n translation binding diagnostics."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:i18n-binding-lifecycle",
+          "summary": "Contract proving i18n dynamic keys are evaluate-only while t-params participates in source-scope-changing binding behavior flow."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime check:fixture-manifests",
+          "summary": "Fixture manifest verification covers migrated localized app-pattern expected effects."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "summary": "Ground i18n error-code coverage before adding more i18n diagnostics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/i18n/key-evaluation-result.ts",
+          "symbolName": "I18nKeyEvaluationResult"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "I18nTranslationBindingIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
+          "minLineCount": 180,
+          "minMethodCount": 7
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-groups.ts",
+          "symbolName": "i18nTranslationBindingGroups"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationBindingRows"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-26"
+    },
+    {
+      "id": "frontier:i18n-translation-key-query-effect",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "i18n",
+        "api",
+        "fixtures",
+        "app-builder"
+      ],
+      "summary": "Static i18n translation resources now have public query and expected-effect surfaces for fixture verification and future app-builder output.",
+      "rationale": "Generated localized fixtures need to prove that plugin registration admitted translation resources without comparing generated source text. The static i18n catalog materializer already owns I18nTranslationKey products, so api.I18nTranslationKeys and i18n-translation-key expected effects are the correct verification boundary.",
+      "guidance": [
+        "Use api.I18nTranslationKeys when a caller needs static translation catalog rows for completion, fixture verification, or future hover/coverage work.",
+        "Use i18n-translation-key expected effects when a fixture or future app-builder output needs to prove static I18nConfiguration init resources reopened as semantic facts.",
+        "Keep dynamic backend loaders, runtime language switching, missing-key lifecycle diagnostics, and translation catalog generation as separate frontiers; this lane only proves static catalog availability.",
+        "Pressure summaries report i18n key counts without printing translation keys, so external app scans do not promote app-specific catalog names into tracked output."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationKeyRows",
+          "summary": "Public row projection for static translation key products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/effect-observation.ts",
+          "symbolName": "observeExpectedSemanticEffect",
+          "summary": "Expected-effect observation now handles i18n-translation-key rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-localized-state-backed-form",
+          "summary": "Migrated localized app-pattern fixture with static i18n configuration pressure."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:i18n-binding-lifecycle",
+          "summary": "Focused i18n binding lifecycle contract."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationKeyRows"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/app-pattern-localized-state-backed-form/semantic-fixture.json"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-26"
+    }
+  ]
+}

@@ -1,0 +1,910 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:typescript-enum-usage-index",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "source-analysis",
+        "enum-usage",
+        "performance",
+        "context-economics"
+      ],
+      "summary": "The TypeScript enum usage index is the dominant measured cold phase in atlas.self and should stay visible as a source-analysis performance frontier.",
+      "rationale": "profile:self showed that cold atlas.self cost was dominated by readTypeScriptEnumUsageIndex for the Atlas package. The cleanup added nested phase/checker-call profiling, contextual lookup outcome counts, exact raw enum-like literal occurrence rows, skipped contextual type lookup where a literal role cannot contribute contextual raw enum counts, cached root enum-name extraction, and moved contextual raw-value analysis toward role-specific expected-type reads. Exact unambiguous Enum.Member text now resolves before checker lookup because that syntactic match was already the fallback; member-reference symbol lookup is no longer the main measured cost. Raw numeric values such as CharKind.None/Upper/Lower remain broad candidate overlaps but skip checker-backed contextual narrowing by default. Atlas self-analysis now uses an explicit enum raw-value context policy: the standard path skips call-argument contextual refinement because it is currently high cost with zero narrowed rows, while targeted `enumContext=all` or call-argument occurrence inquiries still compute the full lane. The profile hotspot printer now pages the whole enum-value-occurrence family before aggregating, so future optimization should read the full candidate distribution: remaining measured checker pressure is mostly comparison contextual narrowing, plus opt-in string-like call-argument contextual checks.",
+      "guidance": [
+        "Run profile:self before touching this substrate; use enum-usage.* phase rows to choose the next cache or split point. Use atlas.self:phase-profile when the same measured rows need exact phase, query, or threshold filtering through the inquiry API.",
+        "Use `pnpm --filter @aurelia-ls/atlas self -- --projection=enum-value-occurrences --role=... --contextualOnly=true --detail` when a specific enum raw-value occurrence lane needs row-level inspection without writing a throwaway inquiry script.",
+        "Treat enum raw-value context as an inquiry policy: standard atlas.self skips call-argument refinement, `--enumContext=all` or role-targeted call-argument occurrence reads keep the exact full lane available, and `--enumContext=none` keeps declaration/reference/raw-overlap inventory without checker-backed raw-value narrowing.",
+        "Numeric raw overlaps are intentionally high-collision candidate rows only; direct Enum.Member references still count numeric enum usage, while checker-backed contextual raw-value narrowing is reserved for string-like literals unless a future product need explicitly opts into numerics.",
+        "profile:self enum raw value hotspots are full-family aggregates, not a single clamped page; role summaries split string and number rows so candidate numeric overlap does not hide the checker-backed string signal. If the numbers look surprising, inspect enum-value-occurrences with role/valueKind/value/contextualOnly filters before changing the substrate.",
+        "Expect enum-usage.member-reference.syntax-exact to absorb unambiguous Enum.Member rows; if checker.getSymbolAtLocation rises again, inspect alias/ambiguous-member pressure before adding broad symbol lookups.",
+        "Comparison raw-value narrowing skips TypeChecker counterpart reads for syntax that cannot carry an enum value type, such as typeof expressions and literal counterparts. If comparison pressure rises again, inspect `enum-usage.checker.getTypeAtLocation.comparison-counterpart` beside `.syntax-skipped` and an `--enumContext=none` baseline before adding more checker calls.",
+        "Use atlas.self projection enum-value-occurrences with valueKind, contextualOnly, and enumContext filters when auditing whether raw enum-like literal counts are real signal or broad overlap noise.",
+        "Use `pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=... --memberName=... --detail` when auditing whether semantic-runtime inquiry/kernel enum primitives are actually spent. The package-facing wrapper exposes the same source index outside atlas.self; for example `InquiryContinuationIntent.Author` currently resolves to a single vocabulary-list reference, which is different from being emitted by public continuation rows.",
+        "Use `enum:usage -- --projection=member-usage --enumName=...` for one-row-per-member spend audits. It aggregates role counts, containing functions/classes, control-flow carriers, translation edges, and coupled enums before you page exact reference rows.",
+        "Use `enum:usage -- --projection=enum-references --controlFlowKind=switch-case-label|if-condition` when the question is whether enum members drive branches or only appear in passive vocabulary. Use `--projection=enum-couplings` for enum pairs joined by translation, shared control-flow carriers, declared type surfaces, or checker-backed shared value-space evidence; broad shared raw labels remain value-space rows, not coupling rows.",
+        "Use `enum:usage -- --projection=enum-couplings --relation=type-surface-cooccurrence --query=...` when the question is whether separate enum value spaces form one typed protocol through an interface, type alias, class, or function signature. For example, `SemanticRuntimeContinuationRow` structurally couples public continuation kind, app-query kind, next-move intent, and continuation cost without requiring any enum member to appear in a branch.",
+        "Do not infer product purpose from enum usage alone. Use enum usage to reveal declared-versus-spent shape, then ground interpretation in owning README, Atlas memory, Work Router route, and reviewed `.temp` intent docs when the primitive is tied to a parked or future direction.",
+        "Do not replace enum usage with text matching; symbol-backed member references and contextual raw-value counts are the point of this substrate.",
+        "If more profiling helpers are needed, extend shared PhaseProfiler rather than adding local profiler classes."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/source/enum-usage.ts",
+          "symbolName": "TypeScriptEnumUsageIndexBuilder",
+          "summary": "Source-backed enum declaration, member reference, raw value, value-space, translation, and phase-profile index builder."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/source/enum-raw-value-context.ts",
+          "symbolName": "TypeScriptEnumRawValueContext",
+          "summary": "Role-specific expected-type resolver for raw enum-like literal contextual narrowing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/phase-profile.ts",
+          "symbolName": "PhaseProfiler",
+          "summary": "Shared phase/repeated-call profiling helper used by enum usage and self-analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/enum-usage.ts",
+          "summary": "Package-facing enum usage CLI for semantic-runtime, MCP, and external package primitive coverage audits."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas profile:self",
+          "summary": "Prints enum-usage nested phase/checker-call timings through atlas.self."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=summary --enumName=InquiryContinuationIntent --memberName=Author --detail",
+          "summary": "Canary for semantic-runtime enum primitive spend: declared intent member, exact references, and whether usage is only vocabulary-level."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --detail",
+          "summary": "Package-facing enum coupling read for translation, branch co-occurrence, declared type-surface, and checker-backed shared value-space relations."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow --detail",
+          "summary": "Canary for enum protocols carried by public continuation DTO type surfaces."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas self -- --projection=enum-value-occurrences --detail",
+          "summary": "Direct queryable atlas.self row wrapper for enum occurrence filters and payloads."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.self",
+          "projectionId": "phase-profile",
+          "summary": "Queryable Atlas self-analysis phase rows with exact phase and threshold filters."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-class",
+          "className": "TypeScriptEnumUsageIndexBuilder",
+          "filePath": "packages/atlas/src/source/enum-usage.ts",
+          "minLineCount": 500,
+          "minMethodCount": 20
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/source/enum-raw-value-context.ts",
+          "symbolName": "TypeScriptEnumRawValueContext"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/phase-profile.ts",
+          "symbolName": "PhaseProfiler"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-24"
+    },
+    {
+      "id": "frontier:atlas-core-analysis-pressure",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "self-analysis",
+        "source-analysis",
+        "inquiry",
+        "context-economics"
+      ],
+      "summary": "Atlas core source-analysis and lens implementation files remain large, high-pressure substrates; use atlas.self/profile lanes before local splitting.",
+      "rationale": "The long autonomous runs repeatedly rely on Atlas to maintain orientation while semantic-runtime grows. Large Atlas analysis files are not automatically wrong, but they need durable handles so future sessions do not rediscover the same pressure through raw file browsing.",
+      "guidance": [
+        "Start with pressure:self and the relevant lens/profile script before opening these files directly.",
+        "Do not split these files only by line count; split around substrate responsibility, cache boundary, analysis phase, or reusable inquiry continuation.",
+        "If a local feature needs a capability that one of these files already owns, improve the existing substrate rather than adding a parallel helper.",
+        "When context or timing cost rises, profile first and treat repeated primitive work as substrate/cache pressure.",
+        "Use the self-analysis phase timings in profile:self or atlas.self:phase-profile to decide whether the next payoff is enum usage indexing, source walking, finalization, or projection paging. The profiler separates exclusive time from child time, so optimize the exclusive phase body rather than an inclusive parent label.",
+        "profile:self is compact by default and prints the highest exclusive-cost phases plus compact enum hotspot summaries first; use profile:self:detail, --phaseRows=..., or --enumRoleRows=... only when the lower-cost tail is the actual question.",
+        "Use product:architecture for targeted class/function/module rows when Work Router route plans name product.architecture lens anchors; prefer exact structural filters (`--className`, `--pathPrefix`, `--surfaceRole`, `--area`, `--functionKind`) before broad `--query`, and do not fall back to throwaway AST scripts for method breakdowns.",
+        "The product:architecture script should reject unknown flags instead of silently widening a narrowed inquiry; use exact file filters such as `--fromFilePath`, `--toFilePath`, `--filePath`, and `--pathPrefix`, and extend the shared script-output argument guard when a real new filter is added.",
+        "`product:architecture -- --projection=functions --detail` prints bounded callee symbol/expression samples; use it to inspect large coordinator methods before paging raw call sites, and use `--minDistinctCalleeCount=...` when dependency fan-out is the question.",
+        "`product:architecture -- --projection=function-duplicates` prints duplicate helper groups directly and respects `--pathPrefix` through grouped file paths; use it to distinguish real same-name split brain from global noise before opening source.",
+        "`product:architecture -- --projection=call-sites` prints call-site rows directly and forwards exact call filters such as `--calleeName`, `--callKind`, `--targetPackageId`, `--local`, `--crossesArea`, and `--includeCallDetails=true`; use that lane before opening source when a route needs concrete product call edges.",
+        "profile:product-architecture is compact by default and prints only the selected lane/phase head; use profile:product-architecture:detail, --laneRows=..., --phaseRows=..., or --rows=... when product architecture cost diagnosis needs the lower-ranked lanes or phases.",
+        "product.architecture treats function body fingerprints and switch topology as an explicit body-analysis lane. Cheap structure and call-pressure reads skip it; duplicate/control-flow projections and `--includeFunctionBodyAnalysis=true` ask for it deliberately.",
+        "atlas.self separates source-surface reads from semantic taxonomy reads: Work Router and memory live checks can use source-file/class/function/variable surfaces without enum/string/contract taxonomy, while summary/taxonomy/enum/string/contract projections still opt into taxonomy deliberately.",
+        "atlas.self now follows the same body-analysis policy: ordinary summary/function rows skip function body fingerprints and switch topology, while `function-shapes`, `function-control-flow-shapes`, fingerprint/switch filters, and `--includeFunctionBodyAnalysis=true` opt into the expensive AST body lane.",
+        "Use `product.architecture:function-control-flow-shapes` or `atlas.self:function-control-flow-shapes` when a cleanup exposes parallel switch walkers or dispatch surfaces with different names; the switch-topology grouping is a structural canary, not a duplicate verdict.",
+        "When atlas.self repeated body-shape rows point at real shared semantics, prefer a named shared substrate such as framework-corpus-classification over parallel helper bodies in route and lens code.",
+        "The atlas.self shallow-wrapper lane now resolves instance method calls through the TypeChecker only after narrowing to wrapper method names; if it becomes slow or noisy, preserve that targeted checker boundary rather than returning to broad property-call lookups or syntax-only counts.",
+        "Product-architecture role classification should make semantic-runtime navigable, not merely reduce `other` rows: behavioral `*Draft`/`*Drafts` classes are phase owners, `*Support`/`*Table` classes are service surfaces, reusable `*World`/`*Cache` classes are epoch contexts, and behavioral `*Effect`/`*Evaluation`/`*ValueChannel`/`*Ontology`/`*Shape` classes are semantic models.",
+        "When Atlas self/product lenses share the same row vocabulary, prefer one small shared policy/helper over parallel switch walkers or one-use wrapper functions. Shared helpers should be spent directly by the owning projections.",
+        "Framework source-backed row families should use sourceRowContinuationsForPage/sourceRowContinuations from framework-continuation-core when they only need next-page plus source-inspection moves. Do not add a named one-use wrapper just to bind row-family copy.",
+        "Script CLI wrappers should reuse script-output argument/filter helpers instead of growing local optional-filter functions; repeated helper rows are a split-brain canary, not a lint score."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-analysis.ts",
+          "symbolName": "readAtlasSelfAnalysis",
+          "summary": "Atlas self-analysis source model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-row-projection.ts",
+          "symbolName": "answerSelfRowProjection",
+          "summary": "Shared atlas.self row projection paging, evidence, and source-inspection continuation helper."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-continuation-core.ts",
+          "symbolName": "sourceRowContinuationsForPage",
+          "summary": "Shared framework row-family next-page/source-inspection continuation binder."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-enum-lenses.ts",
+          "symbolName": "answerSelfEnumValueOccurrencesProjection",
+          "summary": "Enum-specific atlas.self projection answering, filtering, and evidence for enum rows and raw value occurrences."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/source/typescript.ts",
+          "summary": "TypeScript source project substrate."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/ts-lenses.ts",
+          "summary": "TypeScript inquiry lens implementation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-analysis.ts",
+          "summary": "Semantic-runtime product architecture analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/ast-fingerprint.ts",
+          "symbolName": "functionSwitchTopologyFingerprint",
+          "summary": "Structural switch-dispatch topology fingerprint for finding parallel walkers and dispatch surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-lenses.ts",
+          "symbolName": "functionControlFlowShapeGroups",
+          "summary": "Product architecture grouping for semantic-runtime function surfaces with shared switch topology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/class-surface-order.ts",
+          "symbolName": "orderClassSurfaceRows",
+          "summary": "Shared ordering helper for Atlas self and semantic-runtime product class-surface rows."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.self",
+          "projection": "function-control-flow-shapes",
+          "summary": "Atlas self-analysis grouping for Atlas function surfaces with shared switch topology."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "function-control-flow-shapes",
+          "summary": "Semantic-runtime product architecture grouping for function surfaces with shared switch topology."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:self",
+          "summary": "Compact Atlas self-pressure lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas profile:self",
+          "summary": "Hot projection timing lane for atlas.self."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas product:architecture",
+          "summary": "Targeted product.architecture row CLI for following route-plan lens anchors."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/lenses.ts",
+          "minLineCount": 2500
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-analysis.ts",
+          "minLineCount": 2500
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/source/typescript.ts",
+          "minLineCount": 2500
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/ts-lenses.ts",
+          "minLineCount": 2500
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-analysis.ts",
+          "minLineCount": 2500
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/scripts/product-architecture.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/ast-fingerprint.ts",
+          "symbolName": "functionSwitchTopologyFingerprint"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "intentional:atlas-lens-catalog",
+      "kind": "intentional-shape",
+      "domains": [
+        "atlas",
+        "lens-catalog",
+        "contracts",
+        "inquiry"
+      ],
+      "summary": "LensCatalog is a large static contract catalog; treat its size as catalog pressure, not implementation pressure.",
+      "rationale": "Atlas self-pressure correctly reports lens-catalog.ts as very large, but the file is mostly commented contract data. It should remain visible without being treated like an implementation blob that must be split immediately.",
+      "guidance": [
+        "Edit LensCatalog when adding or changing lens contracts; keep contract comments close to the keys they explain.",
+        "If the catalog becomes hard to review, consider generated or grouped catalog structure, but keep stable lens ids and parameter comments as the source of truth.",
+        "Do not hide lens contract drift in runtime implementations; self-check should continue to compare catalog declarations to observed runtime branches."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/lens-catalog.ts",
+          "symbolName": "LensCatalog",
+          "summary": "Static lens contract catalog."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas self-check",
+          "summary": "Lens contract/runtime coherence check."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/lens-catalog.ts",
+          "minLineCount": 3000,
+          "moduleShape": "catalog"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:atlas-memory-substrate",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "memory",
+        "inquiry",
+        "autonomy",
+        "self-analysis"
+      ],
+      "summary": "Atlas memory is a live self-navigation substrate and should keep its store, integrity, normalization, live-check, row/filter, routing, next-action, lens, read script, and write script pressure visible through atlas.self checks.",
+      "rationale": "The memory lane originally tracked semantic-runtime product class pressure but could not keep Atlas-owned memory tooling honest. That made future autonomous Atlas work depend on prose-only docs even though atlas.self already exposes source-file pressure.",
+      "guidance": [
+        "Use atlas-self-* live checks for Atlas-owned memory pressure; use source/file/auLink existence checks only when presence, not pressure, is the durable fact.",
+        "Presence live checks report `present` and should ground records without making pressure-frontiers active; pair them with product-large-class or atlas-self-* checks when they should keep work live.",
+        "When memory:next becomes flat or noisy, improve atlas-memory-next-actions, row filters, or routing continuations before adding another workbench note.",
+        "Keep record-backed `memory:next` rows self-contained: the answer payload should include the backing memory records, and detailed script output should print anchors before bounded guidance so a checkpoint can jump to source, docs, scripts, lenses, or auLink handles without opening raw JSON. Use `--guidanceRows`, `--liveCheckRows`, `--anchorRows`, or explicit `--all-*` switches when the human output needs full expansion.",
+        "Keep query semantics aligned across records, frontiers, untracked frontiers, and next actions: explicit consultable filters should join matching record-backed rows into `memory:next` even when computed next actions exist, exact all-token hits should rank first, query relevance should outrank broad base pressure, and significant adjacent partial hits should be available for broad checkpoint phrases.",
+        "Use separated CLI filters freely: memory scripts accept `--name value` as an exact record-id filter that defaults to `records`, `--limit` as a row-budget alias, and repeated `--domain` filters as all-of narrowing by default. Reach for `--domainMode=any` only when a deliberately broad OR-style sweep is more useful.",
+        "Memory read scripts should reject unsupported flags instead of silently widening a narrowed inquiry; if a commonly attempted flag is useful, add it as a typed filter or documented alias.",
+        "Keep the store, integrity policy, normalization, live-check evaluator, row filters/search, routing/evidence, lens projection answering, next-action ranking, read-script output, and write-script storage updates aligned; they are one substrate with separate responsibilities, not independent helpers.",
+        "When adding durable memory from workbenches or .temp notes, use memory:write or an equivalent structured path so duplicate ids and shard placement do not drift.",
+        "If these files shrink below pressure thresholds, review whether the record is resolved, should become intentional-shape, or needs a narrower live check."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
+          "symbolName": "AtlasMemoryRecord",
+          "summary": "Durable JSON schema, row contracts, live-check contracts, and analysis contracts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-store.ts",
+          "symbolName": "readAtlasMemoryAnalysis",
+          "summary": "Filesystem store reading, live analysis joining, shard provenance, and rollups."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-integrity.ts",
+          "symbolName": "atlasMemoryIntegrityIssues",
+          "summary": "Durable record integrity checks for anchors, lens projections, package scripts, and live-check coverage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-product-class-key.ts",
+          "symbolName": "atlasMemoryProductClassKey",
+          "summary": "Shared product-class identity helper for memory live checks and untracked frontier coverage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-normalization.ts",
+          "symbolName": "normalizeAtlasMemoryManifest",
+          "summary": "Durable JSON manifest, shard, record, anchor, and live-check normalization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-live-checks.ts",
+          "symbolName": "evaluateAtlasMemoryLiveCheck",
+          "summary": "Live check evaluation against product.architecture, atlas.self, and source existence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-lenses.ts",
+          "symbolName": "answerAtlasMemory",
+          "summary": "Queryable Atlas memory lens projection dispatch and answer assembly."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-rows.ts",
+          "symbolName": "filterMemoryRows",
+          "summary": "Atlas memory row families, filters, search text, path matching, and live frontier row construction."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-routing.ts",
+          "symbolName": "memoryRowContinuations",
+          "summary": "Atlas memory evidence, source routing, projection continuations, and storage open seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-next-actions.ts",
+          "symbolName": "atlasMemoryNextActionRows",
+          "summary": "Computed checkpoint-friendly next-action ranking."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/atlas-memory.ts",
+          "summary": "Human-readable script output for the memory lens."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
+          "symbolName": "upsertRecord",
+          "summary": "Structured memory record template, upsert, shard selection, and remove script."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "filters": {
+            "domain": "atlas"
+          },
+          "summary": "Atlas-owned memory next actions."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas memory:next -- --domain atlas --detail",
+          "summary": "Checkpoint lane for Atlas-owned memory substrate work."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas memory:write",
+          "summary": "Structured storage update lane for durable memory records."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-contracts.ts",
+          "minLineCount": 180
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-store.ts",
+          "minLineCount": 250
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-integrity.ts",
+          "minLineCount": 180
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-product-class-key.ts",
+          "symbolName": "atlasMemoryProductClassKey"
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-normalization.ts",
+          "minLineCount": 200
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-live-checks.ts",
+          "minLineCount": 120
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-lenses.ts",
+          "minLineCount": 250
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-rows.ts",
+          "minLineCount": 200
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-routing.ts",
+          "minLineCount": 160
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-memory-next-actions.ts",
+          "minLineCount": 120
+        },
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/scripts/atlas-memory.ts",
+          "minLineCount": 150
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/scripts/atlas-memory-write.ts",
+          "symbolName": "upsertRecord"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-23"
+    },
+    {
+      "id": "reuse:product-architecture-field-provenance-pressure",
+      "kind": "reuse-guide",
+      "domains": [
+        "atlas",
+        "product-architecture",
+        "semantic-runtime",
+        "provenance"
+      ],
+      "summary": "product.architecture field-provenance rows expose both direct FieldProvenance construction and helper call-site fan-out so false field precision stays visible.",
+      "rationale": "A same-handle provenance audit initially looked clean because Atlas only reported the helper's internal new FieldProvenance call. The lens now expands fieldProvenanceEntries call sites into rows for literal, conditional, spread, and dynamic field elements, which surfaced generated value-channel field provenance that semantic-runtime could remove.",
+      "guidance": [
+        "Use pressure:product-architecture or product.architecture:field-provenance before adding field-level provenance to generated semantic-runtime products.",
+        "Treat fieldProvenanceEntries helper rows as product decisions at the call site, not as implementation noise inside kernel/provenance.ts.",
+        "If same-handle fan-out appears, first decide whether individual fields have distinct authored spans or contributions; otherwise prefer product/source provenance.",
+        "Keep constructionKind and fieldNameOrigin comments in the row contract when extending this lane so future Atlas output explains what was actually observed."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-kernel-records.ts",
+          "symbolName": "ProductArchitectureFieldProvenanceConstructionRow",
+          "summary": "Field-provenance row contract with construction form and field-origin axes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-kernel-records.ts",
+          "symbolName": "fieldProvenanceRowsForHelperCall",
+          "summary": "Expansion of fieldProvenanceEntries call sites into exact product-architecture rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/scripts/product-architecture-pressure.ts",
+          "summary": "Human pressure output for field-provenance construction forms, origins, owner hot spots, and same-handle fan-out."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/atlas/src/inquiry/runtime/README.md",
+          "summary": "product.architecture field-provenance lane guidance."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/observation/README.md",
+          "summary": "Observation note explaining why generated value-channel fields use product-level provenance."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail",
+          "summary": "Shows construction forms, field-name origins, owner hot spots, and same-handle fan-out."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-kernel-records.ts",
+          "symbolName": "ProductArchitectureFieldProvenanceConstructionRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/product-architecture-kernel-records.ts",
+          "symbolName": "fieldProvenanceRowsForHelperCall"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "decision:atlas-pressure-is-navigation-not-lint",
+      "kind": "decision",
+      "domains": [
+        "atlas",
+        "self-analysis",
+        "pressure",
+        "maintenance",
+        "autonomy"
+      ],
+      "summary": "Atlas pressure rows are source-navigation and substrate-visibility aids, not a lint scoreboard to make quiet by reshaping code superficially.",
+      "rationale": "The operator warned that using Atlas self checks as lint can produce worse code: for example, extracting constructor calls or short delegation into one-off wrappers may reduce a line-count or call-pressure row while hiding the underlying shape from Atlas and future maintainers. The new function-wrapper lane makes that failure mode visible without turning it into an automatic inline/extract rule.",
+      "guidance": [
+        "Inspect pressure rows as evidence about where source or substrate ownership may need attention; do not refactor solely to make a row disappear.",
+        "If a wrapper, helper, or split has a real lifetime, shared ownership, cache boundary, or framework-shaped responsibility, keep it even when it appears in pressure output.",
+        "If a refactor only moves constructor calls or call forwarding into single-use helpers, prefer the more cohesive source shape and leave the pressure row visible.",
+        "When Atlas becomes blind to a code-quality concern, improve the lens or row contract to expose the concern instead of gaming an existing lane.",
+        "Use atlas.self:function-wrappers as an inspection surface for shallow wrapper soup; its incoming-call count is local direct-reference evidence, not a verdict."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/agent-handoff.md",
+          "heading": "Decision Provenance",
+          "summary": "Atlas pressure/self checks are navigation aids, not lint scoreboard rules."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.self",
+          "projection": "function-wrappers",
+          "summary": "Direct constructor-return and simple-call-return helper rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-analysis-contracts.ts",
+          "symbolName": "AtlasSelfFunctionWrapperRow",
+          "summary": "Row contract for shallow wrapper visibility."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-source-surface-lenses.ts",
+          "symbolName": "answerSelfFunctionWrappersProjection",
+          "summary": "atlas.self function-wrapper projection answerer."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:self",
+          "summary": "Compact self-pressure lane that includes repeated-shape and shallow-wrapper rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-analysis-contracts.ts",
+          "symbolName": "AtlasSelfFunctionWrapperRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/self-source-surface-lenses.ts",
+          "symbolName": "answerSelfFunctionWrappersProjection"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/workbench/agent-handoff.md"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:framework-error-code-grounding",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-errors",
+        "diagnostics",
+        "semantic-runtime",
+        "framework-grounding"
+      ],
+      "summary": "Aurelia framework error/event codes are a source-backed diagnostic authority canary; the current mapped/raw gap pass is closed and should be reopened only when new diagnostic pressure appears.",
+      "rationale": "The framework error-code corpus drove the diagnostic-completeness pass: walk ErrorNames and Events across all Aurelia packages Atlas knows about, let those code/message/usage facts reveal missing semantic-runtime substrates, and use external apps or fixtures only as supplementary proof surfaces. As of 2026-05-14, pressure:framework-errors reports no active mapped diagnostic gaps and no raw authority gaps. External app pressure should still be checked against Aurelia runtime semantics before semantic-runtime-specific handling, but this record should not keep diagnostics at the top of unfiltered autonomous next work.",
+      "guidance": [
+        "This frontier is nextActionPolicy=when-touched: treat it as reusable diagnostic grounding, not the default next task while pressure:framework-errors stays closed.",
+        "Run `pnpm --filter @aurelia-ls/atlas pressure:framework-errors` before introducing `framework-error-code` diagnostics or framework-shaped semantic-runtime errors; use the `framework.errors` `gap` filter to inspect source-row gaps such as code-without-message, unused-code, unresolved-usage-code, raw-new-error, raw-error-factory-call, raw-error-usage, raw-error-authority-gap, intentionally-unclaimed-raw-authority, and unresolved-semantic-runtime-reference, or diagnostic-row filters such as actionable-uncovered, future-substrate, runtime-product-boundary, and dormant-framework-authority.",
+        "Use `pnpm --filter @aurelia-ls/atlas framework:errors -- --projection=diagnostic-frontiers --packageId=template-compiler --codeNamePrefix=compiler --detail` for family-level substrate choice, `--projection=diagnostic-codes` for code-level modeled/unmodeled/dormant/raw/link-broken intake, or the sibling `codes`, `usages`, and `semantic-references` projections when a diagnostic family needs exact rows instead of the broad pressure summary.",
+        "Use the framework error-code corpus as a systematic diagnostic-completeness canary across all Aurelia packages, not as a mechanical coverage checklist; spend real source-reading time on high-pressure families and let unmapped or hard-to-place codes point at missing semantic-runtime substrates.",
+        "Treat codes without mapped messages, unresolved usage code definitions, unused codes, and raw Error authority gaps as framework-completeness pressure that may require a deeper framework/source pass; mapped error wrapper calls and raw Error factory calls are symbol-resolved, so indirect helpers such as dialog cancel errors and expression-parser utilities should remain visible.",
+        "Use the `families` projection for an upfront code-family map by package, enum, and member prefix. Then narrow with `codeNamePrefix` to inspect families such as parse, ast, compiler, router, or lifecycle hook prefixes before deciding which semantic-runtime diagnostic substrate should own the corresponding static analysis.",
+        "Use the `diagnostic-frontiers` projection when selecting the next implementation target: it joins framework code families to exact semantic-runtime AUR-link coverage, reports dormant and actionable uncovered counts, uses `coverage=dormant-closed` for families whose remaining uncovered labels are unused framework definitions, and records recommended next steps without claiming that every framework code should become a static diagnostic.",
+        "Use the `diagnostic-codes` projection after a frontier is chosen or when external app pressure mentions a specific code: it reports the exact code disposition (`modeled-exact`, `unmodeled-used-framework-authority`, `dormant-framework-authority`, `declared-unspent`, `broken-exact-link`, or `raw-authority-gap`), usage effects, semantic-runtime exact-link counts, likely owner hints, and source continuations.",
+        "The `diagnostic-frontiers` recommendation text carries coarse likely-owner hints for common framework families. Use those hints to navigate toward controller/resource/observation/router/DI/i18n/validation/package-specific substrates, but always inspect the framework usage row and semantic-runtime owner before adding a `framework-code-link`.",
+        "Diagnostic-frontier coverage must use spent semantic-runtime references, not merely declared framework-code constants. `pressure:framework-errors` prints both `usedExact` and `declaredExact`; an unspent constant is bookkeeping, not modeled diagnostic authority.",
+        "Semantic-runtime references that carry an exact framework package, enum, and member target are not ambiguous even when the human AUR label is duplicated across framework packages; only bare label references with multiple framework definitions should contribute to ambiguous-label pressure or diagnostic-code scoring.",
+        "The `query` filter must search row families directly, not pre-filter packages first; `pressure:framework-errors` samples `query=binding` as a canary because package-level text can otherwise hide relevant code rows.",
+        "`rawErrorKind=mapped-error-factory-implementation` is the implementation of normal ErrorNames/Events authority, not a bypass. Prioritize `gap=raw-error-authority-gap`, `rawErrorKind=inline-aur-code`, and `inlineCodeLabel` when looking for hard-coded or unmapped framework diagnostic authority.",
+        "As of 2026-05-14, `framework:errors -- --projection=diagnostic-codes --disposition=unmodeled-used-framework-authority` returns zero mapped framework diagnostic-code rows, with no `declared-unspent` or `broken-exact-link` rows, and `gap=raw-error-authority-gap` returns zero raw Error rows. `pressure:framework-errors` prints `active mapped diagnostic gaps: 0`; remaining high-volume diagnostic frontiers are either exact-modeled, intentionally unclaimed, or `dormant-closed` because the unmatched labels are unused framework definitions. Raw framework throws have a separate `semantic-raw-references` projection backed by `frameworkRawErrorAuthority(...)`; route-recognizer duplicate-path, reserved-`$$residue`, ambiguous-endpoint, @aurelia/state builder/decorator/store-registry issue products, and Metadata.define-without-key currently close exact raw rows. @aurelia/state is closed for raw gaps: withStore-after-registration, reserved default store names, duplicate stores, missing named-store lookups, and invalid @fromState(...) target contexts are StateIssue products, while the three DevTools rows stay intentionally unclaimed live host/lifecycle errors. Raw framework throws also have an `intentionally-unclaimed-raw-authority` lane for internal framework guards, live scheduler/platform/DOM state, SSR serialized-manifest translation guards, validation-message DSL guards, and helper bodies that should not become current product diagnostics. Reopen a mapped or raw row only after deciding semantic-runtime admits the corresponding framework product surface.",
+        "When external app pressure touches DI, template compilation, routing, built-in resources, observation, or configuration, ground the behavior in framework lenses and auLink anchors before adding semantic-runtime-specific handling.",
+        "Weak app typings and authoring guidance should remain `semantic-authoring-policy` diagnostics unless an exact Aurelia ErrorNames or Events row and source usage justify framework authority. Binding assignment strictness is different: when binding data-flow has observer/value-channel, writeback, source writeability, TypeChecker assignability, and astAssign evidence, it may use `semantic-runtime-product` authority for an earlier static product fact without claiming framework error authority.",
+        "Completed-input parser failures and companion/frontier publications can carry exact Aurelia parser code labels through `ExpressionFrameworkErrorCode`; attach those low in the parser only after checking the framework package/enum/member through `framework.errors`, because AUR labels collide across framework packages and the pressure lane reports duplicate-label counts. Use the `semantic-references` projection to verify exact semantic-runtime links before trusting the diagnostic authority. As of 2026-05-13 the expression-parser `parse*` family is closed as 26 exact semantic-runtime links plus an `intentionally-unclaimed-framework-authority` row for `parse_invalid_empty`, because that code belongs to framework entry-family behavior (`None`/`IsChainable`) that semantic-runtime does not expose today.",
+        "Runtime AST diagnostics spend exact `runtime:astEvaluate` / `runtime:astAssign` authority through `RuntimeAstFrameworkErrorCode` only where the semantic-runtime substrate owns the corresponding framework path. As of 2026-05-14 the runtime `ast*` frontier is dormant-closed: missing `$host` context maps to `AUR0105` through source expression evaluation; reserved `$host` writeback maps to `AUR0106` through binding data-flow source assignment; non-callable call targets, tagged-template tags, and named/member calls map to `AUR0107`, `AUR0110`, and `AUR0111` through binding data-flow; repeat destructuring scope-effect projection maps non-object or non-Array-rest item shapes to `AUR0112`; source-to-target increment/compound assignment maps to `AUR0113` when binding data-flow asks the evaluator in connectable mode; definitely-nullish member/keyed access maps to `AUR0114`/`AUR0115` only when the data-flow row carries rendering-controller strictness `true`; strict member/keyed assignment through a definitely-nullish owner maps to `AUR0116` through binding source writeability; source-authored `@astTrack` on non-method targets maps to `AUR0117` through observation source issues. Unknown unary/binary operator codes (`AUR0108`, `AUR0109`) remain unclaimed for ordinary template/app analysis because semantic-runtime parser and AST types only admit the framework operator set, and the old behavior/converter runtime definitions are dormant; revisit them only if a product admits raw/hydrated/malformed AST objects or framework source grows a usage row.",
+        "Runtime-html AST diagnostics are a sibling binding-utils/resource-lookup lane, not more runtime callable diagnostics. As of 2026-05-13 semantic-runtime claims missing value-converter resources (`AUR0103`), missing binding-behavior resources (`AUR0101`), and duplicate authored binding-behavior names (`AUR0102`) through `RuntimeHtmlAstFrameworkErrorCode`; the remaining runtime-html `ast*` names are dormant framework authority unless an exact framework usage row proves otherwise.",
+        "Runtime-html resource-definition registrar duplicates are modeled as resource-registration `ResourceIssue` warnings, not DI issues: custom element (`AUR0153`), custom attribute (`AUR0154`), value converter (`AUR0155`), and binding behavior (`AUR0156`) checks live in the runtime-html definition registrar paths. Keep kernel `resource_already_exists` (`AUR0007`) for source/static `$au` resource registration and resolver-publication conflicts. Runtime-html's duplicate `binding_command_existed` (`AUR0157`) label remains dormant, while template-compiler's used `binding_command_existed` / `AUR0157` is claimed through compiler-world binding-command registration issues.",
+        "Runtime-html direct resource API definition failures are modeled by `ResourceDefinitionApiIssueMaterializer`: `CustomElementDefinition.create(...)` with only a string name maps to `element_only_name` (`AUR0761`), and project-local `getDefinition(...)` calls with no matching recognized resource definition map to `element_def_not_found` (`AUR0760`), `attribute_def_not_found` (`AUR0759`), `value_converter_def_not_found` (`AUR0152`), or `binding_behavior_def_not_found` (`AUR0151`). Keep renderer named-resource misses in runtime controller issues and expression converter/behavior name misses in the binding-utils/type-system lane.",
+        "Runtime-html repeat diagnostics are source-grounded but split by owner. As of 2026-05-13 semantic-runtime claims `repeat_non_iterable` / `AUR0777` through runtime binding scope issues when a checker-visible source is outside default `RepeatableHandlerResolver` categories: arrays, sets, maps, numbers, and nullish. Do not broaden this with generic TypeScript iterable or array-like heuristics; app-registered `IRepeatableHandler` support needs DI/configuration modeling. The `Repeat` constructor option checks are controller-owned: `repeat_invalid_key_binding_command` (`AUR0775`), `repeat_extraneous_binding` (`AUR0776`), and `repeat_invalid_contextual_binding_command` (`AUR0821`) publish `RuntimeControllerIssue` products while renderer emulation creates the template-controller frame. `repeat_mismatch_length` (`AUR0814`) belongs to runtime collection consistency; dormant `repeat_non_countable` (`AUR0778`) remains unclaimed.",
+        "Runtime-html controller diagnostics are split by the framework path that owns the static cause. `controller_no_shadow_on_containerless` (`AUR0501`) is a resource-definition issue when a custom element is statically containerless and shadow/slot-backed. `controller_watch_invalid_callback` (`AUR0506`) remains a resource watch/controller watcher issue. Renderer named-resource lookup misses (`element_res_not_found` / `AUR0752`, `attribute_res_not_found` / `AUR0753`, and `attribute_tc_res_not_found` / `AUR0754`) are runtime controller/rendering issues and should stop child-controller materialization instead of producing null-definition controller frames. `controller_property_not_coercible` (`AUR0507`) and `controller_property_no_change_handler` (`AUR0508`) are runtime controller observer-setup issues: observer-locator must first model the object observer branch and whether it supports `useCoercer` / `useCallback`; do not attach those codes from API wording. Lifecycle-state controller codes (`AUR0502`-`AUR0505`) remain unclaimed until controller-state emulation owns activation/deactivation state transitions.",
+        "Runtime-html `au*` diagnostics are partial and `AuCompose`-specific today. Static `scopeBehavior` and `flushMode` setter failures are controller-owned (`AUR0805`, `AUR0809`) because lowered `SetPropertyInstruction`s can prove the same setter path as the framework. Static string `component` / `view-model` misses are also controller-owned (`AUR0806`) and probe the parent hydration-context container, matching `AuCompose._getDefinition`. `au_compose_invalid_run` and `au_compose_duplicate_deactivate` remain unclaimed until composition-controller lifecycle state is modeled.",
+        "Runtime-html else diagnostics are controller link-hook issues, not parser errors. `Else.link(...)` checks the rendering controller's previous child controller; when the previous sibling is not `If`, semantic-runtime maps it to `else_without_if` (`AUR0810`) as a RuntimeControllerIssue.",
+        "Runtime-html switch/case diagnostics are controller link-hook issues, not DOM-shape heuristics. `case` / `default-case` link through the rendering controller's parent switch controller; missing parent switch maps to `switch_invalid_usage` (`AUR0815`), and a second `default-case` linked to the same switch maps to `switch_no_multiple_default` (`AUR0816`).",
+        "Runtime-html promise-result diagnostics are controller link-hook issues. `pending`, `then`, and `catch` link through the rendering controller's parent promise controller; missing parent `promise` maps to `promise_invalid_usage` (`AUR0813`). Keep this in the same RuntimeControllerIssue lane as switch/case rather than treating promise syntax as a parser or DOM-shape diagnostic.",
+        "Runtime-html portal diagnostics are controller activation/property-state issues over the `Portal` template-controller view model, not sibling HTML attribute interpretation. Inline custom-attribute multi-binding is the compiler grammar for secondary portal bindables, so `portal=\"target: ...; position: ...\"` lowers through `MultiBindingValue` and `SetPropertyInstruction` props. Semantic-runtime claims invalid static `position` (`portal_invalid_insert_position` / `AUR0779`), strict empty target (`portal_query_empty` / `AUR0811`), and strict missing target (`portal_no_target` / `AUR0812`) as `RuntimeControllerIssue` rows; target existence beyond empty/missing static inputs remains DOM/query-runtime state.",
+        "Runtime-html invalid diagnostics are also split by owner. Bindable decorator misuse (`AUR0227`, `AUR0229`), `invalid_process_content_hook` (`AUR0766`), `children_invalid_query` (`AUR9989`), and `slotted_decorator_invalid_usage` (`AUR9990`) are resource convergence issues because the framework source throws from decorator/source metadata paths. Runtime `computed_not_getter` (`AUR0228`) is an observation source issue from `@computed(...)` call-form decorators on non-getter/non-method targets; bare `@computed` stays tied to the direct method overload until source-proved otherwise. `children_decorator_invalid_usage` (`AUR9991`) is dormant in current framework source. `invalid_platform_impl` (`AUR0769`) and `invalid_dispose_call` (`AUR0771`) remain unclaimed until app-root platform host state and Aurelia instance lifecycle state are modeled.",
+        "Runtime-html binding-behavior diagnostics are bind-time pressure, not generic template syntax. As of 2026-05-13 semantic-runtime claims `self_behavior_invalid_usage` / `AUR0801`, `update_trigger_behavior_no_triggers` / `AUR0802`, `update_trigger_invalid_usage` / `AUR0803`, `signal_behavior_invalid_usage` / `AUR0817`, `signal_behavior_no_signals` / `AUR0818`, `update_trigger_behavior_node_property_not_observable` / `AUR9992`, `attr_behavior_invalid_binding` / `AUR9994`, `binding_already_has_target_subscriber` / `AUR9995`, and `binding_already_has_rate_limited` / `AUR9996` through `RuntimeBindingBehaviorIssue` after rendered bindings, compiler resource scope, and `Controller.bind` target-access facts exist. `AUR9995` is owned by direct bind-method `PropertyBinding.useTargetSubscriber(...)` effects on visible custom binding-behavior resources, not by template syntax guessing. `update_trigger_behavior_not_supported` / `AUR9993` stays unclaimed until non-default `INodeObserverLocator` service replacement is modeled; `binding_behavior_def_not_found` and `binding_behavior_existed` stay in resource-definition/registration catalog semantics.",
+        "Runtime-html value-converter diagnostics are invocation pressure, not generic expression syntax. As of 2026-05-13 semantic-runtime claims `method_not_implemented` / `AUR0099` only for `SanitizeValueConverter.toView(...)` when the `sanitize` value converter is visible and the active container tree has no modeled `ISanitizer` resolver. App-provided `ISanitizer` registrations suppress the issue. The sibling runtime-html `method_not_implemented` usages in `ChildrenBinding.get(...)` and `AuSlotWatcherBinding.get(...)` remain runtime observer/projection stubs and should stay unclaimed until a product path needs them.",
+        "Router Event diagnostics should stay in router-owned products, not recognizer or template rows. As of 2026-05-13 semantic-runtime claims `exprUnexpectedKind` / `AUR3502` through `RouterIssue` products when RouteTree redirect-parameter migration sees a RouteExpression node kind other than Segment or slash-scoped Segment.",
+        "Runtime-html renderer-dispatch diagnostics belong in `RuntimeRendererIssue` when framework renderers reject instruction input before a binding/controller exists. As of 2026-05-13 semantic-runtime claims `not_supported_view_ref_api` / `AUR0750` because `RefBindingRenderer` calls `getRefTarget(...)` and rejects `view.ref` before creating a `RefBinding`; it claims `ref_not_found` / `AUR0751` when a custom-element host exists but the named target matches neither same-node custom attributes nor the element controller name; it claims `node_is_not_a_host` / `AUR0762` for controller/component refs on ordinary elements and `node_is_not_a_host2` / `AUR0763` for named custom-element fallback on ordinary elements; it also claims `spreading_invalid_target` / `AUR0820` because `SpreadValueRenderer.render` rejects non-`$bindables` targets before creating a binding.",
+        "Runtime-html ViewFactoryProvider diagnostics split by activation context. As of 2026-05-13 semantic-runtime claims `view_factory_provider_not_ready` / `AUR0755` as a `RuntimeControllerIssue` when an ordinary custom element/custom attribute view model has an instance-activation `resolve(IViewFactory)` site; template controllers are exempt because the renderer passes a prepared view factory. `view_factory_invalid_name` / `AUR0756` remains unclaimed until a source/AOT path can produce a prepared factory with an empty or non-string name.",
+        "Runtime-html spread diagnostics split by framework owner. As of 2026-05-13 semantic-runtime claims `no_spread_scope_context_found` / `AUR9999` and `no_spread_template_controller` / `AUR9998` through `RuntimeBindingIssue` on the modeled `SpreadBinding.create` / `SpreadBinding.addChild` paths. `spreading_bindable_onto_non_component` / `AUR0819` is declared but dormant in current framework source, and `no_composition_root` / `AUR0770` remains unclaimed until `Aurelia.start(...)` app-root lifecycle state is modeled explicitly.",
+        "Template-compiler failures should spend exact framework authority through semantic-runtime compiler issue products. Compiler-world service registration claims duplicate attribute patterns (`attribute_pattern_duplicate` / `AUR0089`) and duplicate binding commands (`binding_command_existed` / `AUR0157`, warning severity). Attribute classification bridges `compiler_no_reserved_spread_syntax` / `AUR0720` and `compiler_no_reserved_$bindable` / `AUR0721`; binding-command lowering bridges custom-attribute non-bindable segment failures (`compiler_binding_to_non_bindable` / `AUR0707`) and invalid class-binding syntax (`compiler_invalid_class_binding_syntax` / `AUR0723`); compiled-template assembly bridges root surrogate invalid attributes (`compiler_invalid_surrogate_attr` / `AUR0702`), template controllers on surrogates (`compiler_no_tc_on_surrogate` / `AUR0703`), projection on non-custom elements (`compiler_au_slot_on_non_element` / `AUR0706`), `<slot>` without shadow DOM (`compiler_slot_without_shadowdom` / `AUR0717`), invalid `<let>` commands (`compiler_invalid_let_command` / `AUR0704`), local-template shape failures (`AUR0701`, `AUR0708`, `AUR0709`, `AUR0710`, `AUR0711`, `AUR0712`, `AUR0715`, `AUR0716`), and dynamic spread template-controller rejection (`no_spread_template_controller` / `AUR9998`) through the runtime spread compile host. Diagnostics should read those issue products instead of re-inferring from wording or source scans.",
+        "Runtime-html AttrMapper duplicate mappings are configuration/service-customization issues. As of 2026-05-13 semantic-runtime claims `compiler_attr_mapper_duplicate_mapping` / `AUR0719` through `ConfigurationIssue` products when AppTask-time `AttrMapper.useMapping(...)` or `useGlobalMapping(...)` repeats an exact framework service key, including constructor built-ins. Keep valid mappings in compiler-world `IAttrMapper` state.",
+        "Runtime-html `node*` failures are intentionally split by owner. As of 2026-05-13 `node_observer_mapping_existed` / `AUR0653` is claimed through configuration `ConfigurationIssue` products, and `node_observer_strategy_not_found` / `AUR0652` is claimed through observation target-access products and template diagnostics only for the exact dirty-check-disabled observer lookup path. Host-node controller errors remain unclaimed until controller topology semantics model those framework paths.",
+        "New semantic-runtime diagnostics can still be valid, but record whether they are framework-runtime behavior, framework-error-code authority, or product authoring policy."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "summary",
+          "summary": "Framework error/event code definitions, mapped messages, usage mechanisms, raw Error construction, duplicate AUR-label counts, semantic-runtime AUR-label links, and gap rollups."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "families",
+          "summary": "Grouped framework error-code families by package, enum, and member prefix for choosing diagnostic substrate work."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-frontiers",
+          "summary": "Framework diagnostic frontiers joined to semantic-runtime exact AUR-link coverage and raw authority pressure."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "summary": "Code-level framework diagnostic intake rows with modeled/unmodeled/dormant/raw/link-broken disposition."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "semantic-references",
+          "summary": "Semantic-runtime AUR-label links back to exact framework package, enum, and member authority."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:framework-errors",
+          "summary": "Compact pressure lane for framework diagnostic authority and error-code completeness."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-error-analysis.ts",
+          "symbolName": "readFrameworkErrorAnalysis",
+          "summary": "Source-backed framework error/event code analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-error-lenses.ts",
+          "symbolName": "answerFrameworkErrors",
+          "summary": "Atlas framework.errors lens answerer and source continuations."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "Semantic-runtime diagnostic authority boundary."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/WORKBENCH.md",
+          "summary": "Cursor/file diagnostic pressure notes and framework-grounding reminders."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/framework-error-code.ts",
+          "symbolName": "ExpressionFrameworkErrorCode",
+          "summary": "Semantic-runtime expression parser bridge to exact Aurelia framework parser package/enum/member error labels."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-error-analysis.ts",
+          "symbolName": "readFrameworkErrorAnalysis"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-error-lenses.ts",
+          "symbolName": "answerFrameworkErrors"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/scripts/framework-errors-pressure.ts"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "frontier:atlas-work-router",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "work-router",
+        "memory",
+        "inquiry",
+        "authoring",
+        "fixtures"
+      ],
+      "summary": "Atlas work routing is a live substrate for turning broad intent into typed route plans over memory, source anchors, framework corpus seeds, and explicit cautions.",
+      "rationale": "The Work Router run introduced atlas.work-router so future autonomous sessions can ask for structural route plans instead of relying on fuzzy search or long markdown notes. It should stay self-improving: weak-text matches, stale source anchors, broad fixture seeds, or missing route continuations are router substrate pressure.",
+      "guidance": [
+        "Start with `pnpm --filter @aurelia-ls/atlas work:router -- --domain <domain> --detail` or an exact `--routeId`/`--route` before opening broad workbench notes.",
+        "Use exact route filters, domains, roles, lens ids, auLink ids, source paths, symbols, framework corpus concepts, expected effect kinds, recipe keys, and seed-use lanes before `query`.",
+        "Use Work Router for broad cross-subsystem questions such as `ProxyObservable ComputedObserver astEvaluate`; direct framework lens `query` filters are intentionally narrow/conjunctive unless a future projection explicitly exposes ranked partial coverage.",
+        "Route domain filters match declared route domains and route-owned memory-anchor domains. Memory-anchor domains are join/filter evidence, not free query vocabulary; if a memory domain such as `evaluation` misses a route, fix the route catalog or memory anchor instead of adding a fuzzy synonym layer.",
+        "Route query scoring first prefers exact route-owned vocabulary. A distinctive multi-token route term, source symbol, source anchor, or canary phrase may be contained inside a larger natural-language query; single-token fragments are not enough by themselves. Structural route domains/roles/terms can still cover composite queries as a same-route set, but weak prose matches cannot use set coverage. If a route-critical query misses, add or refine declared route vocabulary rather than relying on broad prose.",
+        "Treat `weak-text` matches as an open seam: add a declared route term, source anchor, lens anchor, auLink id, or corpus concept if the route should be reliable. Add a memory domain only when the gap is route-memory coverage or an explicit domain filter.",
+        "Keep Atlas memory as the durable store for work state. The router should join memory and expose typed plans, not become a second task database.",
+        "Generic route lens anchors are navigation hints, not memory ownership evidence. Lens anchors only join memory structurally when they carry filters that match the memory lens anchor; otherwise use source, exact memory-domain, auLink, script, or doc anchors.",
+        "If `memory:next` surfaces a proactive frontier that no work route can reach structurally, add or refine a route before doing product work. The TypeChecker expression semantics route was added this way for CheckerExpressionTypeEvaluator, CheckerExpressionTypeWorld, member-owner projection, template-control-flow context, and binding source-slot checker handoff.",
+        "Use `--projection=memory-coverage --detail` to reverse the join from memory-next actions back to work routes. Without a route filter, unrouted high-rank rows are route ontology pressure; with `--routeId`, coverage is scoped to rows structurally matched to that route and sorted by route-match score before generic memory rank.",
+        "Use `--projection=coverage` when a semantic-runtime primitive appears asymmetric across route families. Coverage dimensions should turn cross-cutting incompleteness into route-local states such as missing, partial, covered, or not-applicable, so future sessions can discover the gap from adjacent loci instead of by grep. Current dimensions cover intent-aware continuations, query-claim lifetime, authored source-text boundaries, and checker value-access helper reuse.",
+        "When a new primitive is not threaded through all relevant query families, add a named coverage dimension only after identifying the substrate owner route and the route-local consumer obligations. Do not use coverage as a vague todo bucket.",
+        "Bare `--projection=route-plan --detail` is allowed as a fresh-checkpoint selector: with no filters it ranks route plans from live `memory:next` pressure and live product/source pressure using exact route memory/source/auLink/source-anchor overlap before catalog order. Product pressure is structural source ownership from product.architecture or atlas.self rows, not prose matching; symbol-qualified source anchors rank named declaration/class/function/variable rows instead of inheriting broad file/module pressure, and Atlas catalog/contract/barrel module shapes are damped so static catalog size stays visible without acting like implementation pressure. Source-anchor roles still weight live product/source pressure so supporting catalog/context anchors cannot dominate primary owners merely by being large. Shared generic lens anchors such as product.architecture are not enough to route memory pressure by themselves.",
+        "Route memory-domain anchors need either an exact domain-set match or at least two non-generic domain overlaps. Generic carriers such as `semantic-runtime`, `atlas`, `template`, `memory`, `inquiry`, and `analysis-substrate` are not enough by themselves; if a row only routes through those, add a sharper route/source/memory anchor instead of loosening scoring. Do not let memory-anchor domains double as query terms, because that makes joins look like fuzzy route vocabulary.",
+        "Use `--projection=workset` when a dirty worktree is the canary. It groups current changed files by route source/doc/path anchors, route-owned memory source/doc/fixture/live-check anchors, and memory shards so checkpoints can continue from route-shaped pressure instead of raw git status.",
+        "Workset detail is a dirty-file grouping view by default. Use `--fileRows=...` to widen per-route file samples and `--includePlans` only when route authority, memory, and corpus plans are worth the additional context.",
+        "Workset-matched routes should carry `workset-structural` match strength and changed-file evidence in `matchedBy`; if workset output falls back to catalog-default for dirty-file rows, fix the router substrate before trusting the checkpoint.",
+        "Use `--projection=next --detail` or `--projection=route-plan --detail` when selecting the next thread. `next` is the checkpoint-friendly route-plan alias for \"what should I do next?\" prompts; both print route authority lanes, memory-next summaries, query-canary counts, cautions, and multiple next questions. If those rows are still not enough to act, improve the route plan before opening broad markdown.",
+        "Work Router projection ids are intentionally exact. If a human-oriented script receives an unsupported projection, it should print the reroute answer, supported projection ids from LensCatalog, and typed continuations instead of throwing a stack trace or adding a fuzzy alias.",
+        "Route-plan memory previews are query-aware after structural admission: route source, structurally filtered lens, doc, script, auLink, and memory-domain anchors decide which records/actions are eligible, then the active query reorders the admitted memory rows. Path anchors are for workset grouping, not durable memory ownership. If a pressure phrase routes correctly but previews the wrong frontier, first make the durable memory record carry exact source anchors or product vocabulary before changing route matching.",
+        "When route plans show stale source anchors or broad fixture seeds, fix the route catalog, route filters, corpus ranking, or fixture-seed classification reasons before using the route to drive product work.",
+        "Route-owned framework-corpus anchors can carry exact classification and expected-effect filters. Use those for precise fixture pressure such as `surface:native-checked-binding` or `surface:option-model-binding`, and keep route-plan fixture seeds diversified by specific anchors so broad concept rows do not crowd out the concrete canaries.",
+        "Framework corpus fixture seeds deliberately exclude `describe(...)` suite wrappers; use `test-snippets` when a suite overview is useful, and use fixture seeds for concrete `it(...)`, `createFixture(...)`, object-test-case, or doc-fence pressure with tighter source spans.",
+        "Framework corpus classification matching is shared through `framework-corpus-classification.ts`; route anchors and corpus filters must spend that helper so exact `classificationKind` / `classificationKey` behavior cannot drift.",
+        "Framework corpus surface-reason generation is table-shaped in `framework-corpus-analysis.ts`; add new local surface rules to the named rule table rather than extending the fixture seed classifier with another long sequence of hand-coded predicate branches.",
+        "Use `--seedUse=authoring-taste` for docs/promoted-pattern fixture pressure and `--seedUse=behavior-grounding` for framework-test behavior pressure; keep both lanes visible instead of blending them into generic fixture examples.",
+        "Framework corpus `concept=expression` is first-class route pressure for TypeChecker expression semantics. If a route can only find expression-heavy examples through generic binding/template concepts, improve corpus classification before using manual query memory.",
+        "Pressure-script labels and compact bucket names are route canaries. If a phrase copied from `pressure:app-api` misses Work Router, add or refine declared route vocabulary, query canaries, or corpus anchors before treating the miss as a product-planning problem."
+      ],
+      "nextActionPolicy": "proactive",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-route-catalog.ts",
+          "symbolName": "ATLAS_WORK_ROUTES",
+          "summary": "Typed static route catalog and route definitions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-lenses.ts",
+          "symbolName": "answerAtlasWorkRouter",
+          "summary": "Lens implementation that joins routes to memory, product architecture, and framework corpus pressure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-classification.ts",
+          "symbolName": "frameworkCorpusFixtureSeedMatchesClassification",
+          "summary": "Shared exact classification matching for corpus filters and work-router corpus anchors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-matching.ts",
+          "symbolName": "scoredRoutesForFilters",
+          "summary": "Route query/filter scoring, exact anchor matching, weak-text suppression, and path matching policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-rows.ts",
+          "summary": "Public Work Router row/value contracts used by the lens and printable CLI surface."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-next-questions.ts",
+          "symbolName": "routeNextQuestions",
+          "summary": "Route-owned follow-up-question policy that turns matched pressure into sharper next inquiries."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "route-plan",
+          "summary": "Live route plan projection for selected structural routes."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "coverage",
+          "summary": "Cross-cutting coverage projection for primitives that need route-local completeness states."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "workset",
+          "summary": "Current worktree projection grouped by route anchors, memory anchors, and memory shards."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas work:router",
+          "summary": "Human-oriented route query script."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-variable",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-route-catalog.ts",
+          "variableName": "ATLAS_WORK_ROUTES",
+          "initializerKind": "array-literal"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-lenses.ts",
+          "symbolName": "answerAtlasWorkRouter"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-classification.ts",
+          "symbolName": "frameworkCorpusFixtureSeedMatchesClassification"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-matching.ts",
+          "symbolName": "scoredRoutesForFilters"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-rows.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/atlas-work-router-next-questions.ts",
+          "symbolName": "routeNextQuestions"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/scripts/atlas-work-router.ts"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-23"
+    }
+  ]
+}

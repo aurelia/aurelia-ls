@@ -1,0 +1,15 @@
+{
+  "name": "generated-localized-state-backed-form",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aurelia/i18n": "^2.0.0-rc.1",
+    "aurelia": "^2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

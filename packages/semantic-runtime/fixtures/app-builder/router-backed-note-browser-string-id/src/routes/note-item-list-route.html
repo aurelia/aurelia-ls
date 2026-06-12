@@ -1,0 +1,10 @@
+<section>
+  <h2>Notes</h2>
+  <p if.bind="state.noteItems.length === 0">No notes yet.</p>
+  <ul else>
+    <li repeat.for="noteItem of state.noteItems">
+      <a load="route: note-item-detail; params.bind: { noteId: noteItem.code }">${noteItem.title}</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>

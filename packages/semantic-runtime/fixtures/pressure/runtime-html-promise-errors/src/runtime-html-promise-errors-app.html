@@ -1,0 +1,9 @@
+<template pending>Orphan pending branch</template>
+<template then="value">Orphan fulfilled branch</template>
+<template catch="error">Orphan rejected branch</template>
+
+<section promise.resolve="task">
+  <template pending>Loading</template>
+  <template then="value">${value}</template>
+  <template catch="error">${error}</template>
+</section>

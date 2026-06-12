@@ -6,6 +6,10 @@
   "main": "./out/index.js",
   "types": "./out/index.d.ts",
   "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    },
     "./*.js": {
       "import": "./out/*.js",
       "types": "./out/*.d.ts"
@@ -18,6 +22,6 @@
     "parse5": "^8.0.0"
   },
   "peerDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }

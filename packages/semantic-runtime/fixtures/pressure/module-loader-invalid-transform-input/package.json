@@ -1,0 +1,9 @@
+{
+  "name": "module-loader-invalid-transform-input",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aurelia/kernel": "latest",
+    "@aurelia/runtime-html": "latest"
+  }
+}

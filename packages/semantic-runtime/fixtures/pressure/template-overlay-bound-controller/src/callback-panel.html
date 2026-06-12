@@ -1,0 +1,10 @@
+<template>
+  <ul>
+    <li repeat.for="action of actions">
+      <button type="button" click.trigger="onAction(action)">
+        ${action.label}
+      </button>
+      <span>${onAction(action) ? action.id : action.label}</span>
+    </li>
+  </ul>
+</template>

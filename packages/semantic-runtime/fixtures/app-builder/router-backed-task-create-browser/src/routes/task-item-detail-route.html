@@ -1,0 +1,10 @@
+<section>
+  <a load="../">Back</a>
+  <article if.bind="taskItem">
+    <section>
+      <h2>${taskItem.title}</h2>
+      <p>Done: ${taskItem.done ? 'Done' : 'Open'}</p>
+    </section>
+  </article>
+  <p else>No task found for this route.</p>
+</section>

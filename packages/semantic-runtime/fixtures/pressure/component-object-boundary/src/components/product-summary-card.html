@@ -1,0 +1,9 @@
+<article if.bind="product">
+  <h2>${product.name}</h2>
+  <p>${product.priceLabel}</p>
+  <p>${product.stockLabel}</p>
+  <button type="button" disabled.bind="!product.inStock">Select</button>
+</article>
+<article else>
+  <p>Loading product...</p>
+</article>

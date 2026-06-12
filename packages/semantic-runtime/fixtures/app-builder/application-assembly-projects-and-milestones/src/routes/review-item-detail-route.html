@@ -1,0 +1,17 @@
+<section>
+  <a load="../">Back</a>
+  <section promise.bind="reviewItemPromise">
+    <p pending>Loading review...</p>
+    <template then="reviewItem">
+      <article if.bind="reviewItem">
+        <section>
+          <h2>${reviewItem.title}</h2>
+          <p>Done: ${reviewItem.done ? 'Done' : 'Open'}</p>
+          <p>Reviewer: ${state.reviewerLabelForReviewItem(reviewItem)}</p>
+        </section>
+      </article>
+      <p else>No review found for this route.</p>
+    </template>
+    <p catch>Could not load review.</p>
+  </section>
+</section>

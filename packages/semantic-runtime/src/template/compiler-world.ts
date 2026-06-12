@@ -1,0 +1,1175 @@
+import { auLink } from '../kernel/au-link.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type {
+  AddressHandle,
+  IdentityHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
+import type { FieldProvenance } from '../kernel/provenance.js';
+import type { AppRootReference } from '../configuration/app-root.js';
+import type { ContainerReference } from '../di/container-reference.js';
+import type { ExpressionType } from '../expression/ast.js';
+import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
+import { ExpressionParser } from '../expression/expression-parser.js';
+import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
+import {
+  BindableBindingMode,
+  BindableDefinition,
+  BindableDefinitionReference,
+  BindableSetterDefinition,
+  BindableSetterKind,
+} from '../resources/bindable-definition.js';
+import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
+import {
+  CustomElementTemplateKind,
+  type CustomElementDefinition,
+} from '../resources/custom-element-definition.js';
+import type {
+  FullResourceDefinition,
+  TemplateCompilableResourceDefinition,
+} from '../resources/resource-definition.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  IteratorBindingInstruction,
+  SpreadElementPropBindingInstruction,
+  type SpreadTransferedBindingInstruction,
+  TemplateInstructionKind,
+  type TemplateInstruction,
+} from './instruction-ir.js';
+import type { AttributeSyntax } from './attribute-syntax.js';
+import {
+  TemplateRenderTarget,
+  TemplateRenderTargetKind,
+  type CompiledTemplate,
+} from './compiled-template.js';
+import type { TemplateInstructionSequence } from './instruction-ir.js';
+import {
+  SpreadBinding,
+  type RuntimeBinding,
+  type RuntimeBindingScopeEffect,
+  type RuntimeTargetOperation,
+} from './runtime-binding.js';
+import {
+  RuntimeRendererAllocation,
+  RuntimeRendererInstructionOwner,
+  RuntimeRendererInvocation,
+  RuntimeRendererSpreadCompileResult,
+  RuntimeRendererSpreadCompileState,
+  type RuntimeRenderer,
+  type RuntimeRendererSpreadCompileRequest,
+  type RuntimeRenderingRun,
+} from './runtime-renderer.js';
+import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
+import type { RuntimeHtmlRendererFrameworkErrorCode } from './framework-error-code.js';
+import type {
+  RuntimeRendererIssueKind,
+  RuntimeRendererIssuePhase,
+} from './runtime-renderer-issue.js';
+import type {
+  RuntimeControllerCreationRequest,
+  RuntimeControllerFrame,
+} from './runtime-controller.js';
+import {
+  AttributeMapperConfiguration,
+  mapAttribute,
+  shouldDefaultToTwoWay,
+  type TemplateAttributeMapperNode,
+} from './attribute-mapper.js';
+import {
+  TemplateBindableReference,
+  TemplateCompilerServiceKind,
+  TemplateCompilerServiceReference,
+  TemplateResourceVisibilityKind,
+  TemplateVisibleResource,
+} from './compiler-world-reference.js';
+
+export const enum TemplateCompilerWorldKind {
+  /** Compiler world for an app root or app-level container. */
+  AppRoot = 'app-root',
+  /** Compiler world for one component template. */
+  Component = 'component',
+  /** Compiler world for a synthetic view or template-controller child template. */
+  SyntheticView = 'synthetic-view',
+  /** Compiler world exists but its owner is still open. */
+  Unknown = 'unknown',
+}
+
+export type TemplateCompilerWorldField =
+  | 'worldKind'
+  | 'appRoot'
+  | 'container'
+  | 'services'
+  | 'resourceScope'
+  | 'source';
+
+/** Reference to a compiler world without expanding scope or service products. */
+export class TemplateCompilerWorldReference {
+  constructor(
+    /** Product handle for the compiler world. */
+    readonly productHandle: ProductHandle,
+    /** Identity for the compiler world. */
+    readonly identityHandle: IdentityHandle,
+    /** Compiler world owner lane. */
+    readonly worldKind: TemplateCompilerWorldKind,
+    /** Container whose DI/resource state feeds compilation. */
+    readonly container: ContainerReference,
+    /** Source address for the world owner. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Reference to a compiler resource scope without expanding all visible resources. */
+export class TemplateResourceScopeReference {
+  constructor(
+    /** Product handle for the resource scope. */
+    readonly productHandle: ProductHandle,
+    /** Identity for the resource scope. */
+    readonly identityHandle: IdentityHandle,
+    /** Container whose resource/factory/resolver state produced the scope. */
+    readonly container: ContainerReference,
+    /** Source address for the scope owner. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+export type TemplateResourceScopeField =
+  | 'container'
+  | 'resources'
+  | 'syntaxResources'
+  | 'source';
+
+export type TemplateCompilerServiceField =
+  | 'serviceKind'
+  | 'container'
+  | 'debug'
+  | 'resolveResources'
+  | 'resources'
+  | 'renderers'
+  | 'source';
+
+export const enum TemplateResourceResolutionKind {
+  /** Lookup closed over a full resource definition. */
+  Definition = 'definition',
+  /** Lookup closed only over a visible header or slot. */
+  HeaderOnly = 'header-only',
+}
+
+/** Runtime IElementBindablesInfo model for custom element definitions. */
+@auLink('template-compiler:IElementBindablesInfo')
+export class TemplateElementBindablesInfo {
+  readonly primary = null;
+
+  constructor(
+    /** Attribute-name lookup entries. */
+    readonly attrs: readonly TemplateBindableReference[],
+    /** Property-name lookup entries. */
+    readonly bindables: readonly TemplateBindableReference[],
+  ) {}
+
+  attr(attribute: string): TemplateBindableReference | null {
+    return this.attrs.find((entry) => entry.definition.attribute === attribute) ?? null;
+  }
+
+  prop(name: string): TemplateBindableReference | null {
+    return this.bindables.find((entry) => entry.definition.name === name) ?? null;
+  }
+}
+
+/** Runtime IAttributeBindablesInfo model for custom attribute and template-controller definitions. */
+@auLink('template-compiler:IAttributeBindablesInfo')
+export class TemplateAttributeBindablesInfo {
+  constructor(
+    /** Attribute-name lookup entries. */
+    readonly attrs: readonly TemplateBindableReference[],
+    /** Property-name lookup entries. */
+    readonly bindables: readonly TemplateBindableReference[],
+    /** Primary bindable selected by defaultProperty, including runtime's implicit default when needed. */
+    readonly primary: TemplateBindableReference,
+  ) {}
+
+  attr(attribute: string): TemplateBindableReference | null {
+    return this.attrs.find((entry) => entry.definition.attribute === attribute) ?? null;
+  }
+
+  prop(name: string): TemplateBindableReference | null {
+    return this.bindables.find((entry) => entry.definition.name === name) ?? null;
+  }
+}
+
+export type TemplateBindablesInfo =
+  | TemplateElementBindablesInfo
+  | TemplateAttributeBindablesInfo;
+
+/** Result of runtime-shaped IResourceResolver lookup inside one compiler world. */
+export class TemplateResolvedResource {
+  constructor(
+    /** Whether the resolver closed over a full definition or only a visible header. */
+    readonly resolutionKind: TemplateResourceResolutionKind,
+    /** Visible resource row that answered the lookup. */
+    readonly resource: TemplateVisibleResource | null,
+    /** Full custom element/custom attribute definition when known. */
+    readonly definition: TemplateCompilableResourceDefinition | null,
+  ) {}
+}
+
+/** Kernel-materialization host used by the runtime Rendering service emulation. */
+export interface TemplateRenderingRunHost {
+  allocate(local: string): RuntimeRendererAllocation;
+
+  createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
+
+  compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult;
+
+  measureRenderingPhase<TValue>(
+    name: string,
+    read: () => TValue,
+  ): TValue;
+
+  recordRendererIssue(
+    local: string,
+    renderer: RuntimeRendererReference,
+    instruction: TemplateInstruction,
+    phase: RuntimeRendererIssuePhase,
+    issueKind: RuntimeRendererIssueKind,
+    message: string,
+    frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): void;
+}
+
+/** Request to the runtime Rendering service dispatch loop. */
+export interface TemplateRenderingRunRequest {
+  /** Store-local key shared with the template compilation pass. */
+  readonly localKey: string;
+  /** Compiled-template product whose rows are being spent by Rendering. */
+  readonly compiledTemplate: CompiledTemplate;
+  /** Render targets paired with their instruction rows. */
+  readonly targets: readonly TemplateRenderingTargetPlan[];
+  /** All compiled instruction products, including nested hydrate props not directly present in target rows. */
+  readonly instructions: readonly TemplateInstruction[];
+  /** Current runtime controller that receives renderer-created bindings. */
+  readonly rootController: RuntimeControllerFrame;
+  /** Provenance to attach to renderer-created binding models. */
+  readonly provenanceHandle: ProvenanceHandle;
+  /** Kernel-materialization operations needed when the runtime render loop creates products. */
+  readonly host: TemplateRenderingRunHost;
+  /** Whether this pass should spend host/surrogate instructions from the compiled template. */
+  readonly renderSurrogate: boolean;
+}
+
+/** One compiled-template row as consumed by runtime Rendering. */
+export interface TemplateRenderingTargetPlan {
+  /** Compiler-produced render target corresponding to one runtime target node. */
+  readonly target: TemplateRenderTarget;
+  /** Instruction sequence paired with the target. */
+  readonly sequence: TemplateInstructionSequence;
+  /** Hydrated instruction products in row order. */
+  readonly instructions: readonly TemplateInstruction[];
+}
+
+/** One instruction that the runtime Rendering service spent through an IRenderer. */
+export class TemplateRenderedInstruction {
+  constructor(
+    readonly local: string,
+    readonly target: TemplateRenderTarget,
+    readonly instruction: TemplateInstruction,
+    readonly renderer: RuntimeRenderer,
+    readonly renderingController: RuntimeControllerFrame,
+    readonly targetController: RuntimeControllerFrame,
+    /** Runtime binding that receives any bindings created by this instruction, such as SpreadBinding's surrogate controller lane. */
+    readonly bindingOwner: RuntimeBinding | null,
+    readonly bindings: readonly RuntimeBinding[],
+    readonly scopeEffects: readonly RuntimeBindingScopeEffect[],
+    readonly createdControllers: readonly RuntimeControllerFrame[],
+    readonly targetOperations: readonly RuntimeTargetOperation[],
+  ) {}
+}
+
+/** Runtime Rendering dispatch pressure that could not close over a concrete renderer/input. */
+export class TemplateRenderingOpenInstruction {
+  constructor(
+    readonly local: string,
+    readonly summary: string,
+    readonly addressHandle: AddressHandle | null,
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+  ) {}
+}
+
+/** Result of emulating the runtime Rendering.render loop over lowered instruction products. */
+export class TemplateRenderingRunResult {
+  get bindings(): readonly RuntimeBinding[] {
+    return this.renderedInstructions.flatMap((rendered) => rendered.bindings);
+  }
+
+  get scopeEffects(): readonly RuntimeBindingScopeEffect[] {
+    return this.renderedInstructions.flatMap((rendered) => rendered.scopeEffects);
+  }
+
+  get targetOperations(): readonly RuntimeTargetOperation[] {
+    return this.renderedInstructions.flatMap((rendered) => rendered.targetOperations);
+  }
+
+  get controllers(): readonly RuntimeControllerFrame[] {
+    const seen = new Set<ProductHandle>();
+    const controllers: RuntimeControllerFrame[] = [];
+    const push = (controller: RuntimeControllerFrame): void => {
+      if (seen.has(controller.productHandle)) {
+        return;
+      }
+      seen.add(controller.productHandle);
+      controllers.push(controller);
+    };
+    push(this.rootController);
+    for (const rendered of this.renderedInstructions) {
+      push(rendered.renderingController);
+      push(rendered.targetController);
+      for (const child of rendered.createdControllers) {
+        push(child);
+      }
+    }
+    return controllers;
+  }
+
+  constructor(
+    readonly rootController: RuntimeControllerFrame,
+    readonly renderedInstructions: readonly TemplateRenderedInstruction[],
+    readonly openInstructions: readonly TemplateRenderingOpenInstruction[],
+  ) {}
+}
+
+export const enum TemplateCompilerCompileState {
+  /** Runtime compile short-circuited because the definition has no authored template. */
+  NoTemplate = 'no-template',
+  /** Runtime compile short-circuited because the definition is already compiled. */
+  AlreadyCompiled = 'already-compiled',
+  /** Runtime compile entered the compiler host. */
+  Compiled = 'compiled',
+}
+
+/** Runtime-shaped TemplateCompiler.compile request. */
+export class TemplateCompilerCompileRequest {
+  constructor(
+    /** Store-local key shared by the caller and product materializers. */
+    readonly localKey: string,
+    /** Custom element definition being compiled. */
+    readonly definition: CustomElementDefinition,
+  ) {}
+}
+
+/** Product host that performs substrate-specific work after TemplateCompiler.compile admits a definition. */
+export interface TemplateCompilerCompileHost<TResult> {
+  compile(request: TemplateCompilerCompileRequest, compiler: TemplateCompilerService): TResult;
+}
+
+/** Runtime-shaped TemplateCompiler.compile result with the short-circuit branch preserved. */
+export class TemplateCompilerCompileResult<TResult> {
+  constructor(
+    /** Branch selected by the runtime compile front door. */
+    readonly state: TemplateCompilerCompileState,
+    /** Definition supplied to the compiler. */
+    readonly definition: CustomElementDefinition,
+    /** Host product emitted by the compiler branch, when any. */
+    readonly output: TResult | null,
+  ) {}
+}
+
+export const enum TemplateCompilerSpreadCompileState {
+  /** Runtime spread compile short-circuited because there are no captured attributes. */
+  NoCapturedAttributes = 'no-captured-attributes',
+  /** Runtime spread compile produced dynamic instruction products. */
+  Compiled = 'compiled',
+  /** Runtime spread compile is recognized but still open in the semantic model. */
+  Open = 'open',
+}
+
+/** Runtime-shaped TemplateCompiler.compileSpread request. */
+export class TemplateCompilerSpreadCompileRequest {
+  constructor(
+    /** Store-local key shared by rendering and compiler products. */
+    readonly localKey: string,
+    /** Product handle for the controller definition that owns the captured attributes. */
+    readonly requestorDefinitionProductHandle: ProductHandle | null,
+    /** Captured attribute syntaxes from the current hydration context. */
+    readonly capturedSyntaxes: readonly AttributeSyntax[],
+    /** Spread-transfer instruction that triggered dynamic compilation. */
+    readonly spreadInstruction: SpreadTransferedBindingInstruction,
+    /** Render target receiving the spread attributes. */
+    readonly target: TemplateRenderTarget,
+    /** Optional target custom-element definition product, matching runtime's targetDef parameter. */
+    readonly targetDefinitionProductHandle: ProductHandle | null,
+  ) {}
+}
+
+/** Product host that performs the substrate-specific part of TemplateCompiler.compileSpread. */
+export interface TemplateCompilerSpreadCompileHost {
+  compileSpread(
+    request: TemplateCompilerSpreadCompileRequest,
+    compiler: TemplateCompilerService,
+  ): TemplateCompilerSpreadCompileResult;
+}
+
+/** Runtime-shaped TemplateCompiler.compileSpread result. */
+export class TemplateCompilerSpreadCompileResult {
+  constructor(
+    readonly state: TemplateCompilerSpreadCompileState,
+    readonly request: TemplateCompilerSpreadCompileRequest,
+    /** Root dynamic instructions returned by TemplateCompiler.compileSpread. */
+    readonly instructions: readonly TemplateInstruction[],
+    /** Every dynamic instruction allocated during spread compilation, including wrapped inner instructions. */
+    readonly createdInstructions: readonly TemplateInstruction[],
+    readonly summary: string | null,
+  ) {}
+
+  static noCapturedAttributes(request: TemplateCompilerSpreadCompileRequest): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.NoCapturedAttributes,
+      request,
+      [],
+      [],
+      null,
+    );
+  }
+
+  static open(
+    request: TemplateCompilerSpreadCompileRequest,
+    summary: string,
+  ): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.Open,
+      request,
+      [],
+      [],
+      summary,
+    );
+  }
+
+  static compiled(
+    request: TemplateCompilerSpreadCompileRequest,
+    instructions: readonly TemplateInstruction[],
+    createdInstructions: readonly TemplateInstruction[],
+  ): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.Compiled,
+      request,
+      instructions,
+      createdInstructions,
+      null,
+    );
+  }
+}
+
+/** Resource and syntax-resource scope visible to a template compiler world. */
+export class TemplateResourceScope {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this scope. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this modeled resource scope. */
+    readonly identityHandle: IdentityHandle,
+    /** Container whose resource/factory/resolver state produced the scope. */
+    readonly container: ContainerReference,
+    /** Custom elements, custom attributes, template controllers, value converters, binding behaviors, and commands. */
+    readonly resources: readonly TemplateVisibleResource[],
+    /** Attribute patterns and other parser syntax resources available to the compiler. */
+    readonly syntaxResources: readonly TemplateVisibleResource[],
+    /** Source address for the scope owner. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateResourceScopeField>[] = [],
+  ) {}
+
+  toReference(): TemplateResourceScopeReference {
+    return new TemplateResourceScopeReference(
+      this.productHandle,
+      this.identityHandle,
+      this.container,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime ResourceResolver/IResourceResolver service as a product model. */
+@auLink('runtime-html:ResourceResolver')
+export class TemplateResourceResolverService {
+  private readonly _elementCache = new Map<string, TemplateResolvedResource | null>();
+  private readonly _attributeCache = new Map<string, TemplateResolvedResource | null>();
+  private readonly _bindableCache = new WeakMap<TemplateCompilableResourceDefinition, TemplateBindablesInfo>();
+
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used by resolver lookups. */
+    readonly container: ContainerReference,
+    /** Resource rows visible to this resolver through the current compiler world. */
+    readonly resources: readonly TemplateVisibleResource[],
+    /** Source address for the resolver registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  /** Runtime `IResourceResolver.el(container, name)` shape with the container already fixed by this world. */
+  el(name: string): TemplateResolvedResource | null {
+    const key = name.toLowerCase();
+    if (this._elementCache.has(key)) {
+      return this._elementCache.get(key) ?? null;
+    }
+    const resource = this.resources.find((candidate) =>
+      candidate.resourceKind === ResourceDefinitionKind.CustomElement
+      && matchesVisibleResourceName(candidate, key)
+    ) ?? null;
+    const result = resource == null ? null : resolvedResource(resource);
+    this._elementCache.set(key, result);
+    return result;
+  }
+
+  /** Runtime `IResourceResolver.attr(container, name)` shape with the container already fixed by this world. */
+  attr(name: string): TemplateResolvedResource | null {
+    const key = name.toLowerCase();
+    if (this._attributeCache.has(key)) {
+      return this._attributeCache.get(key) ?? null;
+    }
+    const resource = this.resources.find((candidate) =>
+      (candidate.resourceKind === ResourceDefinitionKind.CustomAttribute
+        || candidate.resourceKind === ResourceDefinitionKind.TemplateController)
+      && matchesVisibleResourceName(candidate, key)
+    ) ?? null;
+    const result = resource == null ? null : resolvedResource(resource);
+    this._attributeCache.set(key, result);
+    return result;
+  }
+
+  bindables(definition: CustomElementDefinition): TemplateElementBindablesInfo;
+  bindables(definition: CustomAttributeDefinition): TemplateAttributeBindablesInfo;
+  bindables(definition: TemplateCompilableResourceDefinition): TemplateBindablesInfo {
+    const cached = this._bindableCache.get(definition);
+    if (cached != null) {
+      return cached;
+    }
+    const info = definition.type === ResourceDefinitionKind.CustomElement
+      ? new TemplateElementBindablesInfo(
+        bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+        bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+      )
+      : attributeBindablesInfo(definition);
+    this._bindableCache.set(definition, info);
+    return info;
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.ResourceResolver,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime IExpressionParser service model used through the compiler-world parser contract. */
+@auLink('expression-parser:IExpressionParser')
+export class TemplateExpressionParserService {
+  private readonly parser = new ExpressionParser();
+
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve the parser service. */
+    readonly container: ContainerReference,
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  parse(expression: string, context?: ExpressionParseContext): ExpressionParseResult;
+  parse(expression: string, expressionType: ExpressionType, context?: ExpressionParseContext): ExpressionParseResult;
+  parse(
+    expression: string,
+    expressionTypeOrContext?: ExpressionType | ExpressionParseContext,
+    maybeContext?: ExpressionParseContext,
+  ): ExpressionParseResult {
+    return typeof expressionTypeOrContext === 'string'
+      ? this.parser.parse(expression, expressionTypeOrContext, maybeContext)
+      : this.parser.parse(expression, expressionTypeOrContext);
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.ExpressionParser,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime AttrMapper service model used through the compiler-world mapper contract. */
+@auLink('runtime-html:AttrMapper')
+export class TemplateAttributeMapperService {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve the mapper service. */
+    readonly container: ContainerReference,
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** App-authored AttrMapper service state recognized from configuration AppTasks. */
+    readonly configuration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  /** Runtime `IAttrMapper.map(node, attr)` shape over product-authored HTML nodes. */
+  map(node: TemplateAttributeMapperNode, attr: string): string | null {
+    return mapAttribute(node, attr)
+      ?? this.configuration.map(node, attr);
+  }
+
+  /** Runtime `IAttrMapper.isTwoWay(node, attrName)` shape over product-authored HTML nodes. */
+  isTwoWay(node: TemplateAttributeMapperNode, attrName: string): boolean {
+    return shouldDefaultToTwoWay(node, attrName)
+      || this.configuration.isTwoWay(node, attrName);
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.AttributeMapper,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime Rendering service model used to select instruction renderers. */
+@auLink('runtime-html:Rendering')
+export class TemplateRenderingService {
+  private readonly _rendererByInstructionKind = new Map<TemplateInstructionKind, RuntimeRenderer>();
+
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve the rendering service. */
+    readonly container: ContainerReference,
+    /** Runtime renderers visible through the current compiler-world container/configuration. */
+    readonly renderers: readonly RuntimeRenderer[],
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {
+    for (const renderer of renderers) {
+      if (!this._rendererByInstructionKind.has(renderer.targetInstructionKind)) {
+        this._rendererByInstructionKind.set(renderer.targetInstructionKind, renderer);
+      }
+    }
+  }
+
+  rendererForInstructionKind(kind: TemplateInstructionKind): RuntimeRenderer | null {
+    return this._rendererByInstructionKind.get(kind) ?? null;
+  }
+
+  rendererReferenceForInstructionKind(kind: TemplateInstructionKind): RuntimeRendererReference | null {
+    return this.rendererForInstructionKind(kind)?.toReference() ?? null;
+  }
+
+  /** Runtime `Rendering.render(...)` dispatch loop over already-lowered instruction products. */
+  render(input: TemplateRenderingRunRequest): TemplateRenderingRunResult {
+    return new TemplateRenderingRun(this, input).render();
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.Rendering,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+
+}
+
+class TemplateRenderingRun implements RuntimeRenderingRun {
+  readonly provenanceHandle: ProvenanceHandle;
+
+  private readonly renderedInstructions: TemplateRenderedInstruction[] = [];
+  private readonly openInstructions: TemplateRenderingOpenInstruction[] = [];
+  private readonly instructionsByProduct: Map<ProductHandle, TemplateInstruction>;
+  private readonly nestedInstructionProductHandles: ReadonlySet<ProductHandle>;
+  private readonly consumed = new Set<ProductHandle>();
+
+  constructor(
+    private readonly rendering: TemplateRenderingService,
+    private readonly input: TemplateRenderingRunRequest,
+  ) {
+    this.provenanceHandle = input.provenanceHandle;
+    const index = this.measure('render-dispatch:instruction-index', () =>
+      renderingInstructionIndex(input.instructions)
+    );
+    this.instructionsByProduct = index.instructionsByProduct;
+    this.nestedInstructionProductHandles = index.nestedInstructionProductHandles;
+  }
+
+  render(): TemplateRenderingRunResult {
+    this.measure('render-dispatch:surrogate', () => this.renderSurrogateInstructions());
+    this.measure('render-dispatch:targets', () => this.renderTargetInstructions());
+    return this.measure('render-dispatch:result', () => new TemplateRenderingRunResult(
+      this.input.rootController,
+      this.renderedInstructions,
+      this.openInstructions,
+    ));
+  }
+
+  private renderSurrogateInstructions(): void {
+    const surrogateSequence = this.input.compiledTemplate.surrogateSequence;
+    if (this.input.renderSurrogate && surrogateSequence != null) {
+      const surrogateTarget = new TemplateRenderTarget(
+        this.input.compiledTemplate.productHandle,
+        this.input.compiledTemplate.identityHandle,
+        TemplateRenderTargetKind.Surrogate,
+        null,
+        surrogateSequence.productHandle,
+        surrogateSequence.sourceAddressHandle,
+        [],
+      );
+      const surrogateSequenceInstructions = this.instructionsForSequence(surrogateSequence);
+      surrogateSequence.instructions.forEach((reference, instructionIndex) => {
+        const instruction = reference.productHandle == null
+          ? null
+          : this.readInstruction(reference.productHandle);
+        if (instruction == null) {
+          this.openInstructions.push(new TemplateRenderingOpenInstruction(
+            `${this.input.localKey}:surrogate:instruction:${instructionIndex}:missing-instruction`,
+            `Surrogate instruction reference '${reference.productHandle ?? '(null)'}' could not be hydrated for runtime Rendering.`,
+            reference.addressHandle,
+          ));
+          return;
+        }
+        if (this.consumed.has(instruction.productHandle)) {
+          return;
+        }
+        if (this.nestedInstructionProductHandles.has(instruction.productHandle)) {
+          return;
+        }
+        this.consumeInstruction(instruction.productHandle);
+        this.renderInstruction(
+          `${this.input.localKey}:surrogate:instruction:${instructionIndex}`,
+          instruction,
+          null,
+          this.input.rootController,
+          this.input.rootController,
+          surrogateTarget,
+          null,
+          undefined,
+          surrogateSequenceInstructions,
+        );
+      });
+    }
+  }
+
+  private renderTargetInstructions(): void {
+    this.input.targets.forEach((target, targetIndex) => {
+      target.instructions.forEach((instruction, instructionIndex) => {
+        if (this.consumed.has(instruction.productHandle)) {
+          return;
+        }
+        if (this.nestedInstructionProductHandles.has(instruction.productHandle)) {
+          return;
+        }
+        this.consumeInstruction(instruction.productHandle);
+        this.renderInstruction(
+          `${this.input.localKey}:target:${targetIndex}:instruction:${instructionIndex}`,
+          instruction,
+          null,
+          this.input.rootController,
+          this.input.rootController,
+          target.target,
+          null,
+          undefined,
+          target.instructions,
+        );
+      });
+    });
+  }
+
+  allocate(local: string): RuntimeRendererAllocation {
+    return this.input.host.allocate(local);
+  }
+
+  createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null {
+    return this.measure('render-dispatch:create-child-controller', () =>
+      this.input.host.createChildController(input)
+    );
+  }
+
+  compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult {
+    const result = this.measure('render-dispatch:compile-spread', () =>
+      this.input.host.compileSpread(input)
+    );
+    if (result.state === RuntimeRendererSpreadCompileState.Compiled) {
+      for (const instruction of result.createdInstructions) {
+        this.instructionsByProduct.set(instruction.productHandle, instruction);
+      }
+    }
+    return result;
+  }
+
+  recordOpenInstruction(
+    local: string,
+    summary: string,
+    addressHandle: AddressHandle | null,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
+  ): void {
+    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, summary, addressHandle, reasonKinds));
+  }
+
+  recordRendererIssue(
+    local: string,
+    renderer: RuntimeRendererReference,
+    instruction: TemplateInstruction,
+    phase: RuntimeRendererIssuePhase,
+    issueKind: RuntimeRendererIssueKind,
+    message: string,
+    frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): void {
+    this.input.host.recordRendererIssue(
+      local,
+      renderer,
+      instruction,
+      phase,
+      issueKind,
+      message,
+      frameworkErrorCode,
+      sourceAddressHandle,
+    );
+  }
+
+  readInstruction(productHandle: ProductHandle): TemplateInstruction | null {
+    return this.instructionsByProduct.get(productHandle) ?? null;
+  }
+
+  consumeInstruction(productHandle: ProductHandle): void {
+    this.consumed.add(productHandle);
+  }
+
+  renderInstruction(
+    local: string,
+    instruction: TemplateInstruction,
+    owner: RuntimeRendererInstructionOwner | null,
+    renderingController: RuntimeControllerFrame,
+    targetController: RuntimeControllerFrame,
+    target = this.defaultTarget(),
+    bindingOwner: RuntimeBinding | null = null,
+    hydrationContextController: RuntimeControllerFrame | null = targetController,
+    targetInstructions: readonly TemplateInstruction[] = [instruction],
+  ): void {
+    if (instruction instanceof SpreadElementPropBindingInstruction) {
+      const wrappedInstruction = this.readInstruction(instruction.instructionProductHandle);
+      if (wrappedInstruction == null || wrappedInstruction === instruction) {
+        this.openInstructions.push(new TemplateRenderingOpenInstruction(
+          `${local}:missing-spread-element-prop-instruction`,
+          `Spread element prop instruction '${instruction.productHandle}' references an inner instruction that is not present in the lowering emission.`,
+          instruction.sourceAddressHandle,
+        ));
+        return;
+      }
+      this.consumeInstruction(wrappedInstruction.productHandle);
+      this.renderInstruction(
+        `${local}:spread-element-prop`,
+        wrappedInstruction,
+        owner,
+        renderingController,
+        targetController,
+        target,
+        bindingOwner,
+        hydrationContextController,
+        targetInstructions,
+      );
+      return;
+    }
+
+    const renderer = owner?.rendererOverride ?? this.rendering.rendererForInstructionKind(instruction.instructionKind);
+    if (renderer == null || renderer.productHandle == null) {
+      this.openInstructions.push(new TemplateRenderingOpenInstruction(
+        `${local}:missing-renderer`,
+        `No configured runtime renderer was available for instruction kind '${instruction.instructionKind}'.`,
+        instruction.sourceAddressHandle,
+      ));
+      return;
+    }
+
+    const result = this.measure('render-dispatch:renderer-render', () =>
+      renderer.render(new RuntimeRendererInvocation(
+        local,
+        instruction,
+        renderer,
+        owner,
+        renderingController,
+        targetController,
+        target,
+        this,
+        hydrationContextController,
+        targetInstructions,
+      ))
+    );
+    for (const binding of result.bindings) {
+      if (bindingOwner instanceof SpreadBinding) {
+        bindingOwner.addInnerBinding(binding);
+      } else {
+        renderingController.addBinding(binding);
+      }
+    }
+    this.renderedInstructions.push(new TemplateRenderedInstruction(
+      local,
+      target,
+      instruction,
+      renderer,
+      renderingController,
+      targetController,
+      bindingOwner,
+      result.bindings,
+      result.scopeEffects,
+      result.createdControllers,
+      result.targetOperations,
+    ));
+  }
+
+  private measure<TValue>(
+    name: string,
+    read: () => TValue,
+  ): TValue {
+    return this.input.host.measureRenderingPhase(name, read);
+  }
+
+  private defaultTarget(): TemplateRenderTarget {
+    return this.input.targets[0]?.target
+      ?? this.input.compiledTemplate.targets[0]!;
+  }
+
+  private instructionsForSequence(sequence: TemplateInstructionSequence): readonly TemplateInstruction[] {
+    const instructions: TemplateInstruction[] = [];
+    for (const reference of sequence.instructions) {
+      if (reference.productHandle == null) {
+        continue;
+      }
+      const instruction = this.readInstruction(reference.productHandle);
+      if (instruction != null) {
+        instructions.push(instruction);
+      }
+    }
+    return instructions;
+  }
+}
+
+/** Runtime TemplateCompiler service as a product model. */
+@auLink('template-compiler:TemplateCompiler')
+export class TemplateCompilerService {
+  /** Runtime debug flag. Debug output is intentionally not emitted by the semantic model. */
+  readonly debug = false;
+
+  /** Runtime switch controlling whether resource definitions are embedded into lowered instructions. */
+  readonly resolveResources = true;
+
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve compiler collaborators. */
+    readonly container: ContainerReference,
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  /** Runtime `TemplateCompiler.compile(definition, container)` shape with the container fixed by this compiler world. */
+  compile<TResult>(
+    request: TemplateCompilerCompileRequest,
+    host: TemplateCompilerCompileHost<TResult>,
+  ): TemplateCompilerCompileResult<TResult> {
+    const template = request.definition.template;
+    if (template == null || template.kind === CustomElementTemplateKind.None) {
+      return new TemplateCompilerCompileResult<TResult>(
+        TemplateCompilerCompileState.NoTemplate,
+        request.definition,
+        null,
+      );
+    }
+    if (request.definition.needsCompile === false) {
+      return new TemplateCompilerCompileResult<TResult>(
+        TemplateCompilerCompileState.AlreadyCompiled,
+        request.definition,
+        null,
+      );
+    }
+    return new TemplateCompilerCompileResult<TResult>(
+      TemplateCompilerCompileState.Compiled,
+      request.definition,
+      host.compile(request, this),
+    );
+  }
+
+  /** Runtime `TemplateCompiler.compileSpread(...)` shape with the container fixed by this compiler world. */
+  compileSpread(
+    request: TemplateCompilerSpreadCompileRequest,
+    host: TemplateCompilerSpreadCompileHost,
+  ): TemplateCompilerSpreadCompileResult {
+    if (request.capturedSyntaxes.length === 0) {
+      return TemplateCompilerSpreadCompileResult.noCapturedAttributes(request);
+    }
+    return host.compileSpread(request, this);
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.TemplateCompiler,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Compiler-facing world used by HTML parsing, attribute classification, and lowering. */
+export class TemplateCompilerWorld {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this compiler world. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this compiler world. */
+    readonly identityHandle: IdentityHandle,
+    /** Compiler world owner lane. */
+    readonly worldKind: TemplateCompilerWorldKind,
+    /** AppRoot boundary that owns this world, if known. */
+    readonly appRoot: AppRootReference | null,
+    /** Container whose DI/resource state feeds compilation. */
+    readonly container: ContainerReference,
+    /** Resource/syntax scope visible to this compiler world. */
+    readonly resourceScopeProductHandle: ProductHandle | null,
+    /** Compiler services visible to this compiler world. */
+    readonly services: readonly TemplateCompilerServiceReference[],
+    /** Source address for the world owner. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerWorldField>[] = [],
+  ) {}
+
+  toReference(): TemplateCompilerWorldReference {
+    return new TemplateCompilerWorldReference(
+      this.productHandle,
+      this.identityHandle,
+      this.worldKind,
+      this.container,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+class TemplateRenderingInstructionIndex {
+  constructor(
+    readonly instructionsByProduct: Map<ProductHandle, TemplateInstruction>,
+    readonly nestedInstructionProductHandles: ReadonlySet<ProductHandle>,
+  ) {}
+}
+
+function renderingInstructionIndex(
+  instructions: readonly TemplateInstruction[],
+): TemplateRenderingInstructionIndex {
+  const instructionsByProduct = new Map<ProductHandle, TemplateInstruction>();
+  const nestedInstructionProductHandles = new Set<ProductHandle>();
+  for (const instruction of instructions) {
+    instructionsByProduct.set(instruction.productHandle, instruction);
+    if (instruction instanceof IteratorBindingInstruction) {
+      for (const handle of instruction.tailInstructionProductHandles) {
+        nestedInstructionProductHandles.add(handle);
+      }
+    }
+  }
+  return new TemplateRenderingInstructionIndex(instructionsByProduct, nestedInstructionProductHandles);
+}
+
+function matchesVisibleResourceName(
+  resource: TemplateVisibleResource,
+  lookupName: string,
+): boolean {
+  return resource.name.toLowerCase() === lookupName
+    || resource.aliases.some((alias) => alias.toLowerCase() === lookupName);
+}
+
+function resolvedResource(resource: TemplateVisibleResource): TemplateResolvedResource {
+  const definition = isTemplateCompilableDefinition(resource.definition)
+    ? resource.definition
+    : null;
+  return new TemplateResolvedResource(
+    definition == null
+      ? TemplateResourceResolutionKind.HeaderOnly
+      : TemplateResourceResolutionKind.Definition,
+    resource,
+    definition,
+  );
+}
+
+function isTemplateCompilableDefinition(
+  definition: FullResourceDefinition | null,
+): definition is TemplateCompilableResourceDefinition {
+  return definition != null
+    && (definition.type === ResourceDefinitionKind.CustomElement
+      || definition.type === ResourceDefinitionKind.CustomAttribute);
+}
+
+function bindableReferences(
+  ownerDefinitionProductHandle: ProductHandle | null,
+  sourceAddressHandle: AddressHandle | null,
+  bindables: readonly BindableDefinition[],
+  isImplicitDefault: boolean,
+): readonly TemplateBindableReference[] {
+  return bindables.map((bindable) => new TemplateBindableReference(
+    bindable,
+    new BindableDefinitionReference(
+      ownerDefinitionProductHandle,
+      bindable.name,
+      bindable.attribute,
+      bindable.sourceAddressHandle ?? sourceAddressHandle,
+      isImplicitDefault,
+    ),
+  ));
+}
+
+function attributeBindablesInfo(definition: CustomAttributeDefinition): TemplateAttributeBindablesInfo {
+  const attrs = [
+    ...bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false),
+  ];
+  const bindables = bindableReferences(definition.productHandle, definition.sourceAddressHandle, definition.bindables, false);
+  let primary = bindables.find((entry) => entry.definition.name === definition.defaultProperty) ?? null;
+  if (primary == null) {
+    const implicit = new BindableDefinition(
+      definition.defaultProperty,
+      `${definition.defaultProperty}Changed`,
+      BindableBindingMode.ToView,
+      definition.defaultProperty,
+      new BindableSetterDefinition(BindableSetterKind.Default),
+    );
+    primary = new TemplateBindableReference(
+      implicit,
+      new BindableDefinitionReference(
+        definition.productHandle,
+        implicit.name,
+        implicit.attribute,
+        definition.sourceAddressHandle,
+        true,
+      ),
+    );
+    attrs.push(primary);
+  }
+  return new TemplateAttributeBindablesInfo(attrs, bindables, primary);
+}

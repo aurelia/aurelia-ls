@@ -23,6 +23,15 @@ function checkSubmoduleAvailable(): boolean {
   return existsSync(PLUGINS_ROOT);
 }
 
+function expectResource(
+  resources: InspectionResult['resources'],
+  className: string,
+): InspectionResult['resources'][number] {
+  const resource = resources.find(r => r.className === className);
+  expect(resource, `Expected resource ${className}`).toBeDefined();
+  return resource!;
+}
+
 // =============================================================================
 // Packages using re-export pattern (extraction works)
 // =============================================================================
@@ -429,21 +438,29 @@ describe('aurelia2-plugins: configuration pattern (aspirational)', () => {
 // Packages with no template resources (services only)
 // =============================================================================
 
-describe('aurelia2-plugins: services only', () => {
+describe('aurelia2-plugins: service-heavy packages', () => {
   const submoduleAvailable = checkSubmoduleAvailable();
 
   describe.skipIf(!submoduleAvailable)('aurelia2-auth', () => {
-    it('reports 1 resource (AuthFilterValueConverter)', async () => {
-      // aurelia2-auth has one template resource: AuthFilterValueConverter
-      // (the rest are services/DI infrastructure)
+    it('reports registered auth template resources', async () => {
       const result = await inspect(join(PLUGINS_ROOT, 'aurelia2-auth'));
 
-      expect(result.resources).toHaveLength(1);
+      expect(result.resources).toHaveLength(3);
 
-      const authFilter = result.resources[0]!;
+      const authFilter = expectResource(result.resources, 'AuthFilterValueConverter');
       expect(authFilter.kind).toBe('value-converter');
       expect(authFilter.name).toBe('auth-filter');
       expect(authFilter.className).toBe('AuthFilterValueConverter');
+
+      const ifAuthenticated = expectResource(result.resources, 'IfAuthenticatedCustomAttribute');
+      expect(ifAuthenticated.kind).toBe('custom-attribute');
+      expect(ifAuthenticated.name).toBe('if-authenticated');
+      expect(ifAuthenticated.bindables.map(b => b.name)).toContain('value');
+
+      const ifRoles = expectResource(result.resources, 'IfRolesCustomAttribute');
+      expect(ifRoles.kind).toBe('custom-attribute');
+      expect(ifRoles.name).toBe('if-roles');
+      expect(ifRoles.bindables.map(b => b.name)).toEqual(expect.arrayContaining(['mode', 'value']));
     });
   });
 

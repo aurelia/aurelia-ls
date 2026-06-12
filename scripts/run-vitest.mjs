@@ -16,7 +16,9 @@ if (!/\b--max-old-space-size=\d+\b/.test(nodeOptions)) {
   env.NODE_OPTIONS = `${nodeOptions} --max-old-space-size=2048`.trim();
 }
 
-const result = spawnSync(process.execPath, [vitestCli, "run", "--maxWorkers=2", ...args], {
+const vitestArgs = ["run", "--maxWorkers=2", ...args];
+
+const result = spawnSync(process.execPath, [vitestCli, ...vitestArgs], {
   stdio: "inherit",
   env,
 });

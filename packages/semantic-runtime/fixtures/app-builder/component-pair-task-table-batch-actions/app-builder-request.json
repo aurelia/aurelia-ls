@@ -1,0 +1,221 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/batch-task-table.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "batch-task-table-component-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "batch task table component explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "deleteSelectedTaskItems",
+                      "kind": "delete",
+                      "scope": "collection",
+                      "targetEntityName": "TaskItem",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Batch Task Table",
+                    "baseName": "Batch Task Table"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/batch-task-table.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-collection"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Title",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "collection-query-features",
+                  "value": [
+                    {
+                      "featureId": "row-selection",
+                      "initiallyEnabled": true,
+                      "summary": "The caller chose local row selection before adding collection-scoped batch actions."
+                    },
+                    {
+                      "featureId": "batch-actions",
+                      "initiallyEnabled": true,
+                      "summary": "The caller chose one explicit local batch action over selected scalar identities."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-identity-policy",
+                  "value": {
+                    "mode": "scalar-field",
+                    "requiredBy": [
+                      "row-selection",
+                      "batch-action"
+                    ],
+                    "fieldName": "id"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Draft onboarding plan",
+                      "done": false
+                    },
+                    {
+                      "id": 2,
+                      "title": "Ship accessibility pass",
+                      "done": false
+                    },
+                    {
+                      "id": 3,
+                      "title": "Review table states",
+                      "done": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "collection-table"
+        },
+        "compositionKind": "collection-table",
+        "collectionExpression": "taskItems",
+        "itemLocalName": "taskItem",
+        "emptyStateText": "No tasks yet.",
+        "emptyStateConditionExpression": "taskItems.length === 0",
+        "rowSelectionCheckedExpression": "selectedTaskItemIds.includes(taskItem.id)",
+        "rowSelectionToggleHandlerExpression": "toggleTaskItemSelection(taskItem)",
+        "rowSelectionColumnHeaderText": "Select",
+        "rowSelectionCheckboxLabelExpression": "'Select ' + taskItem.title",
+        "batchActionControls": [
+          {
+            "actionName": "deleteSelectedTaskItems",
+            "handlerExpression": "deleteSelectedTaskItems()",
+            "buttonText": "Delete selected"
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "deleteSelectedTaskItems",
+          "methodBodyStatements": "const selectedIds = new Set(this.selectedTaskItemIds);\nfor (let index = this.taskItems.length - 1; index >= 0; index -= 1) {\n  if (selectedIds.has(this.taskItems[index]!.id)) {\n    this.taskItems.splice(index, 1);\n  }\n}\nthis.selectedTaskItemIds = [];"
+        }
+      ]
+    }
+  }
+}

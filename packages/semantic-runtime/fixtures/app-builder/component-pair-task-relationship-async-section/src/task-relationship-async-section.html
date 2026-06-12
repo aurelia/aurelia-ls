@@ -1,0 +1,35 @@
+<section class="task-relationship-async" data-au-role="app-section">
+  <section promise.bind="taskItemsPromise" class="task-relationship-async__status">
+    <p pending class="task-relationship-async__pending">Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0" class="task-relationship-async__empty">No tasks yet.</p>
+      <template else>
+        <table class="task-relationship-async__table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Assignee</th>
+              <th>Reviewers</th>
+              <th>Schedule</th>
+              <th>Checkpoints</th>
+              <th>Effort</th>
+              <th>Done</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="task-relationship-async__row">
+              <td>${taskItem.title}</td>
+              <td>${assigneeLabelForTaskItem(taskItem)}</td>
+              <td>${reviewersLabelForTaskItem(taskItem)}</td>
+              <td>${scheduleLabelForTaskItem(taskItem)}</td>
+              <td>${checkpointsLabelForTaskItem(taskItem)}</td>
+              <td>${effortLabelForTaskItem(taskItem)}</td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error" class="task-relationship-async__error">Could not load tasks.</p>
+  </section>
+</section>

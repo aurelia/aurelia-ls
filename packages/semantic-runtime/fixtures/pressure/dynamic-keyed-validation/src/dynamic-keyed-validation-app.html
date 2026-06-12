@@ -1,0 +1,16 @@
+<form submit.trigger="submit()">
+  <label repeat.for="field of fields">
+    <span>${labels[field]}</span>
+    <input value.two-way="person[field] & validate">
+  </label>
+
+  <label for="primary-line">Primary address line</label>
+  <input id="primary-line" value.two-way="person[addressField][line1Field] & validate">
+
+  <label repeat.for="lineField of lineFields">
+    <span>${addressLabels[lineField]}</span>
+    <input value.two-way="person[addressField][lineField] & validate">
+  </label>
+
+  <button type="submit">Submit</button>
+</form>

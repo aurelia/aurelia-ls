@@ -17,12 +17,12 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "clean": "rm -rf out"
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\""
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*"
   },
   "peerDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }

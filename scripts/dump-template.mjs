@@ -6,7 +6,9 @@
  *   node scripts/dump-template.mjs <project-root> <template-path> <output-dir>
  *
  * Example:
- *   node scripts/dump-template.mjs ../cortex-device-list src/cortex-devices.html dumps/cortex-devices
+ *   node scripts/dump-template.mjs ../example-aurelia-app src/app.html dumps/example-app
+ *
+ * Do not commit dump output captured from external projects.
  *
  * Output files:
  *   <output-dir>/meta.json         — summary stats
@@ -41,7 +43,7 @@ const { createNodeFileSystem, asDocumentUri } = compilerMod;
 const args = process.argv.slice(2);
 if (args.length < 3) {
   console.error("Usage: dump-template.mjs <project-root> <template-path> <output-dir>");
-  console.error("Example: dump-template.mjs ../cortex-device-list src/cortex-devices.html dumps/cortex-devices");
+  console.error("Example: dump-template.mjs ../example-aurelia-app src/app.html dumps/example-app");
   process.exit(1);
 }
 

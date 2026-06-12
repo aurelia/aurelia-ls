@@ -1,0 +1,1503 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-gallery",
+  "appPatternKey": "app-builder-source-lowering-gallery",
+  "expectedEffects": [
+    {
+      "summary": "App-builder source-lowering fragment gallery has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery has TypeScript and build project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering gallery should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering gallery should compile generated template source.",
+      "topologyNodeKind": "template",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering gallery should hydrate generated runtime controllers.",
+      "topologyNodeKind": "component",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery should expose generated value-channel facts.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 8,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder source-lowering fragment gallery should expose generated binding data-flow facts.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 8,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    }
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen",
+    "control-use-inventory",
+    "existing-app-fact-read",
+    "component-manifest-publication"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "local-view-model-state"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "domain-command-action"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "async-data-source"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-text-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-email-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-url-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-tel-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-password-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-search-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-time-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-datetime-local-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-month-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-week-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-textarea"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-number-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-date-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-range-input"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-boolean-checkbox"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-checkbox-list"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-radio-group"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-single-select"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-multi-select"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "native-button"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "field-group"
+    },
+    {
+      "kind": "control-pattern",
+      "domain": "control",
+      "id": "form-message"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "route-navigation-action"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "collection-list"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "collection-card"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "collection-table"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "loading-empty-error-state"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "action-feedback-status"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "native-submit-form"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "domain-backed-submit-form"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "app-section"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "fragmentGallery.invocation.domain-command-action.actionName",
+      "ownerKind": "invocation",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.domain-command-action.methodBodyStatements",
+      "ownerKind": "invocation",
+      "fieldId": "typescript-method-body-statements",
+      "requestFieldName": "methodBodyStatements",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.domain-command-action.actionName",
+      "ownerKind": "invocation",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.domain-command-action.methodParameters",
+      "ownerKind": "invocation",
+      "fieldId": "typescript-method-parameters",
+      "requestFieldName": "methodParameters",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.domain-command-action.methodBodyStatements",
+      "ownerKind": "invocation",
+      "fieldId": "typescript-method-body-statements",
+      "requestFieldName": "methodBodyStatements",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.async-data-source.asyncDataMemberName",
+      "ownerKind": "invocation",
+      "fieldId": "async-data-member-name",
+      "requestFieldName": "asyncDataMemberName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.async-data-source.asyncDataPromiseType",
+      "ownerKind": "invocation",
+      "fieldId": "async-data-promise-type",
+      "requestFieldName": "asyncDataPromiseType",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.async-data-source.asyncDataInitializerExpression",
+      "ownerKind": "invocation",
+      "fieldId": "async-data-initializer-expression",
+      "requestFieldName": "asyncDataInitializerExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-text-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-text-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-text-input.bindingExpression",
+      "ownerKind": "invocation",
+      "fieldId": "binding-expression",
+      "requestFieldName": "bindingExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-text-input.labelText",
+      "ownerKind": "invocation",
+      "fieldId": "label-text",
+      "requestFieldName": "labelText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-email-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-url-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-tel-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-password-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-search-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-time-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-datetime-local-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-month-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-week-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-textarea.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-number-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-date-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-range-input.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-boolean-checkbox.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-checkbox-list.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-radio-group.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-radio-group.valueSetName",
+      "ownerKind": "invocation",
+      "fieldId": "value-set-name",
+      "requestFieldName": "valueSetName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.bindingExpression",
+      "ownerKind": "invocation",
+      "fieldId": "binding-expression",
+      "requestFieldName": "bindingExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.valueDomainExpression",
+      "ownerKind": "invocation",
+      "fieldId": "value-domain-expression",
+      "requestFieldName": "valueDomainExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.optionLocalName",
+      "ownerKind": "invocation",
+      "fieldId": "option-local-name",
+      "requestFieldName": "optionLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.optionValueExpression",
+      "ownerKind": "invocation",
+      "fieldId": "option-value-expression",
+      "requestFieldName": "optionValueExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.optionBindingKind",
+      "ownerKind": "invocation",
+      "fieldId": "option-binding-kind",
+      "requestFieldName": "optionBindingKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.optionLabelExpression",
+      "ownerKind": "invocation",
+      "fieldId": "option-label-expression",
+      "requestFieldName": "optionLabelExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-single-select.matcherExpression",
+      "ownerKind": "invocation",
+      "fieldId": "matcher-expression",
+      "requestFieldName": "matcherExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-multi-select.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.buttonText",
+      "ownerKind": "invocation",
+      "fieldId": "button-text",
+      "requestFieldName": "buttonText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.buttonType",
+      "ownerKind": "invocation",
+      "fieldId": "button-type",
+      "requestFieldName": "buttonType",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.actionName",
+      "ownerKind": "invocation",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.eventName",
+      "ownerKind": "invocation",
+      "fieldId": "event-name",
+      "requestFieldName": "eventName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.buttonText",
+      "ownerKind": "invocation",
+      "fieldId": "button-text",
+      "requestFieldName": "buttonText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.buttonType",
+      "ownerKind": "invocation",
+      "fieldId": "button-type",
+      "requestFieldName": "buttonType",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.actionName",
+      "ownerKind": "invocation",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.native-button.handlerExpression",
+      "ownerKind": "invocation",
+      "fieldId": "handler-expression",
+      "requestFieldName": "handlerExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.fieldName",
+      "ownerKind": "invocation",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.bindingExpression",
+      "ownerKind": "invocation",
+      "fieldId": "binding-expression",
+      "requestFieldName": "bindingExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.innerControlPatternId",
+      "ownerKind": "invocation",
+      "fieldId": "inner-control-pattern-id",
+      "requestFieldName": "innerControlPatternId",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.labelText",
+      "ownerKind": "invocation",
+      "fieldId": "label-text",
+      "requestFieldName": "labelText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.field-group.fieldControlId",
+      "ownerKind": "invocation",
+      "fieldId": "field-control-id",
+      "requestFieldName": "fieldControlId",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.form-message.messageKind",
+      "ownerKind": "invocation",
+      "fieldId": "message-kind",
+      "requestFieldName": "messageKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.form-message.messageKind",
+      "ownerKind": "invocation",
+      "fieldId": "message-kind",
+      "requestFieldName": "messageKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.form-message.messageText",
+      "ownerKind": "invocation",
+      "fieldId": "message-text",
+      "requestFieldName": "messageText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.form-message.messageId",
+      "ownerKind": "invocation",
+      "fieldId": "message-id",
+      "requestFieldName": "messageId",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.route-navigation-action.actionName",
+      "ownerKind": "invocation",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.route-navigation-action.routeInstruction",
+      "ownerKind": "invocation",
+      "fieldId": "route-instruction",
+      "requestFieldName": "routeInstruction",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.route-navigation-action.routeParamsExpression",
+      "ownerKind": "invocation",
+      "fieldId": "route-params-expression",
+      "requestFieldName": "routeParamsExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.invocation.route-navigation-action.linkText",
+      "ownerKind": "invocation",
+      "fieldId": "link-text",
+      "requestFieldName": "linkText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-list.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-list.collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-list.itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-list.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-list.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-card.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-card.collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-card.itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-card.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-card.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.actionHandlerExpressions",
+      "ownerKind": "composition",
+      "fieldId": "action-handler-expressions",
+      "requestFieldName": "actionHandlerExpressions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.sortHandlerExpressions",
+      "ownerKind": "composition",
+      "fieldId": "sort-handler-expressions",
+      "requestFieldName": "sortHandlerExpressions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.collection-table.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.promiseExpression",
+      "ownerKind": "composition",
+      "fieldId": "promise-expression",
+      "requestFieldName": "promiseExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.pendingText",
+      "ownerKind": "composition",
+      "fieldId": "pending-text",
+      "requestFieldName": "pendingText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledLocalName",
+      "ownerKind": "composition",
+      "fieldId": "fulfilled-local-name",
+      "requestFieldName": "fulfilledLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.rejectedLocalName",
+      "ownerKind": "composition",
+      "fieldId": "rejected-local-name",
+      "requestFieldName": "rejectedLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.rejectedText",
+      "ownerKind": "composition",
+      "fieldId": "rejected-text",
+      "requestFieldName": "rejectedText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.promiseExpression",
+      "ownerKind": "composition",
+      "fieldId": "promise-expression",
+      "requestFieldName": "promiseExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.pendingText",
+      "ownerKind": "composition",
+      "fieldId": "pending-text",
+      "requestFieldName": "pendingText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledLocalName",
+      "ownerKind": "composition",
+      "fieldId": "fulfilled-local-name",
+      "requestFieldName": "fulfilledLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.rejectedLocalName",
+      "ownerKind": "composition",
+      "fieldId": "rejected-local-name",
+      "requestFieldName": "rejectedLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.rejectedText",
+      "ownerKind": "composition",
+      "fieldId": "rejected-text",
+      "requestFieldName": "rejectedText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition",
+      "ownerKind": "composition",
+      "fieldId": "fulfilled-content-composition",
+      "requestFieldName": "fulfilledContentComposition",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 6
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition.collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition.itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition.emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.loading-empty-error-state.fulfilledContentComposition.emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.action-feedback-status.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.action-feedback-status.actionName",
+      "ownerKind": "composition",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.native-submit-form.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.native-submit-form.fieldNames",
+      "ownerKind": "composition",
+      "fieldId": "field-names",
+      "requestFieldName": "fieldNames",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 7
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.native-submit-form.actionName",
+      "ownerKind": "composition",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.native-submit-form.submitButtonText",
+      "ownerKind": "composition",
+      "fieldId": "submit-button-text",
+      "requestFieldName": "submitButtonText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldNames",
+      "ownerKind": "composition",
+      "fieldId": "field-names",
+      "requestFieldName": "fieldNames",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 2
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.bindingRootExpression",
+      "ownerKind": "composition",
+      "fieldId": "binding-root-expression",
+      "requestFieldName": "bindingRootExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldBindingExpressions",
+      "ownerKind": "composition",
+      "fieldId": "field-binding-expressions",
+      "requestFieldName": "fieldBindingExpressions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldControlSelections",
+      "ownerKind": "composition",
+      "fieldId": "field-control-selections",
+      "requestFieldName": "fieldControlSelections",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 2
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.actionName",
+      "ownerKind": "composition",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.handlerExpression",
+      "ownerKind": "composition",
+      "fieldId": "handler-expression",
+      "requestFieldName": "handlerExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.submitButtonText",
+      "ownerKind": "composition",
+      "fieldId": "submit-button-text",
+      "requestFieldName": "submitButtonText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldControlSelections[0].fieldName",
+      "ownerKind": "composition-field-control-selection",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldControlSelections[0].innerControlPatternId",
+      "ownerKind": "composition-field-control-selection",
+      "fieldId": "inner-control-pattern-id",
+      "requestFieldName": "innerControlPatternId",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldControlSelections[1].fieldName",
+      "ownerKind": "composition-field-control-selection",
+      "fieldId": "field-name",
+      "requestFieldName": "fieldName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.domain-backed-submit-form.fieldControlSelections[1].innerControlPatternId",
+      "ownerKind": "composition-field-control-selection",
+      "fieldId": "inner-control-pattern-id",
+      "requestFieldName": "innerControlPatternId",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions",
+      "ownerKind": "composition",
+      "fieldId": "child-compositions",
+      "requestFieldName": "childCompositions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 2
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[0].compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[0].fieldNames",
+      "ownerKind": "composition",
+      "fieldId": "field-names",
+      "requestFieldName": "fieldNames",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 2
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[0].actionName",
+      "ownerKind": "composition",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[0].submitButtonText",
+      "ownerKind": "composition",
+      "fieldId": "submit-button-text",
+      "requestFieldName": "submitButtonText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].compositionKind",
+      "ownerKind": "composition",
+      "fieldId": "composition-kind",
+      "requestFieldName": "compositionKind",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].actionHandlerExpressions",
+      "ownerKind": "composition",
+      "fieldId": "action-handler-expressions",
+      "requestFieldName": "actionHandlerExpressions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].sortHandlerExpressions",
+      "ownerKind": "composition",
+      "fieldId": "sort-handler-expressions",
+      "requestFieldName": "sortHandlerExpressions",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 1
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].collectionExpression",
+      "ownerKind": "composition",
+      "fieldId": "collection-expression",
+      "requestFieldName": "collectionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].itemLocalName",
+      "ownerKind": "composition",
+      "fieldId": "item-local-name",
+      "requestFieldName": "itemLocalName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].emptyStateText",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-text",
+      "requestFieldName": "emptyStateText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "fragmentGallery.composition.app-section.childCompositions[1].emptyStateConditionExpression",
+      "ownerKind": "composition",
+      "fieldId": "empty-state-condition-expression",
+      "requestFieldName": "emptyStateConditionExpression",
+      "valueShape": {
+        "kind": "string"
+      }
+    }
+  ]
+}

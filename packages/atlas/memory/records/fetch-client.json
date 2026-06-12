@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:fetch-client-configuration-diagnostics",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "fetch-client",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "FetchClientSourceIssueMaterializer owns exact @aurelia/fetch-client HttpClient.configure(...) and RetryInterceptor configuration diagnostics.",
+      "rationale": "@aurelia/fetch-client throws several framework errors from source-authored HttpClient configuration and retry policy before request execution. Semantic-runtime now owns the closed static subset as FetchClientIssue products and app diagnostics, while host fetch availability and live interceptor-chain return values remain intentionally separate future products.",
+      "guidance": [
+        "Start here before adding fetch-client diagnostics or changing fetch-client framework-error dispositions.",
+        "Use framework.errors for the fetch-client package and the framework fetch-client sources before spending another AUR50xx authority row.",
+        "Current exact source-owned codes are AUR5001 configure invalid return, AUR5002 configure invalid config, AUR5003 configure invalid header, AUR5004 duplicate retry interceptor, AUR5005 retry interceptor not last, AUR5007 invalid exponential interval, and AUR5008 invalid retry strategy.",
+        "Do not claim AUR5000 until semantic-runtime admits host/global fetch availability or IFetchFn activation; do not claim AUR5006 until it admits live interceptor-chain execution or a static return-value model for custom interceptors."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fetch-client/fetch-client-source-issue-materializer.ts",
+          "symbolName": "FetchClientSourceIssueMaterializer",
+          "summary": "Source-backed fetch-client issue materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fetch-client/framework-error-code.ts",
+          "symbolName": "FetchClientFrameworkErrorCode",
+          "summary": "Exact @aurelia/fetch-client framework code links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fetch-client/README.md",
+          "summary": "Fetch-client lane ownership and remaining intentionally unclaimed authorities."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/fetch-client-config-errors",
+          "summary": "Pressure fixture for the exact fetch-client configuration diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "fetch-client"
+          },
+          "summary": "Fetch-client framework-error disposition view."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Pressure harness includes fetch-client issue and app-diagnostic summaries."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fetch-client/fetch-client-source-issue-materializer.ts",
+          "symbolName": "FetchClientSourceIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fetch-client/framework-error-code.ts",
+          "symbolName": "FetchClientFrameworkErrorCode"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/fetch-client-config-errors/src/fetch-client-config-errors-app.ts"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

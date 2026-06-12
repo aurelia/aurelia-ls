@@ -54,8 +54,8 @@ export function emitOverlay(
     // Helpers to make value converters / binding behaviors TS-safe.
     const helpers = isJs
       ? [
-          "/** @template T @param {T} value @returns {T} */ const __au_vc = (value, _name, ..._args) => value;",
-          "/** @template T @param {T} value @returns {T} */ const __au_bb = (value, _name, ..._args) => value;",
+          "/** @template T @param {T} value @param {string} [_name] @param {...unknown} _args @returns {T} */ function __au_vc(value, _name, ..._args) { return value; }",
+          "/** @template T @param {T} value @param {string} [_name] @param {...unknown} _args @returns {T} */ function __au_bb(value, _name, ..._args) { return value; }",
         ]
       : [
           "function __au_vc<T>(value: T, _name?: string, ..._args: unknown[]): T { return value; }",

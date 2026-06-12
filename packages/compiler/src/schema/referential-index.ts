@@ -13,7 +13,7 @@
 
 import type { ExprId, NormalizedPath, NodeId } from "../model/identity.js";
 import type { SourceSpan } from "../model/ir.js";
-import type { ScopeFrame, ScopeTemplate } from "../model/symbols.js";
+import type { ScopeFrame } from "../model/symbols.js";
 import type { ResourceScopeId, SymbolId } from "./types.js";
 
 // ============================================================================

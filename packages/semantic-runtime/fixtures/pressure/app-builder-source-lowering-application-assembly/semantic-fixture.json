@@ -1,0 +1,415 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-application-assembly",
+  "appPatternKey": "app-builder-source-lowering-application-assembly",
+  "expectedEffects": [
+    {
+      "summary": "App-builder application assembly SourcePlan has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has TypeScript and build project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder application assembly SourcePlan has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should register router options.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-options",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should use route decorator object-literal configs.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "route-decorator",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should use child route object-literal configs.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "originKind",
+          "value": "child-routes-property",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "valueKind",
+          "value": "object-literal",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly top-level route areas should target the main viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "viewport",
+          "value": "main",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly child detail routes should target nested detail viewports.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "route-config",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "viewport",
+          "value": "detail",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly root shell should declare the main au-viewport.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "name",
+          "value": "main",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly child route areas should declare nested detail au-viewports.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "routeProductKind",
+          "value": "router-viewport",
+          "kind": "expected-semantic-effect-filter"
+        },
+        {
+          "field": "name",
+          "value": "detail",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should compile root and route templates.",
+      "topologyNodeKind": null,
+      "effectKind": "template-compilation",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should hydrate runtime controllers.",
+      "topologyNodeKind": null,
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should read through generated route state/domain bindings.",
+      "topologyNodeKind": null,
+      "effectKind": "service-interaction-binding",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly service-backed route area SourcePlan should expose the generated service class.",
+      "topologyNodeKind": null,
+      "effectKind": "service-class",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly service-backed route area SourcePlan should expose a generated call into the service boundary.",
+      "topologyNodeKind": null,
+      "effectKind": "service-interaction",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Application assembly SourcePlan should have no open semantic seams.",
+      "topologyNodeKind": null,
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "cardinality": "absent",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    }
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "application-assembly"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "router-backed-list-detail"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "route-navigation-action"
+    },
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "service-backed-load-save"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "sourceLoweringSourcePlan.rootDir",
+      "ownerKind": "source-plan",
+      "fieldId": "root-dir",
+      "requestFieldName": "rootDir",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly",
+      "ownerKind": "source-plan",
+      "fieldId": "source-lowering-application-assembly",
+      "requestFieldName": "sourceLoweringApplicationAssembly",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 3
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas",
+      "ownerKind": "source-plan",
+      "fieldId": "application-assembly-route-areas",
+      "requestFieldName": "routeAreas",
+      "valueShape": {
+        "kind": "array",
+        "itemCount": 2
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[0].actionName",
+      "ownerKind": "source-plan",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[0].linkText",
+      "ownerKind": "source-plan",
+      "fieldId": "link-text",
+      "requestFieldName": "linkText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[0].serviceCollection",
+      "ownerKind": "source-plan",
+      "fieldId": "router-backed-list-detail-service-collection",
+      "requestFieldName": "serviceCollection",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 0
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[1].actionName",
+      "ownerKind": "source-plan",
+      "fieldId": "action-name",
+      "requestFieldName": "actionName",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[1].linkText",
+      "ownerKind": "source-plan",
+      "fieldId": "link-text",
+      "requestFieldName": "linkText",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringApplicationAssembly.routeAreas[1].serviceCollection",
+      "ownerKind": "source-plan",
+      "fieldId": "router-backed-list-detail-service-collection",
+      "requestFieldName": "serviceCollection",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 0
+      }
+    }
+  ]
+}

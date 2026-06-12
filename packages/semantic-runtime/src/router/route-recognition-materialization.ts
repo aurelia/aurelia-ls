@@ -1,0 +1,1288 @@
+import type { ProjectBootFrame } from '../boot/frames.js';
+import {
+  EvidenceKind,
+  EvidenceRole,
+} from '../kernel/evidence.js';
+import type { IdentityHandle } from '../kernel/handles.js';
+import {
+  KernelStoreBatch,
+  type KernelStore,
+  type KernelStoreRecord,
+} from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
+import { localKeyPart } from '../kernel/local-key.js';
+import {
+  NavigationInstructionKind,
+  RecognizedRouteModel,
+  RouteConfigKind,
+  RouteRecognizerModelKind,
+  RouterIssueKind,
+  RouterIssueModel,
+  RouterIssuePhase,
+  RouteParameterValueModel,
+  RouteRecognizerStateKind,
+  ViewportRequestModel,
+  type ConfigurableRouteModel,
+  type EndpointModel,
+  type RouteConfigModel,
+  type RouteConfigContextModel,
+  type RouteContextModel,
+  type RouteRecognizerReference,
+  type StateModel,
+  type TypedNavigationInstructionModel,
+  type ViewportInstructionModel,
+  type ViewportInstructionTreeModel,
+} from './model.js';
+import { RouterFrameworkErrorCode } from './framework-error-code.js';
+import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
+import type { RouteInstructionMaterializationProjectResult } from './route-instruction-materialization.js';
+import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
+import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
+import { migrateRedirectPath } from './route-redirect-migration.js';
+import { ROUTE_RECOGNIZER_RESIDUE_PARAMETER } from './route-configurable-path.js';
+import { routerIssueProductRecords } from './router-issue-publication.js';
+import { routeRecognizerProductRecords } from './router-product-records.js';
+
+const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
+const DEFAULT_VIEWPORT_NAME = 'default';
+
+interface RouteRecognitionEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly recognizedRoutes: readonly RecognizedRouteModel[];
+  readonly issues: readonly RouterIssueModel[];
+}
+
+interface RecognizerGraph {
+  readonly recognizer: RouteRecognizerReference;
+  readonly root: StateModel;
+  readonly statesByIdentity: ReadonlyMap<StateModel['identityHandle'], StateModel>;
+  readonly endpointsByIdentity: ReadonlyMap<EndpointModel['identityHandle'], EndpointModel>;
+  readonly configurableRoutesByIdentity: ReadonlyMap<ConfigurableRouteModel['identityHandle'], ConfigurableRouteModel>;
+}
+
+interface RecognizedRouteDraft {
+  readonly endpoint: EndpointModel;
+  readonly path: string;
+  readonly residue: string | null;
+  readonly parameters: ReadonlyMap<string, string | undefined>;
+  readonly parameterCount: number;
+  readonly redirectDepth: number;
+  readonly redirectSourceRouteConfig: RouteConfigModel | null;
+}
+
+interface RedirectExpansionResult {
+  readonly routes: readonly RecognizedRouteDraft[];
+  readonly issues: readonly RedirectExpansionIssueDraft[];
+}
+
+interface RedirectExpansionIssueDraft {
+  readonly routeConfig: RouteConfigModel;
+  readonly sourcePath: string;
+  readonly redirectPath: string;
+  readonly depth: number;
+}
+
+interface RouteRecognitionIndexes {
+  readonly routeRuntime: RouteRuntimeTopologyProjectResult;
+  readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
+  readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
+  readonly routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>;
+  readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
+  readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
+  readonly typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>;
+  readonly recognizerGraphs: ReadonlyMap<string, RecognizerGraph>;
+}
+
+interface ViewportInstructionRecognitionSite {
+  readonly instruction: ViewportInstructionModel;
+  readonly instructionIndexPath: string;
+}
+
+interface ChildRecognitionContext {
+  readonly routeContext: RouteContextModel | null;
+  readonly routeConfigContext: RouteConfigContextModel;
+  readonly routeConfig: RouteConfigModel;
+  readonly graph: RecognizerGraph;
+}
+
+/** RecognizedRoute products from static ViewportInstruction paths, before RouteNode transition compilation. */
+export class RouteRecognitionMaterializationProjectResult {
+  constructor(
+    readonly project: ProjectBootFrame,
+    readonly recognizedRoutes: readonly RecognizedRouteModel[],
+    readonly issues: readonly RouterIssueModel[],
+  ) {}
+
+  readRecognizedRoutes(): readonly RecognizedRouteModel[] {
+    return this.recognizedRoutes;
+  }
+
+  readIssues(): readonly RouterIssueModel[] {
+    return this.issues;
+  }
+}
+
+/** Walk route-recognizer state graphs for static ViewportInstruction path strings. */
+export class RouteRecognitionMaterializationProjectPass {
+  materializeAndEmit(
+    store: KernelStore,
+    project: ProjectBootFrame,
+    routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+    routeRuntime: RouteRuntimeTopologyProjectResult,
+    routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    routeInstructions: RouteInstructionMaterializationProjectResult,
+  ): RouteRecognitionMaterializationProjectResult {
+    const indexes = routeRecognitionIndexes(routeConfigContexts, routeRuntime, routeRecognizer, routeInstructions);
+
+    const emissions = routeInstructions.readViewportInstructionTrees().flatMap((tree) =>
+      this.materializeInstructionTreeRecognitions(store, tree, indexes)
+    );
+    const records = emissions.flatMap((emission) => emission.records);
+    if (records.length > 0) {
+      store.commit(new KernelStoreBatch(records, `router-recognition:${project.projectKey}`));
+    }
+    return new RouteRecognitionMaterializationProjectResult(
+      project,
+      emissions.flatMap((emission) => emission.recognizedRoutes),
+      emissions.flatMap((emission) => emission.issues),
+    );
+  }
+
+  private materializeInstructionTreeRecognitions(
+    store: KernelStore,
+    tree: ViewportInstructionTreeModel,
+    indexes: RouteRecognitionIndexes,
+  ): readonly RouteRecognitionEmission[] {
+    const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
+    const routeConfigContext = routeConfigContextForRouteContext(routeContext, indexes.routeConfigContextsByIdentity);
+    const routeConfig = routeConfigForRouteConfigContext(routeConfigContext, indexes.routeConfigsByIdentity);
+    const recognizerIdentity = routeConfigContext?.recognizer.identityHandle ?? null;
+    const graph = recognizerIdentity == null ? null : indexes.recognizerGraphs.get(recognizerIdentity) ?? null;
+    if (graph == null || routeConfig == null || routeConfigContext == null) {
+      return [];
+    }
+
+    return tree.instructions.flatMap((instruction, index) => {
+      const viewportInstruction = instruction.identityHandle == null
+        ? null
+        : indexes.viewportInstructionsByIdentity.get(instruction.identityHandle) ?? null;
+      if (viewportInstruction == null) {
+        return [];
+      }
+      return this.materializeViewportInstructionRecognitions(
+        store,
+        tree,
+        indexes,
+        routeContext,
+        routeConfigContext,
+        routeConfig,
+        graph,
+        {
+          instruction: viewportInstruction,
+          instructionIndexPath: String(index),
+        },
+      );
+    });
+  }
+
+  private materializeViewportInstructionRecognitions(
+    store: KernelStore,
+    tree: ViewportInstructionTreeModel,
+    indexes: RouteRecognitionIndexes,
+    routeContext: RouteContextModel | null,
+    routeConfigContext: RouteConfigContextModel,
+    routeConfig: RouteConfigModel,
+    graph: RecognizerGraph,
+    site: ViewportInstructionRecognitionSite,
+  ): readonly RouteRecognitionEmission[] {
+    const path = collapsedStringPath(
+      site.instruction,
+      indexes.viewportInstructionsByIdentity,
+      indexes.typedInstructionsByIdentity,
+    );
+    if (path == null) {
+      return [];
+    }
+    const recognizedRoutes = recognizePath(graph, path);
+    if (recognizedRoutes == null) {
+      return this.noFallbackEmission(store, routeConfigContext, routeConfig, site.instruction, path, site.instructionIndexPath);
+    }
+    const expanded = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
+    return [
+      this.materializeRecognizedRoutes(
+        store,
+        graph,
+        tree,
+        site.instruction,
+        expanded.routes,
+        expanded.issues,
+        site.instructionIndexPath,
+        routeContext,
+      ),
+      ...expanded.routes.flatMap((route, routeIndex) =>
+        this.materializeResidueChildRecognitions(
+          store,
+          tree,
+          indexes,
+          routeContext,
+          graph,
+          site,
+          route,
+          routeIndex,
+        )
+      ),
+    ];
+  }
+
+  private materializeRecognizedRoutes(
+    store: KernelStore,
+    graph: RecognizerGraph,
+    tree: ViewportInstructionTreeModel,
+    viewportInstruction: ViewportInstructionModel,
+    routes: readonly RecognizedRouteDraft[],
+    redirectIssues: readonly RedirectExpansionIssueDraft[],
+    instructionIndexPath: string,
+    routeContext: RouteContextModel | null,
+  ): RouteRecognitionEmission {
+    const recognizedRoutes = routes.map((route, routeIndex) =>
+      recognizedRouteModel(
+        store,
+        graph,
+        tree,
+        viewportInstruction,
+        route,
+        instructionIndexPath,
+        routeIndex,
+        routeContext,
+      )
+    );
+    return {
+      records: [
+        ...recognizedRoutes.flatMap((route, routeIndex) =>
+          recognizedRouteRecords(
+            store,
+            graph,
+            tree,
+            viewportInstruction,
+            route,
+            instructionIndexPath,
+            routeIndex,
+          )
+        ),
+        ...redirectIssues.flatMap((issue, issueIndex) =>
+          unknownRedirectIssueRecords(store, tree, viewportInstruction, issue, instructionIndexPath, issueIndex)
+        ),
+      ],
+      recognizedRoutes,
+      issues: redirectIssues.map((issue, issueIndex) =>
+        unknownRedirectIssueModel(store, tree, viewportInstruction, issue, instructionIndexPath, issueIndex)
+      ),
+    };
+  }
+
+  private materializeResidueChildRecognitions(
+    store: KernelStore,
+    tree: ViewportInstructionTreeModel,
+    indexes: RouteRecognitionIndexes,
+    parentRouteContext: RouteContextModel | null,
+    graph: RecognizerGraph,
+    site: ViewportInstructionRecognitionSite,
+    route: RecognizedRouteDraft,
+    routeIndex: number,
+  ): readonly RouteRecognitionEmission[] {
+    if (route.residue == null || route.residue.length === 0) {
+      return [];
+    }
+    const childRecognitionContext = childRecognitionContextFor(
+      indexes,
+      parentRouteContext,
+      graph,
+      site.instruction,
+      route,
+    );
+    if (childRecognitionContext == null) {
+      return [];
+    }
+    return residualViewportInstructionSites(
+      site,
+      route.residue,
+      indexes.viewportInstructionsByIdentity,
+      indexes.typedInstructionsByIdentity,
+    ).flatMap((childSite) =>
+      this.materializeViewportInstructionRecognitions(
+        store,
+        tree,
+        indexes,
+        childRecognitionContext.routeContext,
+        childRecognitionContext.routeConfigContext,
+        childRecognitionContext.routeConfig,
+        childRecognitionContext.graph,
+        {
+          instruction: childSite.instruction,
+          instructionIndexPath: `${site.instructionIndexPath}:residue:${routeIndex}:${childSite.instructionIndexPath}`,
+        },
+      )
+    );
+  }
+
+  private noFallbackEmission(
+    store: KernelStore,
+    routeConfigContext: RouteConfigContextModel,
+    routeConfig: RouteConfigModel,
+    viewportInstruction: ViewportInstructionModel,
+    path: string,
+    instructionIndexPath: string,
+  ): readonly RouteRecognitionEmission[] {
+    if (path.length === 0 || routeConfig.fallback != null) {
+      return [];
+    }
+    const local = [
+      'router-recognition-issue',
+      'no-fallback',
+      routeConfigContext.identityHandle,
+      instructionIndexPath,
+      localKeyPart(path),
+    ].join(':');
+    const issue = new RouterIssueModel(
+      store.handles.product(local),
+      store.handles.identity(local),
+      RouterIssuePhase.RouteRecognition,
+      RouterIssueKind.InstructionNoFallback,
+      `Neither the route '${path}' matched any configured route nor is a fallback configured for the active route context.`,
+      'error',
+      RouterFrameworkErrorCode.InstructionNoFallback,
+      routeConfig.toReference(),
+      null,
+      'fallback',
+      'configured fallback or matching route',
+      'missing',
+      path,
+      path,
+      null,
+      null,
+      viewportInstruction.sourceAddressHandle,
+    );
+    return [{
+      records: routerIssueProductRecords(store, {
+        local,
+        issue,
+        ownerHandle: routeConfigContext.identityHandle,
+        sourceAddressHandle: viewportInstruction.sourceAddressHandle,
+        localName: path,
+        evidenceSummary: issue.message,
+      }),
+      recognizedRoutes: [],
+      issues: [issue],
+    }];
+  }
+}
+
+function unknownRedirectIssueRecords(
+  store: KernelStore,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndexPath: string,
+  issueIndex: number,
+): readonly KernelStoreRecord[] {
+  const issue = unknownRedirectIssueModel(store, tree, viewportInstruction, draft, instructionIndexPath, issueIndex);
+  return routerIssueProductRecords(store, {
+    local: unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndexPath, issueIndex),
+    issue,
+    ownerHandle: draft.routeConfig.identityHandle,
+    sourceAddressHandle: issue.sourceAddressHandle,
+    localName: draft.routeConfig.id ?? draft.sourcePath,
+    evidenceSummary: issue.message,
+  });
+}
+
+function unknownRedirectIssueModel(
+  store: KernelStore,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndexPath: string,
+  issueIndex: number,
+): RouterIssueModel {
+  const local = unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndexPath, issueIndex);
+  const sourceAddressHandle = draft.routeConfig.redirectToSourceAddressHandle
+    ?? draft.routeConfig.sourceAddressHandle
+    ?? viewportInstruction.sourceAddressHandle;
+  const message = `Redirect target '${draft.redirectPath}' from route '${draft.sourcePath}' did not match any configured route.`;
+  return new RouterIssueModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    RouterIssuePhase.RouteTreeRedirectResolution,
+    RouterIssueKind.InstructionUnknownRedirect,
+    message,
+    'error',
+    RouterFrameworkErrorCode.InstructionUnknownRedirect,
+    draft.routeConfig.toReference(),
+    null,
+    'redirectTo',
+    'configured route or registered component name',
+    'unmatched redirect target',
+    draft.redirectPath,
+    draft.sourcePath,
+    draft.redirectPath,
+    null,
+    sourceAddressHandle,
+  );
+}
+
+function unknownRedirectIssueLocal(
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndexPath: string,
+  issueIndex: number,
+): string {
+  return [
+    'router-recognition-issue',
+    'unknown-redirect',
+    tree.identityHandle,
+    viewportInstruction.identityHandle,
+    instructionIndexPath,
+    issueIndex,
+    draft.routeConfig.identityHandle,
+    localKeyPart(draft.redirectPath),
+  ].join(':');
+}
+
+function routeRecognitionIndexes(
+  routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+  routeRecognizer: RouteRecognizerMaterializationProjectResult,
+  routeInstructions: RouteInstructionMaterializationProjectResult,
+): RouteRecognitionIndexes {
+  return {
+    routeRuntime,
+    routeContextsByIdentity: new Map(
+      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
+    ),
+    routeConfigContextsByIdentity: new Map(
+      routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
+    ),
+    routeConfigContextsByConfigIdentity: new Map(
+      routeConfigContexts.readRouteConfigContexts().flatMap((routeConfigContext) => {
+        const identityHandle = routeConfigContext.config.identityHandle;
+        return identityHandle == null ? [] : [[identityHandle, routeConfigContext] as const];
+      }),
+    ),
+    routeConfigsByIdentity: new Map(
+      routeConfigContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
+    ),
+    viewportInstructionsByIdentity: new Map(
+      routeInstructions.readViewportInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
+    ),
+    typedInstructionsByIdentity: new Map(
+      routeInstructions.readTypedNavigationInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
+    ),
+    recognizerGraphs: recognizerGraphsByIdentity(routeRecognizer),
+  };
+}
+
+function recognizerGraphsByIdentity(
+  result: RouteRecognizerMaterializationProjectResult,
+): ReadonlyMap<string, RecognizerGraph> {
+  const configurableRoutesByIdentity = new Map(
+    result.readConfigurableRoutes().map((route) => [route.identityHandle, route] as const),
+  );
+  const endpointsByIdentity = new Map(
+    result.readEndpoints().map((endpoint) => [endpoint.identityHandle, endpoint] as const),
+  );
+  const statesByRecognizer = new Map<string, StateModel[]>();
+  for (const state of result.readStates()) {
+    const recognizerIdentity = state.recognizer.identityHandle;
+    if (recognizerIdentity == null) {
+      continue;
+    }
+    const states = statesByRecognizer.get(recognizerIdentity);
+    if (states == null) {
+      statesByRecognizer.set(recognizerIdentity, [state]);
+    } else {
+      states.push(state);
+    }
+  }
+
+  const graphs = new Map<string, RecognizerGraph>();
+  for (const [recognizerIdentity, states] of statesByRecognizer) {
+    const root = states.find((state) => state.previousState == null);
+    if (root == null) {
+      continue;
+    }
+    graphs.set(recognizerIdentity, {
+      recognizer: root.recognizer,
+      root,
+      statesByIdentity: new Map(states.map((state) => [state.identityHandle, state] as const)),
+      endpointsByIdentity,
+      configurableRoutesByIdentity,
+    });
+  }
+  return graphs;
+}
+
+function routeContextForInstructionTree(
+  tree: ViewportInstructionTreeModel,
+  routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>,
+): RouteContextModel | null {
+  const identityHandle = tree.routeContext?.identityHandle ?? null;
+  return identityHandle == null ? null : routeContextsByIdentity.get(identityHandle) ?? null;
+}
+
+function routeConfigContextForRouteContext(
+  routeContext: RouteContextModel | null,
+  routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>,
+): RouteConfigContextModel | null {
+  const identityHandle = routeContext?.routeConfigContext?.identityHandle ?? null;
+  return identityHandle == null ? null : routeConfigContextsByIdentity.get(identityHandle) ?? null;
+}
+
+function routeConfigForRouteConfigContext(
+  routeConfigContext: RouteConfigContextModel | null,
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+): RouteConfigModel | null {
+  const identityHandle = routeConfigContext?.config.identityHandle ?? null;
+  return identityHandle == null ? null : routeConfigsByIdentity.get(identityHandle) ?? null;
+}
+
+function childRecognitionContextFor(
+  indexes: RouteRecognitionIndexes,
+  parentRouteContext: RouteContextModel | null,
+  graph: RecognizerGraph,
+  viewportInstruction: ViewportInstructionModel,
+  route: RecognizedRouteDraft,
+): ChildRecognitionContext | null {
+  const routeConfig = routeConfigForEndpoint(route.endpoint, graph, indexes.routeConfigsByIdentity);
+  const childRouteConfigContext = routeConfig?.identityHandle == null
+    ? null
+    : indexes.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
+  const childRouteConfig = routeConfigForRouteConfigContext(childRouteConfigContext, indexes.routeConfigsByIdentity);
+  const recognizerIdentity = childRouteConfigContext?.recognizer.identityHandle ?? null;
+  const childGraph = recognizerIdentity == null
+    ? null
+    : indexes.recognizerGraphs.get(recognizerIdentity) ?? null;
+  if (childRouteConfigContext == null || childRouteConfig == null || childGraph == null) {
+    return null;
+  }
+
+  const componentName = routeConfig?.component?.localName ?? null;
+  const viewportName = viewportInstruction.viewport ?? routeConfig?.viewport ?? DEFAULT_VIEWPORT_NAME;
+  const viewportAgent = componentName == null
+    ? null
+    : indexes.routeRuntime.resolveViewportAgent(
+      parentRouteContext?.identityHandle ?? null,
+      new ViewportRequestModel(viewportName, componentName),
+    );
+  const childRouteContext = indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
+    childRouteConfigContext.identityHandle,
+    viewportAgent?.identityHandle ?? null,
+  );
+  return {
+    routeContext: childRouteContext,
+    routeConfigContext: childRouteConfigContext,
+    routeConfig: childRouteConfig,
+    graph: childGraph,
+  };
+}
+
+function residualViewportInstructionSites(
+  parentSite: ViewportInstructionRecognitionSite,
+  residue: string,
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
+  typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>,
+): readonly ViewportInstructionRecognitionSite[] {
+  const sites: ViewportInstructionRecognitionSite[] = [];
+
+  const visit = (instruction: ViewportInstructionModel, instructionIndexPath: string): void => {
+    const path = collapsedStringPath(instruction, viewportInstructionsByIdentity, typedInstructionsByIdentity);
+    if (path === residue) {
+      sites.push({ instruction, instructionIndexPath });
+      return;
+    }
+    instruction.children.forEach((childRef, childIndex) => {
+      const identityHandle = childRef.identityHandle;
+      const child = identityHandle == null
+        ? null
+        : viewportInstructionsByIdentity.get(identityHandle) ?? null;
+      if (child != null) {
+        visit(child, `${instructionIndexPath}.${childIndex}`);
+      }
+    });
+  };
+
+  parentSite.instruction.children.forEach((childRef, childIndex) => {
+    const identityHandle = childRef.identityHandle;
+    const child = identityHandle == null
+      ? null
+      : viewportInstructionsByIdentity.get(identityHandle) ?? null;
+    if (child != null) {
+      visit(child, `${childIndex}`);
+    }
+  });
+
+  return sites;
+}
+
+function collapsedStringPath(
+  viewportInstruction: ViewportInstructionModel,
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
+  typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>,
+): string | null {
+  const component = stringComponent(viewportInstruction, typedInstructionsByIdentity);
+  if (component == null) {
+    return null;
+  }
+  let path = component;
+  let current = viewportInstruction;
+  while (current.children.length === 1) {
+    const childRef = current.children[0]!;
+    const child = childRef.identityHandle == null
+      ? null
+      : viewportInstructionsByIdentity.get(childRef.identityHandle) ?? null;
+    if (child == null) {
+      break;
+    }
+    const childComponent = stringComponent(child, typedInstructionsByIdentity);
+    if (childComponent == null) {
+      break;
+    }
+    path = `${path}/${childComponent}`;
+    current = child;
+  }
+  return path;
+}
+
+function stringComponent(
+  viewportInstruction: ViewportInstructionModel,
+  typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>,
+): string | null {
+  const componentIdentity = viewportInstruction.component?.identityHandle ?? null;
+  const typedInstruction = componentIdentity == null
+    ? null
+    : typedInstructionsByIdentity.get(componentIdentity) ?? null;
+  return typedInstruction?.instructionKind === NavigationInstructionKind.String
+    ? typedInstruction.value ?? ''
+    : null;
+}
+
+function recognizePath(
+  graph: RecognizerGraph,
+  path: string,
+): readonly RecognizedRouteDraft[] | null {
+  let normalized = path.startsWith('/') ? path : `/${path}`;
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  const result = new RecognizeResult(graph);
+  for (let i = 0; i < normalized.length; ++i) {
+    result.advance(normalized.charAt(i));
+    if (result.isEmpty) {
+      return null;
+    }
+  }
+  return result.getSolution()?.routes() ?? null;
+}
+
+class RecognizeResult {
+  private readonly candidates: Candidate[] = [];
+
+  constructor(
+    readonly graph: RecognizerGraph,
+  ) {
+    this.candidates.push(new Candidate([''], [graph.root], [], this));
+  }
+
+  get isEmpty(): boolean {
+    return this.candidates.length === 0;
+  }
+
+  add(candidate: Candidate): void {
+    this.candidates.push(candidate);
+  }
+
+  remove(candidate: Candidate): void {
+    this.candidates.splice(this.candidates.indexOf(candidate), 1);
+  }
+
+  advance(ch: string): void {
+    for (const candidate of this.candidates.slice()) {
+      candidate.advance(ch);
+    }
+  }
+
+  getSolution(): Candidate | null {
+    const candidates = this.candidates.filter((candidate) => candidate.hasEndpoint && candidate.finalize());
+    if (candidates.length === 0) {
+      return null;
+    }
+    candidates.sort((left, right) => left.compareTo(right));
+    return candidates[0]!;
+  }
+}
+
+class Candidate {
+  private endpoint: EndpointModel | null;
+  private recognizedRoutes: readonly RecognizedRouteDraft[] | null = null;
+  private isConstrained = false;
+  private satisfiesConstraints: boolean | null = null;
+
+  constructor(
+    private readonly chars: string[],
+    private readonly states: StateModel[],
+    private readonly skippedStates: StateModel[],
+    private readonly result: RecognizeResult,
+  ) {
+    this.endpoint = endpointForState(states[states.length - 1]!, result.graph);
+  }
+
+  get hasEndpoint(): boolean {
+    return this.endpoint != null;
+  }
+
+  advance(ch: string): void {
+    const state = this.states[this.states.length - 1]!;
+    const stateToAdd: { value: StateModel | null } = { value: null };
+    let matchCount = 0;
+
+    const process = (nextState: StateModel, skippedState: StateModel | null): void => {
+      if (stateMatches(nextState, ch)) {
+        if (++matchCount === 1) {
+          stateToAdd.value = nextState;
+        } else {
+          this.result.add(new Candidate(
+            this.chars.concat(ch),
+            this.states.concat(nextState),
+            skippedState == null ? this.skippedStates : this.skippedStates.concat(skippedState),
+            this.result,
+          ));
+        }
+      }
+
+      if (state.isSeparator && nextState.isOptional && nextState.nextStates.length > 0) {
+        const separator = nextState.nextStates.length === 1
+          ? stateForReference(nextState.nextStates[0]!, this.result.graph)
+          : null;
+        if (separator?.isSeparator === true) {
+          for (const optionalNext of nextStatesFor(separator, this.result.graph)) {
+            process(optionalNext, nextState);
+          }
+        }
+      }
+    };
+
+    if (state.isDynamic) {
+      process(state, null);
+    }
+    for (const nextState of nextStatesFor(state, this.result.graph)) {
+      process(nextState, null);
+    }
+
+    if (stateToAdd.value != null) {
+      this.states.push(stateToAdd.value);
+      this.chars.push(ch);
+      this.isConstrained = this.isConstrained
+        || stateToAdd.value.isDynamic && stateToAdd.value.isConstrained;
+      const endpoint = endpointForState(stateToAdd.value, this.result.graph);
+      if (endpoint != null) {
+        this.endpoint = endpoint;
+      }
+    }
+
+    if (matchCount === 0) {
+      this.result.remove(this);
+    }
+  }
+
+  finalize(): boolean {
+    collectSkippedStates(this.skippedStates, this.states[this.states.length - 1]!, this.result.graph);
+    if (!this.isConstrained) {
+      return true;
+    }
+    this.routes();
+    return this.satisfiesConstraints === true;
+  }
+
+  routes(): readonly RecognizedRouteDraft[] | null {
+    if (this.recognizedRoutes != null) {
+      return this.recognizedRoutes;
+    }
+
+    this.satisfiesConstraints = true;
+    const routes: RecognizedRouteDraft[] = [];
+    let currentRequirement: EndpointRequirement | null = null;
+
+    for (let i = this.states.length - 1; i >= 0; --i) {
+      const state = this.states[i]!;
+      const endpoint = endpointForState(state, this.result.graph);
+      const createNewRoute = endpoint != null
+        && (currentRequirement == null
+          || currentRequirement.isDifferentEndpoint(endpoint)
+          && currentRequirement.isFulfilled());
+      if (createNewRoute) {
+        if (currentRequirement != null) {
+          routes.unshift(currentRequirement.toRecognizedRoute());
+        }
+        currentRequirement = new EndpointRequirement(endpoint, this.result.graph);
+      }
+
+      if (currentRequirement == null) {
+        continue;
+      }
+      this.satisfiesConstraints = this.satisfiesConstraints
+        && currentRequirement.consume(state, this.chars[i]!, this.states[i - 1]);
+    }
+
+    if (currentRequirement != null && currentRequirement.isDifferentRecognizedRoute(routes[0])) {
+      routes.unshift(currentRequirement.toRecognizedRoute());
+    }
+    this.recognizedRoutes = routes.length > 1 && routes[0]?.path === ''
+      ? routes.slice(1)
+      : routes;
+    return this.satisfiesConstraints ? this.recognizedRoutes : null;
+  }
+
+  compareTo(other: Candidate): -1 | 1 | 0 {
+    const leftStates = this.states;
+    const rightStates = other.states;
+    for (let leftIndex = 0, rightIndex = 0, end = Math.max(leftStates.length, rightStates.length); leftIndex < end; ++leftIndex) {
+      let leftState = leftStates[leftIndex];
+      if (leftState == null) {
+        return 1;
+      }
+      let rightState = rightStates[rightIndex];
+      if (rightState == null) {
+        return -1;
+      }
+      let leftRank = segmentRank(leftState);
+      let rightRank = segmentRank(rightState);
+      if (leftRank == null) {
+        if (rightRank == null) {
+          ++rightIndex;
+          continue;
+        }
+        leftState = leftStates[++leftIndex];
+        if (leftState == null) {
+          return 1;
+        }
+        leftRank = segmentRank(leftState)!;
+      } else if (rightRank == null) {
+        rightState = rightStates[++rightIndex];
+        if (rightState == null) {
+          return -1;
+        }
+        rightRank = segmentRank(rightState)!;
+      }
+      if (leftRank < rightRank) {
+        return 1;
+      }
+      if (leftRank > rightRank) {
+        return -1;
+      }
+      ++rightIndex;
+    }
+
+    if (this.skippedStates.length < other.skippedStates.length) {
+      return 1;
+    }
+    if (this.skippedStates.length > other.skippedStates.length) {
+      return -1;
+    }
+    for (let i = 0; i < this.skippedStates.length; ++i) {
+      const left = this.skippedStates[i]!;
+      const right = other.skippedStates[i]!;
+      if (left.length < right.length) {
+        return 1;
+      }
+      if (left.length > right.length) {
+        return -1;
+      }
+    }
+    return 0;
+  }
+}
+
+class EndpointRequirement {
+  private readonly parameters = new Map<string, { value: string | undefined; required: boolean; fulfilled: boolean }>();
+  private readonly staticSegments: { name: string; accumulated: string; fulfilled: boolean }[] = [];
+  private readonly routeConfigIdentity: IdentityHandle;
+  private path = '';
+
+  constructor(
+    readonly endpoint: EndpointModel,
+    readonly graph: RecognizerGraph,
+  ) {
+    this.routeConfigIdentity = routeConfigIdentityForEndpoint(endpoint, graph);
+    for (const parameter of endpoint.parameters) {
+      this.parameters.set(parameter.name, {
+        value: undefined,
+        required: !parameter.isOptional,
+        fulfilled: false,
+      });
+    }
+    for (const part of endpoint.path.split('/').filter((part) => part.length > 0 && !part.startsWith(':') && !part.startsWith('*'))) {
+      this.staticSegments.push({
+        name: part,
+        accumulated: '',
+        fulfilled: false,
+      });
+    }
+  }
+
+  consume(
+    state: StateModel,
+    ch: string,
+    previousState: StateModel | undefined,
+  ): boolean {
+    this.path = ch + this.path;
+
+    if (state.isDynamic) {
+      const name = state.segmentName;
+      const parameter = name == null ? null : this.parameters.get(name) ?? null;
+      if (parameter != null) {
+        if (parameter.value === undefined) {
+          parameter.value = ch;
+          parameter.fulfilled = parameter.required;
+        } else {
+          parameter.value = ch + parameter.value;
+        }
+      }
+      const checkConstraint = state.isConstrained
+        && previousState?.segmentName !== state.segmentName;
+      return !checkConstraint || satisfiesPattern(state.pattern, parameter?.value ?? '');
+    }
+
+    if (this.staticSegments.length > 0 && ch !== '' && ch !== '/') {
+      const segment = [...this.staticSegments].reverse().find((candidate) => !candidate.fulfilled);
+      if (segment != null) {
+        segment.accumulated = ch + segment.accumulated;
+        segment.fulfilled = segment.name.toLowerCase() === segment.accumulated.toLowerCase();
+      }
+    }
+    return true;
+  }
+
+  isFulfilled(): boolean {
+    for (const parameter of this.parameters.values()) {
+      if (parameter.required && !parameter.fulfilled) {
+        return false;
+      }
+    }
+    return this.staticSegments.length === 0 || this.staticSegments[0]!.fulfilled;
+  }
+
+  isDifferentRecognizedRoute(value: RecognizedRouteDraft | null | undefined): boolean {
+    return this.isDifferentEndpoint(value?.endpoint);
+  }
+
+  isDifferentEndpoint(value: EndpointModel | null | undefined): boolean {
+    return value == null || this.routeConfigIdentity !== routeConfigIdentityForEndpoint(value, this.graph);
+  }
+
+  toRecognizedRoute(): RecognizedRouteDraft {
+    const params = new Map<string, string | undefined>();
+    for (const [key, parameter] of this.parameters) {
+      params.set(key, parameter.value);
+    }
+    const residue = params.get(RESIDUE) ?? null;
+    let path = this.path;
+    if ((residue?.length ?? 0) > 0 && path.endsWith(residue!)) {
+      path = path.slice(0, -residue!.length);
+    }
+    path = path.startsWith('/') ? path.slice(1) : path;
+    path = path.endsWith('/') ? path.slice(0, -1) : path;
+    return {
+      endpoint: this.endpoint,
+      path,
+      residue,
+      parameters: params,
+      parameterCount: [...params].filter(([key, value]) => key !== RESIDUE && value != null).length,
+      redirectDepth: 0,
+      redirectSourceRouteConfig: null,
+    };
+  }
+}
+
+function expandRedirectTargets(
+  graph: RecognizerGraph,
+  routes: readonly RecognizedRouteDraft[],
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+): RedirectExpansionResult {
+  const expanded: RecognizedRouteDraft[] = [];
+  const issues: RedirectExpansionIssueDraft[] = [];
+  for (const route of routes) {
+    expanded.push(route);
+    const targets = redirectTargetsFor(graph, route, routeConfigsByIdentity, new Set(), 1);
+    expanded.push(...targets.routes);
+    issues.push(...targets.issues);
+  }
+  return { routes: expanded, issues };
+}
+
+function redirectTargetsFor(
+  graph: RecognizerGraph,
+  route: RecognizedRouteDraft,
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+  seenRedirects: Set<string>,
+  depth: number,
+): RedirectExpansionResult {
+  const routeConfig = routeConfigForEndpoint(route.endpoint, graph, routeConfigsByIdentity);
+  if (routeConfig?.routeKind !== RouteConfigKind.Redirect || routeConfig.redirectTo == null) {
+    return emptyRedirectExpansion();
+  }
+  if (seenRedirects.has(routeConfig.identityHandle)) {
+    return emptyRedirectExpansion();
+  }
+  seenRedirects.add(routeConfig.identityHandle);
+  const configurableRoute = configurableRouteForEndpoint(route.endpoint, graph);
+  const redirectPath = migrateRedirectPath(configurableRoute?.path ?? route.path, routeConfig.redirectTo, route.parameters).path;
+  if (redirectPath == null) {
+    return emptyRedirectExpansion();
+  }
+  const recognized = recognizePath(graph, redirectPath);
+  if (recognized == null) {
+    return {
+      routes: [],
+      issues: [{
+        routeConfig,
+        sourcePath: configurableRoute?.path ?? route.path,
+        redirectPath,
+        depth,
+      }],
+    };
+  }
+  const targets = recognized.map((target) => ({
+    ...target,
+    redirectDepth: depth,
+    redirectSourceRouteConfig: routeConfig,
+  }));
+  const expanded: RecognizedRouteDraft[] = [];
+  const issues: RedirectExpansionIssueDraft[] = [];
+  for (const target of targets) {
+    expanded.push(target);
+    const nested = redirectTargetsFor(graph, target, routeConfigsByIdentity, seenRedirects, depth + 1);
+    expanded.push(...nested.routes);
+    issues.push(...nested.issues);
+  }
+  return { routes: expanded, issues };
+}
+
+function emptyRedirectExpansion(): RedirectExpansionResult {
+  return { routes: [], issues: [] };
+}
+
+function routeConfigForEndpoint(
+  endpoint: EndpointModel,
+  graph: RecognizerGraph,
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+): RouteConfigModel | null {
+  const configurableRouteIdentity = endpoint.configurableRoute.identityHandle;
+  const configurableRoute = configurableRouteIdentity == null
+    ? null
+    : graph.configurableRoutesByIdentity.get(configurableRouteIdentity) ?? null;
+  const routeConfigIdentity = configurableRoute?.routeConfig.identityHandle ?? null;
+  return routeConfigIdentity == null
+    ? null
+    : routeConfigsByIdentity.get(routeConfigIdentity) ?? null;
+}
+
+function stateMatches(state: StateModel, ch: string): boolean {
+  switch (state.stateKind) {
+    case RouteRecognizerStateKind.Dynamic:
+      return !state.value.includes(ch);
+    case RouteRecognizerStateKind.Star:
+    case RouteRecognizerStateKind.Residue:
+      return true;
+    case RouteRecognizerStateKind.Static:
+    case RouteRecognizerStateKind.Separator:
+      return state.value.includes(ch);
+  }
+}
+
+function nextStatesFor(
+  state: StateModel,
+  graph: RecognizerGraph,
+): readonly StateModel[] {
+  return state.nextStates.flatMap((reference) => {
+    const nextState = stateForReference(reference, graph);
+    return nextState == null ? [] : [nextState];
+  });
+}
+
+function stateForReference(
+  reference: RouteRecognizerReference,
+  graph: RecognizerGraph,
+): StateModel | null {
+  const identityHandle = reference.identityHandle;
+  return identityHandle == null ? null : graph.statesByIdentity.get(identityHandle) ?? null;
+}
+
+function endpointForState(
+  state: StateModel,
+  graph: RecognizerGraph,
+): EndpointModel | null {
+  const identityHandle = state.endpoint?.identityHandle ?? null;
+  return identityHandle == null ? null : graph.endpointsByIdentity.get(identityHandle) ?? null;
+}
+
+function routeConfigIdentityForEndpoint(
+  endpoint: EndpointModel,
+  graph: RecognizerGraph,
+): IdentityHandle {
+  const configurableRouteIdentity = endpoint.configurableRoute.identityHandle;
+  if (configurableRouteIdentity == null) {
+    throw new Error(`Endpoint '${endpoint.identityHandle}' is missing its ConfigurableRoute identity reference.`);
+  }
+  const configurableRoute = graph.configurableRoutesByIdentity.get(configurableRouteIdentity);
+  const routeConfigIdentity = configurableRoute?.routeConfig.identityHandle ?? null;
+  if (routeConfigIdentity == null) {
+    throw new Error(`Endpoint '${endpoint.identityHandle}' references an unmaterialized ConfigurableRoute '${configurableRouteIdentity}'.`);
+  }
+  return routeConfigIdentity;
+}
+
+function configurableRouteForEndpoint(
+  endpoint: EndpointModel,
+  graph: RecognizerGraph,
+): ConfigurableRouteModel | null {
+  const configurableRouteIdentity = endpoint.configurableRoute.identityHandle;
+  return configurableRouteIdentity == null
+    ? null
+    : graph.configurableRoutesByIdentity.get(configurableRouteIdentity) ?? null;
+}
+
+function collectSkippedStates(
+  skippedStates: StateModel[],
+  state: StateModel,
+  graph: RecognizerGraph,
+): void {
+  const nextStates = nextStatesFor(state, graph);
+  if (nextStates.length === 0) {
+    return;
+  }
+  if (nextStates.length === 1 && nextStates[0]!.isSeparator) {
+    collectSkippedStates(skippedStates, nextStates[0]!, graph);
+    return;
+  }
+  for (const nextState of nextStates) {
+    if (nextState.isOptional && nextState.endpoint != null) {
+      skippedStates.push(nextState);
+      for (const child of nextStatesFor(nextState, graph)) {
+        collectSkippedStates(skippedStates, child, graph);
+      }
+      break;
+    }
+  }
+}
+
+function segmentRank(state: StateModel): number | null {
+  switch (state.stateKind) {
+    case RouteRecognizerStateKind.Residue:
+      return 1;
+    case RouteRecognizerStateKind.Star:
+      return 2;
+    case RouteRecognizerStateKind.Dynamic:
+      return 3;
+    case RouteRecognizerStateKind.Static:
+      return 4;
+    case RouteRecognizerStateKind.Separator:
+      return null;
+  }
+}
+
+function satisfiesPattern(pattern: string | null, value: string): boolean {
+  if (pattern == null) {
+    return true;
+  }
+  return new RegExp(pattern).test(value);
+}
+
+function recognizedRouteModel(
+  store: KernelStore,
+  graph: RecognizerGraph,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  route: RecognizedRouteDraft,
+  instructionIndexPath: string,
+  routeIndex: number,
+  routeContext: RouteContextModel | null,
+): RecognizedRouteModel {
+  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndexPath, routeIndex);
+  return new RecognizedRouteModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    graph.recognizer,
+    route.endpoint.toReference(),
+    viewportInstruction.toReference(),
+    tree.toReference(),
+    routeContext?.toReference() ?? tree.routeContext,
+    route.path,
+    route.residue,
+    route.parameterCount,
+    routeParameterValues(route.parameters),
+    route.redirectDepth,
+    route.redirectSourceRouteConfig?.toReference() ?? null,
+    viewportInstruction.sourceAddressHandle,
+  );
+}
+
+function routeParameterValues(
+  parameters: ReadonlyMap<string, string | undefined>,
+): readonly RouteParameterValueModel[] {
+  return [...parameters].map(([name, value]) =>
+    new RouteParameterValueModel(
+      name,
+      value == null ? null : decodeURIComponent(value),
+      value != null,
+      name === RESIDUE,
+    )
+  );
+}
+
+function recognizedRouteRecords(
+  store: KernelStore,
+  graph: RecognizerGraph,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  route: RecognizedRouteModel,
+  instructionIndexPath: string,
+  routeIndex: number,
+): readonly KernelStoreRecord[] {
+  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndexPath, routeIndex);
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  const ownerHandle = routeRecognizerOwnerHandle(graph);
+  return routeRecognizerProductRecords(store, {
+    local,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: route.productHandle,
+    identityHandle: route.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.RecognizedRoute.key,
+    ownerHandle,
+    sourceAddressHandle: route.sourceAddressHandle,
+    localName: route.path,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'RouteRecognizer.recognize walked a static ViewportInstruction path into a RecognizedRoute.',
+  });
+}
+
+function routeRecognizerOwnerHandle(
+  graph: RecognizerGraph,
+): NonNullable<RouteRecognizerReference['identityHandle']> {
+  const ownerHandle = graph.recognizer.identityHandle;
+  if (ownerHandle == null) {
+    throw new Error('Cannot materialize RecognizedRoute without a RouteRecognizer identity owner.');
+  }
+  return ownerHandle;
+}
+
+function recognizedRouteLocal(
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  instructionIndexPath: string,
+  routeIndex: number,
+): string {
+  return `router-recognition:${tree.identityHandle}:instruction:${viewportInstruction.identityHandle}:${instructionIndexPath}:route:${routeIndex}`;
+}

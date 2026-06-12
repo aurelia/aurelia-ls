@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-source-lowering-app-shell",
+  "appPatternKey": "app-builder-source-lowering-app-shell",
+  "expectedEffects": [
+    {
+      "summary": "App-builder minimal app shell SourcePlan has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder minimal app shell SourcePlan has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder minimal app shell SourcePlan has TypeScript and build project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder minimal app shell SourcePlan has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Minimal app shell SourcePlan should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Minimal app shell SourcePlan should expose a resource definition.",
+      "topologyNodeKind": null,
+      "effectKind": "resource-definition",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Minimal app shell SourcePlan should compile its root template.",
+      "topologyNodeKind": "template",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Minimal app shell SourcePlan should hydrate its root component.",
+      "topologyNodeKind": "component",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Minimal app shell SourcePlan should have no open semantic seams.",
+      "topologyNodeKind": null,
+      "effectKind": "open-seam-closure",
+      "scope": "app",
+      "cardinality": "absent",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    }
+  ],
+  "effectContractIds": [
+    "source-plan-preview",
+    "semantic-runtime-reopen"
+  ],
+  "sourceLoweringTargetRefs": [
+    {
+      "kind": "application-pattern",
+      "domain": "application-pattern",
+      "id": "app-shell"
+    }
+  ],
+  "sourceLoweringRequestFieldUsageRows": [
+    {
+      "requestPath": "sourceLoweringSourcePlan.rootDir",
+      "ownerKind": "source-plan",
+      "fieldId": "root-dir",
+      "requestFieldName": "rootDir",
+      "valueShape": {
+        "kind": "string"
+      }
+    },
+    {
+      "requestPath": "sourceLoweringSourcePlan.sourceLoweringAppShell",
+      "ownerKind": "source-plan",
+      "fieldId": "source-lowering-app-shell",
+      "requestFieldName": "sourceLoweringAppShell",
+      "valueShape": {
+        "kind": "object",
+        "keyCount": 2
+      }
+    }
+  ]
+}

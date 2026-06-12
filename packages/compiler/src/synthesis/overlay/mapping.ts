@@ -78,10 +78,10 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
   const overlayEntries: OverlayEntry[] = inputs.overlayMapping.map((m) => {
     const htmlSpan = exprSpanIndex.ensure(m.exprId, inputs.fallbackFile);
     const overlaySpan = inputs.overlayFile
-      ? resolveSourceSpan(m.span as SourceSpan, inputs.overlayFile)
+      ? resolveSourceSpan(m.span, inputs.overlayFile)
       : normalizeSpan(m.span);
     const callSpan = m.callSpan
-      ? (inputs.overlayFile ? resolveSourceSpan(m.callSpan as SourceSpan, inputs.overlayFile) : normalizeSpan(m.callSpan))
+      ? (inputs.overlayFile ? resolveSourceSpan(m.callSpan, inputs.overlayFile) : normalizeSpan(m.callSpan))
       : undefined;
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
@@ -173,7 +173,7 @@ function buildSegmentPairs(
       kind: "member",
       path: overlaySeg.path,
       htmlSpan,
-      overlaySpan: overlayFile ? resolveSourceSpan(overlaySeg.span as SourceSpan, overlayFile) : normalizeSpan(overlaySeg.span),
+      overlaySpan: overlayFile ? resolveSourceSpan(overlaySeg.span, overlayFile) : normalizeSpan(overlaySeg.span),
       ...(degradation ? { degradation } : {}),
     });
   }

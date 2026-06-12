@@ -1,0 +1,28 @@
+<section>
+  <a load="../">Back</a>
+  <section promise.bind="contactEntryPromise">
+    <p pending>Loading contact...</p>
+    <template then="contactEntry">
+      <article if.bind="contactEntry">
+        <section>
+          <h2>${contactEntry.fullName}</h2>
+          <p>
+            Email:
+            <a href.bind="'mailto:' + (contactEntry.email)" external>${contactEntry.email}</a>
+          </p>
+          <p>
+            Website:
+            <a href.bind="contactEntry.websiteUrl" external>${contactEntry.websiteUrl}</a>
+          </p>
+          <p>
+            Support Phone:
+            <a href.bind="'tel:' + (contactEntry.supportPhone)" external>${contactEntry.supportPhone}</a>
+          </p>
+          <p>Status: ${contactEntry.active ? 'Active' : 'Inactive'}</p>
+        </section>
+      </article>
+      <p else>No contact found for this route.</p>
+    </template>
+    <p catch>Could not load contact.</p>
+  </section>
+</section>

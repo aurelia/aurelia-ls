@@ -1,0 +1,48 @@
+<section class="service-filter-create-complete-task-section">
+  <form submit.trigger="create()" class="service-filter-create-complete-task-section__form">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <button type="submit">Create task</button>
+  </form>
+  <p if.bind="createStatusMessage" role="status" id="task-create-status">${createStatusMessage}</p>
+  <button type="button" click.trigger="showAllTaskItems()" class="service-filter-create-complete-task-section__filter-button">Show all tasks</button>
+  <p if.bind="allFilterStatusMessage" role="status" id="task-all-filter-status">${allFilterStatusMessage}</p>
+  <button type="button" click.trigger="showOpenTaskItems()" class="service-filter-create-complete-task-section__filter-button">Show open tasks</button>
+  <p if.bind="openFilterStatusMessage" role="status" id="task-open-filter-status">${openFilterStatusMessage}</p>
+  <button type="button" click.trigger="showCompletedTaskItems()" class="service-filter-create-complete-task-section__filter-button">Show completed tasks</button>
+  <p if.bind="completedFilterStatusMessage" role="status" id="task-completed-filter-status">${completedFilterStatusMessage}</p>
+  <p if.bind="completeStatusMessage" role="status" id="task-complete-status">${completeStatusMessage}</p>
+  <section promise.bind="taskItemsPromise" class="service-filter-create-complete-task-section__status">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+      <template else>
+        <table class="service-filter-create-complete-task-section__table" data-au-role="service-filter-create-complete-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Done</th>
+              <th>Complete</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="service-filter-create-complete-task-section__row">
+              <td>${taskItem.title}</td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
+              <td>
+                <button type="button" click.trigger="complete(taskItem)">Complete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error">Could not load tasks.</p>
+  </section>
+</section>

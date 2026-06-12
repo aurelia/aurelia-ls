@@ -1,0 +1,226 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "app-builder-source-lowering-pressure",
+  "pressureOrigin": "app-builder-part-source-gallery",
+  "appPatternKey": "app-builder-part-source-gallery",
+  "expectedEffects": [
+    {
+      "summary": "App-builder part source gallery has package manifest tooling.",
+      "topologyNodeKind": "package-manifest",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "package-manifest",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder part source gallery has a browser root document.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "root-document",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder part source gallery has TypeScript and build project tooling.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "tooling-config",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "App-builder part source gallery has local asset module declarations.",
+      "topologyNodeKind": "build-tool",
+      "effectKind": "project-tooling",
+      "scope": "project",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "role",
+          "value": "declaration",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should reopen as an Aurelia app.",
+      "topologyNodeKind": null,
+      "effectKind": "project-shape",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "baseline",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should compile the generated template and nested controller source.",
+      "topologyNodeKind": "template",
+      "effectKind": "template-compilation",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should hydrate runtime controllers from generated template source.",
+      "topologyNodeKind": "component",
+      "effectKind": "runtime-controller",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose generated value-channel facts.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-value-channel",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 12,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose generated binding behavior applications.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-behavior-application",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 8,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose generated binding data-flow facts.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 12,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should register @aurelia/state and materialize the named users store.",
+      "topologyNodeKind": "plugin",
+      "effectKind": "state-store",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "name",
+          "value": "users",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should admit static i18n resources for generated translation bindings.",
+      "topologyNodeKind": "plugin",
+      "effectKind": "i18n-translation-key",
+      "scope": "app",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "key",
+          "value": "app.title",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose generated i18n translation bindings.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "i18n-translation-binding",
+      "scope": "template",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose router facts from generated load/href/viewport source.",
+      "topologyNodeKind": "route",
+      "effectKind": "route",
+      "scope": "route",
+      "cardinality": "at-least",
+      "count": 1,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose validation-errors data flow.",
+      "topologyNodeKind": "template-binding",
+      "effectKind": "binding-data-flow",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [
+        {
+          "field": "targetProperty",
+          "value": "errors",
+          "kind": "expected-semantic-effect-filter"
+        }
+      ],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    },
+    {
+      "summary": "Part source gallery should expose au-compose runtime composition facts.",
+      "topologyNodeKind": "component",
+      "effectKind": "runtime-composition",
+      "scope": "template",
+      "cardinality": "present",
+      "count": null,
+      "filters": [],
+      "role": "signature",
+      "kind": "expected-semantic-effect"
+    }
+  ]
+}

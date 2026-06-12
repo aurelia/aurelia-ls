@@ -16,6 +16,7 @@ export interface HydrationContext {
   document: Document;
   platform: BrowserPlatform;
   host: Element;
+  restoreGlobals(): void;
 }
 
 export interface HydrationResult {
@@ -105,30 +106,15 @@ export function createHydrationContext(
   const document = window.document;
   const platform = new BrowserPlatform(window as any);
   const host = resolveHost(document, hostElement);
+  const restoreGlobals = installHydrationGlobals(window, document);
+  const closeWindow = window.close.bind(window);
+  window.close = function closeHydrationWindow(): void {
+    restoreGlobals();
+    closeWindow();
+  };
 
   // Ensure DOM globals exist for runtime checks in node-based SSR/hydration tests.
-  const globalWindow = globalThis as typeof globalThis & {
-    HTMLElement?: typeof window.HTMLElement;
-    Element?: typeof window.Element;
-    Node?: typeof window.Node;
-    Document?: typeof window.Document;
-    HTMLInputElement?: typeof window.HTMLInputElement;
-    HTMLTextAreaElement?: typeof window.HTMLTextAreaElement;
-    HTMLSelectElement?: typeof window.HTMLSelectElement;
-    CustomEvent?: typeof window.CustomEvent;
-    Event?: typeof window.Event;
-  };
-  globalWindow.HTMLElement = window.HTMLElement;
-  globalWindow.Element = window.Element;
-  globalWindow.Node = window.Node;
-  globalWindow.Document = window.Document;
-  globalWindow.HTMLInputElement = window.HTMLInputElement;
-  globalWindow.HTMLTextAreaElement = window.HTMLTextAreaElement;
-  globalWindow.HTMLSelectElement = window.HTMLSelectElement;
-  globalWindow.CustomEvent = window.CustomEvent;
-  globalWindow.Event = window.Event;
-
-  return { dom, window, document, platform, host };
+  return { dom, window, document, platform, host, restoreGlobals };
 }
 
 export async function hydrateSsr(
@@ -236,6 +222,52 @@ export async function hydrateSsr(
       }
       ctx.dom.window.close();
     },
+  };
+}
+
+function installHydrationGlobals(
+  window: Window & typeof globalThis,
+  document: Document,
+): () => void {
+  const globalObject = globalThis as Record<string, unknown>;
+  const values: Record<string, unknown> = {
+    window,
+    document,
+    HTMLElement: window.HTMLElement,
+    Element: window.Element,
+    Node: window.Node,
+    Document: window.Document,
+    HTMLInputElement: window.HTMLInputElement,
+    HTMLTextAreaElement: window.HTMLTextAreaElement,
+    HTMLSelectElement: window.HTMLSelectElement,
+    CustomEvent: window.CustomEvent,
+    Event: window.Event,
+  };
+  const previous = new Map<string, { hadOwnValue: boolean; value: unknown }>();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, {
+      hadOwnValue: Object.prototype.hasOwnProperty.call(globalObject, key),
+      value: globalObject[key],
+    });
+    globalObject[key] = value;
+  }
+
+  let restored = false;
+  return () => {
+    if (restored) {
+      return;
+    }
+    restored = true;
+    for (const [key, entry] of previous) {
+      if (globalObject[key] !== values[key]) {
+        continue;
+      }
+      if (entry.hadOwnValue) {
+        globalObject[key] = entry.value;
+      } else {
+        delete globalObject[key];
+      }
+    }
   };
 }
 

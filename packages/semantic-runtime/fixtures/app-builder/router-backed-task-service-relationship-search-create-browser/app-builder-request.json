@@ -1,0 +1,497 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "includeControlUseInventoryRows": true,
+    "sourceLoweringRouterBackedListDetail": {
+      "targetRef": {
+        "kind": "application-pattern",
+        "domain": "application-pattern",
+        "id": "router-backed-list-detail"
+      },
+      "actionName": "openTask",
+      "linkText": "Open",
+      "createForm": {
+        "actionName": "create",
+        "fieldNames": [
+          "title",
+          "done",
+          "assigneeId",
+          "reviewerIds"
+        ],
+        "submitButtonText": "Create task"
+      },
+      "serviceCollection": {
+        "sourceTargetPath": "src/services/task-relationship-search-create-service.ts",
+        "serviceClassName": "TaskRelationshipSearchCreateService",
+        "loadMethodName": "loadTaskRelationships",
+        "findMethodName": "loadTaskRelationship",
+        "createMethodName": "createTaskRelationship",
+        "filterMethods": [
+          {
+            "methodName": "searchTaskRelationshipsByTitle",
+            "fieldName": "title",
+            "parameterName": "query",
+            "predicateKind": "text-contains"
+          }
+        ],
+        "queryControls": [
+          {
+            "stateMemberName": "taskRelationshipTitleQuery",
+            "stateTypeText": "string",
+            "initialValueExpression": "''",
+            "inactiveValueExpression": "''",
+            "reloadMethodName": "reloadTaskRelationshipsByTitle",
+            "resultMemberName": "taskItemsPromise",
+            "filterMethodName": "searchTaskRelationshipsByTitle",
+            "fieldControlId": "task-relationship-search-query",
+            "labelText": "Search task relationships",
+            "applyActionName": "searchTaskRelationships",
+            "applyButtonText": "Search task relationships",
+            "clearActionName": "clearTaskRelationshipSearch",
+            "clearButtonText": "Clear search"
+          }
+        ]
+      },
+      "includePreflight": true,
+      "decisionBundles": [
+        {
+          "bundleId": "task-service-relationship-search-create-browser-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "task service relationship search create browser explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": [
+                    {
+                      "entityTitle": "Task",
+                      "entityTypeName": "TaskItem",
+                      "collectionMemberName": "taskItems",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Contact",
+                      "entityTypeName": "ContactEntry",
+                      "collectionMemberName": "contacts",
+                      "identityMemberName": "contactId",
+                      "identityValueKind": "string"
+                    },
+                    {
+                      "entityTitle": "Schedule",
+                      "entityTypeName": "ScheduleWindow",
+                      "collectionMemberName": "schedules",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    },
+                    {
+                      "entityTitle": "Checkpoint",
+                      "entityTypeName": "CheckpointItem",
+                      "collectionMemberName": "checkpoints",
+                      "identityMemberName": "id",
+                      "identityValueKind": "number"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "openTask",
+                      "kind": "custom",
+                      "scope": "navigation",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done",
+                        "assigneeId",
+                        "reviewerIds"
+                      ]
+                    },
+                    {
+                      "name": "searchTaskRelationships",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "clearTaskRelationshipSearch",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "assigneeId",
+                      "title": "Assignee",
+                      "valueKind": "text",
+                      "defaultValue": "ada"
+                    },
+                    {
+                      "entityName": "TaskItem",
+                      "name": "reviewerIds",
+                      "title": "Reviewers",
+                      "valueKind": "choice-set",
+                      "defaultValue": [
+                        "ada"
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "fullName",
+                      "title": "Full Name",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "name": "email",
+                      "title": "Email",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ScheduleWindow",
+                      "name": "label",
+                      "title": "Label",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "ScheduleWindow",
+                      "name": "confirmed",
+                      "title": "Confirmed",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "CheckpointItem",
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "CheckpointItem",
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    },
+                    {
+                      "entityName": "TaskEffort",
+                      "name": "summary",
+                      "title": "Summary",
+                      "valueKind": "text"
+                    },
+                    {
+                      "entityName": "TaskEffort",
+                      "name": "hours",
+                      "title": "Hours",
+                      "valueKind": "number"
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-relationships",
+                  "value": [
+                    {
+                      "name": "assignee",
+                      "title": "Assignee",
+                      "kind": "reference-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "assigneeId",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": true
+                    },
+                    {
+                      "name": "reviewers",
+                      "title": "Reviewers",
+                      "kind": "reference-many",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ContactEntry",
+                      "localFieldName": "reviewerIds",
+                      "foreignFieldName": "contactId",
+                      "displayFieldName": "fullName",
+                      "required": false
+                    },
+                    {
+                      "name": "schedule",
+                      "title": "Schedule",
+                      "kind": "owns-one",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "ScheduleWindow",
+                      "localFieldName": "schedule",
+                      "displayFieldName": "label",
+                      "required": false
+                    },
+                    {
+                      "name": "checkpoints",
+                      "title": "Checkpoints",
+                      "kind": "owns-many",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "CheckpointItem",
+                      "localFieldName": "checkpoints",
+                      "displayFieldName": "title",
+                      "required": false
+                    },
+                    {
+                      "name": "effort",
+                      "title": "Effort",
+                      "kind": "nested-value-object",
+                      "fromEntityName": "TaskItem",
+                      "toEntityName": "TaskEffort",
+                      "localFieldName": "effort",
+                      "displayFieldName": "summary",
+                      "required": false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "relationshipName": "assignee",
+                      "header": "Assignee",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "reviewers",
+                      "header": "Reviewers",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "schedule",
+                      "header": "Schedule",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "checkpoints",
+                      "header": "Checkpoints",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "relationshipName": "effort",
+                      "header": "Effort",
+                      "displayKind": "relation"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    },
+                    {
+                      "actionName": "openTask",
+                      "header": "Action",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Task Service Relationship Search Create Browser",
+                    "sourcePatternParameterValues": [
+                      {
+                        "key": "list-route-path",
+                        "value": "task-service-relationship-search-create"
+                      },
+                      {
+                        "key": "detail-route-parameter",
+                        "value": "taskId"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-routing-policy",
+                  "value": {
+                    "routerAdmission": "router-configuration",
+                    "areaNavigationPolicies": [
+                      "router-driven-view-selection"
+                    ]
+                  }
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "appStateOwnership": "di-state-class",
+                    "domainModeling": "plain-domain-composition"
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "searchTaskRelationships",
+                      "statusMemberName": "searchStatusMessage",
+                      "statusText": "Search applied.",
+                      "statusId": "task-relationship-search-status"
+                    },
+                    {
+                      "actionName": "clearTaskRelationshipSearch",
+                      "statusMemberName": "clearSearchStatusMessage",
+                      "statusText": "Search cleared.",
+                      "statusId": "task-relationship-clear-search-status"
+                    },
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task relationship saved.",
+                      "statusId": "task-relationship-create-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "entityName": "TaskItem",
+                      "records": [
+                        {
+                          "id": 1,
+                          "title": "Prepare release notes",
+                          "done": false,
+                          "assigneeId": "ada",
+                          "reviewerIds": [
+                            "ada",
+                            "grace"
+                          ],
+                          "schedule": {
+                            "id": 101,
+                            "label": "Draft review",
+                            "confirmed": true
+                          },
+                          "checkpoints": [
+                            {
+                              "id": 1001,
+                              "title": "Draft summary",
+                              "done": true
+                            },
+                            {
+                              "id": 1002,
+                              "title": "Review changes",
+                              "done": false
+                            }
+                          ],
+                          "effort": {
+                            "summary": "Short focused pass",
+                            "hours": 2
+                          }
+                        },
+                        {
+                          "id": 2,
+                          "title": "Check deployment checklist",
+                          "done": true,
+                          "assigneeId": "grace",
+                          "reviewerIds": [
+                            "ada"
+                          ],
+                          "schedule": {
+                            "id": 102,
+                            "label": "Launch readiness",
+                            "confirmed": false
+                          },
+                          "checkpoints": [
+                            {
+                              "id": 2001,
+                              "title": "Confirm owners",
+                              "done": true
+                            }
+                          ],
+                          "effort": {
+                            "summary": "Review with owner",
+                            "hours": 1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "entityName": "ContactEntry",
+                      "records": [
+                        {
+                          "contactId": "ada",
+                          "fullName": "Ada Lovelace",
+                          "email": "ada@example.test"
+                        },
+                        {
+                          "contactId": "grace",
+                          "fullName": "Grace Hopper",
+                          "email": "grace@example.test"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

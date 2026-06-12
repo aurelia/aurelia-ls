@@ -1,0 +1,50 @@
+<section class="task-relationship-operations" data-au-role="app-section">
+  <p if.bind="filteredTaskItems.length === 0" class="task-relationship-operations__empty">No matching tasks.</p>
+  <template else>
+    <div role="toolbar" aria-label="Batch actions">
+      <button type="button" click.trigger="deleteSelectedTaskItems()">Delete selected</button>
+    </div>
+    <table class="task-relationship-operations__table">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>
+            <button type="button" click.trigger="sortByTitle()">Task</button>
+            <input type="search" aria-label="Filter Task" value.bind="titleFilter">
+          </th>
+          <th>Assignee</th>
+          <th>Reviewers</th>
+          <th>Schedule</th>
+          <th>Checkpoints</th>
+          <th>Effort</th>
+          <th>Done</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr repeat.for="taskItem of pagedTaskItems" class="task-relationship-operations__row">
+          <td>
+            <input type="checkbox" checked.to-view="selectedTaskItemIds.includes(taskItem.id)" change.trigger="toggleTaskItemSelection(taskItem)" aria-label.bind="'Select ' + taskItem.title">
+          </td>
+          <td>${taskItem.title}</td>
+          <td>${assigneeLabelForTaskItem(taskItem)}</td>
+          <td>${reviewersLabelForTaskItem(taskItem)}</td>
+          <td>${scheduleLabelForTaskItem(taskItem)}</td>
+          <td>${checkpointsLabelForTaskItem(taskItem)}</td>
+          <td>${effortLabelForTaskItem(taskItem)}</td>
+          <td>${taskItem.done ? 'Done' : 'Open'}</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="8">
+            <nav aria-label="Pagination">
+              <button type="button" click.trigger="previousTaskItemsPage()">Previous</button>
+              <span>Page ${Math.min(taskItemsPage, taskItemsPageCount)} of ${taskItemsPageCount}</span>
+              <button type="button" click.trigger="nextTaskItemsPage()">Next</button>
+            </nav>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </template>
+</section>

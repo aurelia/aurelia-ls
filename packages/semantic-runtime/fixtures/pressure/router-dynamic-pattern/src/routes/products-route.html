@@ -1,0 +1,29 @@
+<nav>
+  <a repeat.for="product of products" href="${productHref(product)}">${product.name}</a>
+  <a repeat.for="product of products" href="${routerLinks.detail(product)}">
+    Receiver ${product.name}
+  </a>
+  <button repeat.for="product of products" type="button" load.bind="'/products/' + product.id">
+    Load ${product.name}
+  </button>
+  <button type="button" load="route: product-detail; params.bind: { productId: 'espresso' }">
+    Inline espresso
+  </button>
+  <button repeat.for="product of products" type="button" load="route: product-detail; params.bind: { productId: product.id }">
+    Inline ${product.name}
+  </button>
+  <a href="${stateBackedHref('state-coffee')}">State Coffee</a>
+  <a repeat.for="product of products" href="${stateBackedHref(product.id)}">
+    State lookup ${product.name}
+  </a>
+  <a repeat.for="product of products" href="${externalHref(product)}" target="_blank" rel="noreferrer">
+    External ${product.name}
+  </a>
+  <a repeat.for="product of products" href.bind="explicitExternalHref(product)" external>
+    Explicit external ${product.name}
+  </a>
+  <a repeat.for="product of products" href="${externalPackageHref(product.id)}" target="_blank" rel="noreferrer">
+    Vendor ${product.name}
+  </a>
+</nav>
+<au-viewport name="details"></au-viewport>

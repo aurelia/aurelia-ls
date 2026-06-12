@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:application-topology-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "application",
+        "authoring",
+        "fixture",
+        "topology"
+      ],
+      "summary": "ApplicationTopologyBuilder is the mutable authoring-side assembler for app-level topology files, components, styles, services, registrations, and routes.",
+      "rationale": "The authoring API needs a topology model that can express intended app structure before source exists, while recognition and verification later prove what the app actually means. This builder is the topology-construction boundary; recipes should name intent and preferences rather than rebuilding topology graphs by hand.",
+      "guidance": [
+        "Start here when authoring operations need to assemble entrypoints, components, templates, styles, services, registrations, routes, or component dependencies.",
+        "Keep generator taste, formatting policy, and recipe-specific preferences out of application topology.",
+        "When recipe requests allow custom paths, derive topology component references and template/style import specifiers from the same paths used by source plans; `ApplicationTopologyBuilder.component(...)` owns component reference specifier derivation through `referenceFromPath`, and default-layout specifiers such as `./app` should not leak into custom-path topology.",
+        "Large recipe topology builders should stay as short phase assemblers plus named topology artifact helpers, such as adding a root component, form component, state service, route, or entrypoint. That gives Atlas stable handles for topology intent without pushing recipe taste into `ApplicationTopologyBuilder`.",
+        "This frontier is nextActionPolicy=when-touched: use it as topology grounding when app-building, fixture, or authoring-operation work needs topology assembly, not as default autonomous work just because the builder is live.",
+        "`ApplicationTopology` and reopened `AppTopology` share the same style asset vocabulary: owner kind, asset kind, source kind, optional style file, and optional import specifier.",
+        "`AppTopology.styles` and component `styles` rows are source-backed by local CSS imports and inline Aurelia `cssModules(...)` / `shadowCSS(...)` registry arguments. They distinguish plain component/global stylesheets from CSS module and Shadow DOM style registries. Use those rows for the `style-resource` expected effect and `style-resource-ownership` taste; dynamic class/style bindings are a separate template binding lane.",
+        "If generated fixtures fail verification, improve recognition/semantic-runtime proof layers rather than weakening topology into source-parser shortcuts."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/topology-builder.ts",
+          "symbolName": "ApplicationTopologyBuilder",
+          "line": 65,
+          "summary": "Mutable app topology assembler."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/module-specifier.ts",
+          "symbolName": "moduleSpecifier",
+          "summary": "Shared relative authored import specifier helper for topology and source plans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/README.md",
+          "summary": "Application topology boundary and authoring pressure notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ApplicationTopologyBuilder",
+          "filePath": "packages/semantic-runtime/src/application/topology-builder.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/application/module-specifier.ts",
+          "symbolName": "moduleSpecifier"
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "reuse:direct-di-state-template-binding",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "application",
+        "observation",
+        "fixtures",
+        "topology",
+        "app-builder"
+      ],
+      "summary": "Direct template bindings to DI-injected state and domain objects should remain visible without requiring view-model forwarding getters.",
+      "rationale": "Idiomatic Aurelia can bind templates to ordinary DI-owned state and domain objects. A getter that only shortens `state.member` or forwards one domain property adds boilerplate and should not be required for AppTopology, observation, or authoring verification to see service/state flow.",
+      "guidance": [
+        "Prefer `state.member` template bindings over view-model getters when the getter only forwards to DI-owned state.",
+        "Keep getters/setters for real adaptation points: route/query projection, presentation state, validation policy, service calls, or domain behavior. Nullable id-to-object lookup can be a real adaptation boundary, but state-backed app-pattern fixtures currently express that boundary as a template-local `<let request.bind=\"state.readRequest(requestId)\"></let>` plus `if.bind` narrowing so the component does not grow a forwarding getter.",
+        "ID-first boundaries and direct object bindings are both legitimate depending on the domain shape. State-backed app-pattern fixtures use a scalar ID at the component boundary, a template-local request object, and one object-valued `request.assignee` select with an app-authored matcher because the form model really owns that selected object.",
+        "Prefer domain-object getters for real domain behavior such as submit readiness. Migrated app-pattern form fixtures model `ServiceRequest.canSubmit` as a plain accessor getter and bind to `request.canSubmit`/`canSubmit`; semantic-runtime should prove that through computed-observer-source rows and binding-observed-dependency rows instead of regenerating a view-model `canSubmit` alias.",
+        "When a binding source root is an injected state/service/model member, AppTopology.serviceInteractionBindings should publish direct read/write handoff rows from the binding data-flow instead of requiring a component-member TypeScript body.",
+        "Keep the direct handoff scope-backed: use the binding row's materialized BindingScope to prove that the root slot resolves to the injected component member source, so template locals named `state` do not become false service/state interactions.",
+        "Support source roles are not path-only: `ApplicationSupportSourceRoleIndex` admits DI targets from `resolve(...)` sites when the owning component member establishes a support role such as `state`, so compact files like `src/task-list-state.ts` remain topology-visible without magic folders.",
+        "Direct state binding rows should report the invoked/read top-level support member. For complex expressions such as `state.completedCount === 0`, use binding observed-dependency rows to name `completedCount` instead of treating the whole expression as a state member.",
+        "Ground ordinary `state.member` observability in Aurelia expression connectable reads. ProxyObservable feeds watcher/trackable/nested-collection reads into the same observation circuit, but it is not a reason to reintroduce forwarding getters.",
+        "Small state/domain methods invoked by templates can also be the low-boilerplate boundary, but direct template calls to ordinary methods should not promise hidden method-body dependency reads. Use binding data-flow/topology rows for the call itself, direct template member reads or getters for observed UI state, and explicit trackable/proxy contexts when method body dependency collection is actually framework-owned.",
+        "Listener bindings are part of the same direct handoff lane when no view-model adaptation is needed. A form can use `submit.trigger=\"state.submitRequest(requestId)\"`; semantic-runtime should project the ListenerBinding source expression, close the event listener target operation through an `event-handler-invocation` value channel, and expose the app-topology service interaction as a `call` against the injected state layer.",
+        "Listener expressions may also evaluate to a method reference or handler factory. Preserve the full binding source display, including arguments such as `$event`, while AppTopology reports the invoked support member name without call arguments.",
+        "Keep component listener methods for real adaptation such as validation controller orchestration, route/presentation policy, or argument shaping. Do not reintroduce a `submit()` forwarding method only to make template-to-state calls visible."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "directInjectionServiceInteractionBindingRowsForDataFlow",
+          "summary": "Direct binding-data-flow to injected support-member topology rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionOperationKindsForDataFlow",
+          "summary": "Read/write operation projection from binding direction and assignment policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression.ts",
+          "symbolName": "isRuntimeExpressionBinding",
+          "summary": "Runtime binding expression gate now includes ListenerBinding source expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingValueChannelKind",
+          "summary": "Runtime value-channel vocabulary including event-handler-invocation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName",
+          "summary": "Shared binding expression display helper, including listener call arguments such as `$event`."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberName",
+          "summary": "AppTopology support-member display helper that strips trailing call arguments from direct listener expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberNames",
+          "summary": "AppTopology support-member projection that uses observed dependencies for complex direct state expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/support-source-role.ts",
+          "symbolName": "ApplicationSupportSourceRoleIndex",
+          "summary": "Project-local support-role index for path and DI-member role evidence."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/support-source-role.ts",
+          "symbolName": "applicationSupportSourceRoleIndex",
+          "summary": "Builds compact support-role evidence from source path conventions and `resolve(...)` member sites."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "stateCompositionValueType",
+          "summary": "State-composition helper that unwraps collection element types such as `Task[]` to a source-backed domain class."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/listener-method-reference",
+          "summary": "Pressure fixture for direct listener calls, method references, and handler factories against injected state."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:listener-method-reference",
+          "summary": "Focused contract for listener method-reference value channels and app-topology service interaction rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/application/README.md",
+          "summary": "Application topology boundary and direct injected-state binding guidance."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/observation/README.md",
+          "summary": "Observation notes for ordinary template connectable reads and ProxyObservable as one integrated observation circuit."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-state-backed-form",
+          "summary": "Migrated app-pattern fixture preserving direct state/domain binding pressure."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/app-pattern-service-backed-form",
+          "summary": "Migrated app-pattern fixture preserving service-boundary binding pressure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "directInjectionServiceInteractionBindingRowsForDataFlow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionOperationKindsForDataFlow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberNames"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/application/support-source-role.ts",
+          "symbolName": "ApplicationSupportSourceRoleIndex"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-listener-method-reference.mjs"
+        }
+      ],
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-30"
+    }
+  ]
+}

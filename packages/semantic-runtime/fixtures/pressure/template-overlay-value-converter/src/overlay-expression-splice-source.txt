@@ -1,0 +1,1 @@
+formatWordCount(message | wordCount:minimumCount)

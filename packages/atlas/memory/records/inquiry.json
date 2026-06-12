@@ -1,0 +1,874 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:template-completion-cursor-context-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "template",
+        "completion",
+        "lsp"
+      ],
+      "summary": "TemplateCompletionCursorContextBuilder resolves a materialized template cursor locus into the product-handle query shape used by template completion.",
+      "rationale": "Cursor-locus inquiry is where HTML spans, attribute syntax, classification, value sites, expression parses, binding scopes, resource scopes, route/i18n context, and TypeChecker member-owner projection meet. This builder is the locus-to-query boundary and should not be bypassed by answer-local cursor heuristics.",
+      "guidance": [
+        "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
+        "The product-handle completion answer should spend supplied handles and report missing inputs; cursor member-owner derivation belongs in TemplateCompletionCursorContextBuilder where runtime-analysis expression world and rendered binding source context are available.",
+        "Top-level template completion candidates should reuse BindingContextSlot target handles and TypeMember hot details for member kind, visibility, readonly/optional, and known Aurelia hook-category metadata. Do not add a completion-local TypeChecker member enumeration path for this.",
+        "`$this.` member-access completion is covered for the parser-owned awaiting-member-name frontier by using the frontier owner expression when no completed binding AST exists. If a similar completion reports missing `expression-member-owner` or `member-owner-type`, route through shared cursor/member-owner projection and binding-scope selection rather than inventing lookup in the answer mapper.",
+        "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
+        "Plain static attribute values may classify as attribute-value sites without a TemplateValueSite product; that is an expected empty completion surface, not an attribute-value-site missing input.",
+        "If another LSP-like feature needs similar cursor context, consider extracting a shared cursor-context substrate before duplicating this builder."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder",
+          "line": 335,
+          "summary": "Template cursor-to-completion-query context builder."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "summary": "Use memory:next to discover active cursor/inquiry pressure before adding answer-local heuristics."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-completion-member-metadata",
+          "summary": "Contract proving public completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "TemplateCompletionCursorContextBuilder",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "minLineCount": 150,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-06-10"
+    },
+    {
+      "id": "intent:lsp-edit-affordance-substrate",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "lsp",
+        "mcp",
+        "edits",
+        "references",
+        "type-system",
+        "template"
+      ],
+      "summary": "IDE/MCP affordances need one semantic reference and edit-plan algebra for definition, references, hover, diagnostics, rename, code actions, organize imports, file rename edits, and future workspace edits.",
+      "rationale": "Atlas can already ask TypeScript LanguageService questions, but semantic-runtime must eventually serve the same semantic affordances to human IDE users and AI MCP users across TypeScript and Aurelia semantics. Navigation can tolerate partial reference confidence, while editing is the strictest consumer: it has to combine TypeScript references with template, resource, route, i18n, binding, and generated-source constraints, then produce previewable source edits with exact provenance and invalidation. A tiny rename wrapper would create an attractive shortcut that scales poorly.",
+      "guidance": [
+        "Treat MCP and IDE/LSP as clients of the same semantic-runtime affordance API. MCP should expose the same information and operations a developer IDE would use, with transport/display differences only.",
+        "Design around a Semantic IDE Affordance Algebra first: locus, semantic subject, reference role, affordance kind, editability, completeness, source precision, and invalidation epoch.",
+        "Do not implement semantic-runtime rename as a direct TypeScript LanguageService pass-through. Treat TypeScript rename as one reference source inside a broader definition/reference/edit-plan algebra.",
+        "Start with editing constraints because edits are the strictest consumer. If exact reference coverage and editability are sufficient for rename/code actions, read-only go-to-definition, find-all-references, hover, and highlights can share the same substrate with weaker completeness requirements.",
+        "Start from TypeSystemProject for Program/checker facts, but decide deliberately whether a future LanguageService can share the same epoch or needs an explicitly modeled companion lifetime.",
+        "Use Atlas `ts.type` rename, references, code-fixes, refactors, organize-imports, and file-rename-edits as pressure and implementation precedent, not as a semantic-runtime API dependency.",
+        "Cross-language edits must join Aurelia semantic references: template bindings, resource names, bindables, route parameters, translation keys, value converters, binding behaviors, and source-level configuration can all participate in edit reachability.",
+        "Edit ranges must use exact authored source references. A broad carrier span is a blocker for edit application, not a range to patch.",
+        "Grow this toward a Roslyn-like workspace operation model: previewable, multi-file, transactional, explainable, and able to separate read-only navigation, edit preview, and edit application.",
+        "Route edit-plan answers through QueryClaimGraph or an adjacent inquiry-owned lifetime so source/project epoch invalidation, retained previews, and answer-local TypeChecker products stay explicit.",
+        "If implementing the first slice, prefer a read-only edit-plan or rename-feasibility projection that reports missing semantic reference families over a small mutating MCP tool."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "summary": "Shared Program/checker epoch that any TypeScript-backed edit plan must reuse or explicitly companion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference",
+          "summary": "Current public source-locus envelope; future edit ranges must be exact enough for source mutation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder",
+          "summary": "Existing cursor-locus substrate that should be generalized before other LSP-like features duplicate template site discovery."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Answer-boundary lifetime and invalidation substrate for future edit-preview answers."
+        },
+        {
+          "kind": "lens",
+          "lensId": "ts.type",
+          "projection": "rename",
+          "summary": "Atlas TypeScript rename precedent."
+        },
+        {
+          "kind": "lens",
+          "lensId": "ts.type",
+          "projection": "code-fixes",
+          "summary": "Atlas TypeScript code-fix precedent."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        }
+      ],
+      "createdAt": "2026-05-22",
+      "updatedAt": "2026-05-22"
+    },
+    {
+      "id": "reuse:app-builder-generated-fixture-contracts",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "app-builder",
+        "fixtures",
+        "inquiry",
+        "lsp",
+        "mcp",
+        "edits",
+        "references",
+        "expected-effects"
+      ],
+      "summary": "Editing, rename, and other IDE/MCP affordances need generated fixture contracts rooted in current app-builder ontology/source-lowering intent, not isolated hand-written snippets alone.",
+      "rationale": "Edit affordances are the strictest consumer of semantic-runtime source precision. Dedicated fixtures must cover exact definition/reference families, editability, non-editable spans, route/template/resource/i18n/binding references, expected edit plans, generated source, exact app-builder/MCP inputs, and semantic-runtime analysis expectations. Larger generated app fixtures should come from the current app-builder ontology/source-lowering path used for public app generation so MCP and IDE features are pressure-tested against realistic low-boilerplate Aurelia code without reviving the deleted starter/golden or legacy authoring lane.",
+      "guidance": [
+        "Treat editing fixtures as a bridge between app-builder ontology and the Semantic IDE Affordance Algebra. Do not create a separate MCP-only or IDE-only fixture language.",
+        "Use tiered fixture lanes: small reference-contract fixtures for exact semantic subjects, medium edit-plan fixtures for multi-file expected edits, generated app fixtures for realistic pattern compositions, and contrast fixtures for analyzable shapes that should not become recommendable source.",
+        "Generated app fixtures live under packages/semantic-runtime/fixtures/app-builder once policy/ontology authority is settled enough to emit tracked end-user-shaped source; each fixture should preserve exact compact public request input, compact public response snapshot, generated source, a detailed manifest, expected semantic effects, and a persisted `semantic-verification.json` snapshot from the external fixture verifier. Use `generated-fixture-index.json` as the root review map for generated-app fixture coverage, starting from `fixtureSummaryRows` before drilling into paths, source-lowering targets, decision-bundle counts, decision-bundle input contract/facet rollups, separate generated control-pattern ids versus leaf-control ids, advertised request-field surfaces, actual source-lowering request-field usage rows with compact request paths/value shapes, `sourceLoweringTargetRegistryCoverageRows`, `sourceLoweringRequestFieldRegistryCoverageRows`, `policySatisfactionCandidateCoverageRows`, `domainModelCoverageSummary`, `domainModelKindCoverageSummary`, `domainModelCoverageRows`, and `reviewArtifactByteCounts`. Use `domainModelCoverageSummary`, `domainModelKindCoverageSummary`, and `domainModelCoverageRows` before raw request spelunking when reviewing entity/domain concentration, identity kind coverage, field value-kind coverage, relationship-kind coverage, action-kind coverage, action-scope coverage, value-set coverage, or seed-data coverage. All app-builder relationship kinds, action kinds, and action scopes are covered by generated fixtures through explicit caller-owned command actions, router-backed route-navigation actions, relationship lookup/ownership/value display, and relationship-backed table columns; standalone navigation outside router-backed topology plus relationship editing/lifecycle/service workflows remain app-design/source-lowering frontier evidence, not fixture failures by themselves. Use `reviewArtifactByteCountSummary` to distinguish heavy persisted request/response/manifest review snapshots from generated source/tooling text size before treating a fixture as code-generation bloat. Use partitioned unused request-field counts to distinguish required gaps from conditional-only, optional-only, and mixed refinement knobs. Use `fixtures/pressure/app-builder-source-lowering-fixture-index.json` as the focused pressure review map for direct source-lowering invocation/composition/SourcePlan request-field coverage. Coverage summaries carry explicit summarized owner/surface scopes, and focused review detail rows should match that same scoped row set; read those scopes before comparing compact unused counts between generated-app and focused-pressure lanes. Actual request-field usage rows should be produced by the shared source-lowering request-field helper so IDE/MCP fixture coverage, generated-app materialization, and pressure-fixture indexing spend the same request-tree vocabulary. Current control coverage includes a field-variety generated fixture with explicit `fieldControlSelections` for textarea, range, radio-group, and checkbox-list plus field-scoped `ControlAccessibility` help/error/status relationships and form/field/button `VisualClassHooks`; `component-pair-task-draft-explicit-field-overrides` proves nested `fieldControlSelections` can carry caller-supplied ids, labels, messages, value-domain expressions, option locals, option value/label expressions, and option binding kind without dropping to manual one-control invocation; `component-pair-task-preferences-named-value-sets` proves composed choice controls can select reusable domain value sets by name while component-pair assembly keeps local view-model state compatible with those selected option members. `component-pair-task-command-actions` proves update/delete/archive/assign/submit/refresh action kinds through table row buttons, top-level native buttons, explicit `DomainCommandAction.methodBodyStatements`, and local collection mutability derived from mutating entity action `inputFieldNames`; it does not prove service/router integration or app-builder-invented behavior. Form-message fragments now prove generated source-lowering target-ref coverage and generated form-message control-use inventory rows; authored static-template message inventory remains a separate analyzer concern. Request-field registry and policy-satisfaction candidate coverage should surface unused optional/conditional fixture pressure, contextual executable targets without generated-app coverage, and any used field without registry ownership without turning every optional field into an immediate generated-fixture obligation. The app-builder query-surface contract also rejects stale field-scoped `ControlAccessibility` and `VisualClassHooks` inputs for Native Submit Form instead of letting caller input disappear silently. Generated app-builder verification now records request idempotency failures when stored compact requests stop reproducing tracked SourcePlan source/tooling files, stored compact response snapshots, or detail-derived manifest contract rows such as expected effects, effect contracts, target refs, control-use rows, and `sourcePlanWitnessRows`; it also records generated-source-quality failures such as duplicate static template attributes and trailing whitespace outside app-builder lowerers. Current collection projection coverage includes separate generated contracts for list/card `CollectionDisplayFields`, a non-task/string-identity contact card canary, and table `CollectionTableColumns`.",
+        "Generated fixture index rows also join explicit source-lowering targets and generated control-use coverage to compact recommendation-policy posture, applicability/evidence kind ids, and contextual executable policy-satisfaction candidate flags. Use `sourceLoweringTargetPolicyRows` for SourcePlan-declared targets and `generatedControlUsePolicyRows` for leaf/native controls that appear through generated `ControlUse` inventory when reviewing whether realistic generated app output is exercising recommendable versus contextual terrain. Generated control-use policy rows may satisfy contextual controls through exact target refs, explicit nested `fieldControlSelections`, or deterministic domain-field control input; pure observation alone should still report missing selection. Fixture summary rows should carry policy-satisfaction count/source summaries by default, while full fixture rows carry per-target detail.",
+        "Use `generated-fixture-index.md` as the generated human-review companion for the same app-builder fixture index; it should stay a projection over `generated-fixture-index.json`, not a separate authority or a place to hand-record fixture truth.",
+        "Generated editing fixtures should declare expected definition targets, reference sets, source roles, editability blockers, rename plans or preview edits, diagnostics-to-repair facts, and exact source spans where possible.",
+        "When an editing fixture requires larger source, generate it from current app-builder ontology/source-lowering selections plus expected semantic effects rather than hard-coding another example domain in app-builder.",
+        "App-builder expected effects should grow beyond app facts when needed: reference families and edit-plan expectations are semantic effects too, even if their first implementation lives in an IDE/edit contract layer.",
+        "Use TypeSystemProject, template overlays, binding/data-flow products, router/i18n/resource products, and SemanticSourceReference provenance as inputs. Overlay segments are evidence, not the authoritative edit surface by themselves.",
+        "A broad carrier span should fail an edit contract or report missing precision; it should not be silently used as a patch range.",
+        "If app-builder generated fixtures expose missing reference or provenance families, deepen the semantic-runtime substrate before adding fixture-local expectations.",
+        "Use packages/semantic-runtime/fixtures/pressure/app-builder-* for focused current source-lowering/analyzer pressure. Use packages/semantic-runtime/fixtures/app-builder for current tracked generated-app contracts, starting from `generated-fixture-index.json` when reviewing the whole set. The deleted starter/golden lane and legacy authoring verification loop are intentionally not durable fixture authority. The persisted verification snapshot is fixture tooling output, not a public app-builder response field.",
+        "Generated component-pair templates may carry `sourceLoweringTemplateInvocations` beside a higher-level template composition; use `component-pair-task-draft-reset-button` to review native button event/type/text fields in realistic generated app source. Do not chase the remaining generated-app unused request fields mechanically: `bindingExpression` is pressure-covered for direct invocations, `bindingRootExpression` is covered by rooted draft-object generation but does not prove full edit-buffer semantics, and `matcherExpression` is covered by object-valued relationship controls while richer object-valued choice arrays remain deferred.",
+        "Generated fixture indexes include `sourceLoweringRequestFieldReviewSummary` and `sourceLoweringRequestFieldReviewRows` for unused generated-app request fields. Treat those rows as fixture-review posture: they can say a field is pressure-covered, covered by rooted draft-object generation, deferred for full edit-buffer modeling, or deferred for object-valued choice/domain relationship modeling without turning optional request-field counts into mechanical generated-fixture obligations; a nonzero needs-review count is the canary to classify new unused fields."
+      ],
+      "anchors": [
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "filters": {
+            "domain": "app-builder"
+          },
+          "summary": "App-builder ontology memory owns reusable pattern intent and reference-domain separation."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "filters": {
+            "domain": "edits"
+          },
+          "summary": "Semantic IDE affordance memory owns strict reference/edit requirements."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Current fixture verification primitive that future edit/reference effects can extend or parallel."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference",
+          "summary": "Public source-locus envelope that edit fixtures must pressure for exact authored ranges."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "summary": "Shared Program/checker epoch for generated fixture diagnostics, references, and future edit plans."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure",
+          "summary": "Contrast and analyzer-pressure fixture lane for shapes semantic-runtime must understand but MCP should not recommend."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder",
+          "summary": "Current tracked generated-app contract lane for end-user-shaped app-builder output, exact inputs, manifests, expected effects, and reopen verification."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/generated-fixture-index.json",
+          "summary": "Root generated-app fixture review map listing compact fixture summary rows, exact request/response/manifest paths, generated source files, review artifact byte counts, source-lowering targets, target registry coverage rows, effect kinds, decision-bundle counts, advertised request-field surfaces, and actual nested request-field usage rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/generated-fixture-index.md",
+          "summary": "Generated human-review companion for the generated-app fixture index, with compact counts and per-fixture links into requests, responses, manifests, verification snapshots, and generated source."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-field-variety",
+          "summary": "Generated app-builder fixture that proves all first-ring native field controls, explicit fieldControlSelections, field-scoped ControlAccessibility messages, finite option type aliases, and control-use verification."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-explicit-field-overrides",
+          "summary": "Generated app-builder fixture that proves nested fieldControlSelections can carry caller-supplied ids, labels, messages, value-domain expressions, option locals, value/label expressions, and option binding kind through Native Submit Form."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-preferences-named-value-sets",
+          "summary": "Generated app-builder fixture that proves composed choice controls can select reusable domain value sets by name while local view-model state emits matching option members."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-list-local-collection",
+          "summary": "Generated app-builder fixture that proves collection-list source lowering spends CollectionDisplayFields over explicit local collection state."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-card-local-collection",
+          "summary": "Generated app-builder fixture that proves collection-card source lowering spends CollectionDisplayFields over explicit local collection state."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-contact-card-string-id",
+          "summary": "Generated app-builder fixture that proves collection-card source lowering over a non-task contact domain with string identity and explicit seed records."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/app-builder/component-pair-task-draft-reset-button",
+          "summary": "Generated app-builder fixture that proves component-pair templates can combine a create-form composition with a direct native reset button invocation and caller-owned class-member action."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-06-04"
+    },
+    {
+      "id": "frontier:query-claim-graph",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "api",
+        "performance",
+        "telemetry"
+      ],
+      "summary": "QueryClaimGraph is the answer-boundary storage layer for query outcomes, lazy resolution, nested effects, retention policy, and disposal.",
+      "rationale": "Semantic-runtime serves many consumers with different latency and memory budgets. Public API answers should not turn every query-local projection into durable kernel products; QueryClaimGraph records answer shape, materialization policy, nested query composition, inclusive kernel side effects, and retention/disposal policy immediately before serialization.",
+      "guidance": [
+        "Start here when a public query grows kernel records, retains TypeChecker products, caches answer-local data, or needs inquiry-profile-specific disposal.",
+        "Keep durable semantic facts in kernel products and claims; keep answer payload shape, nested query composition, query-local type projection, and transport-facing retention in query claims.",
+        "Use app-query catalog materializationPolicy and profile-aware telemetry before adding another cache or eager projection.",
+        "Use `SEMANTIC_RUNTIME_TELEMETRY_DEPTHS=query-default` when measuring routed query cost from the public API's natural inquiry-depth policy. Use explicit depth rows only when the consumer intentionally forces a broader app-world analysis posture.",
+        "Keep app-world epochs shared across consumer lanes. A SemanticApp can own multiple QueryClaimGraph instances, one per inquiry profile, while the underlying cached app remains keyed by semantic shape rather than profile.",
+        "Do not replay retained routed batch answers when the caller asks for live app profiles or app query-claim profiles. Those profile snapshots are telemetry, not ordinary semantic payload, and must be materialized against the current claim graph.",
+        "Retained outcomes are indexed by materialization policy, query kind, query key, locus key, and epoch key. Add reuse or invalidation through that graph-owned storage rather than scanning answer history or adding a second cache.",
+        "Treat QueryClaimGraph as the lazy storage layer immediately before public answer serialization. New API answerers should enter the graph with an answer closure and explicit materialization/disposal policy instead of producing a value first and later recording telemetry.",
+        "Opened-app convenience methods should re-enter SemanticApp.ask(...) when called outside active materialization. Do not add new direct SemanticApp answer methods that bypass answerPublicQueryIfNeeded.",
+        "Keep exact answer loci separate from invalidation epoch keys. Cursor/file answers should carry source/project epoch keys so source-change disposal can stay graph-owned instead of adapter-local.",
+        "Canonicalize source-file query loci before computing query keys, locus keys, and epoch keys. Runtime routed queries should converge absolute host paths and project-relative paths to the same project-relative source epoch.",
+        "Use SemanticRuntime.disposeQueryClaims for long-lived public sessions that need to prune answer-outcome storage by project/source/query policy without clearing the app-world kernel. Use clearAnalysisCache when retained app products themselves are stale.",
+        "Route public query-claim disposal through the semantic-runtime disposal strategy layer before touching QueryClaimGraph. The strategy should resolve scope, manual/project/source invalidation kind, canonical epoch keys, query-kind filters, materialization-policy filters, and profile selection; the graph should own indexed matching and disposal.",
+        "Source-file invalidation should include the containing project epoch as well as the canonical source epoch. Project-wide and sibling-file answers can depend on a changed resource, route, registration, or type surface, so do not treat the source key as an isolated cache key.",
+        "Use QueryClaimGraph.disposeWithSummary when invalidating by source, query family, or session policy. The summary should show candidate, matched, disposed, evaluation-state, materialization-policy, and profile/retention details so disposal stays graph-owned rather than adapter-local guesswork.",
+        "Use QueryClaimGraph snapshot index cardinalities before adding adapter-local retention scans. Root/child counts, max depth, and distinct query-kind/locus/epoch/materialization/outcome buckets show whether retained answer storage has the shape an invalidation or reuse policy expects.",
+        "Use retained query/locus/epoch/outcome key character mass before compacting query identity strings. Query keys are answer-boundary identity, not durable semantic truth, so excessive retained key text should be fixed in the claim graph/query-key policy rather than in transport caches.",
+        "Use retained answer values only for small answers whose materialization policy is explicitly admitted by the active inquiry-profile budget; do not retain broad semantic DTOs in the claim graph just to avoid recomputation.",
+        "Retained answer values should have both per-answer and graph-total byte budgets. If the total budget is exceeded, drop old DTO values while keeping claim records and payload/effect telemetry for invalidation and diagnostics.",
+        "Keep QueryAnswerClaim as a lazy handle, not a second cache. Rereads should succeed only when the graph retained the answer value; otherwise the handle is read-once and invalidation/disposal must prevent stale DTO reuse.",
+        "Retained-answer byte checks should use bounded answer-envelope shape estimation, not row count alone, because summary answers can carry broad nested objects without exposing a top-level rows array and continuation/profile metadata can dominate an otherwise small value payload.",
+        "Keep runtime-level summary/static answers and opened-app answers in separate query-claim graphs so workspace/project-selection or static catalog reuse does not force app-world construction or pollute app-epoch retention.",
+        "Public transport catalog answers should call claim-backed SemanticRuntime methods, not raw readSemantic* helpers, so tools and resources share one query-outcome ledger.",
+        "Record routed app answers in the runtime-level query-claim graph through optional app-epoch disposal. That graph should retain lightweight outcome/cost claims for one-off MCP-style calls without owning or retaining the opened app kernel records.",
+        "Use SemanticRuntime.answerAppQueries for multi-answer public orientation moves. The batch should be one runtime-level claim, while app-world child queries still enter the app-owned graph with their own materialization policy.",
+        "For routed batch profiling, inspect both runtime query claims and app query claims. Runtime claims explain public transport retention and app-epoch cleanup; app claims explain nested child-query composition and retained answer reuse before optional app disposal.",
+        "Let app-world-free app queries remain app-world-free through the routed boundary, driven by app-query catalog runtimeBoundary rather than private switches. Runtime-static, project-frame, and static-evaluation batches should retain a runtime root claim plus nested runtime child claims, and zero app-owned child claims, instead of opening an app world just to preserve a uniform batch shape.",
+        "Batch routed app answers should copy compact app construction profile evidence into the public result before disposal. Use that top-phase evidence for retention-safe telemetry; reopen with an opened-app profile only when deeper subphase detail is actually needed.",
+        "Keep expensive owner summaries on the compact routed app profile when they are needed to explain disposed answers. Template expression type-cache counters belong there so one-off MCP-style answers can attribute CheckerExpressionTypeWorld work without retaining the app epoch.",
+        "Use disposeAnswerSideEffects for policy-owned one-off cleanup such as routed app epoch disposal. The claim should record both materialized kernel deltas and reclaimed nested app query claims so retained-memory telemetry stays honest.",
+        "Kernel disposal summaries should carry disposed handle-character mass beside record/detail counts. Use root handle deltas, disposed handle characters, and net handle characters when investigating handle-string memory pressure from one-off answers.",
+        "Route process-local TypeScript dependency SourceFile cache clears through the same answer-side disposal summary when they are part of a one-off public answer. The graph should count cleared dependency files/text beside app-world disposal rather than leaving that cleanup hidden in adapter-local finally blocks.",
+        "Keep dependency SourceFile cache clearing inquiry-shaped. Recompute-friendly routed answers that dispose the app epoch default to clearing all dependency/lib SourceFiles, while warm sessions can pass `preserve` to keep TypeChecker Program construction cheap.",
+        "Retained answer hits must still run answer-side disposal policy. Reusing a small answer value should not bypass an explicit dispose-app request or any future transport-owned cleanup hook.",
+        "Let answer boundaries veto retained-answer reuse when materialization is the requested side effect, such as retain-app routed queries that need to warm a compatible app epoch.",
+        "Session profiles should carry explicit retained-record budgets. Budget disposal belongs in QueryClaimGraph, should be visible in telemetry, and should prune only answered/failed nodes so pending lazy claims remain materializable.",
+        "Discard-after-answer profiles should still retain pending lazy nodes until materialization resolves or fails; the graph is the storage owner before serialization even when the profile keeps no records afterward.",
+        "Keep answer-local kernel retention as one explicit policy. KernelStore markers dispose records, product details, and hot details as a coherent slice; do not add separate hot-detail retention flags without a new kernel lifetime primitive.",
+        "Keep retained node/index mechanics in QueryClaimGraphStorage. QueryClaimGraph should own lazy materialization, profile policy, and disposal accounting; storage should own retained outcome history, index buckets, reuse lookup, invalidation candidates, and retention-budget candidate selection.",
+        "Keep retained-answer byte totals and cheap retained-shape snapshot accounting in QueryClaimGraphStorage. Cache overview should not allocate full public query-claim row DTOs just to report pending/root/retained-answer counts.",
+        "When cache overview asks for row detail, use the graph's recent-record projection rather than materializing all retained claim rows and slicing in API code. The graph storage is the answer-history owner.",
+        "Use `contract:query-claim-graph` when changing graph storage, retention policy, answer reuse, failed-claim retry behavior, or disposal indexing. It pins lazy claim lifetime, retained-answer reuse and veto, failed-claim retention, answer-side disposal on retained-answer hits and failures, retained-answer byte budgets including continuation-rich envelopes, active-parent record-budget safety, and indexed source/project epoch disposal.",
+        "Put profile-to-retention and disposal vocabulary changes in query-claim-policy.ts; keep query-claim-graph.ts focused on graph materialization, storage, indexes, lazy policy, and counters until a real second source-file lifetime warrants a split.",
+        "Treat diagnosticProjection as the first concrete query policy lever: overview-style callers should use available-products, while explicit diagnostics can request type-projection. The lsp-diagnostics profile keeps session claims but disposes answer-local TypeChecker products; fixture and authoring profiles may retain them for app-epoch inspection.",
+        "Expose diagnosticProjection at public transport boundaries instead of baking in a hidden default. MCP/LSP orientation flows can choose available-products, while repair/deep diagnostic flows can choose type-projection and make the CPU/memory trade-off visible in query claims.",
+        "Prefer lazy answer closures at the query-claim boundary; do not compute an answer first and record it afterward.",
+        "Use kernel mark/dispose boundaries for non-retaining inquiry profiles: query claims should record answer-local kernel deltas and disposed counts without forcing those products to survive the public answer.",
+        "When memory pressure returns, inspect whether hot details or query-produced products should be retained for session, retained for app epoch, discarded after answer, or moved into query-local claim storage instead of durable kernel products.",
+        "Treat QueryClaimNode as an internal lifetime object for one answer attempt. It may be large because it owns resolved/disposed state, parent/depth, payload shape, and inclusive kernel-effect deltas; do not split it just to hide source pressure unless a real second lifetime emerges.",
+        "Treat QueryClaimGraphCounters as graph-local measurement state owned by the claim graph. Keep it visible as part of the claim-graph frontier, but do not promote it to an independent product model unless another consumer starts needing its lifetime separately."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Lazy answer-claim graph with profile-shaped retention and disposal policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimNode",
+          "summary": "Internal per-answer node carrying lifecycle state, nesting, and inclusive kernel effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraphStorage",
+          "summary": "Retained query outcome storage and invalidation indexes under the claim graph."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraphCounters",
+          "summary": "Graph-local counter accumulator for answer retention, row, kernel-effect, and disposal telemetry."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-policy.ts",
+          "symbolName": "queryClaimRetentionPolicyForProfile",
+          "summary": "Inquiry-profile policy mapping for query claim retention and answer-local kernel disposal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp",
+          "summary": "Opened app facade routes public app queries through QueryClaimGraph."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerPublicQueryIfNeeded",
+          "summary": "Direct opened-app answer methods re-enter the app query claim graph before running projection bodies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.mark",
+          "summary": "Kernel/session marker used by query claims to dispose answer-local records and sidecars."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "semanticAppQueryCatalogRow",
+          "summary": "Public app-query catalog carrying answer materialization policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-identity.ts",
+          "symbolName": "semanticAppQueryKey",
+          "summary": "Shared app-query identity, locus, and invalidation epoch key helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-policy.ts",
+          "symbolName": "semanticRuntimeQueryClaimDisposalStrategy",
+          "summary": "Public query-claim disposal strategy builder for scope, invalidation kind, epoch keys, and policy filters."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQueries",
+          "summary": "Batch routed app-query answer boundary with one runtime claim and child app query claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-query-claim-graph.mjs",
+          "summary": "Focused semantic contract for query-claim graph lifetime, reuse, budget, and indexed disposal invariants."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
+          "summary": "Inquiry-profile app telemetry script printing query-claim retention and query-side kernel growth."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/inquiry/README.md",
+          "heading": "Query Claims",
+          "summary": "Inquiry boundary note for query claims, laziness, and disposal."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraph",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 120,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimNode",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraphStorage",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraphCounters",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 60,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "semanticAppQueryCatalogRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerPublicQueryIfNeeded"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-query-claim-graph.mjs"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-24"
+    },
+    {
+      "id": "frontier:semantic-contract-harness",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "testing",
+        "verification",
+        "inquiry",
+        "fixtures",
+        "framework-corpus"
+      ],
+      "summary": "Semantic contract verification should provide route-scoped regression witnesses without turning Aurelia framework tests or public DTOs into one large snapshot suite.",
+      "rationale": "auLink has been valuable as fast framework grounding, but inquiry policy, query-claim retention, invalidation, fixture expected effects, and public MCP answers now need behavior-level regression confidence. The durable shape should assert semantic products and expected effects selected by Work Router routes, while preserving the ability to refactor Atlas and semantic-runtime boldly when an ontology is wrong.",
+      "guidance": [
+        "Start here when testing strategy, semantic-runtime regression coverage, fixture verification, or public query budget checks are under discussion.",
+        "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, app-builder, inquiry, or MCP surfaces.",
+        "Assert semantic effects and product facts rather than source snapshots or whole DTO dumps: resources, routes, bindings, controller topology, value channels, diagnostics, expected effects, retention policy, and answer budgets.",
+        "Use expected-effect descriptor rows when a caller or route needs to explain which public query families and verifier observation surfaces prove an ExpectedSemanticEffectKind.",
+        "Runtime watcher, watcher observed-dependency, binding-owned trackable method dependency, template collection observation, computed-observer-source, and computed-observer-observed-dependency rows are now expected-effect targets. Use the proxy-observation, trackable-method-observation, template-collection-observation, and computed-observer-source contracts as the first patterns for row-backed observation witnesses.",
+        "Use Aurelia framework docs as promoted-pattern seeds and framework tests as behavior-grounding seeds; do not copy the full framework suite into the default lane.",
+        "Keep app-builder/generated fixtures and contrastive analysis fixtures distinct so app-builder output quality and analyzer robustness can both be checked.",
+        "Treat auLink as framework grounding, not behavior coverage. A link can show where semantic-runtime should mirror Aurelia; a contract should show what an answer or fixture must prove.",
+        "Give query/inquiry contracts cost and retention expectations when the consumer is MCP, LSP, diagnostics, app-builder, AOT, or another profile with different budget needs.",
+        "When a contract asserts complete public row families, drain `page.nextCursor` to exhaustion. Dense rows can be byte-clamped before the requested row count, so `partial` is a successful page state rather than a failed query.",
+        "Prefer a fast route-health/schema lane, a route-scoped semantic lane, a selected framework-corpus witness lane, and a slower confidence lane over one mandatory all-in suite.",
+        "Use `pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --list` or a route/domain filter before manually assembling contract scripts. The current suite is a first harness, not the final Atlas-selected contract algebra; it keeps child output compact on success and exposes `--verbose` for debugging."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Expected semantic effects are the contract vocabulary used by fixture verification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/effect-kind-descriptor.ts",
+          "symbolName": "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS",
+          "summary": "Runtime-readable expected-effect descriptor rows mapping effect kinds to observation surfaces, public query families, and seed posture."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/verification.ts",
+          "symbolName": "readFixtureVerificationSnapshot",
+          "summary": "Opened-app verification snapshot collector for row-backed expected effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-suite.mjs",
+          "summary": "First route/domain/tier contract runner for selected semantic-runtime contract and authoring smoke witnesses."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-proxy-observation.mjs",
+          "summary": "First route-scoped semantic contract witness for computed watcher ProxyObservable dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-trackable-method-observation.mjs",
+          "summary": "Route-scoped semantic contract witness for binding-owned @computed/@astTrack trackable method dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-computed-observer-source.mjs",
+          "summary": "Route-scoped semantic contract witness for getter ComputedObserver/ControlledComputedObserver source rows and dependency provenance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs",
+          "summary": "Route-scoped semantic contract witness for TypeChecker-gated astEvaluate array collection reads and callback-local false-positive rejection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Query materialization and retention policy should become contractable for public answers."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "route-plan",
+          "summary": "Route-scoped witness selection should start from Work Router rather than a monolithic test command."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "fixture-seeds",
+          "summary": "Docs/tests witness seeds for promoted-pattern and behavior-grounding examples."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/effect-kind-descriptor.ts",
+          "symbolName": "EXPECTED_SEMANTIC_EFFECT_KIND_DESCRIPTOR_ROWS"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/verification.ts",
+          "symbolName": "readFixtureVerificationSnapshot"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-suite.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-proxy-observation.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-trackable-method-observation.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-computed-observer-source.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ExpectedSemanticEffect",
+          "filePath": "packages/semantic-runtime/src/fixture-verification/expected-effect.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-26"
+    },
+    {
+      "id": "frontier:evidence-gated-continuations",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "api",
+        "mcp",
+        "lsp",
+        "continuations",
+        "kernel",
+        "provenance",
+        "typescript",
+        "evaluation"
+      ],
+      "summary": "Public semantic-runtime continuations should be selected by next-move intent and evidence gates instead of fuzzy next-query heuristics.",
+      "rationale": "A rich semantic-runtime can surface dozens of plausible next moves. The public app-query API now has a catalog-aware continuation policy with target query payloads, answer-envelope intent filtering, and a fast contract; future work should improve family-specific precision by reusing source/provenance/type/evaluation substrate rather than adding adapter-local heuristics.",
+      "guidance": [
+        "Use TemplateCursorInfo and AppDiagnostics as precision canaries: they naturally connect cursor/file loci to evidence, diagnostics, and suggested next inquiries.",
+        "Keep continuations typed and lazy. Return compact handles and target query shapes first; compute expensive details only when the continuation is followed.",
+        "Expose evidence gates such as source-backed/type-projected/open, complete-for-locus/partial-known-gaps, exact-authored-span/carrier/generated/external, and source/project epoch sensitivity.",
+        "Reuse existing kernel identity, address, source, provenance, and claim primitives before creating local continuation evidence wrappers. If the primitive exists nearby but is not accessible enough, treat that as a substrate/API threading gap.",
+        "Keep memory pressure visible. Prefer compact handles and existing row identities over recording more kernel products or field-level provenance merely because a continuation row wants richer explanation.",
+        "Treat defensive fallbacks, optional source/provenance branches, surprising function input dimensions, duplicated TypeScript helpers, and ad hoc evaluator contexts as canaries for split-brain from different substrate-maturity eras.",
+        "Generated addresses can be anchored to either addresses or identities. Source precision should follow the shared kernel source-address resolver so identity-backed generated products keep their authored TypeScript/template anchor instead of adding continuation-local fallback logic.",
+        "The mirrored address-kind switches in `api/source-reference.ts` and `kernel/source-address.ts` are intentional only because they answer different contracts: public API descriptions preserve carriers such as generated/template-node addresses, while kernel authored-source lookup collapses those carriers to the nearest authored source for internal locality.",
+        "Continuation source-precision policy should use `semanticSourcePrecisionForReferences(...)` so authored template/source anchors, generated-address visibility, external dependency roles, and carrier spans share one evidence lattice with future diagnostics, hover, and edit surfaces.",
+        "Treat public continuation `sourcePrecision` as a compact evidence summary, not an editability guarantee. Repair-intent diagnostic continuations must check every related source reference individually and carry blockers when any returned row source is carrier-only, generated, external, or missing an exact authored span.",
+        "Parser-local SourceSpan values are intentionally not kernel addresses. Template/overlay consumers should use runtime-expression-source-address helpers to recover the source-file address handle from semantic-runtime-created parse contexts instead of scattering `span.file.id` casts.",
+        "Public source-reference traversal is bounded by a typed carrier-key vocabulary and a runtime reachability contract over synthesized row DTO paths. When a public row nests source-bearing objects, update `PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS` and keep `contract:source-reference-carriers` green instead of reintroducing arbitrary DTO recursion or depth-based special cases.",
+        "When a continuation needs local evaluation, decide whether it belongs to the global static evaluator, a formal TypeScript projection, or a named Aurelia-specific environment such as template scope, binding scope, DI world, controller branch, or route context.",
+        "Treat the initial public app-query continuation surface as covered, but keep improving family-specific evidence precision when a diagnostic, template, router, observation, binding, or MCP lane exposes a sharper source/provenance/type requirement.",
+        "Use `continuationIntents` to narrow public app-query answer continuations without changing query identity or materialization policy. If filtered answers still produce a large list, improve evidence grouping before adding heuristic score sorting.",
+        "Interpret enum-usage audits against intent documents before deleting or promoting primitives. For example, `InquiryContinuationIntent.Author` is currently vocabulary-only in code, but the continuation scope map and API docs say authoring continuations are intentionally deferred until app-builder replaces the fixture-like recipe surface; that makes it reserved pressure, not automatically dead code.",
+        "`InquiryContinuationIntent.Verify` and `InquiryContinuationIntent.Profile` are also vocabulary-list-only today. Treat them as parked contract/telemetry intent pressure until semantic contract verification or app-telemetry query families emit concrete public continuation rows; do not present them as spent next-move lanes merely because the enum contains them.",
+        "`InquiryContinuationCost.Deep` is currently unspent. Keep it parked for future broad semantic-substrate continuations unless a concrete query family needs it; current app-query continuations derive cost from runtime boundary and query-type-projection policy.",
+        "Use package enum usage to keep continuation action vocabulary canonical. `InquiryContinuationKind` now owns both lower-level inquiry continuations and public app-query row actions; concrete app-query ownership belongs in `targetQueryKind`, shaped `targetQuery`, intent, and evidence metadata rather than target-specific kind members.",
+        "Use enum coupling `type-surface-cooccurrence` before treating continuation-related enums as islands. `SemanticRuntimeContinuationRow` intentionally couples the canonical continuation action, target app-query kind, continuation intent, and cost in one DTO surface; evidence-gate enums couple through `SemanticContinuationEvidenceGate`.",
+        "Continuation `kind` values should not duplicate product ownership already carried by `targetQueryKind`. If a row-table follow-up is observation-, state-, rendering-, i18n-, router-, resource-, binding-, or diagnostic-owned, keep that ownership in the shaped target query and evidence metadata instead of minting another action value.",
+        "Root app-query identity and pre-open policy should use the shared catalog-shaped query boundary. Continuation builders should also use that shape for source/cursor loci so unsupported loci do not fragment query keys, locus keys, epoch keys, authoring-template opt-in, inquiry profile selection, or follow-up target queries.",
+        "Use `semanticAppQuerySourceFileLocus(...)` as the single cursor-to-source-file bridge for source-capable app-query families; duplicated local `sourceFile ?? cursor.filePath` helpers are query-locus split-brain canaries.",
+        "`SemanticApp.ask(...)` should keep shaped-query dispatch/claim identity separate from the original caller query used for continuation target-policy hints. Do not erase a hint such as `diagnosticProjection` before the continuation target row has had a chance to consume it.",
+        "Continuation target queries should be catalog-shaped. Do not copy cursor, source-file, detail, diagnostic projection, overview, or router-sampling knobs into a target query unless the target catalog row can consume them; diagnostic projection may still be an explicit target-policy hint when a source query does not consume it itself.",
+        "Validate continuation evidence as public data. A malformed evidence state, cost, staleness, coverage, source precision, or intent value is an API contract failure even if TypeScript did not catch the seed-site mistake.",
+        "Continuation cost should reuse app-query materialization policy. Query options can remove TypeChecker projection cost, but they do not erase the app-world/project-frame/runtime-static boundary.",
+        "`next-page` continuations still inherit target query staleness policy; paging is cheap, but the cursor is not current-epoch stable when the underlying rows are project- or source-epoch sensitive. Source-capable catalog rows remain project-epoch sensitive until the target query carries a cursor or source-file locus.",
+        "Route query-local continuation state through QueryClaimGraph when following a continuation changes materialization cost, retention, or invalidation.",
+        "Kernel-side inquiry continuations should carry `InquiryContinuationApplicability`; leaving applicability null means the low-level lane has not been grounded in the shared intent/evidence vocabulary yet.",
+        "Use `atlas.work-router --projection=coverage --coverageDimension=intent-aware-continuations` to find adjacent routes whose query families are missing or partial, and update those route coverage rows when a query family is threaded."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
+          "symbolName": "InquiryContinuationApplicability",
+          "summary": "Evidence and intent-aware gate for typed continuations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/answer.ts",
+          "symbolName": "InquiryContinuation",
+          "summary": "Internal continuation primitive now carries applicability metadata."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/answer.ts",
+          "symbolName": "InquiryContinuationKind",
+          "summary": "Canonical continuation action vocabulary shared by lower-level inquiry continuations and public app-query rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeContinuationRow",
+          "summary": "Public continuation DTO that carries the canonical action kind beside target query, intent, cost, and evidence gates."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeContinuationRow",
+          "summary": "Public DTO shape for continuation rows and followable target app queries."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=enum-couplings --relation=type-surface-cooccurrence --query=SemanticRuntimeContinuationRow --detail",
+          "summary": "Audits the public continuation DTO as an enum protocol rather than isolated enum-member counts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "authoredSourceAddressForAnchorHandle",
+          "summary": "Shared source resolver for address-or-identity anchors behind generated products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "readSourceAnchorRecord",
+          "summary": "Record-index bridge that validates generated-address anchor handles as source addresses or semantic identities."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-source-address.ts",
+          "symbolName": "sourceAddressHandleForRuntimeExpressionSpan",
+          "summary": "Parser-span-to-kernel-address bridge for overlay and bound-controller source precision."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS",
+          "summary": "Bounded carrier-key vocabulary for public row DTO source-reference traversal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "semanticSourcePrecisionForReferences",
+          "summary": "Shared authored/generated/external source-precision classifier over public source references."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-continuations.ts",
+          "symbolName": "withSemanticAppQueryContinuations",
+          "summary": "Catalog-aware public app-query continuation policy."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas enum:usage -- --packageId=semantic-runtime --projection=member-usage --query=InquiryContinuation --detail",
+          "summary": "Package enum usage audit for continuation intent, cost, and lower-level continuation-kind spend."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:source-reference-carriers",
+          "summary": "AST contract proving public row DTOs with nested SemanticSourceReference fields are reachable by the bounded carrier traversal."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:app-query-continuations",
+          "summary": "Fast contract for public app-query continuation coverage and representative followability."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:source-anchor-identity",
+          "summary": "Fast contract proving generated addresses anchored to semantic identities resolve to authored source anchors."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Answer-boundary storage for continuation-following cost and invalidation policy."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "route-plan",
+          "filters": {
+            "routeId": "semantic-runtime.intent-aware-continuations"
+          },
+          "summary": "Dedicated Work Router route for this frontier."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "coverage",
+          "filters": {
+            "coverageDimension": "intent-aware-continuations"
+          },
+          "summary": "Coverage-discovery lane for adjacent routes that still need intent-aware continuation threading."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/continuation-intent.ts",
+          "symbolName": "InquiryContinuationApplicability"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeContinuationRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeContinuationRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-query-continuations.ts",
+          "symbolName": "withSemanticAppQueryContinuations"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "authoredSourceAddressForAnchorHandle"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/source-address.ts",
+          "symbolName": "readSourceAnchorRecord"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-source-address.ts",
+          "symbolName": "sourceAddressHandleForRuntimeExpressionSpan"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-source-anchor-identity.mjs"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "semanticSourcePrecisionForReferences"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-source-reference-carriers.mjs"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/answer.ts",
+          "symbolName": "InquiryContinuationKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-05-24"
+    }
+  ]
+}

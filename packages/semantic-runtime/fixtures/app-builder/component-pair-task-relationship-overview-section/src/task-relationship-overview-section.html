@@ -1,0 +1,27 @@
+<section class="task-relationship-overview" data-au-role="app-section">
+  <p if.bind="taskItems.length === 0" class="task-relationship-overview__empty">No tasks yet.</p>
+  <table else class="task-relationship-overview__table">
+    <thead>
+      <tr>
+        <th>Task</th>
+        <th>Assignee</th>
+        <th>Reviewers</th>
+        <th>Schedule</th>
+        <th>Checkpoints</th>
+        <th>Effort</th>
+        <th>Done</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="taskItem of taskItems" class="task-relationship-overview__row">
+        <td>${taskItem.title}</td>
+        <td>${assigneeLabelForTaskItem(taskItem)}</td>
+        <td>${reviewersLabelForTaskItem(taskItem)}</td>
+        <td>${scheduleLabelForTaskItem(taskItem)}</td>
+        <td>${checkpointsLabelForTaskItem(taskItem)}</td>
+        <td>${effortLabelForTaskItem(taskItem)}</td>
+        <td>${taskItem.done ? 'Done' : 'Open'}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>

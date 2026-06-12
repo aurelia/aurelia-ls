@@ -1,0 +1,81 @@
+<form
+  class.bind="state.profile.canSubmit ? 'wizard-ready' : 'wizard-pending'"
+  submit.trigger="submit()">
+  <div class="wizard">
+    <div class="wizard-progress" aria-label="Onboarding Profile progress">
+      <div class="wizard-progress-bar" style="width: ${state.progressPercent}%"></div>
+    </div>
+
+    <ol class="wizard-steps">
+      <li
+        repeat.for="step of state.steps"
+        class="wizard-step"
+        active.class="state.isCurrentStep(step)"
+        complete.class="state.isCompletedStep(step)">
+        ${step.title}
+      </li>
+    </ol>
+
+    <section if.bind="state.currentStep.id === 'profile'">
+      <div class.bind="nameErrors.length > 0 ? 'field-stack field-invalid' : 'field-stack'" validation-errors.from-view="nameErrors">
+        <label for="profile-name">Name</label>
+        <input id="profile-name" value.two-way="state.profile.name & validate:'blur'">
+        <p class="error" repeat.for="error of nameErrors">${error.result.message}</p>
+      </div>
+
+      <div class.bind="emailErrors.length > 0 ? 'field-stack field-invalid' : 'field-stack'" validation-errors.from-view="emailErrors">
+        <label for="profile-email">Email</label>
+        <input id="profile-email" type="email" value.two-way="state.profile.email & validate:'blur'">
+        <p class="error" repeat.for="error of emailErrors">${error.result.message}</p>
+      </div>
+    </section>
+
+    <section if.bind="state.currentStep.id === 'preferences'">
+      <fieldset>
+        <legend>Contact preference</legend>
+        <label>
+          <input type="radio" model.bind="state.emailContact" checked.bind="state.profile.contactMethod">
+          Email
+        </label>
+        <label>
+          <input type="radio" model.bind="state.phoneContact" checked.bind="state.profile.contactMethod">
+          Phone
+        </label>
+      </fieldset>
+
+      <label for="plan-tier">Plan tier</label>
+      <select id="plan-tier" value.bind="state.profile.planTier">
+        <option model.bind="null">Choose...</option>
+        <option model.bind="state.starterTier">Starter</option>
+        <option model.bind="state.teamTier">Team</option>
+        <option model.bind="state.enterpriseTier">Enterprise</option>
+      </select>
+
+      <fieldset>
+        <legend>Features</legend>
+        <label repeat.for="feature of state.availableFeatures">
+          <input type="checkbox" model.bind="feature.id" checked.bind="state.profile.featureIds">
+          ${feature.name}
+        </label>
+      </fieldset>
+
+      <label>
+        <input type="checkbox" checked.bind="state.profile.acceptedTerms">
+        I accept the service terms
+      </label>
+    </section>
+
+    <section if.bind="state.currentStep.id === 'review'">
+      <h2>Review</h2>
+      <p class="${state.profile.canSubmit ? 'ready' : 'pending'}">Ready to submit: ${state.profile.canSubmit}</p>
+      <p>Contact: ${state.profile.contactSummary}</p>
+      <p>Selected features: ${state.profile.featureIds.length}</p>
+    </section>
+
+    <nav>
+      <button type="button" click.trigger="state.previousStep()" disabled.bind="!state.canGoBack">Back</button>
+      <button type="button" if.bind="!state.isLastStep" click.trigger="next()" disabled.bind="!state.canGoNext">Next</button>
+      <button type="submit" if.bind="state.isLastStep" disabled.bind="!state.profile.canSubmit">Submit</button>
+    </nav>
+  </div>
+</form>

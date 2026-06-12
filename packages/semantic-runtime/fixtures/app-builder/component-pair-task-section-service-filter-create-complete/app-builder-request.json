@@ -1,0 +1,618 @@
+{
+  "kind": "source-lowering-source-plan",
+  "sourceLoweringSourcePlan": {
+    "rootDir": ".",
+    "templatePath": "src/service-filter-create-complete-task-section.html",
+    "sourceLoweringComponentPair": {
+      "appShell": {
+        "entrypointPath": "src/main.ts"
+      },
+      "decisionBundles": [
+        {
+          "bundleId": "service-filter-create-complete-task-section-decisions",
+          "sourceId": "explicit-caller-selection",
+          "label": "service filter create complete task section explicit choices",
+          "decisions": [
+            {
+              "inputContractId": "domain-model",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "domain-entities",
+                  "value": {
+                    "entityTitle": "Task",
+                    "entityTypeName": "TaskItem",
+                    "collectionMemberName": "taskItems",
+                    "identityMemberName": "id",
+                    "identityValueKind": "number"
+                  }
+                },
+                {
+                  "inputFacetId": "domain-actions",
+                  "value": [
+                    {
+                      "name": "showAllTaskItems",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "showOpenTaskItems",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "showCompletedTaskItems",
+                      "kind": "custom",
+                      "scope": "integration",
+                      "targetEntityName": "TaskItem"
+                    },
+                    {
+                      "name": "create",
+                      "kind": "create",
+                      "scope": "form",
+                      "mutatesState": true,
+                      "inputFieldNames": [
+                        "title",
+                        "done"
+                      ]
+                    },
+                    {
+                      "name": "complete",
+                      "kind": "complete",
+                      "scope": "entity",
+                      "mutatesState": true
+                    }
+                  ]
+                },
+                {
+                  "inputFacetId": "domain-fields",
+                  "value": [
+                    {
+                      "name": "title",
+                      "title": "Title",
+                      "valueKind": "text"
+                    },
+                    {
+                      "name": "done",
+                      "title": "Done",
+                      "valueKind": "boolean"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "source-placement",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "source-naming",
+                  "value": {
+                    "appName": "Service Filter Create Complete Task Section",
+                    "baseName": "Service Filter Create Complete Task Section"
+                  }
+                },
+                {
+                  "inputFacetId": "source-file-layout",
+                  "value": {
+                    "resourceCarrier": "convention"
+                  }
+                },
+                {
+                  "inputFacetId": "source-target-path",
+                  "value": "src/service-filter-create-complete-task-section.ts"
+                }
+              ]
+            },
+            {
+              "inputContractId": "aurelia-policy",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "aurelia-convention-policy",
+                  "value": "conventions-enabled"
+                },
+                {
+                  "inputFacetId": "aurelia-state-policy",
+                  "value": {
+                    "localStatePolicies": [
+                      "view-model-local-state"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "inputContractId": "collection-projection",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "collection-table-columns",
+                  "value": [
+                    {
+                      "fieldName": "title",
+                      "header": "Task",
+                      "displayKind": "text"
+                    },
+                    {
+                      "fieldName": "done",
+                      "header": "Done",
+                      "displayKind": "boolean",
+                      "booleanTrueText": "Done",
+                      "booleanFalseText": "Open"
+                    },
+                    {
+                      "actionName": "complete",
+                      "header": "Complete",
+                      "displayKind": "action"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "interaction-feedback",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "domain-command-action"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "local-view-model-state"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "action-feedback",
+                  "value": [
+                    {
+                      "actionName": "showAllTaskItems",
+                      "statusMemberName": "allFilterStatusMessage",
+                      "statusText": "Showing all tasks.",
+                      "statusId": "task-all-filter-status"
+                    },
+                    {
+                      "actionName": "showOpenTaskItems",
+                      "statusMemberName": "openFilterStatusMessage",
+                      "statusText": "Showing open tasks.",
+                      "statusId": "task-open-filter-status"
+                    },
+                    {
+                      "actionName": "showCompletedTaskItems",
+                      "statusMemberName": "completedFilterStatusMessage",
+                      "statusText": "Showing completed tasks.",
+                      "statusId": "task-completed-filter-status"
+                    },
+                    {
+                      "actionName": "create",
+                      "statusMemberName": "createStatusMessage",
+                      "statusText": "Task saved.",
+                      "statusId": "task-create-status"
+                    },
+                    {
+                      "actionName": "complete",
+                      "statusMemberName": "completeStatusMessage",
+                      "statusText": "Task completed.",
+                      "statusId": "task-complete-status"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "visual-style-input",
+              "targetRefs": [
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "app-section"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "native-submit-form"
+                },
+                {
+                  "kind": "control-pattern",
+                  "domain": "control",
+                  "id": "native-button"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "action-feedback-status"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "loading-empty-error-state"
+                },
+                {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                }
+              ],
+              "facetPayloads": [
+                {
+                  "inputFacetId": "visual-class-hooks",
+                  "value": [
+                    {
+                      "target": "app-section",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section"
+                      ]
+                    },
+                    {
+                      "target": "form",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__form"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "showAllTaskItems",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__filter-button"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "showOpenTaskItems",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__filter-button"
+                      ]
+                    },
+                    {
+                      "target": "button",
+                      "actionName": "showCompletedTaskItems",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__filter-button"
+                      ]
+                    },
+                    {
+                      "target": "status-region",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__status"
+                      ]
+                    },
+                    {
+                      "target": "collection-table",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__table"
+                      ],
+                      "dataAttributes": [
+                        {
+                          "name": "data-au-role",
+                          "value": "service-filter-create-complete-table"
+                        }
+                      ]
+                    },
+                    {
+                      "target": "collection-table-row",
+                      "classTokens": [
+                        "service-filter-create-complete-task-section__row"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "inputContractId": "seed-data",
+              "facetPayloads": [
+                {
+                  "inputFacetId": "seed-record-set",
+                  "value": [
+                    {
+                      "id": 1,
+                      "title": "Filter completed service rows",
+                      "done": true
+                    },
+                    {
+                      "id": 2,
+                      "title": "Create a new service-backed row",
+                      "done": false
+                    },
+                    {
+                      "id": 3,
+                      "title": "Complete a row command",
+                      "done": false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "serviceCollections": [
+        {
+          "sourceTargetPath": "src/services/task-item-service.ts",
+          "serviceClassName": "TaskItemService",
+          "componentMemberName": "taskItemService",
+          "collectionEntityName": "TaskItem",
+          "recordTypeName": "TaskItemRecord",
+          "loadMethodName": "listTaskItems",
+          "filterMethods": [
+            {
+              "methodName": "listTaskItemsByDone",
+              "fieldName": "done",
+              "parameterName": "done"
+            }
+          ],
+          "createMethods": [
+            {
+              "methodName": "createTaskItem",
+              "inputFieldNames": [
+                "title",
+                "done"
+              ]
+            }
+          ],
+          "updateMethods": [
+            {
+              "methodName": "completeTaskItem",
+              "inputFieldNames": [
+                "done"
+              ]
+            }
+          ],
+          "queryStates": [
+            {
+              "stateMemberName": "taskItemDoneFilter",
+              "stateTypeText": "boolean | null",
+              "initialValueExpression": "null",
+              "inactiveValueExpression": "null",
+              "reloadMethodName": "reloadTaskItems",
+              "resultMemberName": "taskItemsPromise",
+              "filterMethodName": "listTaskItemsByDone"
+            }
+          ]
+        }
+      ],
+      "sourceLoweringLocalViewModelState": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "local-view-model-state"
+        }
+      },
+      "sourceLoweringComposition": {
+        "targetRef": {
+          "kind": "application-pattern",
+          "domain": "application-pattern",
+          "id": "app-section"
+        },
+        "compositionKind": "app-section",
+        "childContent": [
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "native-submit-form"
+              },
+              "compositionKind": "native-submit-form",
+              "fieldNames": [
+                "title",
+                "done"
+              ],
+              "actionName": "create",
+              "submitButtonText": "Create task"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "create"
+            }
+          },
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "native-button"
+              },
+              "actionName": "showAllTaskItems",
+              "buttonText": "Show all tasks"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "showAllTaskItems"
+            }
+          },
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "native-button"
+              },
+              "actionName": "showOpenTaskItems",
+              "buttonText": "Show open tasks"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "showOpenTaskItems"
+            }
+          },
+          {
+            "invocation": {
+              "targetRef": {
+                "kind": "control-pattern",
+                "domain": "control",
+                "id": "native-button"
+              },
+              "actionName": "showCompletedTaskItems",
+              "buttonText": "Show completed tasks"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "showCompletedTaskItems"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "action-feedback-status"
+              },
+              "compositionKind": "action-feedback-status",
+              "actionName": "complete"
+            }
+          },
+          {
+            "composition": {
+              "targetRef": {
+                "kind": "application-pattern",
+                "domain": "application-pattern",
+                "id": "loading-empty-error-state"
+              },
+              "compositionKind": "loading-empty-error-state",
+              "promiseExpression": "taskItemsPromise",
+              "pendingText": "Loading tasks...",
+              "fulfilledLocalName": "loadedTaskItems",
+              "emptyStateText": "No tasks yet.",
+              "emptyStateConditionExpression": "loadedTaskItems.length === 0",
+              "rejectedLocalName": "error",
+              "rejectedText": "Could not load tasks.",
+              "fulfilledContentComposition": {
+                "targetRef": {
+                  "kind": "application-pattern",
+                  "domain": "application-pattern",
+                  "id": "collection-table"
+                },
+                "compositionKind": "collection-table",
+                "collectionExpression": "loadedTaskItems",
+                "itemLocalName": "taskItem",
+                "actionHandlerExpressions": [
+                  {
+                    "actionName": "complete",
+                    "handlerExpression": "complete(taskItem)"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "sourceLoweringClassMemberInvocations": [
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "async-data-source"
+          },
+          "asyncDataMemberName": "taskItemsPromise",
+          "asyncDataPromiseType": "ReturnType<TaskItemService['listTaskItems']>",
+          "asyncDataInitializerExpression": "this.taskItemService.listTaskItems()",
+          "asyncDataMemberMutability": "mutable"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "showAllTaskItems",
+          "serviceQueryStateMemberName": "taskItemDoneFilter",
+          "serviceQueryStateValueExpression": "null",
+          "serviceQueryReloadMethodName": "reloadTaskItems"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "showOpenTaskItems",
+          "serviceQueryStateMemberName": "taskItemDoneFilter",
+          "serviceQueryStateValueExpression": "false",
+          "serviceQueryReloadMethodName": "reloadTaskItems"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "showCompletedTaskItems",
+          "serviceQueryStateMemberName": "taskItemDoneFilter",
+          "serviceQueryStateValueExpression": "true",
+          "serviceQueryReloadMethodName": "reloadTaskItems"
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "create",
+          "serviceMemberName": "taskItemService",
+          "serviceMethodName": "createTaskItem",
+          "serviceCallRefreshMethodName": "reloadTaskItems",
+          "serviceCallArgumentExpressions": [
+            "this.title",
+            "this.done"
+          ]
+        },
+        {
+          "targetRef": {
+            "kind": "application-pattern",
+            "domain": "application-pattern",
+            "id": "domain-command-action"
+          },
+          "actionName": "complete",
+          "methodParameters": [
+            {
+              "name": "taskItem",
+              "typeText": "TaskItemRecord"
+            }
+          ],
+          "serviceMemberName": "taskItemService",
+          "serviceMethodName": "completeTaskItem",
+          "serviceCallRefreshMethodName": "reloadTaskItems",
+          "serviceCallArgumentExpressions": [
+            "taskItem.id",
+            "true"
+          ]
+        }
+      ]
+    }
+  }
+}

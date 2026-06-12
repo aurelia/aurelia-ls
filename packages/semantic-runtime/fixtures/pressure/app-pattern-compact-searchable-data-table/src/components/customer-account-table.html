@@ -1,0 +1,30 @@
+<section>
+  <h2>Customer Accounts</h2>
+
+  <label>
+    <span>Search</span>
+    <input type="search" value.bind="state.filters.searchQuery & debounce:300" placeholder="Search name">
+  </label>
+
+  <button type="button" if.bind="state.filters.hasActiveFilters" click.trigger="state.resetFilters()">
+    Reset search
+  </button>
+
+  <p if.bind="state.isLoading">Loading customer accounts...</p>
+  <table else>
+    <thead>
+      <tr>
+          <th>Name</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="customerAccount of state.filteredCustomerAccounts; key.bind: customerAccount.id">
+          <td>${customerAccount.nameLabel}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p if.bind="!state.isLoading && state.filteredCustomerAccounts.length === 0">
+    No customer accounts match the current search.
+  </p>
+</section>

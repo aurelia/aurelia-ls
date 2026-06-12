@@ -1,0 +1,28 @@
+.task-shell {
+  display: grid;
+  gap: 1rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.task-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.task-entry label {
+  grid-column: 1 / -1;
+}
+
+.task-entry input {
+  min-width: 0;
+}
+
+.task-shell ul {
+  display: grid;
+  gap: 0.5rem;
+  padding-inline-start: 1.25rem;
+}

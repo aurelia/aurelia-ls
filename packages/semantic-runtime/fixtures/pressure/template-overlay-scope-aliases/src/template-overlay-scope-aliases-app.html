@@ -1,0 +1,41 @@
+<template>
+  <h1>${$this.title}</h1>
+  <p>${$this.titleLength()}</p>
+  <p>${title & oneTime}</p>
+
+  <section if.bind="title.length > 0">
+    <p>${title.toUpperCase()}</p>
+  </section>
+  <section else>
+    <p>${title.toLowerCase()}</p>
+  </section>
+
+  <section with.bind="selectedItem">
+    <button type="button" click.trigger="$parent.selectById(id)">${label}</button>
+  </section>
+
+  <ul>
+    <li repeat.for="item of items">
+      <span>${$index}: ${item.label}</span>
+      <span>${$parent.title}</span>
+      <span>${$parent.titleLength()}</span>
+      <span>${$this.item.label}</span>
+      <ul>
+        <li repeat.for="child of item.children">
+          <span>${child.label}</span>
+          <span>${$parent.item.labelLength()}</span>
+          <span>${$parent.item.label}</span>
+          <span>${$parent.$parent.title}</span>
+          <span>${this.title}</span>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <dl>
+    <template repeat.for="[key, entry] of itemEntries">
+      <dt>${$this.key}</dt>
+      <dd>${$this.entry.label}</dd>
+    </template>
+  </dl>
+</template>

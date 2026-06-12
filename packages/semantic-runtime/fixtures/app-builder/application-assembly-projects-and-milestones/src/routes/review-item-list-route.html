@@ -1,0 +1,49 @@
+<section>
+  <h2>Reviews</h2>
+  <form submit.trigger="createReview()">
+    <div>
+      <label for="title-field">Title</label>
+      <input value.bind="title" id="title-field">
+    </div>
+    <div>
+      <label for="done-field">Done</label>
+      <input type="checkbox" checked.bind="done" id="done-field">
+    </div>
+    <div>
+      <label for="reviewer-field">Reviewer</label>
+      <select value.bind="reviewer" matcher.bind="state.matchReviewerProfile" id="reviewer-field">
+        <option repeat.for="reviewerProfile of state.reviewerProfiles" model.bind="reviewerProfile">${reviewerProfile.displayName}</option>
+      </select>
+    </div>
+    <button type="submit">Create review</button>
+  </form>
+  <p if.bind="createReviewStatusMessage" role="status" id="review-create-status">${createReviewStatusMessage}</p>
+  <section promise.bind="reviewItemsPromise">
+    <p pending>Loading reviews...</p>
+    <template then="loadedReviewItems">
+      <p if.bind="loadedReviewItems.length === 0">No reviews yet.</p>
+      <table else>
+        <thead>
+          <tr>
+            <th>Review</th>
+            <th>Reviewer</th>
+            <th>Done</th>
+            <th>Open</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="reviewItem of loadedReviewItems">
+            <td>${reviewItem.title}</td>
+            <td>${state.reviewerLabelForReviewItem(reviewItem)}</td>
+            <td>${reviewItem.done ? 'Done' : 'Open'}</td>
+            <td>
+              <a load="route: review-item-detail; params.bind: { reviewId: reviewItem.id }">Open review</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+    <p catch>Could not load reviews.</p>
+  </section>
+  <au-viewport name="detail"></au-viewport>
+</section>

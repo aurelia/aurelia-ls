@@ -1,0 +1,23 @@
+<section promise.bind="taskItemsPromise">
+  <p pending>Loading tasks...</p>
+  <template then="loadedTaskItems">
+    <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+    <template else>
+      <table class="async-task-table__table" data-au-role="fulfilled-collection-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Done</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr repeat.for="taskItem of loadedTaskItems" class="async-task-table__row">
+            <td>${taskItem.title}</td>
+            <td class="async-task-table__done-cell">${taskItem.done ? 'Done' : 'Open'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+  </template>
+  <p catch>Could not load tasks.</p>
+</section>

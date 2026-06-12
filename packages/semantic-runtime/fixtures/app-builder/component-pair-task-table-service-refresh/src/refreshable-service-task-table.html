@@ -1,0 +1,27 @@
+<section class="refreshable-service-task-table">
+  <p if.bind="refreshStatusMessage" role="status" id="task-refresh-status">${refreshStatusMessage}</p>
+  <section promise.bind="taskItemsPromise" class="refreshable-service-task-table__status">
+    <p pending>Loading tasks...</p>
+    <template then="loadedTaskItems">
+      <p if.bind="loadedTaskItems.length === 0">No tasks yet.</p>
+      <template else>
+        <table class="refreshable-service-task-table__table" data-au-role="refreshable-service-backed-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Done</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr repeat.for="taskItem of loadedTaskItems" class="refreshable-service-task-table__row">
+              <td>${taskItem.title}</td>
+              <td>${taskItem.done ? 'Done' : 'Open'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </template>
+    <p catch="error">Could not load tasks.</p>
+  </section>
+</section>
+<button type="button" click.trigger="refreshTaskItems()">Refresh tasks</button>

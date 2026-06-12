@@ -1,0 +1,29 @@
+<select value.bind="selectedFirst" multiple.bind="true">
+  <option model.bind="'alpha'">Alpha</option>
+  <option model.bind="'beta'">Beta</option>
+</select>
+
+<select value.bind="selectedMiddle" id.bind="selectId" multiple.bind="true">
+  <option model.bind="'gamma'">Gamma</option>
+  <option model.bind="'delta'">Delta</option>
+</select>
+
+<select id.bind="selectId" value.bind="selectedLast" multiple.bind="true">
+  <option model.bind="'epsilon'">Epsilon</option>
+  <option model.bind="'zeta'">Zeta</option>
+</select>
+
+<select value.bind="selectedNullable" multiple.bind="true">
+  <option model.bind="'eta'">Eta</option>
+  <option model.bind="'theta'">Theta</option>
+</select>
+
+<select multiple.bind="false" value.bind="selectedSingle">
+  <option model.bind="'alpha'">Alpha</option>
+  <option model.bind="'beta'">Beta</option>
+</select>
+
+<select value.bind="selectedDynamic" multiple.bind="isMultiple">
+  <option model.bind="'alpha'">Alpha</option>
+  <option model.bind="'beta'">Beta</option>
+</select>

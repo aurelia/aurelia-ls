@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "framework-service-root-pressure",
+  "pressureOrigin": "service-root-open-spread-local",
+  "expectedEffects": [
+    "source-service-admission-unknown",
+    "local-registration-open"
+  ],
+  "effectContractIds": [
+    "service-root-admission-chain"
+  ]
+}

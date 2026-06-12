@@ -63,7 +63,7 @@ export function brandNumber<TBrand extends string>(value: number): NumericId<TBr
 }
 
 export function unbrand<T>(value: Branded<T, string>): T {
-  return value as T;
+  return value;
 }
 
 export function idMapGet<TBrand extends string, TValue>(

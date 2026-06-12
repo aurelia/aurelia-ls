@@ -1,0 +1,7 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<section else>
+  <article repeat.for="taskItem of taskItems">
+    <h3>${taskItem.title}</h3>
+    <p>Done: ${taskItem.done ? 'Done' : 'Open'}</p>
+  </article>
+</section>

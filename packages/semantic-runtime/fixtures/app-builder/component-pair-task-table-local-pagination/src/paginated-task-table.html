@@ -1,0 +1,26 @@
+<p if.bind="taskItems.length === 0">No tasks yet.</p>
+<table else>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Done</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr repeat.for="taskItem of pagedTaskItems">
+      <td>${taskItem.title}</td>
+      <td>${taskItem.done ? 'Done' : 'Open'}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="2">
+        <nav aria-label="Pagination">
+          <button type="button" click.trigger="previousTaskItemsPage()">Previous</button>
+          <span>Page ${taskItemsPage} of ${taskItemsPageCount}</span>
+          <button type="button" click.trigger="nextTaskItemsPage()">Next</button>
+        </nav>
+      </td>
+    </tr>
+  </tfoot>
+</table>

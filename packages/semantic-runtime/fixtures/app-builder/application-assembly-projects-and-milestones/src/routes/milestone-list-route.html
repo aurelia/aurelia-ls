@@ -1,0 +1,11 @@
+<section>
+  <h2>Milestones</h2>
+  <p if.bind="state.milestones.length === 0">No milestones yet.</p>
+  <ul else>
+    <li repeat.for="milestone of state.milestones">
+      <span>${milestone.title}</span>
+      <a load="route: milestone-detail; params.bind: { milestoneId: milestone.id }">Open milestone</a>
+    </li>
+  </ul>
+  <au-viewport name="detail"></au-viewport>
+</section>
