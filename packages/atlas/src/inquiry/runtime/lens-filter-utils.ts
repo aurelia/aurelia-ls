@@ -247,8 +247,19 @@ function searchTokens(value: string): readonly string[] {
     .filter(Boolean);
 }
 
+const normalizedSearchTokensCache = new Map<string, readonly string[]>();
+
 function normalizedSearchTokens(value: string): readonly string[] {
-  return [...new Set(searchTokens(value).map(normalizedSearchToken))];
+  const cached = normalizedSearchTokensCache.get(value);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const tokens = [...new Set(searchTokens(value).map(normalizedSearchToken))];
+  if (normalizedSearchTokensCache.size > 50_000) {
+    normalizedSearchTokensCache.clear();
+  }
+  normalizedSearchTokensCache.set(value, tokens);
+  return tokens;
 }
 
 function normalizedSearchToken(token: string): string {

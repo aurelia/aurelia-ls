@@ -2721,15 +2721,45 @@ function sourcePositionForOffset(
   offset: number,
 ): SourceRange["start"] {
   const safeOffset = Math.min(Math.max(0, offset), text.length);
-  let line = 0;
-  let lineStart = 0;
-  for (let index = 0; index < safeOffset; index += 1) {
-    if (text[index] === "\n") {
-      line += 1;
-      lineStart = index + 1;
+  const lineStarts = sourceLineStarts(text);
+  const line = lineIndexForOffset(lineStarts, safeOffset);
+  const lineStart = lineStarts[line] ?? 0;
+  return { line, character: safeOffset - lineStart };
+}
+
+const sourceLineStartsCache = new Map<string, readonly number[]>();
+
+function sourceLineStarts(text: string): readonly number[] {
+  const cached = sourceLineStartsCache.get(text);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const lineStarts = [0];
+  for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) {
+    lineStarts.push(index + 1);
+  }
+  if (sourceLineStartsCache.size > 1_000) {
+    sourceLineStartsCache.clear();
+  }
+  sourceLineStartsCache.set(text, lineStarts);
+  return lineStarts;
+}
+
+function lineIndexForOffset(
+  lineStarts: readonly number[],
+  offset: number,
+): number {
+  let low = 0;
+  let high = lineStarts.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if ((lineStarts[mid] ?? 0) <= offset) {
+      low = mid + 1;
+    } else {
+      high = mid;
     }
   }
-  return { line, character: safeOffset - lineStart };
+  return Math.max(0, low - 1);
 }
 
 function sourceTextForRange(
@@ -2762,15 +2792,10 @@ function sourceOffsetForPosition(
   text: string,
   position: SourceRange["start"],
 ): number {
-  let line = 0;
-  let lineStart = 0;
-  while (line < position.line && lineStart < text.length) {
-    const nextLine = text.indexOf("\n", lineStart);
-    if (nextLine < 0) {
-      return text.length;
-    }
-    line += 1;
-    lineStart = nextLine + 1;
+  const lineStarts = sourceLineStarts(text);
+  const lineStart = lineStarts[position.line];
+  if (lineStart === undefined) {
+    return text.length;
   }
   return Math.min(text.length, lineStart + Math.max(0, position.character));
 }

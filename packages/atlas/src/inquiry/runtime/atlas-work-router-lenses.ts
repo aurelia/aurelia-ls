@@ -70,7 +70,6 @@ import {
 } from "./lens-filter-utils.js";
 import {
   readAtlasSelfAnalysis,
-  type AtlasSelfAnalysis,
   type AtlasSelfClassSurfaceRow,
   type AtlasSelfFunctionSurfaceRow,
   type AtlasSelfSourceFileSurfaceRow,
@@ -78,7 +77,6 @@ import {
 } from "./self-analysis.js";
 import {
   readProductArchitectureAnalysis,
-  type ProductArchitectureAnalysis,
   type ProductArchitectureClassSurfaceRow,
   type ProductArchitectureDeclarationRow,
   type ProductArchitectureFunctionSurfaceRow,
@@ -106,6 +104,7 @@ import {
   firstFrameworkErrorCodeQuery,
   routeMatchStrengthMeets,
   scoredRoutesForFilters,
+  normalizeRoutePath,
   sourcePathMatches,
   type AtlasWorkRouterFilters,
   type ScoredRoute,
@@ -139,13 +138,30 @@ type AtlasWorkRouterProjection =
   | "schema";
 
 interface RouterState {
-  readonly product: ProductArchitectureAnalysis;
-  readonly atlasSelf: AtlasSelfAnalysis;
   readonly memoryRecords: readonly AtlasMemoryRecordRow[];
   readonly memoryNextActions: readonly AtlasMemoryNextActionRow[];
   readonly fixtureSeeds: readonly FrameworkCorpusFixtureSeedRow[];
   readonly expectedEffects: readonly FrameworkCorpusExpectedEffectDescriptorRow[];
+  readonly atlasModuleShapeByPath: ReadonlyMap<string, AtlasSelfSourceFileSurfaceRow["moduleShape"]>;
+  readonly sourceIndexes: RouterSourceIndexes;
   readonly sourceProject: SourceProject;
+}
+
+interface PathIndex<TRow> {
+  readonly rows: readonly TRow[];
+  readonly byNormalizedPath: ReadonlyMap<string, readonly TRow[]>;
+}
+
+interface RouterSourceIndexes {
+  readonly sourceDeclarations: PathIndex<SourceDeclarationRow>;
+  readonly productModules: PathIndex<ProductArchitectureModuleRow>;
+  readonly productDeclarations: PathIndex<ProductArchitectureDeclarationRow>;
+  readonly productClassSurfaces: PathIndex<ProductArchitectureClassSurfaceRow>;
+  readonly productFunctionSurfaces: PathIndex<ProductArchitectureFunctionSurfaceRow>;
+  readonly atlasSourceFiles: PathIndex<AtlasSelfSourceFileSurfaceRow>;
+  readonly atlasClassSurfaces: PathIndex<AtlasSelfClassSurfaceRow>;
+  readonly atlasFunctionSurfaces: PathIndex<AtlasSelfFunctionSurfaceRow>;
+  readonly atlasVariableSurfaces: PathIndex<AtlasSelfVariableSurfaceRow>;
 }
 
 interface WorktreeFile {
@@ -160,7 +176,6 @@ export function answerAtlasWorkRouter(
 ): Answer<AtlasWorkRouterValue> {
   const projection = atlasWorkRouterProjection(inquiry);
   const filters = atlasWorkRouterFilters(inquiry);
-  const state = readRouterState(sourceProject);
   const selectedRoutes = scoredRoutesForFilters(filters);
   const basis = atlasWorkRouterBasis(sourceProject);
 
@@ -171,7 +186,7 @@ export function answerAtlasWorkRouter(
       return answerAtlasWorkRouterRouteHealth(
         inquiry,
         selectedRoutes,
-        state,
+        readRouterState(sourceProject),
         basis,
       );
     case "coverage":
@@ -184,7 +199,7 @@ export function answerAtlasWorkRouter(
       return answerAtlasWorkRouterWorkset(
         inquiry,
         selectedRoutes,
-        state,
+        readRouterState(sourceProject),
         sourceProject,
         basis,
       );
@@ -192,7 +207,7 @@ export function answerAtlasWorkRouter(
       return answerAtlasWorkRouterMemoryCoverage(
         inquiry,
         selectedRoutes,
-        state,
+        readRouterState(sourceProject),
         basis,
       );
     case "next":
@@ -201,17 +216,23 @@ export function answerAtlasWorkRouter(
       return answerAtlasWorkRouterRoutePlans(
         inquiry,
         selectedRoutes,
-        state,
+        readRouterState(sourceProject),
         basis,
       );
     case "routes":
-      return answerAtlasWorkRouterRoutes(inquiry, filters, selectedRoutes, state, basis);
+      return answerAtlasWorkRouterRoutes(
+        inquiry,
+        filters,
+        selectedRoutes,
+        readRouterState(sourceProject),
+        basis,
+      );
     case "summary":
       return answerAtlasWorkRouterSummary(
         inquiry,
         filters,
         selectedRoutes,
-        state,
+        readRouterState(sourceProject),
         basis,
       );
   }
@@ -228,16 +249,16 @@ function answerAtlasWorkRouterSummary(
   const routes = effectiveScoredRoutes
     .slice(0, rowLimit(inquiry))
     .map((entry) => entry.row);
-  const rollupPlans = effectiveScoredRoutes.map((entry) =>
-    routePlan(entry, state, filters)
-  );
-  const plans = rollupPlans.slice(0, Math.min(3, routes.length));
-  const rollup = routerRollup(effectiveScoredRoutes, rollupPlans);
+  const planFor = createRoutePlanReader(state, filters);
+  const plans = effectiveScoredRoutes
+    .slice(0, Math.min(3, routes.length))
+    .map(planFor);
+  const rollup = routerRollup(effectiveScoredRoutes, plans);
   const weakSeams = weakTextOpenSeams(routes);
   return createAnswer(
     inquiry,
     routes.length > 0 ? OutcomeKind.Hit : OutcomeKind.Miss,
-    `Returned ${routes.length} of ${effectiveScoredRoutes.length} matched Atlas work route(s) from ${ATLAS_WORK_ROUTES.length} catalog route(s); ${rollup.weakTextMatchCount} weak-text match(es), ${rollup.routeWithMemoryCount} route(s) with memory joins, ${rollup.routeWithFixtureSeedCount} route(s) with fixture seeds, and ${rollup.routeWithSourceMatchCount} route(s) with source matches.`,
+    `Returned ${routes.length} of ${effectiveScoredRoutes.length} matched Atlas work route(s) from ${ATLAS_WORK_ROUTES.length} catalog route(s); ${rollup.weakTextMatchCount} weak-text match(es), with ${plans.length} sampled route plan(s) carrying ${rollup.routeWithMemoryCount} memory join(s), ${rollup.routeWithFixtureSeedCount} fixture seed join(s), and ${rollup.routeWithSourceMatchCount} source match(es).`,
     {
       value: {
         version: ATLAS_WORK_ROUTER_VERSION,
@@ -250,7 +271,7 @@ function answerAtlasWorkRouterSummary(
       openSeams: weakSeams,
       continuations: [
         ...atlasWorkRouterProjectionContinuations(inquiry, filters),
-        ...routes.flatMap((row) => routeContinuations(row, state)).slice(0, 18),
+        ...routes.flatMap(routeContinuations).slice(0, 18),
       ],
     },
   );
@@ -263,6 +284,8 @@ function answerAtlasWorkRouterRoutes(
   state: RouterState,
   basis: readonly Basis[],
 ): Answer<AtlasWorkRouterValue> {
+  const planFor = createRoutePlanReader(state, filters);
+  const scoredRouteById = scoredRouteMap(scoredRoutes);
   const rowFamily = new PagedRowFamily<AtlasWorkRouteRow>({
     id: "atlas.work-router:routes",
     rowLabel: "Atlas work route row(s)",
@@ -274,7 +297,7 @@ function answerAtlasWorkRouterRoutes(
         routeSummary: "Next Atlas work-route page.",
       }),
       ...atlasWorkRouterProjectionContinuations(inquiry, filters),
-      ...rows.flatMap((row) => routeContinuations(row, state)).slice(0, 18),
+      ...rows.flatMap(routeContinuations).slice(0, 18),
     ],
   });
   return rowFamily.answer({
@@ -285,9 +308,9 @@ function answerAtlasWorkRouterRoutes(
     basis,
     value: (page) => {
       const pagePlans = page.rows.flatMap((row) =>
-        scoredRoutes
-          .filter((entry) => entry.row.id === row.id)
-          .map((entry) => routePlan(entry, state, filters)),
+        scoredRouteById.get(row.id) === undefined
+          ? []
+          : [planFor(scoredRouteById.get(row.id)!)],
       );
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
@@ -308,11 +331,11 @@ function answerAtlasWorkRouterRoutePlans(
 ): Answer<AtlasWorkRouterValue> {
   const filters = atlasWorkRouterFilters(inquiry);
   const effectiveScoredRoutes = routePlanScoredRoutes(scoredRoutes, state, filters);
-  const plans = effectiveScoredRoutes.map((entry) => routePlan(entry, state, filters));
-  const rowFamily = new PagedRowFamily<AtlasWorkRoutePlanRow>({
+  const planFor = createRoutePlanReader(state, filters);
+  const rowFamily = new PagedRowFamily<ScoredRoute>({
     id: "atlas.work-router:route-plan",
     rowLabel: "Atlas work route plan(s)",
-    evidenceForRow: routePlanEvidence,
+    evidenceForRow: (entry) => routePlanEvidence(planFor(entry)),
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
       ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
         priority: ContinuationPriority.Secondary,
@@ -320,26 +343,27 @@ function answerAtlasWorkRouterRoutePlans(
         routeSummary: "Next Atlas work-route plan page.",
       }),
       ...atlasWorkRouterProjectionContinuations(inquiry, atlasWorkRouterFilters(inquiry)),
-      ...rows.flatMap(routePlanContinuations).slice(0, 24),
+      ...rows.flatMap((entry) => routePlanContinuations(planFor(entry))).slice(0, 24),
     ],
   });
   return rowFamily.answer({
     inquiry,
-    rows: plans,
+    rows: effectiveScoredRoutes,
     limit: rowLimit(inquiry),
     offset: pageOffset(inquiry),
     basis,
-    value: (page) => ({
-      version: ATLAS_WORK_ROUTER_VERSION,
-      rollup: routerRollup(effectiveScoredRoutes, plans),
-      routes: effectiveScoredRoutes.map((entry) => entry.row),
-      routePlans: page.rows,
-    }),
+    value: (page) => {
+      const pagePlans = page.rows.map(planFor);
+      return {
+        version: ATLAS_WORK_ROUTER_VERSION,
+        rollup: routerRollup(effectiveScoredRoutes, pagePlans),
+        routes: effectiveScoredRoutes.map((entry) => entry.row),
+        routePlans: pagePlans,
+      };
+    },
     openSeams: (page) =>
       weakTextOpenSeams(
-        effectiveScoredRoutes
-          .map((entry) => entry.row)
-          .filter((row) => page.rows.some((plan) => plan.routeId === row.id)),
+        page.rows.map((entry) => entry.row),
       ),
   });
 }
@@ -351,7 +375,8 @@ function answerAtlasWorkRouterRouteHealth(
   basis: readonly Basis[],
 ): Answer<AtlasWorkRouterValue> {
   const filters = atlasWorkRouterFilters(inquiry);
-  const plans = scoredRoutes.map((entry) => routePlan(entry, state, filters));
+  const planFor = createRoutePlanReader(state, filters);
+  const plans = scoredRoutes.map(planFor);
   const healthRows = plans.map((plan) => routeHealthRow(plan));
   const rowFamily = new PagedRowFamily<AtlasWorkRouteHealthRow>({
     id: "atlas.work-router:route-health",
@@ -441,6 +466,7 @@ function answerAtlasWorkRouterWorkset(
   basis: readonly Basis[],
 ): Answer<AtlasWorkRouterValue> {
   const filters = atlasWorkRouterFilters(inquiry);
+  const planFor = createRoutePlanReader(state, filters);
   const worktreeFiles = readWorktreeFiles(sourceProject.repoRoot);
   const fileSampleLimit = worksetFileSampleLimit(inquiry);
   const rows = scoredRoutes
@@ -467,7 +493,7 @@ function answerAtlasWorkRouterWorkset(
       }),
       ...atlasWorkRouterProjectionContinuations(inquiry, filters),
       ...pageRows.flatMap((row) =>
-        routePlanContinuations(routePlanForWorksetRow(row, scoredRoutes, state, filters)),
+        routePlanContinuations(routePlanForWorksetRow(row, scoredRoutes, planFor)),
       ).slice(0, 24),
     ],
   });
@@ -481,8 +507,7 @@ function answerAtlasWorkRouterWorkset(
       const pagePlans = routePlansForWorksetRows(
         page.rows,
         scoredRoutes,
-        state,
-        filters,
+        planFor,
       );
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
@@ -502,6 +527,7 @@ function answerAtlasWorkRouterMemoryCoverage(
   basis: readonly Basis[],
 ): Answer<AtlasWorkRouterValue> {
   const filters = atlasWorkRouterFilters(inquiry);
+  const planFor = createRoutePlanReader(state, filters);
   const coverageRows = state.memoryNextActions
     .filter((row) => memoryNextActionMatchesFilters(row, filters))
     .map((row) => memoryCoverageRow(row, scoredRoutes))
@@ -544,8 +570,7 @@ function answerAtlasWorkRouterMemoryCoverage(
       const pagePlans = routePlansForMemoryCoverageRows(
         page.rows,
         scoredRoutes,
-        state,
-        filters,
+        planFor,
       );
       return {
         version: ATLAS_WORK_ROUTER_VERSION,
@@ -646,17 +671,71 @@ function readRouterState(sourceProject: SourceProject): RouterState {
   });
   const memory = readAtlasMemoryAnalysis(sourceProject);
   const corpus = readFrameworkCorpusAnalysis(sourceProject);
+  const atlasSelf = readAtlasSelfAnalysis(sourceProject, {
+    includeSemanticTaxonomyAnalysis: false,
+  });
+  const sourceDeclarations = sourceProject.declarationRows();
   return {
-    product,
-    atlasSelf: readAtlasSelfAnalysis(sourceProject, {
-      includeSemanticTaxonomyAnalysis: false,
-    }),
     memoryRecords: memory.records,
     memoryNextActions: atlasMemoryNextActionRows(memory),
     fixtureSeeds: corpus.fixtureSeeds,
     expectedEffects: corpus.expectedEffectDescriptors,
+    atlasModuleShapeByPath: new Map(
+      atlasSelf.sourceFileSurfaces.map((row) => [row.filePath, row.moduleShape] as const),
+    ),
+    sourceIndexes: {
+      sourceDeclarations: createPathIndex(sourceDeclarations, (row) => row.file.repoPath),
+      productModules: createPathIndex(product.modules, (row) => row.filePath),
+      productDeclarations: createPathIndex(product.declarations, (row) => row.filePath),
+      productClassSurfaces: createPathIndex(product.classSurfaces, (row) => row.filePath),
+      productFunctionSurfaces: createPathIndex(product.functionSurfaces, (row) => row.filePath),
+      atlasSourceFiles: createPathIndex(atlasSelf.sourceFileSurfaces, (row) => row.filePath),
+      atlasClassSurfaces: createPathIndex(atlasSelf.classSurfaces, (row) => row.filePath),
+      atlasFunctionSurfaces: createPathIndex(atlasSelf.functionSurfaces, (row) => row.filePath),
+      atlasVariableSurfaces: createPathIndex(atlasSelf.variableSurfaces, (row) => row.filePath),
+    },
     sourceProject,
   };
+}
+
+function createPathIndex<TRow>(
+  rows: readonly TRow[],
+  pathOf: (row: TRow) => string,
+): PathIndex<TRow> {
+  const mutable = new Map<string, TRow[]>();
+  for (const row of rows) {
+    const path = normalizeRoutePath(pathOf(row));
+    const bucket = mutable.get(path);
+    if (bucket === undefined) {
+      mutable.set(path, [row]);
+    } else {
+      bucket.push(row);
+    }
+  }
+  return {
+    rows,
+    byNormalizedPath: new Map(
+      [...mutable.entries()].map(([path, pathRows]) => [path, pathRows] as const),
+    ),
+  };
+}
+
+function indexedPathRows<TRow>(
+  index: PathIndex<TRow>,
+  requestedPath: string,
+  pathOf: (row: TRow) => string,
+): readonly TRow[] {
+  const normalizedRequested = normalizeRoutePath(requestedPath);
+  const exactRows = index.byNormalizedPath.get(normalizedRequested);
+  if (exactRows !== undefined && routePathLooksFileScoped(normalizedRequested)) {
+    return exactRows;
+  }
+  return index.rows.filter((row) => sourcePathMatches(pathOf(row), requestedPath));
+}
+
+function routePathLooksFileScoped(normalizedPath: string): boolean {
+  const lastSegment = normalizedPath.split("/").at(-1) ?? "";
+  return /\.[a-z0-9]+$/iu.test(lastSegment);
 }
 
 function atlasWorkRouterProjection(
@@ -679,15 +758,53 @@ function atlasWorkRouterProjection(
   }
 }
 
+type RoutePlanReader = (scored: ScoredRoute) => AtlasWorkRoutePlanRow;
+
+interface RoutePlanContext {
+  readonly sourcePlans: Map<string, AtlasWorkRouteSourcePlanRow>;
+  readonly queryCanaryMatches: Map<string, ScoredRoute | undefined>;
+}
+
+function createRoutePlanReader(
+  state: RouterState,
+  filters: AtlasWorkRouterFilters,
+): RoutePlanReader {
+  const plans = new Map<string, AtlasWorkRoutePlanRow>();
+  const context = createRoutePlanContext();
+  return (scored) => {
+    const cached = plans.get(scored.route.id);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const plan = routePlan(scored, state, filters, context);
+    plans.set(scored.route.id, plan);
+    return plan;
+  };
+}
+
+function createRoutePlanContext(): RoutePlanContext {
+  return {
+    sourcePlans: new Map(),
+    queryCanaryMatches: new Map(),
+  };
+}
+
+function scoredRouteMap(
+  scoredRoutes: readonly ScoredRoute[],
+): ReadonlyMap<string, ScoredRoute> {
+  return new Map(scoredRoutes.map((entry) => [entry.route.id, entry] as const));
+}
+
 function routePlan(
   scored: ScoredRoute,
   state: RouterState,
   filters: AtlasWorkRouterFilters,
+  context: RoutePlanContext = createRoutePlanContext(),
 ): AtlasWorkRoutePlanRow {
   const route = scored.route;
   const sourceAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteSourceAnchor => anchor.kind === "source")
-    .map((anchor) => sourcePlan(anchor, state));
+    .map((anchor) => sourcePlanForAnchor(anchor, state, context));
   const lensAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteLensAnchor => anchor.kind === "lens");
   const scriptAnchors = route.anchors
@@ -718,7 +835,7 @@ function routePlan(
     corpusAnchors,
     filters,
   ).slice(0, 8);
-  const queryCanaries = routeQueryCanaryRows(route);
+  const queryCanaries = routeQueryCanaryRows(route, context);
   return {
     routeId: route.id,
     title: route.title,
@@ -793,7 +910,7 @@ function defaultRankedScoredRoute(
   state: RouterState,
 ): ScoredRoute | null {
   const memory = memoryRankComponent(scored.route, state.memoryNextActions);
-  const product = productPressureRankComponent(scored.route, state.product, state.atlasSelf);
+  const product = productPressureRankComponent(scored.route, state);
   if (memory === null && product === null) {
     return null;
   }
@@ -843,12 +960,11 @@ function memoryRankComponent(
 
 function productPressureRankComponent(
   route: AtlasWorkRoute,
-  product: ProductArchitectureAnalysis,
-  atlasSelf: AtlasSelfAnalysis,
+  state: RouterState,
 ): DefaultRouteRankComponent | null {
   const topMatch = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteSourceAnchor => anchor.kind === "source")
-    .flatMap((anchor) => sourceAnchorProductPressureMatches(anchor, product, atlasSelf))
+    .flatMap((anchor) => sourceAnchorProductPressureMatches(anchor, state))
     .sort((left, right) =>
       right.score - left.score ||
       left.label.localeCompare(right.label)
@@ -871,66 +987,56 @@ interface SourceAnchorProductPressureMatch {
 
 function sourceAnchorProductPressureMatches(
   anchor: AtlasWorkRouteSourceAnchor,
-  product: ProductArchitectureAnalysis,
-  atlasSelf: AtlasSelfAnalysis,
+  state: RouterState,
 ): readonly SourceAnchorProductPressureMatch[] {
-  const atlasModuleShapeByPath = new Map(
-    atlasSelf.sourceFileSurfaces.map((row) => [row.filePath, row.moduleShape] as const),
-  );
+  const { sourceIndexes } = state;
   return [
-    ...product.modules
-      .filter((row) =>
-        anchor.symbolName === undefined &&
-        sourcePathMatches(row.filePath, anchor.filePath)
-      )
+    ...indexedPathRows(sourceIndexes.productModules, anchor.filePath, (row) => row.filePath)
+      .filter(() => anchor.symbolName === undefined)
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, productModulePressureScore(row)),
         label: `${row.filePath}${row.maxFunctionName == null ? "" : `:${row.maxFunctionName}`}`,
       })),
-    ...product.classSurfaces
-      .filter((row) => sourcePathMatches(row.filePath, anchor.filePath) &&
-        (anchor.symbolName === undefined || row.name === anchor.symbolName))
+    ...indexedPathRows(sourceIndexes.productClassSurfaces, anchor.filePath, (row) => row.filePath)
+      .filter((row) => anchor.symbolName === undefined || row.name === anchor.symbolName)
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, classLikePressureScore(row)),
         label: row.name,
       })),
-    ...product.functionSurfaces
-      .filter((row) => sourcePathMatches(row.filePath, anchor.filePath) &&
-        (anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName))
+    ...indexedPathRows(sourceIndexes.productFunctionSurfaces, anchor.filePath, (row) => row.filePath)
+      .filter((row) =>
+        anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName
+      )
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, productFunctionPressureScore(row)),
         label: row.name,
     })),
-    ...atlasSelf.sourceFileSurfaces
-      .filter((row) =>
-        anchor.symbolName === undefined &&
-        sourcePathMatches(row.filePath, anchor.filePath)
-      )
+    ...indexedPathRows(sourceIndexes.atlasSourceFiles, anchor.filePath, (row) => row.filePath)
+      .filter(() => anchor.symbolName === undefined)
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, atlasSourceFilePressureScore(row)),
         label: row.filePath,
       })),
-    ...atlasSelf.classSurfaces
-      .filter((row) => sourcePathMatches(row.filePath, anchor.filePath) &&
-        (anchor.symbolName === undefined || row.name === anchor.symbolName))
+    ...indexedPathRows(sourceIndexes.atlasClassSurfaces, anchor.filePath, (row) => row.filePath)
+      .filter((row) => anchor.symbolName === undefined || row.name === anchor.symbolName)
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, classLikePressureScore(row)),
         label: row.name,
       })),
-    ...atlasSelf.functionSurfaces
-      .filter((row) => sourcePathMatches(row.filePath, anchor.filePath) &&
-        (anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName))
+    ...indexedPathRows(sourceIndexes.atlasFunctionSurfaces, anchor.filePath, (row) => row.filePath)
+      .filter((row) =>
+        anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName
+      )
       .map((row) => ({
         score: sourceAnchorProductPressureScore(anchor, atlasFunctionPressureScore(row)),
         label: row.name,
       })),
-    ...atlasSelf.variableSurfaces
-      .filter((row) => sourcePathMatches(row.filePath, anchor.filePath) &&
-        (anchor.symbolName === undefined || row.name === anchor.symbolName))
+    ...indexedPathRows(sourceIndexes.atlasVariableSurfaces, anchor.filePath, (row) => row.filePath)
+      .filter((row) => anchor.symbolName === undefined || row.name === anchor.symbolName)
       .map((row) => ({
         score: sourceAnchorProductPressureScore(
           anchor,
-          atlasVariablePressureScore(row, atlasModuleShapeByPath.get(row.filePath)),
+          atlasVariablePressureScore(row, state.atlasModuleShapeByPath.get(row.filePath)),
         ),
         label: row.name,
       })),
@@ -1044,21 +1150,22 @@ function compareDefaultRankedScoredRoutes(
     left.route.id.localeCompare(right.route.id);
 }
 
-function routeQueryCanaryRows(route: AtlasWorkRoute): readonly AtlasWorkRouteQueryCanaryRow[] {
+function routeQueryCanaryRows(
+  route: AtlasWorkRoute,
+  context: RoutePlanContext,
+): readonly AtlasWorkRouteQueryCanaryRow[] {
   return (route.queryCanaries ?? []).map((canary) =>
-    routeQueryCanaryRow(route, canary),
+    routeQueryCanaryRow(route, canary, context),
   );
 }
 
 function routeQueryCanaryRow(
   route: AtlasWorkRoute,
   canary: AtlasWorkRouteQueryCanary,
+  context: RoutePlanContext,
 ): AtlasWorkRouteQueryCanaryRow {
   const minimumStrength = canary.minimumStrength ?? "declared-route-term";
-  const matchedRoute = scoredRoutesForFilters({
-    ...emptyAtlasWorkRouterFilters(),
-    query: canary.query,
-  })[0];
+  const matchedRoute = routeQueryCanaryMatch(canary.query, context);
   const passed = matchedRoute !== undefined &&
     matchedRoute.route.id === route.id &&
     routeMatchStrengthMeets(matchedRoute.row.matchStrength, minimumStrength);
@@ -1073,6 +1180,21 @@ function routeQueryCanaryRow(
       ? `${canary.query} routes to ${route.id} as ${matchedRoute.row.matchStrength}.`
       : `${canary.query} should route to ${route.id} with at least ${minimumStrength}, but ${matchedRoute === undefined ? "no route matched" : `${matchedRoute.route.id} matched as ${matchedRoute.row.matchStrength}`}. ${canary.summary}`,
   };
+}
+
+function routeQueryCanaryMatch(
+  query: string,
+  context: RoutePlanContext,
+): ScoredRoute | undefined {
+  if (context.queryCanaryMatches.has(query)) {
+    return context.queryCanaryMatches.get(query);
+  }
+  const matchedRoute = scoredRoutesForFilters({
+    ...emptyAtlasWorkRouterFilters(),
+    query,
+  })[0];
+  context.queryCanaryMatches.set(query, matchedRoute);
+  return matchedRoute;
 }
 
 function routeCoverageRows(route: AtlasWorkRoute): readonly AtlasWorkRouteCoverageRow[] {
@@ -1254,45 +1376,82 @@ function routeById(routeId: string): AtlasWorkRoute {
   return route;
 }
 
+function sourcePlanForAnchor(
+  anchor: AtlasWorkRouteSourceAnchor,
+  state: RouterState,
+  context: RoutePlanContext,
+): AtlasWorkRouteSourcePlanRow {
+  const key = `${anchor.filePath}\0${anchor.symbolName ?? ""}`;
+  const cached = context.sourcePlans.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const plan = sourcePlan(anchor, state);
+  context.sourcePlans.set(key, plan);
+  return plan;
+}
+
 function sourcePlan(
   anchor: AtlasWorkRouteSourceAnchor,
   state: RouterState,
 ): AtlasWorkRouteSourcePlanRow {
-  const { product, atlasSelf, sourceProject } = state;
+  const { sourceProject, sourceIndexes } = state;
   const admittedSourceFileFound = sourceProject.readSourceFile(anchor.filePath) !== null;
   const admittedSourceDeclarations = admittedSourceDeclarationMatches(
     anchor,
-    sourceProject.declarationRows(),
+    sourceIndexes.sourceDeclarations,
   ).slice(0, 8);
-  const modules = product.modules.filter((module) =>
-    sourcePathMatches(module.filePath, anchor.filePath),
+  const modules = indexedPathRows(
+    sourceIndexes.productModules,
+    anchor.filePath,
+    (row) => row.filePath,
   );
-  const declarations = product.declarations.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName),
+  const declarations = indexedPathRows(
+    sourceIndexes.productDeclarations,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName
   );
-  const classSurfaces = product.classSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName),
+  const classSurfaces = indexedPathRows(
+    sourceIndexes.productClassSurfaces,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName
   );
-  const functionSurfaces = product.functionSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName),
+  const functionSurfaces = indexedPathRows(
+    sourceIndexes.productFunctionSurfaces,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName || row.className === anchor.symbolName
   );
-  const atlasSourceFiles = atlasSelf.sourceFileSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath),
+  const atlasSourceFiles = indexedPathRows(
+    sourceIndexes.atlasSourceFiles,
+    anchor.filePath,
+    (row) => row.filePath,
   );
-  const atlasClassSurfaces = atlasSelf.classSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName),
+  const atlasClassSurfaces = indexedPathRows(
+    sourceIndexes.atlasClassSurfaces,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName
   );
-  const atlasFunctionSurfaces = atlasSelf.functionSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName),
+  const atlasFunctionSurfaces = indexedPathRows(
+    sourceIndexes.atlasFunctionSurfaces,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName
   );
-  const atlasVariableSurfaces = atlasSelf.variableSurfaces.filter((row) =>
-    sourcePathMatches(row.filePath, anchor.filePath) &&
-    (anchor.symbolName === undefined || row.name === anchor.symbolName),
+  const atlasVariableSurfaces = indexedPathRows(
+    sourceIndexes.atlasVariableSurfaces,
+    anchor.filePath,
+    (row) => row.filePath,
+  ).filter((row) =>
+    anchor.symbolName === undefined || row.name === anchor.symbolName
   );
   const found =
     admittedSourceDeclarations.length > 0 ||
@@ -1326,12 +1485,11 @@ function sourcePlan(
 
 function admittedSourceDeclarationMatches(
   anchor: AtlasWorkRouteSourceAnchor,
-  declarations: readonly SourceDeclarationRow[],
+  declarations: PathIndex<SourceDeclarationRow>,
 ): AtlasWorkRouteSourcePlanRow["admittedSourceDeclarations"] {
-  return declarations
+  return indexedPathRows(declarations, anchor.filePath, (row) => row.file.repoPath)
     .filter((row) =>
-      sourcePathMatches(row.file.repoPath, anchor.filePath) &&
-      (anchor.symbolName === undefined || row.name === anchor.symbolName)
+      anchor.symbolName === undefined || row.name === anchor.symbolName
     )
     .map((row) => ({
       kind: row.kind,
@@ -1492,20 +1650,18 @@ function memoryRecordFileMatchKinds(
 function routePlanForWorksetRow(
   row: AtlasWorkRouteWorksetRow,
   scoredRoutes: readonly ScoredRoute[],
-  state: RouterState,
-  filters: AtlasWorkRouterFilters,
+  planFor: RoutePlanReader,
 ): AtlasWorkRoutePlanRow {
   const scored = scoredRouteForWorksetRow(row, scoredRoutes);
-  return routePlan(scored, state, filters);
+  return planFor(scored);
 }
 
 function routePlansForWorksetRows(
   rows: readonly AtlasWorkRouteWorksetRow[],
   scoredRoutes: readonly ScoredRoute[],
-  state: RouterState,
-  filters: AtlasWorkRouterFilters,
+  planFor: RoutePlanReader,
 ): readonly AtlasWorkRoutePlanRow[] {
-  return rows.map((row) => routePlanForWorksetRow(row, scoredRoutes, state, filters));
+  return rows.map((row) => routePlanForWorksetRow(row, scoredRoutes, planFor));
 }
 
 function scoredRoutesForWorksetRows(
@@ -1559,8 +1715,7 @@ function routeWorksetMatchedBy(row: AtlasWorkRouteWorksetRow): readonly string[]
 function routePlansForMemoryCoverageRows(
   rows: readonly AtlasWorkRouteMemoryCoverageRow[],
   scoredRoutes: readonly ScoredRoute[],
-  state: RouterState,
-  filters: AtlasWorkRouterFilters,
+  planFor: RoutePlanReader,
 ): readonly AtlasWorkRoutePlanRow[] {
   const routeIds: string[] = [];
   const seen = new Set<string>();
@@ -1573,21 +1728,20 @@ function routePlansForMemoryCoverageRows(
     }
   }
   return routeIds.map((routeId) =>
-    routePlanForRouteId(routeId, scoredRoutes, state, filters)
+    routePlanForRouteId(routeId, scoredRoutes, planFor)
   );
 }
 
 function routePlanForRouteId(
   routeId: string,
   scoredRoutes: readonly ScoredRoute[],
-  state: RouterState,
-  filters: AtlasWorkRouterFilters,
+  planFor: RoutePlanReader,
 ): AtlasWorkRoutePlanRow {
   const scored = scoredRoutes.find((entry) => entry.route.id === routeId);
   if (scored === undefined) {
     throw new Error(`Route row references missing route '${routeId}'.`);
   }
-  return routePlan(scored, state, filters);
+  return planFor(scored);
 }
 
 function readWorktreeFiles(repoRoot: string): readonly WorktreeFile[] {
@@ -2626,7 +2780,6 @@ function workRouterRoutePlanContinuation(
 
 function routeContinuations(
   row: AtlasWorkRouteRow,
-  state: RouterState,
 ): readonly Continuation[] {
   const route = ATLAS_WORK_ROUTES.find((entry) => entry.id === row.id);
   if (route === undefined) {
@@ -2635,7 +2788,6 @@ function routeContinuations(
   return [
     workRouterRoutePlanContinuation(route.id, `Build a live route plan for ${route.id}.`),
     ...route.anchors.flatMap(anchorContinuation).slice(0, 12),
-    ...routePlanContinuations(routePlan({ route, row }, state, emptyAtlasWorkRouterFilters())).slice(0, 12),
   ];
 }
 

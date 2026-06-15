@@ -726,6 +726,17 @@ export function sourcePathMatches(candidate: string, requested: string): boolean
     normalizedRequested.startsWith(`${normalizedCandidate}/`);
 }
 
-function normalizeRoutePath(value: string): string {
-  return value.replace(/\\/gu, "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+const normalizedRoutePathCache = new Map<string, string>();
+
+export function normalizeRoutePath(value: string): string {
+  const cached = normalizedRoutePathCache.get(value);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const normalized = value.replace(/\\/gu, "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  if (normalizedRoutePathCache.size > 50_000) {
+    normalizedRoutePathCache.clear();
+  }
+  normalizedRoutePathCache.set(value, normalized);
+  return normalized;
 }
