@@ -3,9 +3,10 @@ Requires Node >=22.13 <25.
 # Preview Release
 
 The current MCP preview is distributed as a GitHub Release tarball until npm
-publishing is available. The tarball contains only `au-mcp.js` and a generated
-`package.json`; the workspace package stays private and keeps its workspace
-dependency on semantic-runtime.
+publishing is available. The tarball contains bundled `au-mcp.js`, a generated
+`package.json`, and an offline Aurelia docs corpus snapshot under `docs/`; the
+workspace package stays private and keeps its workspace dependencies on
+semantic-runtime and patterns.
 
 ## Build The Tarball
 
@@ -13,16 +14,48 @@ dependency on semantic-runtime.
 pnpm --filter @aurelia-ls/mcp release:pack
 ```
 
-The command builds semantic-runtime and the MCP package, bundles
-`packages/mcp/out/server.js` with semantic-runtime inlined, leaves public
-dependencies external, writes `packages/mcp/.release/package`, and creates a
-tarball under `packages/mcp/.release`.
+The command builds the patterns, semantic-runtime, and MCP projects, bundles
+`packages/mcp/out/server.js`, leaves public dependencies external, copies
+`aurelia/docs/user-docs` into
+`packages/mcp/.release/package/docs/aurelia-user-docs`, writes
+`docs/aurelia-user-docs.manifest.json`, and creates a tarball under
+`packages/mcp/.release`.
+
+Set `AURELIA_DOCS_USER_DOCS_ROOT` to package a different checked-out docs root,
+or `AURELIA_DOCS_SOURCE_REVISION` to override the revision recorded in the
+manifest. Packaging fails if the docs root is missing.
 
 Run the packaged install smoke before uploading the artifact:
 
 ```powershell
+pnpm --filter @aurelia-ls/mcp contract:release
+pnpm --filter @aurelia-ls/mcp release:pack
 pnpm --filter @aurelia-ls/mcp probe:release-tarball
+pnpm --filter @aurelia-ls/mcp probe:project-local-install
 ```
+
+The release contract checks release documentation, adversarial MCP transport
+behavior, continuation pass-through, and every curated pattern example through
+semantic-runtime app diagnostics.
+
+The release probe installs the tarball into a temporary project, verifies the
+bundled docs manifest, lists the pattern/docs tools and resources, fetches a
+pattern example with `support.followUp` semantic-runtime hints, and calls
+`aurelia_docs_search` plus `aurelia_docs_fetch` against the installed package.
+It also checks the current guarded catalog size of 49 patterns and catalog
+sentinels such as `template.dom-ref`, `resource.custom-attribute`,
+`router.active-navigation`, `service.fetch-interceptor`,
+`router.relative-context-navigation`, `component.dynamic-composition`,
+`service.fetch-cache-policy`, `collection.pagination`,
+`collection.server-query`, `collection.virtual-repeat`,
+`collection.batch-selection`, `form.file-upload`, `form.validation-submit`,
+`form.server-validation-errors`, `router.auth-session-guard`,
+`localization.i18n-locale-service`, `dialog.confirm-edit`,
+`resource.template-controller`, and `template.portal-overlay`
+through natural menu searches and example fetches.
+
+The project-local install probe verifies the recommended app-local install path
+and checks that TypeScript resolves from the same package context as the app.
 
 ## GitHub Release Flow
 
@@ -65,6 +98,13 @@ with the app's own TypeScript package when the peer dependency is satisfied.
 
 Provider-specific config snippets live in
 [docs/providers](./docs/providers/README.md).
+
+Persistent AI authoring rules live in
+[docs/ai-authoring.md](./docs/ai-authoring.md). Release verification should
+confirm this file remains linked from README/release notes and continues to
+teach the Patterns/docs/`support.followUp` workflow, semantic-runtime
+diagnostics, DI-owned shared state, router transactions, app-builder exclusion,
+and router-direct exclusion.
 
 When asking an AI to set this up, the useful instruction is:
 

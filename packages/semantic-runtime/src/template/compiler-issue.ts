@@ -30,6 +30,7 @@ export const enum TemplateCompilerIssueKind {
   LocalTemplateBindableDuplicate = 'local-template-bindable-duplicate',
   LocalTemplateNameEmpty = 'local-template-name-empty',
   LocalTemplateNameDuplicate = 'local-template-name-duplicate',
+  UnknownBindingCommand = 'unknown-binding-command',
   BindingToNonBindable = 'binding-to-non-bindable',
   InvalidLetCommand = 'invalid-let-command',
   ReservedSpreadSyntax = 'reserved-spread-syntax',

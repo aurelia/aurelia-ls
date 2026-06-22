@@ -45,23 +45,49 @@ This preview focuses on semantic-runtime analysis:
 - workspace and Aurelia app discovery
 - TypeScript and Aurelia diagnostics
 - template diagnostics, cursor info, and completions
+- removed Aurelia 1 `.delegate` / `.call` binding-command diagnostics
 - router and route-surface inspection
 - binding/resource/open-seam query surfaces
 - typed query catalogs and continuation hints
+- curated Aurelia Patterns menu/example tools for authoring starting points
+- bundled Aurelia docs search/fetch with no runtime web requests
 - prompts/resources to help MCP clients orient themselves
 
-## Experimental App-Builder Surface
+## Aurelia Patterns And Docs
 
-This preview also includes the early app-builder/source-guidance surface.
+This preview includes a compact Aurelia Patterns surface:
 
-Treat this part as highly experimental. It can return Aurelia-oriented source
-plans, source previews, and lowering guidance in the app-builder query family,
-but its query shape, presets, naming, policy model, and public positioning are
-expected to change substantially.
+- `aurelia_pattern_menu`
+- `aurelia_pattern_example`
 
-It is included for exploration and feedback, not as a stable generation
-contract. The MCP server still does not write files; any returned source or
-guidance must be applied by the user, editor, or AI client.
+When authoring new Aurelia code, use the menu to choose a curated pattern and
+fetch the example by stable `patternId`. The returned source is meant to be
+adapted by the user, editor, or AI client. Pattern examples include assumptions,
+handoff notes, stable docs refs where available, and compact `support.followUp`
+hints for semantic-runtime checks to run after adaptation.
+The guarded catalog currently includes 49 patterns. Release sentinels include
+`template.dom-ref`, `resource.custom-attribute`, `router.active-navigation`,
+`service.fetch-interceptor`, `router.relative-context-navigation`, and
+`component.dynamic-composition`, `service.fetch-cache-policy`,
+`collection.pagination`, `collection.server-query`, `collection.virtual-repeat`,
+`collection.batch-selection`, `form.file-upload`, `form.validation-submit`,
+`form.server-validation-errors`, `router.auth-session-guard`,
+`localization.i18n-locale-service`, `dialog.confirm-edit`,
+`resource.template-controller`, and `template.portal-overlay`.
+
+The preview also includes bundled docs tools:
+
+- `aurelia_docs_search`
+- `aurelia_docs_fetch`
+
+Docs answers come from the packaged Aurelia docs snapshot, so MCP clients do
+not need runtime web requests for framework grounding.
+
+For persistent AI rules, see
+[`docs/ai-authoring.md`](../docs/ai-authoring.md). It contains a compact
+copyable instruction block for project rule files and names the recommended
+Patterns/docs/`support.followUp` workflow, semantic-runtime diagnostics,
+DI-owned shared state and router transactions.
 
 ## TypeScript Diagnostic Fidelity
 

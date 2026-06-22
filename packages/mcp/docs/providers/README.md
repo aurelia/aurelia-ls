@@ -21,6 +21,11 @@ Provider guides:
 - [Cursor](./cursor.md)
 - [VS Code](./vscode.md)
 
+After configuring the server, add the compact project-rule guidance from
+[Aurelia AI Authoring Guidance](../ai-authoring.md) to the agent or workspace
+rule file for your MCP client. It teaches when to use Patterns, bundled docs,
+and `support.followUp` semantic-runtime verification.
+
 After setup, restart the MCP client and run `aurelia_app_overview` or
 `aurelia_app_query` with `queryKind=typescript-diagnostic-summary`. A good
 project-local install reports a TypeScript relation of `same-package`.

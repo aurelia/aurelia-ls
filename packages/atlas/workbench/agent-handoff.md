@@ -296,6 +296,17 @@ pnpm --filter @aurelia-ls/atlas self-check
   continuation with `projection=text`; docs and framework tests outside the
   TypeScript Program are source-text-backed only, so switch to checker lenses
   only after moving to admitted framework or product source.
+- Current public app-building guidance is Aurelia Patterns, not the retired
+  app-builder public algebra. Use
+  `pnpm --filter @aurelia-ls/atlas work:router -- --projection=route-plan --query="Aurelia Patterns pattern menu" --rows=8`
+  to enter the dedicated route, then inspect `packages/patterns` and MCP
+  `aurelia_pattern_menu` / `aurelia_pattern_example` adapters. Treat
+  `support.followUp` rows as compact handoffs to existing semantic-runtime
+  diagnostics/app-query tools after adaptation, not as a verification stamp or
+  fixer wrapper. Treat app-builder routes as legacy/internal source-lowering
+  and fixture evidence unless the task explicitly touches that substrate. Run
+  `pnpm --filter @aurelia-ls/mcp contract:release-docs` when release notes or
+  README wording might drift back toward old app-builder phrasing.
 - `pressure:framework-observation` is the compact observation lane. Use it
   before changing semantic-runtime observer/accessor/value-channel behavior: it
   prints observer entities, binding observer lookups and setup overrides,

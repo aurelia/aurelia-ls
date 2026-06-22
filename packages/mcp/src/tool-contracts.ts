@@ -1,7 +1,5 @@
 import type {
   OpenSemanticAppOptions,
-  SemanticRuntimeAppBuilderQueryCatalogRequest,
-  SemanticRuntimeAppBuilderQueryRequest,
   SemanticAppQuery,
   SemanticRuntimeAppQueryBatchRequest,
   SemanticRuntimeAppQueryRequest,
@@ -25,8 +23,10 @@ export const aureliaMcpToolNames = {
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
   appQueryCatalog: 'aurelia_app_query_catalog',
-  appBuilderCatalog: 'aurelia_app_builder_catalog',
-  appBuilderQuery: 'aurelia_app_builder_query',
+  patternMenu: 'aurelia_pattern_menu',
+  patternExample: 'aurelia_pattern_example',
+  docsSearch: 'aurelia_docs_search',
+  docsFetch: 'aurelia_docs_fetch',
   appOverview: 'aurelia_app_overview',
   routerOverview: 'aurelia_router_overview',
   appQuery: 'aurelia_app_query',
@@ -85,17 +85,32 @@ export interface AureliaMcpAppQueryCatalogInput {
   readonly queryKind?: SemanticAppQuery['kind'] | null;
 }
 
-export interface AureliaMcpAppBuilderCatalogInput extends SemanticRuntimeAppBuilderQueryCatalogRequest {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
+export interface AureliaMcpPatternMenuInput {
+  /** Optional case-insensitive search over pattern id, title, and summary. */
+  readonly query?: string | null;
 }
 
-export interface AureliaMcpAppBuilderQueryInput extends Omit<SemanticRuntimeAppBuilderQueryRequest, 'kind'> {
-  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
-  readonly workspaceRoot?: string | null;
-  readonly storeKey?: string | null;
-  readonly queryKind: SemanticRuntimeAppBuilderQueryRequest['kind'];
+export interface AureliaMcpPatternExampleInput {
+  /** Stable pattern id returned by aurelia_pattern_menu. */
+  readonly patternId: string;
+}
+
+export interface AureliaMcpDocsSearchInput {
+  /** Non-empty search text for bundled Aurelia docs. */
+  readonly query: string;
+  /** Optional docs path prefix such as router/ or templates/. */
+  readonly documentPathPrefix?: string | null;
+  /** Optional page request; large sizes clamp. */
+  readonly page?: SemanticRuntimePageInput | null;
+}
+
+export interface AureliaMcpDocsFetchInput {
+  /** Docs path returned by aurelia_docs_search, such as router/route-parameters.md. */
+  readonly documentPath: string;
+  /** Optional section anchor returned by aurelia_docs_search; omit for a compact page fetch. */
+  readonly sectionAnchor?: string | null;
+  /** Optional content character budget; omitted uses a compact default and large values clamp. */
+  readonly maxChars?: number | null;
 }
 
 export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, AureliaMcpPagedInput {

@@ -270,6 +270,9 @@ importers:
 
   packages/mcp:
     dependencies:
+      '@aurelia-ls/patterns':
+        specifier: workspace:*
+        version: link:../patterns
       '@aurelia-ls/semantic-runtime':
         specifier: workspace:*
         version: link:../semantic-runtime
@@ -279,6 +282,15 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.19.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/patterns:
     devDependencies:
       '@types/node':
         specifier: ^22.5.4

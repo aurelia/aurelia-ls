@@ -2,6 +2,10 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AureliaMcpSemanticRuntimeAdapter } from '../out/runtime-adapter.js';
+import {
+  expectedPatternCatalogCount,
+  patternReleaseSentinels,
+} from './pattern-sentinels.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const serverPath = path.join(repoRoot, 'packages/mcp/out/server.js');
@@ -48,6 +52,8 @@ try {
   await verifyOrientationResource();
   await verifyToolSurfaceBudget();
   await verifyToolInputSchemaDescriptions();
+  await verifyPatternFollowUpHints();
+  await verifyBundledDocsTools();
   await verifyStrictTopLevelEnvelope();
   await verifyPageClampAndTextPreview();
   await verifyWorkspaceOverviewContinuations();
@@ -84,6 +90,12 @@ async function initialize() {
 function verifyServerInstructions(response) {
   const instructions = response.result?.instructions;
   expect(typeof instructions === 'string' && instructions.includes('aurelia_workspace_overview'), 'Initialize response should include Aurelia MCP orientation instructions.');
+  expect(instructions.includes('aurelia_pattern_menu'), 'Initialize response should mention the Aurelia pattern menu for app-building examples.');
+  expect(instructions.includes('support.followUp'), 'Initialize response should mention pattern follow-up hints.');
+  expect(instructions.includes('aurelia_docs_search'), 'Initialize response should mention bundled docs search.');
+  expect(instructions.includes('aurelia_docs_fetch'), 'Initialize response should mention bundled docs fetch.');
+  expect(instructions.includes('no web requests'), 'Initialize response should state that docs grounding is local and offline.');
+  expect(!instructions.includes('aurelia_app_builder'), 'Initialize response should not advertise retired app-builder tools.');
   expect(instructions.includes('page.size=0'), 'Server instructions should teach rollup-first page.size=0 usage.');
   expect(instructions.includes('auto-selects') || instructions.includes('auto-satisfies'), 'Server instructions should teach analysis-depth auto-selection.');
   expect(!containsLocalPathOrScratchReference(instructions), 'Server instructions should stay app-agnostic.');
@@ -97,6 +109,11 @@ async function verifyOrientationResource() {
   const text = read.result?.contents?.[0]?.text;
   expect(typeof text === 'string' && text.includes('## Golden Path'), 'Orientation resource should provide the full golden path.');
   expect(text.includes('aurelia_app_query_catalog'), 'Orientation resource should teach catalog-first query selection.');
+  expect(text.includes('aurelia_pattern_example'), 'Orientation resource should teach pattern example fetch for source guidance.');
+  expect(text.includes('support.followUp'), 'Orientation resource should teach semantic-runtime follow-up hints from pattern examples.');
+  expect(text.includes('aurelia_docs_search'), 'Orientation resource should teach docs search before docs fetch.');
+  expect(text.includes('no web requests'), 'Orientation resource should describe bundled docs as offline/local.');
+  expect(!text.includes('aurelia_app_builder'), 'Orientation resource should not advertise retired app-builder tools.');
   expect(text.includes('sourceFile') && text.includes('outcome=unsupported'), 'Orientation resource should teach honest source-file selector rejection.');
   expect(!containsLocalPathOrScratchReference(text), 'Orientation resource should stay app-agnostic.');
 }
@@ -105,7 +122,15 @@ async function verifyToolSurfaceBudget() {
   const response = await call('tools/list', {});
   const text = JSON.stringify(response.result);
   expect(Buffer.byteLength(text, 'utf8') < 80_000, 'tools/list should stay below the described-schema budget.');
-  expect(response.result?.tools?.length === 16, 'tools/list should advertise the expected public tool count.');
+  expect(response.result?.tools?.length === 18, 'tools/list should advertise the expected public tool count.');
+  const toolNames = new Set((response.result?.tools ?? []).map((tool) => tool.name));
+  expect(toolNames.has('aurelia_pattern_menu'), 'tools/list should advertise aurelia_pattern_menu.');
+  expect(toolNames.has('aurelia_pattern_example'), 'tools/list should advertise aurelia_pattern_example.');
+  expect(toolNames.has('aurelia_docs_search'), 'tools/list should advertise aurelia_docs_search.');
+  expect(toolNames.has('aurelia_docs_fetch'), 'tools/list should advertise aurelia_docs_fetch.');
+  expect(!toolNames.has('aurelia_app_builder_catalog'), 'tools/list should not advertise retired app-builder catalog.');
+  expect(!toolNames.has('aurelia_app_builder_query'), 'tools/list should not advertise retired app-builder query.');
+  expect(!text.includes('sourceLowering') && !text.includes('targetCatalog') && !text.includes('inputReadiness'), 'tools/list should not expose old app-builder request vocabulary.');
 }
 
 async function verifyToolInputSchemaDescriptions() {
@@ -118,6 +143,102 @@ async function verifyToolInputSchemaDescriptions() {
   const appQuery = tools.find((tool) => tool.name === 'aurelia_app_query');
   expect(JSON.stringify(appQuery?.inputSchema).includes('Check supportsSourceFile'), 'sourceFile schema description should point callers to supportsSourceFile.');
   expect(JSON.stringify(appQuery?.inputSchema).includes('outcome=unsupported'), 'sourceFilePath schema description should promise honest unsupported answers.');
+}
+
+async function verifyPatternFollowUpHints() {
+  const fullMenu = await callTool('aurelia_pattern_menu', {});
+  const fullMenuText = resultText(fullMenu);
+  const fullMenuItems = structuredToolValue(fullMenu)?.items;
+  expect(fullMenuText.includes('Pattern menu returned'), 'Pattern menu text should summarize returned pattern rows.');
+  expect(fullMenuText.includes('component.local-collection'), 'Pattern menu text should name representative pattern ids.');
+  expect(
+    Array.isArray(fullMenuItems) && fullMenuItems.length === expectedPatternCatalogCount,
+    `Pattern menu should expose the guarded ${expectedPatternCatalogCount}-pattern catalog.`,
+  );
+  expect(
+    Buffer.byteLength(JSON.stringify(fullMenuItems), 'utf8') < 20_000,
+    'Pattern menu should remain compact enough for a first-choice MCP lookup.',
+  );
+  expect(
+    fullMenuItems.every((item) => {
+      const keys = Object.keys(item).sort();
+      return keys.join(',') === 'patternId,summary,title';
+    }),
+    'Pattern menu rows should stay compact: patternId, title, summary.',
+  );
+
+  const response = await callTool('aurelia_pattern_example', {
+    patternId: 'router.route-parameters',
+  });
+  const exampleText = resultText(response);
+  const value = structuredToolValue(response);
+  const followUp = value?.support?.followUp;
+  expect(exampleText.includes('Pattern router.route-parameters'), 'Pattern example text should name the fetched pattern.');
+  expect(exampleText.includes('Follow-up:'), 'Pattern example text should summarize follow-up hints.');
+  expect(Array.isArray(followUp) && followUp.length > 0, 'Pattern examples should return semantic-runtime follow-up hints.');
+  expect(followUp.length <= 3, 'Pattern follow-up hints should stay compact.');
+  expect(followUp.some((row) => row.tool === 'aurelia_router_overview'), 'Router patterns should point to router overview.');
+  expect(followUp.some((row) => row.tool === 'aurelia_diagnostic_overview'), 'Pattern follow-up hints should include diagnostic overview when useful.');
+  expect(
+    followUp.some((row) => row.tool === 'aurelia_app_query' && row.queryKind === 'typescript-diagnostic-summary'),
+    'Router patterns should include a compact TypeScript diagnostic follow-up.',
+  );
+  expect(JSON.stringify(value).includes('aurelia_app_builder') === false, 'Pattern follow-up hints should not reference retired app-builder tools.');
+
+  for (const sentinel of patternReleaseSentinels) {
+    const menu = await callTool('aurelia_pattern_menu', {
+      query: sentinel.query,
+    });
+    const menuItems = structuredToolValue(menu)?.items;
+    expect(
+      Array.isArray(menuItems) && menuItems.some((item) => item.patternId === sentinel.patternId),
+      `Pattern menu query "${sentinel.query}" should find ${sentinel.patternId}.`,
+    );
+
+    const latestResponse = await callTool('aurelia_pattern_example', {
+      patternId: sentinel.patternId,
+    });
+    const latestValue = structuredToolValue(latestResponse);
+    expect(latestValue?.patternId === sentinel.patternId, `Pattern example should return ${sentinel.patternId}.`);
+    expectLatestPatternSupport(latestValue, sentinel);
+  }
+}
+
+async function verifyBundledDocsTools() {
+  const docsIndex = await call('resources/read', { uri: 'aurelia://docs/index' });
+  const docsIndexText = docsIndex.result?.contents?.[0]?.text;
+  const docsIndexValue = typeof docsIndexText === 'string' ? JSON.parse(docsIndexText) : undefined;
+  expect(docsIndexValue?.tools?.includes('aurelia_docs_search'), 'Docs index resource should point to docs search.');
+  expect(docsIndexValue?.tools?.includes('aurelia_docs_fetch'), 'Docs index resource should point to docs fetch.');
+  expect(docsIndexValue?.markdownDocumentCount >= 600, 'Docs index resource should summarize the bundled docs corpus.');
+
+  const search = await callTool('aurelia_docs_search', {
+    query: 'route parameters loading',
+    page: { size: 5 },
+  });
+  const searchValue = structuredToolValue(search);
+  expect(Array.isArray(searchValue?.items) && searchValue.items.length > 0, 'Docs search should return compact docs rows.');
+  expect(searchValue.items.some((item) => item.documentPath === 'router/route-parameters.md'), 'Docs search should find router route parameters.');
+  expect(searchValue.items.every((item) => !item.documentPath.startsWith('router-direct/')), 'Docs search should permanently exclude router-direct rows.');
+  expect(resultText(search).includes('Docs results for'), 'Docs search text preview should summarize returned docs rows.');
+
+  const first = searchValue.items[0];
+  const fetched = await callTool('aurelia_docs_fetch', {
+    documentPath: first.documentPath,
+    sectionAnchor: first.sectionAnchor,
+    maxChars: 4000,
+  });
+  const fetchedValue = structuredToolValue(fetched);
+  expect(fetchedValue?.documentPath === first.documentPath, 'Docs fetch should return the requested document path.');
+  expect(Array.isArray(fetchedValue?.sections) && fetchedValue.sections.length >= 1, 'Docs fetch should return bounded section payloads.');
+  expect(Array.isArray(fetchedValue?.availableSections) && fetchedValue.availableSections.length >= 1, 'Docs fetch should include available section summaries.');
+  expect(resultText(fetched).includes('Fetched'), 'Docs fetch text preview should summarize fetched content.');
+
+  const excluded = await callTool('aurelia_docs_fetch', {
+    documentPath: 'router-direct/getting-started.md',
+  });
+  const excludedValue = structuredToolValue(excluded);
+  expect(excludedValue?.cautions?.some((entry) => entry.includes('permanently excluded')), 'Explicit router-direct fetch should carry a permanent-exclusion caution.');
 }
 
 async function verifyStrictTopLevelEnvelope() {
@@ -341,12 +462,38 @@ function resultText(response) {
   return response.result?.content?.find((entry) => entry.type === 'text')?.text ?? '';
 }
 
+function structuredToolValue(response) {
+  return response.result?.structuredContent?.value?.value ?? response.result?.structuredContent?.value ?? null;
+}
+
 function containsLocalPathOrScratchReference(value) {
   if (typeof value !== 'string') {
     return false;
   }
   const lower = value.toLowerCase();
   return lower.includes('.temp') || /[a-z]:[\\/]/i.test(value);
+}
+
+function expectLatestPatternSupport(value, sentinel) {
+  const followUp = value?.support?.followUp;
+  expect(Array.isArray(followUp) && followUp.length > 0, `${sentinel.patternId} should return support.followUp hints.`);
+  expect(followUp.length <= 3, `${sentinel.patternId} support.followUp should stay compact.`);
+  for (const tool of sentinel.followUpTools) {
+    expect(followUp.some((row) => row.tool === tool), `${sentinel.patternId} should return ${tool} follow-up.`);
+  }
+  for (const queryKind of sentinel.followUpQueryKinds ?? []) {
+    expect(
+      followUp.some((row) => row.tool === 'aurelia_app_query' && row.queryKind === queryKind),
+      `${sentinel.patternId} should return ${queryKind} follow-up.`,
+    );
+  }
+
+  const refs = value?.support?.refs ?? [];
+  const refUrls = refs.map((ref) => ref.url);
+  for (const docsRef of sentinel.docsRefs) {
+    expect(refUrls.some((url) => url.includes(docsRef)), `${sentinel.patternId} should return docs ref ${docsRef}.`);
+  }
+  expect(JSON.stringify(value).includes('aurelia_app_builder') === false, `${sentinel.patternId} should avoid retired app-builder vocabulary.`);
 }
 
 function missingDescriptions(schema, path) {

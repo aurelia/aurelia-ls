@@ -76,10 +76,14 @@ export function atlasMemoryNextActionRows(
       )
       .map(liveFrontierNextAction),
     ...analysis.records
-      .filter((row) => row.kind === "intentional-shape" && row.status === "intentional-live")
+      .filter((row) =>
+        row.kind === "intentional-shape" &&
+        row.status === "intentional-live" &&
+        row.nextActionPolicy !== "hidden"
+      )
       .map(intentionalShapeNextAction),
     ...analysis.records
-      .filter((row) => row.kind === "reuse-guide")
+      .filter((row) => row.kind === "reuse-guide" && row.nextActionPolicy !== "hidden")
       .map(reuseGuideNextAction),
   ].sort(compareAtlasMemoryNextActionRowsByRank);
 }

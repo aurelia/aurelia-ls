@@ -4,6 +4,7 @@
     {
       "id": "intent:source-plan-boundary",
       "kind": "intentional-shape",
+      "nextActionPolicy": "hidden",
       "domains": [
         "semantic-runtime",
         "source-plan",

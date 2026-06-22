@@ -959,7 +959,7 @@ function createTypeScriptIdeGuide(
     loci: [
       {
         id: "repo",
-        use: "Whole admitted Atlas, semantic-runtime, and Aurelia framework TypeScript world.",
+        use: "Whole admitted Atlas, semantic-runtime, patterns, MCP, and Aurelia framework TypeScript world.",
         example: { kind: LocusKind.Repo },
       },
       {

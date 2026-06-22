@@ -9,6 +9,307 @@ import {
 /** Static work-route catalog used by the atlas.work-router lens. */
 export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   {
+    id: "mcp.aurelia-patterns-public-surface",
+    aliases: [
+      "aurelia-patterns",
+      "aurelia-patterns-public-surface",
+      "patterns-public-surface",
+      "pattern-menu",
+      "pattern-example",
+      "mcp-patterns",
+      "patterns-corpus-review",
+      "aurelia-patterns-corpus-review",
+    ],
+    title: "Aurelia Patterns Public Surface",
+    summary:
+      "Route current public app-building guidance through the clean-slate Aurelia Patterns package and MCP pattern menu/example tools, not through the retired app-builder ontology/source-lowering public workflow.",
+    domains: [
+      "patterns",
+      "aurelia-patterns",
+      "mcp",
+      "app-building",
+      "corpus",
+      "semantic-runtime",
+      "fixtures",
+    ],
+    roles: ["orient", "author", "analyze", "verify", "document", "improve-atlas"],
+    terms: [
+      "Aurelia Patterns",
+      "aurelia patterns",
+      "patterns package",
+      "packages/patterns",
+      "pattern menu",
+      "pattern search",
+      "pattern example",
+      "patternId",
+      "aurelia_pattern_menu",
+      "aurelia_pattern_example",
+      "aurelia://patterns/menu",
+      "curated Aurelia patterns",
+      "curated pattern examples",
+      "pattern assumptions",
+      "pattern handoff notes",
+      "support.followUp",
+      "semantic-runtime follow-up hints",
+      "official docs refs",
+      "aurelia_docs_search",
+      "aurelia_docs_fetch",
+      "pattern evidence review",
+      "pattern admission record",
+      "pattern candidate ledger",
+      "canon interpretation lens",
+      "corpus candidate review",
+      "patterns corpus review source companion groups document example sets router-direct",
+      "Aurelia Patterns corpus review source companion groups document example sets router-direct",
+      "source companion groups",
+      "document example sets",
+      "evidence dispositions",
+      "docs capability reference",
+      "injected shared state",
+      "shared state service",
+      "CustomEvent component output",
+      "EventAggregator capability reference",
+      "callback bindables",
+      "GitBook docs parser",
+      "semantic corpus parser",
+      "docs bundle",
+      "bundled Aurelia docs corpus",
+      "release notes pattern docs alignment",
+      "verified after adaptation",
+      "semantic-runtime diagnostics after adaptation",
+      "remove app-builder public surface",
+      "retired app-builder public tools",
+      "compact app-building guidance",
+    ],
+    queryCanaries: [
+      {
+        query: "Aurelia Patterns pattern menu example fetch by patternId",
+        summary:
+          "Current public app-building guidance should route to the compact pattern menu/example surface.",
+      },
+      {
+        query: "Aurelia Patterns support.followUp semantic-runtime hints after adaptation",
+        summary:
+          "Pattern examples should carry compact hints for existing semantic-runtime tools, not a separate fixer wrapper.",
+      },
+      {
+        query: "MCP app building source guidance should use aurelia_pattern_menu",
+        summary:
+          "MCP app-building source-shape prompts should start with the pattern menu and example fetch, not app-builder catalog/preflight.",
+      },
+      {
+        query: "app-builder public patterns",
+        summary:
+          "Ambiguous public app-builder wording should route to Aurelia Patterns before legacy app-builder substrate.",
+      },
+      {
+        query: "app-builder public pattern menu",
+        summary:
+          "Public pattern-menu work should route to the clean Aurelia Patterns surface even when a caller still says app-builder.",
+      },
+      {
+        query: "patterns package GitBook semantic docs parser curated docs examples",
+        summary:
+          "Docs/corpus parser work should route to packages/patterns ownership without making Atlas a runtime dependency.",
+      },
+      {
+        query: "patterns corpus review source companion groups document example sets excluded router-direct",
+        summary:
+          "Package-owned corpus review should expose semantic docs grouping, candidate buckets, and excluded/non-default evidence.",
+      },
+      {
+        query: "Aurelia Patterns EventAggregator callback bindables injected shared state",
+        summary:
+          "Cross-component communication guidance should apply the canon lens before promoting docs mechanisms into public patterns.",
+      },
+      {
+        query: "retired app-builder catalog query target catalog input readiness source lowering preflight",
+        summary:
+          "Public-surface regression checks should route here when old app-builder vocabulary appears in MCP tools, prompts, or route guidance.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "memory",
+        domains: ["patterns", "aurelia-patterns", "mcp"],
+        role: "primary",
+        summary:
+          "Current authority memory for the post-PR35 Aurelia Patterns public surface.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/patterns/",
+        role: "primary",
+        summary:
+          "Clean-slate package for pattern contract, catalog, evidence review, and future semantic corpus parser.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/patterns/src/pattern-contract.ts",
+        role: "primary",
+        summary:
+          "Public pattern menu/example contract, assumptions, handoff notes, source files, support refs, and support.followUp semantic-runtime hints.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/patterns/src/pattern-catalog.ts",
+        role: "primary",
+        summary:
+          "Admitted public pattern catalog and fetch/menu helpers used by MCP.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/patterns/src/curation/evidence-review.ts",
+        role: "supporting",
+        summary:
+          "Internal review loop that keeps admitted examples tied to docs/corpus evidence without exposing old app-builder algebra.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/patterns/src/corpus/docs-snapshot.ts",
+        role: "primary",
+        summary:
+          "Package-owned Aurelia user-docs snapshot writer, manifest schema, bundled-corpus reader, and git revision helper for offline MCP docs grounding.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/tools.ts",
+        symbolName: "registerAureliaSemanticRuntimeTools",
+        role: "primary",
+        summary:
+          "MCP tool registration for aurelia_pattern_menu, aurelia_pattern_example, aurelia_docs_search, and aurelia_docs_fetch.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/resources.ts",
+        symbolName: "registerAureliaSemanticRuntimeResources",
+        role: "supporting",
+        summary:
+          "MCP resource registration for aurelia://patterns/menu and aurelia://docs/index.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/mcp/release-notes/",
+        role: "supporting",
+        summary:
+          "Public preview release notes; keep app-building guidance aligned with Aurelia Patterns and bundled docs.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/orientation.ts",
+        role: "primary",
+        summary:
+          "MCP cold-start guidance that should point app-building source-shape work at patterns.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/mcp/esbuild.mjs",
+        role: "supporting",
+        summary:
+          "Release packager that bundles the MCP server and copies the Aurelia docs snapshot into the tarball stage.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "doc-snippets",
+        concept: "forms",
+        seedUse: "authoring-taste",
+        role: "grounding",
+        summary:
+          "Atlas docs snippets are prior-art grounding for pattern curation, not the runtime source of pattern truth.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/patterns test",
+        role: "primary",
+        summary:
+          "Contract proving compact pattern menu/example shape, stable docs refs, coverage, and absence of old app-builder algebra.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/patterns corpus:review",
+        role: "primary",
+        summary:
+          "Package-owned semantic corpus candidate review over docs source groups, multi-section example sets, dispositions, and internal buckets.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp probe:stdio",
+        role: "supporting",
+        summary:
+          "Stdio probe that calls pattern menu/example and asserts retired app-builder tools/resources are absent.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+        role: "supporting",
+        summary:
+          "Public MCP canary for pattern-tool exposure and retired app-builder vocabulary absence.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp contract:release-docs",
+        role: "supporting",
+        summary:
+          "Release-doc canary proving README, release checklist, and preview notes teach patterns, support.followUp, and bundled docs instead of stale app-builder wording.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp release:pack",
+        role: "supporting",
+        summary:
+          "Release packaging check that bundles the offline Aurelia docs corpus through the patterns snapshot writer.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/mcp probe:release-tarball",
+        role: "supporting",
+        summary:
+          "Install-smoke probe that asserts the release tarball exposes pattern tools/resources and contains the bundled docs manifest.",
+      },
+    ],
+    authority: [
+      "The public product is Aurelia Patterns, not the old app-builder algebra.",
+      "Public app-building source guidance starts with pattern menu/search and example fetch by stable patternId.",
+      "Pattern examples may choose affordance-local microdomain defaults and disclose assumptions/handoff notes.",
+      "Pattern examples may carry compact support.followUp rows that point to existing semantic-runtime tools after adaptation.",
+      "Verification happens after adaptation through semantic-runtime diagnostics/app queries, not as a baked pattern stamp or separate fixer wrapper.",
+      "packages/patterns owns the pattern contract, catalog, evidence review, and future semantic corpus parser without a direct Atlas dependency.",
+      "packages/patterns owns the semantic corpus candidate review loop; generated buckets are internal curation evidence, not public pattern IDs.",
+      "MCP release tarballs should bundle the Aurelia user-docs snapshot through packages/patterns and should not require runtime web requests for docs grounding.",
+      "Preview release notes and README copy should mention patterns, support.followUp, and bundled docs search/fetch when those surfaces ship.",
+      "Official docs are capability/reference evidence, not automatic recommendation order; shared feature state and commands should prefer injected state/service classes before EventAggregator, callback bindables, or event bubbling chains.",
+    ],
+    cautions: [
+      "Do not revive aurelia_app_builder_catalog or aurelia_app_builder_query as public compatibility shims.",
+      "Do not ask public MCP callers to provide domain models, policy axes, target catalogs, input-readiness rows, source-lowering preflight, or SourcePlan request envelopes before receiving a useful pattern.",
+      "Do not treat Atlas framework.corpus as a product-quality semantic docs parser; it is navigation and prior-art pressure.",
+      "Do not expose the old five-status grammar or app-builder bucket vocabulary as public pattern menu/request fields.",
+      "Do not make MCP release packaging depend on Atlas corpus APIs or runtime web fetches.",
+      "Do not let router-direct enter the public pattern surface; it is permanently excluded, not deferred.",
+      "Do not let EventAggregator or callback bindables become the default public answer for cross-component app behavior; keep them as capability/reference or deliberate interface evidence unless a later admitted pattern says otherwise.",
+      "Do not let validation-plugin, state, i18n, or rich design-system pressure enter the first public surface without a later admitted pattern loop.",
+      "Do not describe support.followUp as a verification stamp or fixer wrapper; it is a small handoff to existing semantic-runtime tools.",
+    ],
+    nextQuestions: [
+      "Is this public app-building guidance, internal app-builder substrate, or semantic-runtime verification after adaptation?",
+      "Which admitted patternId, evidence profile, and docs refs cover the requested source shape?",
+      "Does the pattern answer stay compact while carrying enough assumptions and handoff notes for safe adaptation?",
+      "Do the pattern support.followUp rows point at the right existing semantic-runtime reads for this source shape?",
+      "Should this source of evidence become a curated pattern, a parser rule, a deferred handoff, or only Atlas navigation pressure?",
+      "Which diagnostic/app-query should verify the adapted user project after the pattern is applied?",
+    ],
+    relatedRouteIds: [
+      "mcp.developer-preview-shell",
+      "atlas.framework-corpus.navigation",
+      "atlas.framework-capability-terrain",
+      "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.source-plan",
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.app-builder-generated-fixture-contracts",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
     id: "semantic-runtime.app-builder-pattern-ontology",
     aliases: [
       "app-builder-pattern-ontology",
@@ -25,9 +326,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "app-builder-v1-readiness",
       "app-builder-v1-substrate-gaps",
     ],
-    title: "App Builder Pattern Ontology",
+    title: "Legacy App Builder Ontology Substrate",
     summary:
-      "Route current app-builder v1 work through the June 7 recalibration packet, AI-first ontology, target/readiness/detail surfaces, explicit source-lowering, SourcePlan effects, and generated fixture contracts. Older interviews are background texture, and the old starter/golden lane is intentionally absent.",
+      "Route legacy/internal app-builder ontology and source-lowering substrate work through historical evidence, SourcePlan effects, and generated fixture contracts. Public app-building guidance now belongs to Aurelia Patterns, not this target/readiness/detail/preflight ladder.",
     domains: [
       "semantic-runtime",
       "app-builder",
@@ -54,7 +355,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "app builder",
       "app-building pattern ontology",
       "pattern ontology",
-      "reusable app-building patterns",
+      "legacy reusable app-building mechanics",
       "app-building algebra",
       "AI-first app builder",
       "AI-facing app builder",
@@ -65,7 +366,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "input-readiness",
       "input-contract-detail",
       "architecture-options",
-      "architecture option menu",
+      "architecture option registry",
       "requested app architecture options",
       "single-component-local-state",
       "di-state-component-section",
@@ -297,7 +598,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "form-message target ref coverage",
       "static form message control-use boundary",
       "di-state-class generated fixture coverage",
-      "part menu",
+      "app-builder part registry",
       "part source invocation",
       "part source lowering preview",
       "part-source gallery",
@@ -439,7 +740,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "relationship view binding taste",
       "runnable app startup root awareness",
       "index.html root selector mount target",
-      "npx makes aurelia",
+      "project generator scaffold compatibility",
       "plugin conventions availability",
       "control affordance expansion",
       "semantic field affordance",
@@ -464,13 +765,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query:
           "app-builder ontology-catalog target-catalog input-readiness source-lowering-preflight source-lowering-implemented",
         summary:
-          "Current app-builder option discovery should route through ontology and readiness surfaces before source lowering.",
+          "Legacy/internal app-builder option discovery should route through ontology and readiness surfaces before source lowering.",
       },
       {
         query:
           "app-builder v1 scope recalibration packet with.bind startup validation handoff control affordance",
         summary:
-          "Current app-builder v1 implementation should route through the June 7 recalibration packet before broad composition climbing or older interview texture.",
+          "Historical app-builder v1 substrate review can consult the June 7 recalibration packet, but public app-building guidance now routes to Aurelia Patterns.",
       },
       {
         query:
@@ -3138,9 +3439,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "ide-mcp-generated-fixture-contracts",
       "control-use-generated-fixture-contracts",
     ],
-    title: "App Builder Generated Fixture Contracts",
+    title: "Generated Fixture And Pattern Evidence Contracts",
     summary:
-      "Connect app-builder-generated fixture contracts with Semantic IDE/MCP affordance contracts so generated source, exact inputs, manifests, expected effects, references, diagnostics-to-repair, and future workspace edits are tested against realistic Aurelia pattern compositions.",
+      "Connect curated Aurelia Patterns, legacy app-builder/source-lowering evidence, and Semantic IDE/MCP affordance contracts so realistic source, exact inputs, manifests, expected effects, references, diagnostics-to-repair, and future workspace edits stay testable.",
     domains: [
       "semantic-runtime",
       "app-builder",
@@ -3230,7 +3531,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "translation key references",
       "resource rename fixture",
       "source role editability",
-      "app-builder ontology source-lowering generated edit fixtures",
+      "patterns source-lowering generated edit fixtures",
       "control-use generated fixture contracts",
       "static submit generated fixture contracts",
       "containing form submit generated fixture",
@@ -3314,7 +3615,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query:
           "editing fixtures app-builder ontology source-lowering generated fixtures semantic IDE affordance generated fixture contracts",
         summary:
-          "The coupled editing/app-builder/fixture thread should route to this bridge before splitting into generated app contracts or IDE affordance substrates.",
+          "The coupled patterns/app-builder/fixture thread should route to this bridge before splitting into curated pattern evidence, generated app contracts, or IDE affordance substrates.",
       },
       {
         query:
@@ -3384,7 +3685,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "larger editing fixtures require app-builder fixture generation",
         summary:
-          "Large edit fixtures should be generated from app-builder ontology/source-lowering selections rather than hard-coded as another reference app.",
+          "Large edit fixtures should start from admitted Aurelia Patterns or internally verified SourcePlan/evidence seeds rather than hard-coded reference apps or the retired public app-builder request algebra.",
       },
       {
         query: "diagnostics to repair expected edit plan exact source ranges",
@@ -3597,7 +3898,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         domains: ["semantic-runtime", "app-builder", "ontology"],
         role: "grounding",
         summary:
-          "App-builder ontology memory owns current source-lowering intent and reference-scenario separation.",
+          "Legacy app-builder ontology memory owns internal source-lowering evidence and reference-scenario separation, not current public pattern authority.",
       },
       {
         kind: "memory",
@@ -3608,7 +3909,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
     ],
     authority: [
-      "App-builder pattern ontology for generating realistic low-boilerplate source.",
+      "Aurelia Patterns for public realistic low-boilerplate source guidance; legacy app-builder/source-lowering evidence is internal substrate.",
       "Generated fixture index rows for exact request, generated source, domain kind coverage, source-lowering registry coverage, policy-satisfaction coverage, and semantic verification.",
       "Expected semantic effects and future edit/reference effects for fixture verification.",
       "Semantic IDE Affordance Substrate for definition/reference/edit algebra and strict source precision when the fixture tier is edit/reference oriented.",
@@ -3617,7 +3918,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     cautions: [
       "Do not add generated-app fixture variants solely because a coverage count is nonzero; classify whether the gap is source-lowering, domain-design, pressure-only, or deferred app-design work.",
       "Do not treat a green generated fixture index as app-builder v1 completeness when the current ontology only covers the control affordances it already knows how to name.",
-      "Do not make large editing fixtures another hard-coded example domain inside app-builder.",
+      "Do not make large editing fixtures another hard-coded example domain or a revival of the retired public app-builder request algebra.",
       "Do not treat overlay generated spans as authoritative edit ranges without joining authored source provenance.",
       "Do not start with a mutating rename tool when the reference family and editability contract are still incomplete.",
       "Do not let read-only navigation requirements hide stricter edit requirements; editing is the tightest consumer.",
@@ -3626,11 +3927,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which fixture tier is needed: reference-contract, edit-plan, generated app, or contrast fixture?",
       "Which generated index lane is driving the work: domain kind coverage, request-field registry coverage, policy-satisfaction coverage, source-quality/idempotency, expected effects, or semantic reopen verification?",
       "Is the visible gap a fixture gap, a source-lowering substrate gap, a domain/app-design frontier, or pressure-only coverage?",
-      "Which exact request input and app-builder pattern composition should generate the realistic source without inventing app-builder defaults?",
+      "Which admitted pattern, internal SourcePlan/evidence seed, or legacy app-builder composition should ground the realistic source without inventing hidden defaults?",
       "If this is edit/reference pressure, which semantic subjects, exact spans, and blockers must the fixture prove?",
     ],
     relatedRouteIds: [
       "semantic-runtime.app-builder-pattern-ontology",
+      "mcp.aurelia-patterns-public-surface",
       "semantic-runtime.lsp-edit-affordance-substrate",
       "semantic-runtime.app-builder-pattern-ontology",
       "semantic-runtime.semantic-contract-verification",
@@ -3846,8 +4148,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     id: "mcp.developer-preview-shell",
     title: "MCP Developer Preview Shell",
     summary:
-      "Keep the public MCP package as a thin, restart-tolerant shell over current semantic-runtime analysis APIs while future generation grows through app-builder.",
-    domains: ["mcp", "api", "semantic-runtime", "app-builder", "lsp", "router", "evaluation", "open-seams", "release", "typescript"],
+      "Keep the public MCP package as a thin, restart-tolerant shell over current semantic-runtime analysis APIs while public app-building guidance grows through Aurelia Patterns.",
+    domains: ["mcp", "api", "semantic-runtime", "patterns", "aurelia-patterns", "lsp", "router", "evaluation", "open-seams", "release", "typescript"],
     roles: ["orient", "analyze", "verify", "document"],
     terms: [
       "mcp shell",
@@ -3905,8 +4207,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "aurelia_app_overview",
       "query catalog",
       "aurelia_app_query_catalog",
-      "aurelia_app_builder_catalog",
-      "aurelia_app_builder_query",
+      "aurelia_pattern_menu",
+      "aurelia_pattern_example",
+      "aurelia://patterns/menu",
       "mcp orientation",
       "MCP onboarding",
       "MCP golden path",
@@ -3918,10 +4221,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "tools/list described schema budget",
       "sourceFilePath unsupported preflight",
       "analysisDepth used",
-      "app-builder MCP tool",
-      "app-builder query MCP",
-      "SemanticRuntimeAppBuilderQueryKind",
-      "answerAppBuilderQuery",
+      "patterns MCP tool",
+      "pattern example MCP",
+      "retired app-builder MCP tool",
+      "retired app-builder query MCP",
       "aurelia_app_query",
       "aurelia_app_query_batch",
       "diagnostic overview",
@@ -3934,7 +4237,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "aurelia_inspect_app_feature",
       "aurelia_build_app_feature",
       "read-only mcp",
-      "mcp app building future app-builder",
+      "mcp app building Aurelia Patterns",
       "mcp hand-test",
       "mcp restart",
       "mcp token economy",
@@ -4147,12 +4450,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         query: "aurelia_build_app_feature prompt source edits low boilerplate",
         summary:
-          "Current app-building workflow prompts should route new-app generation through app-builder catalog/query tools and existing-app edits through analysis queries.",
+          "Current app-building workflow prompts should route source-shape guidance through Aurelia Patterns and existing-app edits through analysis/diagnostic queries.",
       },
       {
         query: "MCP app-builder generation shell should not expose removed recipe tools",
         summary:
-          "Public generation work should route to the semantic-runtime app-builder facade before MCP tools; removed recipe tools stay retired.",
+          "Public app-building work should route to Aurelia Patterns, while removed recipe and app-builder public tools stay retired.",
       },
     ],
     coverage: [
@@ -4347,19 +4650,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "source",
-        filePath: "packages/semantic-runtime/src/api/app-builder.ts",
-        symbolName: "SemanticRuntimeAppBuilderQueryKind",
+        filePath: "packages/patterns/src/pattern-contract.ts",
         role: "grounding",
         summary:
-          "Semantic-runtime-owned app-builder query vocabulary for MCP app-builder source-lowering preview tooling.",
+          "Public Aurelia Patterns contract used by MCP pattern menu/example tools.",
       },
       {
         kind: "source",
         filePath: "packages/mcp/src/tool-schemas.ts",
-        symbolName: "appBuilderQueryInputSchema",
+        symbolName: "patternMenuInputSchema",
         role: "grounding",
         summary:
-          "MCP schema boundary for app-builder query inputs; keep it aligned with semantic-runtime detail request envelopes.",
+          "MCP schema boundary for compact pattern discovery.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/tool-schemas.ts",
+        symbolName: "patternExampleInputSchema",
+        role: "grounding",
+        summary:
+          "MCP schema boundary for fetch-by-patternId pattern examples.",
       },
       {
         kind: "source",
@@ -4410,7 +4720,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         command: "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
         role: "supporting",
         summary:
-          "Contract proving MCP forwards semantic-runtime app-query continuations and app-builder detail requests without adapter-local projection.",
+          "Contract proving MCP forwards semantic-runtime app-query continuations without adapter-local projection.",
       },
       {
         kind: "script",
@@ -4479,7 +4789,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     authority: [
       "MCP is a public API shell; semantic-runtime owns product concepts and query results.",
       "Atlas remains the internal development navigation layer and should not be required for end-user MCP operation.",
-      "App generation must be exposed through app-builder's semantic-runtime facade, not transport-local recipe or source-plan policy.",
+      "Public app-building source guidance is exposed through Aurelia Patterns; MCP should not recreate transport-local recipe, app-builder, or source-plan policy.",
       "Large diagnostic or seam counts are not useful unless the same semantic-runtime answer family exposes source samples, filters, attempt/boundary interpretation, unique authored sites, raw-row drill-down counts, and follow-up queries.",
       "Source-file roles should not conflate TypeScript checker inclusion with Aurelia app-world static evaluation eligibility; scripts/tools may need diagnostics without producing app-world seam pressure.",
       "Static-evaluation origin explains why a source participated in app-world evaluation; it is factual context, not a severity or actionability label.",
@@ -4488,16 +4798,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     cautions: [
       "Do not reintroduce removed recipe/guidance tools just to make old prompts work.",
       "Do not let MCP adapters classify diagnostics, routes, app-building taste, or source-plan policy locally.",
-      "Do not bypass app-builder typed menus, lowering previews, SourcePlan generation, and verification promises when exposing generation through MCP.",
+      "Do not revive retired app-builder typed menus, lowering previews, SourcePlan generation, or verification promises as public MCP app-building guidance.",
     ],
     nextQuestions: [
       "Is this a shell/transport concern or a semantic-runtime API concern?",
       "Does the MCP tool forward a current semantic-runtime query, or is it trying to resurrect a removed public surface?",
-      "Does an app-building prompt need to inspect an existing app, preview future app-builder direction, or defer generation?",
+      "Does an app-building prompt need a curated pattern example, an existing-app inspection query, or a deferred/internal app-builder substrate note?",
       "Which semantic-runtime query family should prove the answer before MCP formats it?",
     ],
     relatedRouteIds: [
       "semantic-runtime.app-builder-pattern-ontology",
+      "mcp.aurelia-patterns-public-surface",
       "semantic-runtime.source-plan",
       "semantic-runtime.semantic-contract-verification",
       "semantic-runtime.intent-aware-continuations",

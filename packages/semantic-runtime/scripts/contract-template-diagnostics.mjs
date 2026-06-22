@@ -27,6 +27,7 @@ const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressur
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
 const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const guidanceTruthCanariesFixtureRoot = path.join(packageRoot, 'fixtures/pressure/guidance-truth-canaries');
+const templateCompilerErrorsFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-compiler-errors');
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
 const unregisteredShorthandFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-shorthand-syntax');
 const unregisteredPluginSyntaxFixtureRoot = path.join(packageRoot, 'fixtures/pressure/unregistered-plugin-syntax');
@@ -434,6 +435,27 @@ const contracts = [
           effectFilter('sourceName', '$ghostLocal'),
           effectFilter('sourceAssignmentKind', 'runtime-assignable'),
         ],
+      ),
+    ],
+  ),
+  await verifyFixture(
+    templateCompilerErrorsFixtureRoot,
+    'template-diagnostics-contract:template-compiler-errors',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Removed Aurelia 1 template commands should surface as unknown binding-command compiler diagnostics.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'template-compiler-error'),
+          effectFilter('frameworkErrorCode', 'AUR0713'),
+          effectFilter('missingInput', 'template-compiler:AUR0713'),
+          effectFilter('suggestion.suggestionKind', 'fix-template-syntax'),
+          effectFilter('source.path', 'src/template-compiler-errors-app.html'),
+        ],
+        'signature',
       ),
     ],
   ),

@@ -217,6 +217,17 @@ const expectedEffects = [
     ],
     'signature',
   ),
+  ExpectedSemanticEffect.absent(
+    'Listener command method calls should not surface non-trackable render observation warnings.',
+    'observation-issue',
+    'template',
+    null,
+    [
+      effectFilter('phase', 'binding-observation'),
+      effectFilter('issueKind', 'non-trackable-template-method-call'),
+      effectFilter('subjectName', 'recordSelection'),
+    ],
+  ),
   ExpectedSemanticEffect.fact(
     'Trackable-method fixture should expose only the two intentionally non-trackable observation warnings.',
     'observation-issue',

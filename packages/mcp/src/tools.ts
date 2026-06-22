@@ -1,11 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z, type ZodRawShape } from 'zod/v4';
+import {
+  aureliaPatternExamples,
+  fetchAureliaDocs,
+  getAureliaPatternExample,
+  searchAureliaPatternMenuItems,
+  searchAureliaDocs,
+  type AureliaDocsFetchResult,
+  type AureliaDocsSearchResult,
+} from '@aurelia-ls/patterns';
+import { readAureliaDocsCorpusForMcp } from './docs-runtime.js';
 import { AureliaMcpSemanticRuntimeAdapter } from './runtime-adapter.js';
 import {
   appDiagnosticsInputSchema,
-  appBuilderCatalogInputSchema,
-  appBuilderQueryInputSchema,
   appOverviewInputSchema,
   appQueryCatalogInputSchema,
   appQueryBatchInputSchema,
@@ -14,7 +22,11 @@ import {
   aureliaMcpResponseOutputSchema,
   clearAnalysisCacheInputSchema,
   diagnosticOverviewInputSchema,
+  docsFetchInputSchema,
+  docsSearchInputSchema,
   openSeamOverviewInputSchema,
+  patternExampleInputSchema,
+  patternMenuInputSchema,
   routerOverviewInputSchema,
   templateCursorInputSchema,
   templateDiagnosticsInputSchema,
@@ -23,8 +35,6 @@ import {
 import {
   aureliaMcpToolNames,
   type AureliaMcpAnalysisCacheOverviewInput,
-  type AureliaMcpAppBuilderCatalogInput,
-  type AureliaMcpAppBuilderQueryInput,
   type AureliaMcpAppDiagnosticsInput,
   type AureliaMcpAppOverviewInput,
   type AureliaMcpAppQueryBatchInput,
@@ -32,7 +42,12 @@ import {
   type AureliaMcpAppQueryCatalogInput,
   type AureliaMcpClearAnalysisCacheInput,
   type AureliaMcpDiagnosticOverviewInput,
+  type AureliaMcpDocsFetchInput,
+  type AureliaMcpDocsSearchInput,
   type AureliaMcpOpenSeamOverviewInput,
+  type AureliaMcpPatternExampleInput,
+  type AureliaMcpPatternMenuInput,
+  type AureliaMcpResponse,
   type AureliaMcpRouterOverviewInput,
   type AureliaMcpTemplateCursorInput,
   type AureliaMcpTemplateDiagnosticsInput,
@@ -110,27 +125,51 @@ export function registerAureliaSemanticRuntimeTools(
   );
 
   server.registerTool(
-    aureliaMcpToolNames.appBuilderCatalog,
+    aureliaMcpToolNames.patternMenu,
     {
-      title: 'Aurelia App Builder Catalog',
-      description: 'Return supported semantic-runtime app-builder query kinds for app-builder ontology, recommendation policy, input readiness, source lowering, and reusable part source lowering.',
-      inputSchema: strictInputSchema(appBuilderCatalogInputSchema),
+      title: 'Aurelia Pattern Menu',
+      description: 'Search the compact Aurelia Patterns menu for curated examples you can fetch by stable patternId.',
+      inputSchema: strictInputSchema(patternMenuInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appBuilderCatalog(input as AureliaMcpAppBuilderCatalogInput)),
+    async (input) => jsonResultFrom(async () => patternMenu(input as AureliaMcpPatternMenuInput)),
   );
 
   server.registerTool(
-    aureliaMcpToolNames.appBuilderQuery,
+    aureliaMcpToolNames.patternExample,
     {
-      title: 'Aurelia App Builder Query',
-      description: 'Forward one semantic-runtime app-builder query. Use aurelia_app_builder_catalog for supported query kinds and then ask catalog/detail/preflight answers for field-level request contracts; this tool keeps nested envelopes compact so startup does not advertise every app-builder schema inline.',
-      inputSchema: strictInputSchema(appBuilderQueryInputSchema),
+      title: 'Aurelia Pattern Example',
+      description: 'Fetch one curated Aurelia pattern example by stable patternId, including guidance, source files, assumptions, handoff notes, semantic-runtime follow-up hints, and stable docs refs.',
+      inputSchema: strictInputSchema(patternExampleInputSchema),
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
     },
-    async (input) => jsonResultFrom(() => adapter.appBuilderQuery(input as AureliaMcpAppBuilderQueryInput)),
+    async (input) => jsonResultFrom(async () => patternExample(input as AureliaMcpPatternExampleInput)),
+  );
+
+  server.registerTool(
+    aureliaMcpToolNames.docsSearch,
+    {
+      title: 'Aurelia Docs Search',
+      description: 'Search the bundled Aurelia docs corpus with compact section-level results; use aurelia_docs_fetch to fetch a returned documentPath and optional sectionAnchor.',
+      inputSchema: strictInputSchema(docsSearchInputSchema),
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(async () => docsSearch(input as AureliaMcpDocsSearchInput)),
+  );
+
+  server.registerTool(
+    aureliaMcpToolNames.docsFetch,
+    {
+      title: 'Aurelia Docs Fetch',
+      description: 'Fetch a compact bundled Aurelia docs page or section by documentPath and optional sectionAnchor returned from aurelia_docs_search.',
+      inputSchema: strictInputSchema(docsFetchInputSchema),
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(async () => docsFetch(input as AureliaMcpDocsFetchInput)),
   );
 
   server.registerTool(
@@ -302,20 +341,22 @@ function resourceLinksForResult(value: unknown) {
       return [
         semanticRuntimeResourceLink('app-queries'),
       ];
-    case aureliaMcpToolNames.appBuilderQuery:
+    case aureliaMcpToolNames.patternMenu:
+    case aureliaMcpToolNames.patternExample:
       return [
-        semanticRuntimeResourceLink('app-builder'),
+        semanticRuntimeResourceLink('patterns'),
       ];
-    case aureliaMcpToolNames.appBuilderCatalog:
+    case aureliaMcpToolNames.docsSearch:
+    case aureliaMcpToolNames.docsFetch:
       return [
-        semanticRuntimeResourceLink('app-builder'),
+        semanticRuntimeResourceLink('docs'),
       ];
     default:
       return [];
   }
 }
 
-function semanticRuntimeResourceLink(view: 'orientation' | 'app-queries' | 'app-builder') {
+function semanticRuntimeResourceLink(view: 'orientation' | 'app-queries' | 'patterns' | 'docs') {
   if (view === 'orientation') {
     return {
       type: 'resource_link' as const,
@@ -325,16 +366,82 @@ function semanticRuntimeResourceLink(view: 'orientation' | 'app-queries' | 'app-
       description: 'Golden-path orientation for fresh Aurelia MCP sessions.',
     };
   }
-  const isAppBuilder = view === 'app-builder';
+  const isPatterns = view === 'patterns';
+  const isDocs = view === 'docs';
   return {
     type: 'resource_link' as const,
-    uri: `aurelia://semantic-runtime/${view}`,
-    name: isAppBuilder ? 'Aurelia App Builder Catalog' : 'Aurelia App Query Catalog',
+    uri: isPatterns ? 'aurelia://patterns/menu' : isDocs ? 'aurelia://docs/index' : `aurelia://semantic-runtime/${view}`,
+    name: isPatterns ? 'Aurelia Pattern Menu' : isDocs ? 'Aurelia Docs Index' : 'Aurelia App Query Catalog',
     mimeType: 'application/json',
-    description: isAppBuilder
-      ? 'Supported semantic-runtime app-builder query kinds for app-builder ontology, input readiness, source lowering, and opinionated part source lowering.'
+    description: isPatterns
+      ? 'Curated Aurelia Patterns menu rows fetchable by stable patternId; examples include support.followUp semantic-runtime hints.'
+      : isDocs
+        ? 'Bundled Aurelia docs corpus summary; search and fetch through aurelia_docs_search and aurelia_docs_fetch.'
       : 'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
   };
+}
+
+function patternMenu(input: AureliaMcpPatternMenuInput): AureliaMcpResponse<{
+  readonly items: ReturnType<typeof searchAureliaPatternMenuItems>;
+}> {
+  const items = searchAureliaPatternMenuItems(input.query);
+  return localToolResponse(aureliaMcpToolNames.patternMenu, { items });
+}
+
+function patternExample(input: AureliaMcpPatternExampleInput): AureliaMcpResponse<unknown> {
+  const pattern = getAureliaPatternExample(input.patternId);
+  if (pattern === undefined) {
+    const supported = aureliaPatternExamples.map((candidate) => candidate.patternId).join(', ');
+    throw new Error(`Unknown Aurelia patternId '${input.patternId}'. Use aurelia_pattern_menu first. Available patternId values: ${supported}`);
+  }
+  return localToolResponse(aureliaMcpToolNames.patternExample, pattern);
+}
+
+function docsSearch(input: AureliaMcpDocsSearchInput): AureliaMcpResponse<AureliaDocsSearchResult & { readonly displayText: string }> {
+  const result = searchAureliaDocs(readAureliaDocsCorpusForMcp(), input);
+  return localToolResponse(aureliaMcpToolNames.docsSearch, {
+    ...result,
+    displayText: docsSearchDisplayText(result),
+  });
+}
+
+function docsFetch(input: AureliaMcpDocsFetchInput): AureliaMcpResponse<AureliaDocsFetchResult & { readonly displayText: string }> {
+  const result = fetchAureliaDocs(readAureliaDocsCorpusForMcp(), input);
+  return localToolResponse(aureliaMcpToolNames.docsFetch, {
+    ...result,
+    displayText: docsFetchDisplayText(result),
+  });
+}
+
+function localToolResponse<TValue>(tool: string, value: TValue): AureliaMcpResponse<TValue> {
+  return {
+    tool,
+    generatedAt: new Date().toISOString(),
+    workspaceRoot: null,
+    value,
+  };
+}
+
+function docsSearchDisplayText(result: AureliaDocsSearchResult): string {
+  if (result.items.length === 0 && result.page.size === 0) {
+    return `Docs search for "${result.query}" returned no rows because page.size=0.`;
+  }
+  if (result.items.length === 0) {
+    return `No bundled Aurelia docs results for "${result.query}".`;
+  }
+  const rows = result.items
+    .slice(0, 5)
+    .map((item) => `${item.documentPath}${item.sectionAnchor === undefined ? '' : `#${item.sectionAnchor}`}: ${item.heading ?? item.title}`);
+  const next = result.page.nextCursor === undefined ? '' : ` nextCursor=${result.page.nextCursor}.`;
+  return `Docs results for "${result.query}": ${rows.join(' | ')}.${next}`;
+}
+
+function docsFetchDisplayText(result: AureliaDocsFetchResult): string {
+  const sectionRows = result.sections
+    .slice(0, 3)
+    .map((section) => section.heading ?? result.title);
+  const cautions = result.cautions.length === 0 ? '' : ` Caution: ${result.cautions.join(' ')}`;
+  return `Fetched ${result.mode} docs for ${result.documentPath}: ${sectionRows.join(' | ') || result.title}.${result.truncated ? ' Truncated.' : ''}${cautions}`;
 }
 
 function structuredContent(value: unknown): Record<string, unknown> {

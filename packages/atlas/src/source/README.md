@@ -1,13 +1,13 @@
 # Source Substrate
 
-The source substrate owns the hot TypeScript world for Atlas, semantic-runtime, the MCP shell, admitted Aurelia
-framework packages, and admitted Aurelia framework tooling packages. It admits source into a shared
+The source substrate owns the hot TypeScript world for Atlas, semantic-runtime, Aurelia Patterns, the MCP shell,
+admitted Aurelia framework packages, and admitted Aurelia framework tooling packages. It admits source into a shared
 LanguageService-backed Program, builds source-epoch indexes, keeps the current TypeChecker available, and gives higher
 lenses stable source and declaration addresses without importing package runtime exports.
 
 ## Responsibilities
 
-- Admit `packages/atlas`, `packages/semantic-runtime`, `packages/mcp`, the `aurelia` framework submodule packages,
+- Admit `packages/atlas`, `packages/semantic-runtime`, `packages/patterns`, `packages/mcp`, the `aurelia` framework submodule packages,
   selected `aurelia/packages-tooling` packages, and public
   `aurelia2-plugins` workspace packages when that submodule is present through their tsconfigs for TypeChecker-first
   internal, framework, framework-tooling, and plugin-pressure analysis.

@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import process from 'node:process';
+import { listAureliaPatternMenuItems } from '@aurelia-ls/patterns';
+import { aureliaDocsIndexResourceValue } from './docs-runtime.js';
 import {
   AURELIA_MCP_ORIENTATION_RESOURCE_TEXT,
   AURELIA_MCP_ORIENTATION_RESOURCE_URI,
@@ -20,19 +22,27 @@ export function registerAureliaSemanticRuntimeResources(
   );
   registerStaticJsonResource(
     server,
+    'aurelia_pattern_menu',
+    'aurelia://patterns/menu',
+    'Aurelia Pattern Menu',
+    'Curated Aurelia Patterns menu rows fetchable by stable patternId; fetched examples include support.followUp semantic-runtime hints.',
+    async () => ({ items: listAureliaPatternMenuItems() }),
+  );
+  registerStaticJsonResource(
+    server,
+    'aurelia_docs_index',
+    'aurelia://docs/index',
+    'Aurelia Docs Index',
+    'Bundled Aurelia docs corpus summary; search and fetch through aurelia_docs_search and aurelia_docs_fetch.',
+    async () => aureliaDocsIndexResourceValue(),
+  );
+  registerStaticJsonResource(
+    server,
     'aurelia_app_query_catalog',
     'aurelia://semantic-runtime/app-queries',
     'Aurelia App Query Catalog',
     'Supported semantic-runtime app query kinds and their locus, paging, detail, and router-product affordances.',
     async () => (await adapter.appQueryCatalog({ workspaceRoot: process.cwd() })).value,
-  );
-  registerStaticJsonResource(
-    server,
-    'aurelia_app_builder_catalog',
-    'aurelia://semantic-runtime/app-builder',
-    'Aurelia App Builder Catalog',
-    'Supported semantic-runtime app-builder query kinds for app-builder ontology/detail reads, recommendation policy, input readiness, source lowering, and opinionated part source lowering.',
-    async () => (await adapter.appBuilderCatalog({ workspaceRoot: process.cwd() })).value,
   );
 }
 

@@ -35,6 +35,7 @@ export class TrackableMethodDependenciesApp {
   };
 
   comparisonTarget = 'p1';
+  lastRecordedLabel = '';
 
   @computed
   featuredProductNames(): string {
@@ -81,5 +82,9 @@ export class TrackableMethodDependenciesApp {
 
   someCheck(value: string): boolean {
     return this.comparisonTarget === value;
+  }
+
+  recordSelection(): void {
+    this.lastRecordedLabel = this.selected.label;
   }
 }

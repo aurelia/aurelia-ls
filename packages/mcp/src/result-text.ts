@@ -10,21 +10,93 @@ export function aureliaMcpResultText(value: unknown): string {
       return `${tool}: ${payload.summary}`;
     }
     if (isRecord(payload)) {
-      const lines = [`${tool}: returned structured semantic-runtime content.`];
+      const patternText = patternPayloadDisplayText(payload);
+      if (patternText != null) {
+        return `${tool}: ${patternText}`;
+      }
       const displayText = topLevelDisplayText(payload);
+      const semanticChildren: { key: string; child: { readonly summary: string } }[] = [];
+      for (const [key, child] of Object.entries(payload)) {
+        if (isSemanticAnswer(child)) {
+          semanticChildren.push({ key, child });
+        }
+      }
+      if (displayText != null && semanticChildren.length === 0) {
+        return `${tool}: ${displayText}`;
+      }
+      const lines = [`${tool}: returned structured content.`];
       if (displayText != null) {
         lines.push(displayText);
       }
-      for (const [key, child] of Object.entries(payload)) {
-        if (isSemanticAnswer(child)) {
-          lines.push(`${key}: ${child.summary}`);
-        }
+      for (const { key, child } of semanticChildren) {
+        lines.push(`${key}: ${child.summary}`);
       }
       return lines.join('\n');
     }
     return `${tool}: returned structured content.`;
   }
   return 'Aurelia MCP returned structured content.';
+}
+
+function patternPayloadDisplayText(payload: Record<string, unknown>): string | null {
+  if (Array.isArray(payload.items) && !('query' in payload) && payload.items.every(isPatternMenuItem)) {
+    if (payload.items.length === 0) {
+      return 'Pattern menu returned no results.';
+    }
+    const rows = payload.items
+      .slice(0, 8)
+      .map((item) => `${item.patternId}: ${item.title}`);
+    const remaining = payload.items.length - rows.length;
+    return `Pattern menu returned ${payload.items.length} result(s): ${rows.join(' | ')}${remaining > 0 ? ` | +${remaining} more` : ''}.`;
+  }
+  if (isPatternExample(payload)) {
+    const filePaths = payload.source.files
+      .slice(0, 4)
+      .map((file) => file.path);
+    const remainingFiles = payload.source.files.length - filePaths.length;
+    const followUp = Array.isArray(payload.support.followUp)
+      ? payload.support.followUp
+        .filter(isPatternFollowUp)
+        .map((row) => row.queryKind == null ? row.tool : `${row.tool}:${row.queryKind}`)
+      : [];
+    return [
+      `Pattern ${payload.patternId}: ${payload.title}.`,
+      payload.guidance.summary,
+      `Files: ${filePaths.join(', ')}${remainingFiles > 0 ? `, +${remainingFiles} more` : ''}.`,
+      followUp.length === 0 ? '' : `Follow-up: ${followUp.join(', ')}.`,
+    ].filter((part) => part.length > 0).join(' ');
+  }
+  return null;
+}
+
+function isPatternMenuItem(value: unknown): value is { patternId: string; title: string; summary: string } {
+  return isRecord(value)
+    && typeof value.patternId === 'string'
+    && typeof value.title === 'string'
+    && typeof value.summary === 'string';
+}
+
+function isPatternExample(value: Record<string, unknown>): value is {
+  patternId: string;
+  title: string;
+  guidance: { summary: string };
+  source: { files: readonly { path: string }[] };
+  support: { followUp?: readonly unknown[] };
+} {
+  return typeof value.patternId === 'string'
+    && typeof value.title === 'string'
+    && isRecord(value.guidance)
+    && typeof value.guidance.summary === 'string'
+    && isRecord(value.source)
+    && Array.isArray(value.source.files)
+    && value.source.files.every((file) => isRecord(file) && typeof file.path === 'string')
+    && isRecord(value.support);
+}
+
+function isPatternFollowUp(value: unknown): value is { tool: string; queryKind?: string } {
+  return isRecord(value)
+    && typeof value.tool === 'string'
+    && (value.queryKind == null || typeof value.queryKind === 'string');
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,8 +5,9 @@ semantic-runtime owns app discovery, query contracts, diagnostics, query claims,
 Atlas, Work Router, memory, framework corpus, and other development-only surfaces stay internal.
 
 The current preview is read-only. It helps MCP clients inspect Aurelia workspaces, query app semantics, diagnose
-TypeScript/Aurelia/template issues, and follow typed continuations. Public app generation belongs to the future
-app-builder API, not to the retired legacy authoring recipe surface.
+TypeScript/Aurelia/template issues, follow typed continuations, fetch curated Aurelia Patterns examples for
+authoring starting points, and search/fetch the bundled Aurelia docs corpus without runtime web requests. App-builder is
+legacy/internal substrate unless a later product decision reopens it.
 
 ## Preview Install
 
@@ -97,6 +98,7 @@ once release staging exists:
 
 ```powershell
 pnpm --filter @aurelia-ls/mcp release:pack
+pnpm --filter @aurelia-ls/mcp contract:release
 pnpm --filter @aurelia-ls/mcp probe:release-tarball
 pnpm --filter @aurelia-ls/mcp probe:project-local-install
 ```
@@ -150,25 +152,52 @@ The preview exposes read-only semantic-runtime queries:
 - `aurelia_template_cursor_info`
 - `aurelia_template_completions`
 - `aurelia_template_diagnostics`
-- `aurelia_app_builder_catalog`
-- `aurelia_app_builder_query`
+- `aurelia_pattern_menu`
+- `aurelia_pattern_example`
+- `aurelia_docs_search`
+- `aurelia_docs_fetch`
 
 It also exposes catalog resources:
 
 - `aurelia://semantic-runtime/app-queries`
-- `aurelia://semantic-runtime/app-builder`
+- `aurelia://patterns/menu`
+- `aurelia://docs/index`
 
-Use `aurelia_app_builder_query` with `queryKind=recommendation-policy` when a
-caller needs recommendation/defaulting posture, applicability lanes, evidence
-lanes, or contextual executable rows that require explicit policy/defaulting
-review before source lowering should be trusted. It returns compact counts by
-default; pass `recommendationPolicy.includeRows=true` for the detailed row
-table after the counts point at a policy area worth inspecting.
-Use `queryKind=source-lowering-preflight` after selecting targets and supplied
-inputs. Contextual executable targets reached only through a broad/default
-target set report policy satisfaction as missing and do not report
-`canRequestSourceLowering=true`; exact target selection is the current
-first-ring satisfaction source.
+When authoring new Aurelia code, use `aurelia_pattern_menu` when a caller needs
+a compact list of curated Aurelia examples. Fetch the selected example with
+`aurelia_pattern_example` by stable `patternId`, adapt the returned source into
+the target app, then run the returned `support.followUp` semantic-runtime hints
+that fit the adapted workspace. Pattern responses do not ask callers to provide
+domain models, policy axes, target catalogs, input-readiness payloads, or
+source-lowering preflight state before returning useful source.
+The current guarded catalog includes 49 patterns. Release sentinels cover DOM
+template refs, host custom attributes, router active navigation, fetch-client
+interceptors, route-context relative navigation, dynamic composition,
+fetch-client cache policy, local pagination, server query collections,
+virtual-repeat, batch selection, file upload, validation submit,
+server validation errors, auth session guards, i18n locale services,
+dialog confirm/edit flows, template controllers, and portal overlays through
+`template.dom-ref`, `resource.custom-attribute`, `router.active-navigation`,
+`service.fetch-interceptor`, `router.relative-context-navigation`, and
+`component.dynamic-composition`, `service.fetch-cache-policy`,
+`collection.pagination`, `collection.server-query`, `collection.virtual-repeat`,
+`collection.batch-selection`, `form.file-upload`, `form.validation-submit`,
+`form.server-validation-errors`, `router.auth-session-guard`,
+`localization.i18n-locale-service`, `dialog.confirm-edit`,
+`resource.template-controller`, and `template.portal-overlay`.
+
+Use `aurelia_docs_search` when a caller needs official Aurelia docs context
+behind a pattern, API, template concept, or routing behavior. Fetch a returned
+`documentPath` and optional `sectionAnchor` with `aurelia_docs_fetch`. These
+answers come from the docs snapshot bundled into the MCP package; public URLs
+are navigation references, not runtime fetch requirements.
+
+For persistent project rules, see
+[Aurelia AI Authoring Guidance](./docs/ai-authoring.md). It provides a compact
+copyable `AGENTS.md`/`CLAUDE.md` style instruction block that teaches the
+Patterns/docs/`support.followUp` workflow, semantic-runtime diagnostics, the
+DI/state/router canon, and the excluded app-builder/router-direct lanes without
+expanding the MCP schema.
 
 And small workflow prompts:
 
@@ -193,7 +222,8 @@ minimum depth, paging expectations, and batch/summary-first hints.
 
 Diagnostic tools and the generic app query accept `diagnosticProjection` for query-catalog rows that advertise it.
 Explicit diagnostics include ordinary TypeScript project diagnostics from semantic-runtime's Program/tsconfig epoch as
-well as modeled Aurelia/template diagnostics. After lint or formatter autofixes, rerun `aurelia_diagnostic_overview`,
+well as modeled Aurelia/template diagnostics. Template diagnostics include removed Aurelia 1 `.delegate` and `.call`
+binding commands as `AUR0713` unknown binding-command issues. After lint or formatter autofixes, rerun `aurelia_diagnostic_overview`,
 `aurelia_app_diagnostics`, or `aurelia_app_query` with `queryKind=typescript-diagnostic-summary` before treating the app
 as clean.
 

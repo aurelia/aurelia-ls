@@ -1,7 +1,15 @@
+import {
+  AURELIA_PATTERN_WORKFLOW_INSTRUCTION,
+  AURELIA_PATTERN_WORKFLOW_ORIENTATION_STEP,
+  AURELIA_PATTERN_WORKFLOW_PROMPT_TEXT
+} from './pattern-instructions.js';
+
 export const AURELIA_MCP_ORIENTATION_RESOURCE_URI = 'aurelia://semantic-runtime/orientation' as const;
 
 export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
   'Use aurelia_workspace_overview first for a cheap project/app map.',
+  AURELIA_PATTERN_WORKFLOW_INSTRUCTION,
+  'For framework docs grounding, use aurelia_docs_search and then aurelia_docs_fetch; docs are bundled and require no web requests.',
   'Open the selected app with aurelia_app_overview; pass appRetention=retain-app when several app calls will share the session, and keep diagnosticPageSize/openSeamPageSize small on first reads.',
   'Use aurelia_app_query_catalog as the authority for queryKind, minimumAnalysisDepth, paging, detail, source-file support, and continuation affordances.',
   'Prefer clusters before rows: diagnostics/open-seam summaries first, then page exact rows for the chosen cluster.',
@@ -14,7 +22,7 @@ export const AURELIA_MCP_SERVER_INSTRUCTIONS = [
 export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '# Aurelia MCP Orientation',
   '',
-  'This MCP is a read-only semantic-runtime shell for Aurelia apps. It is meant to give an AI the same semantic facts a future IDE/LSP surface should expose: workspace shape, app topology, diagnostics, template/cursor context, router facts, binding/value-flow facts, open semantic seams, and app-builder menus.',
+  'This MCP is a read-only semantic-runtime shell for Aurelia apps plus compact Aurelia Patterns and bundled docs surfaces. It is meant to give an AI the same semantic facts a future IDE/LSP surface should expose: workspace shape, app topology, diagnostics, template/cursor context, router facts, binding/value-flow facts, open semantic seams, curated app-building examples, and local docs grounding without runtime web requests.',
   '',
   '## Golden Path',
   '',
@@ -27,6 +35,8 @@ export const AURELIA_MCP_ORIENTATION_RESOURCE_TEXT = [
   '7. For `aurelia_template_cursor_info`, position is semantic: cursor on a call name returns expression-site context; cursor on a member token returns expression-member owner type context.',
   '8. Omit `analysisDepth` unless intentionally controlling cache or cost. Query calls auto-select the smallest required app-world depth, and answers report the depth used when an app world is opened.',
   '9. Check `supportsSourceFile` before file-scoping a query with `sourceFile` or `sourceFilePath`. Unsupported selectors return `outcome=unsupported` with accepted query families; trust that answer instead of retrying blindly.',
+  AURELIA_PATTERN_WORKFLOW_ORIENTATION_STEP,
+  '11. For docs context behind a pattern or framework concept, call `aurelia_docs_search`, then `aurelia_docs_fetch` with the returned `documentPath` and optional `sectionAnchor`. The docs are bundled; make no web requests for this context.',
   '',
   '## Worked Shape',
   '',
@@ -58,6 +68,7 @@ export function aureliaOrientWorkspacePromptText(input: {
       ? 'Because routing is in scope, call aurelia_router_overview after app overview with a small rowPageSize.'
       : 'Call aurelia_router_overview only if the overview or user task makes route/viewport facts relevant.',
     'Do not ask for Atlas, Work Router, corpus, or development-only memory; this MCP surface is the public semantic-runtime shell.',
+    'Use aurelia_docs_search and aurelia_docs_fetch for local bundled docs context instead of web requests.',
   ].join(' ');
 }
 
@@ -78,6 +89,7 @@ export function aureliaInspectAppFeaturePromptText(input: {
       : 'Call aurelia_router_overview only when the feature goal or app overview makes route/viewport facts relevant.',
     'For binding-heavy work, batch binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary; use page.size=0 for rollup-first reads.',
     'Pass continuationIntents such as inspect, diagnose, repair, or verify on focused follow-up calls and prefer returned targetQuery continuations over local tool-order heuristics.',
+    'Use aurelia_docs_search and aurelia_docs_fetch when official docs context would clarify the feature; the docs are bundled and require no web requests.',
   ].join(' ');
 }
 
@@ -92,8 +104,10 @@ export function aureliaBuildAppFeaturePromptText(input: {
     `Plan and implement this Aurelia feature: ${input.featureGoal}.`,
     'The MCP tools are read-only. Use them for semantic guidance, then edit files directly in the workspace.',
     input.workspaceRoot == null || input.workspaceRoot.length === 0
-      ? 'For a new app, start with aurelia_app_builder_catalog and use app-builder preflight/detail queries before source lowering. For an existing app, first obtain the absolute workspaceRoot.'
+      ? 'For a new app or fresh feature shape, start with aurelia_pattern_menu and fetch a relevant pattern with aurelia_pattern_example. For an existing app, first obtain the absolute workspaceRoot.'
       : `Use workspaceRoot ${input.workspaceRoot}; start with aurelia_workspace_overview and aurelia_app_overview before editing.`,
+    AURELIA_PATTERN_WORKFLOW_PROMPT_TEXT,
+    'When you need framework docs context, use aurelia_docs_search and aurelia_docs_fetch; fetched docs are local bundled docs, not runtime web requests.',
     input.focus == null || input.focus.length === 0
       ? 'Use the feature goal as the inspection posture.'
       : `Treat ${input.focus} as the primary inspection posture while checking adjacent facts made relevant by overview, diagnostics, or continuations.`,

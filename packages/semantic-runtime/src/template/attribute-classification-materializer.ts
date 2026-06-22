@@ -378,6 +378,13 @@ function classifySyntax(
   const bindingCommand = commandName == null
     ? null
     : world.bindingCommandResolver.get(commandName)?.toReference() ?? null;
+  if (commandName != null && bindingCommand == null && isRemovedV1BindingCommand(commandName)) {
+    return invalidDecision(
+      TemplateCompilerIssueKind.UnknownBindingCommand,
+      unknownBindingCommandMessage(commandName),
+      TemplateCompilerFrameworkErrorCode.CompilerUnknownBindingCommand,
+    );
+  }
   const elementResolution = world.resourceResolver.el(htmlElementLookupName(owner.element, owner));
   const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
     ? elementResolution.definition
@@ -539,4 +546,29 @@ function invalidDecision(
     null,
     new TemplateCompilerIssueDraft(issueKind, message, frameworkErrorCode),
   );
+}
+
+function isRemovedV1BindingCommand(commandName: string): boolean {
+  return commandName === 'delegate' || commandName === 'call';
+}
+
+function unknownBindingCommandMessage(commandName: string): string {
+  const help = removedV1BindingCommandHelp(commandName);
+  return `Template compilation error: unknown binding command: "${commandName}".${help}`;
+}
+
+function removedV1BindingCommandHelp(commandName: string): string {
+  switch (commandName) {
+    case 'delegate':
+      return ' The ".delegate" binding command has been removed in v2.'
+        + ' Binding command ".trigger" should be used instead.'
+        + ' If you are migrating v1 application, install compat package'
+        + ' to add back the ".delegate" binding command for ease of migration.';
+    case 'call':
+      return ' The ".call" binding command has been removed in v2.'
+        + ' If you want to pass a callback that preserves the context of the function call,'
+        + ' you can use lambda instead. Refer to lambda expression doc for more details.';
+    default:
+      return '';
+  }
 }

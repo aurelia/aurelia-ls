@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "decision:aurelia-patterns-public-surface",
+      "kind": "decision",
+      "domains": [
+        "patterns",
+        "aurelia-patterns",
+        "mcp",
+        "app-building",
+        "corpus",
+        "semantic-runtime"
+      ],
+      "summary": "Aurelia Patterns is the current public app-building guidance surface: compact menu/search plus example fetch by stable patternId and support.followUp semantic-runtime hints.",
+      "rationale": "After PR35 and the June 2026 transfer packet, the old app-builder public algebra was rejected for AI callers because caller-authored domain models, policy axes, target catalogs, input-readiness, preflight, and SourcePlan lowering consumed too much context before returning useful code. The current product attractor is a compact pattern/example surface backed by curated docs/tests/corpus evidence and verified after adaptation through semantic-runtime diagnostics.",
+      "guidance": [
+        "For public MCP app-building source guidance, start with `aurelia_pattern_menu` and then fetch a curated example with `aurelia_pattern_example` by stable `patternId`.",
+        "Do not route new public pattern work through `aurelia_app_builder_catalog`, `aurelia_app_builder_query`, caller-authored domain models, policy menus, target catalogs, input-readiness, source-lowering preflight, or SourcePlan request envelopes.",
+        "Pattern examples are opinionated curated bundles with assumptions, handoff notes, source files, optional stable official docs refs, and compact `support.followUp` hints; publication is the admission decision and no public status grammar is exposed.",
+        "Verification is asynchronous: after a consuming agent adapts a pattern into a real app, use semantic-runtime diagnostics/app queries to inspect the adapted project rather than baking verification stamps or fixer wrappers into the pattern response.",
+        "`packages/patterns` owns the clean-slate public pattern contract, admitted catalog, evidence-review loop, and future GitBook-aware corpus parser. It must not depend on Atlas, and Atlas must not become a runtime dependency for patterns.",
+        "`packages/patterns` also owns the Aurelia user-docs snapshot writer and manifest contract used by MCP release packaging; release tarballs should bundle docs for offline grounding rather than performing runtime web requests.",
+        "Use `pnpm --filter @aurelia-ls/patterns corpus:review` for the package-owned semantic corpus candidate review. It groups source companion examples, multi-section recipe example sets, evidence dispositions, candidate buckets, and explicit cautions such as excluded router-direct or capability-only EventAggregator evidence.",
+        "Atlas framework.corpus remains prior art and navigation pressure only. It may help find docs/tests/examples, but `packages/patterns` should own any product-quality semantic parser or curation model.",
+        "Official docs are capability/reference evidence, not automatic recommendation order. For cross-component behavior, prefer injected state/service classes for shared feature state and commands; use bindables for local parent-to-child input; use bubbling CustomEvent only for narrow visible parent-child UI output; keep EventAggregator and callback bindables as exceptional or deliberate interface choices, not public defaults.",
+        "Router-direct is permanently excluded from the public Aurelia Patterns surface. Validation and i18n guidance should appear only through curated admitted patterns or docs-first handoffs; `@aurelia/state`, plugin-store state, broad advanced router workflows, and rich design-system policy remain non-default/deferred unless explicitly admitted by a later pattern loop."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tools.ts",
+          "symbolName": "registerAureliaSemanticRuntimeTools",
+          "summary": "MCP registration point for `aurelia_pattern_menu`, `aurelia_pattern_example`, `aurelia_docs_search`, and `aurelia_docs_fetch`."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/resources.ts",
+          "symbolName": "registerAureliaSemanticRuntimeResources",
+          "summary": "MCP registration point for `aurelia://patterns/menu` and `aurelia://docs/index`."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "MCP orientation that teaches app-building source-shape guidance through Aurelia Patterns."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns test",
+          "summary": "Contract test for compact public menu/example shape, official docs refs, coverage, and absence of old app-builder algebra."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns docs:snapshot",
+          "summary": "Package-owned Aurelia user-docs snapshot writer and manifest generator for offline MCP docs grounding."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns report -- component.local-collection",
+          "summary": "Pattern evidence report runner; use representative admitted pattern ids for catalog/evidence review while the package source remains untracked."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns corpus:review",
+          "summary": "Package-owned semantic corpus candidate review over docs source groups, multi-section example sets, dispositions, and internal candidate buckets."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "MCP public-surface canary proving pattern tools are advertised and retired app-builder vocabulary is absent."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:release-docs",
+          "summary": "Release-doc canary proving README, release checklist, and preview notes teach patterns, support.followUp, and bundled docs instead of stale app-builder wording."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp probe:stdio",
+          "summary": "End-to-end stdio probe that calls pattern menu/example and asserts retired app-builder tools/resources are absent."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp release:pack",
+          "summary": "MCP release packaging path that copies the offline Aurelia docs snapshot into the tarball stage."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp probe:release-tarball",
+          "summary": "Release install probe that asserts the bundled docs manifest and pattern tools/resources are present."
+        }
+      ],
+      "createdAt": "2026-06-15",
+      "updatedAt": "2026-06-17"
+    },
+    {
+      "id": "reuse:aurelia-patterns-public-surface",
+      "kind": "reuse-guide",
+      "domains": [
+        "patterns",
+        "aurelia-patterns",
+        "mcp",
+        "app-building"
+      ],
+      "summary": "Use Aurelia Patterns as the first reusable route for public app-building source guidance and semantic-runtime handoff hints.",
+      "rationale": "Atlas memory next-action ranking favors reuse guides. This companion keeps future high-compaction sessions from seeing legacy app-builder reuse rows as the only actionable pattern guidance.",
+      "guidance": [
+        "Start public app-building source guidance with `aurelia_pattern_menu` and `aurelia_pattern_example`; after adaptation, use the example's `support.followUp` rows as compact hints to existing semantic-runtime tools.",
+        "Use `packages/patterns` reports/tests to review admitted examples and evidence. While the package is untracked during the long workstream, prefer script anchors over durable source anchors in Atlas memory.",
+        "Use `packages/patterns` corpus review before adding more admitted patterns so docs volume, example-set grouping, and non-default/excluded evidence are visible before hand-authoring metadata.",
+        "Apply the canon lens before admitting docs-backed communication examples: docs that show EventAggregator, callback bindables, or event bubbling prove capability, but shared feature state should route to injected state/service patterns before those mechanisms become public guidance.",
+        "For offline docs grounding or release packaging questions, use the patterns docs snapshot script plus the MCP release pack/probe scripts; do not route through Atlas corpus APIs or runtime web requests.",
+        "Route internal SourcePlan/source-lowering and generated fixture questions to legacy app-builder routes only after deciding the task is substrate evidence rather than public pattern guidance."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tools.ts",
+          "symbolName": "registerAureliaSemanticRuntimeTools",
+          "summary": "Tracked MCP tool registration point for the pattern menu and example tools."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/orientation.ts",
+          "summary": "Tracked MCP orientation guidance that teaches pattern menu/example usage."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns test",
+          "summary": "Pattern public-contract regression test."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/patterns corpus:review",
+          "summary": "Semantic corpus candidate review for internal buckets and curation cautions."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
+          "summary": "MCP public-surface regression test for pattern-tool exposure and retired app-builder absence."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp contract:release-docs",
+          "summary": "MCP release-doc regression test for pattern/docs wording and stale app-builder phrasing."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/mcp probe:release-tarball",
+          "summary": "Release packaging regression test for offline docs snapshot inclusion."
+        }
+      ],
+      "createdAt": "2026-06-15",
+      "updatedAt": "2026-06-17"
+    }
+  ]
+}

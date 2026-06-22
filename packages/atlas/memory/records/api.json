@@ -652,22 +652,22 @@
         "router",
         "plugins"
       ],
-      "summary": "The first public MCP preview should prioritize compact, idiomatic Aurelia answers; app generation belongs only behind the typed app-builder semantic-runtime facade.",
+      "summary": "The public MCP preview should prioritize compact, idiomatic Aurelia answers; app-building source guidance now goes through Aurelia Patterns, not the retired app-builder facade.",
       "rationale": "A not-yet-complete au-compose or router/viewport model can be explained for an early preview, but a tool that repeatedly guides AI toward verbose or suboptimal Aurelia code undermines the product thesis. Aurelia's short-term MCP value is trust: low-token answers that help agents write small, readable, object-oriented Aurelia apps using core observation, common routing, plugins, and advertised patterns.",
       "guidance": [
-        "Use this decision before expanding public MCP prompts, tools, or app-generation output.",
+        "Use this decision before expanding public MCP prompts, tools, pattern guidance, or app-building output.",
         "Keep the MCP package a thin adapter over semantic-runtime query families; do not classify diagnostics, app-building taste, or source-plan policy in the transport layer.",
         "For current public preview behavior, prioritize analysis answers that help agents write compact Aurelia: diagnostics including ordinary TypeScript diagnostics, app/router/template/binding facts, continuations, and concise prompt workflows.",
         "Treat the MCP orientation module as the public cold-start teaching source. It should teach sequencing and affordances, not app-specific canaries or product facts that belong in semantic-runtime answers.",
         "Keep startup token economy measurable: schema descriptions are valuable, but they should remain terse and the adversarial MCP contract should fail if `tools/list` grows beyond the current described-schema budget.",
-        "Prioritize low-boilerplate Aurelia guidance in future app-builder outputs: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by domain shape, and expected-effect verification.",
+        "Prioritize low-boilerplate Aurelia guidance in Aurelia Patterns: DI-owned state classes, direct state/domain template reads where appropriate, sparse bindables, direct object or ID boundaries chosen by the admitted pattern's local microdomain, and semantic-runtime verification after adaptation.",
         "Keep core observation high priority: ordinary template reads, proxy-observed domain state, value channels, binding data-flow, and the patterns that make forwarding getters unnecessary.",
         "Keep common router support high enough for real app-building help, but do not make pixel-perfect au-viewport or ViewportAgent parity a first-preview blocker.",
         "Treat au-compose as lower priority for the first public cut unless it blocks a common advertised pattern or an existing semantic-runtime query surface.",
         "When a public MCP answer would be verbose, improve the semantic-runtime summary query or structuredContent shape before accepting token-heavy guidance as the preview behavior.",
-        "Expose app-builder through MCP only as a thin forwarder over `SemanticRuntime.appBuilderQueryCatalog(...)` and `SemanticRuntime.answerAppBuilderQuery(...)`; do not put generation policy, catalog joins, source-fragment construction, or source-plan interpretation in the transport.",
-        "MCP app-builder detail requests should be proved at the schema and adapter boundary. The shell may accept public query envelopes such as `controlManifestDetail`, but it must forward them to semantic-runtime unchanged rather than reconstructing app-builder rows locally.",
-        "Public generation should remain staged: typed menu, source-plan preview, generated SourcePlan, and semantic verification promises before any host writes files."
+        "Expose Aurelia Patterns through MCP as small transport-local forwards over `@aurelia-ls/patterns`: `aurelia_pattern_menu` for discovery and `aurelia_pattern_example` for fetch-by-`patternId`.",
+        "Do not restore `aurelia_app_builder_catalog`, `aurelia_app_builder_query`, target catalogs, input-readiness, source-lowering preflight, or SourcePlan request envelopes as public MCP app-building guidance unless a later product decision explicitly reopens that design.",
+        "Public pattern use remains read-only: fetch the example, adapt it in the target app, then verify the adapted project through semantic-runtime diagnostics/app queries."
       ],
       "anchors": [
         {
@@ -679,8 +679,14 @@
         {
           "kind": "source",
           "filePath": "packages/mcp/src/tool-schemas.ts",
-          "symbolName": "appBuilderQueryInputSchema",
-          "summary": "MCP schema boundary that should stay aligned with semantic-runtime app-builder query envelopes."
+          "symbolName": "patternMenuInputSchema",
+          "summary": "MCP schema boundary for compact pattern discovery."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/tool-schemas.ts",
+          "symbolName": "patternExampleInputSchema",
+          "summary": "MCP schema boundary for fetch-by-patternId pattern examples."
         },
         {
           "kind": "source",
@@ -701,36 +707,25 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/api/app-builder.ts",
-          "symbolName": "SemanticRuntimeAppBuilderQueryKind",
-          "summary": "Public app-builder query vocabulary for typed menu/source-plan workflow answers."
-        },
-        {
-          "kind": "source",
           "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
           "symbolName": "readSemanticAppQueryCatalog",
           "summary": "Public query vocabulary and paging affordance source for MCP generic query tools."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/app-builder/README.md",
-          "summary": "Future app-generation direction and AI-first app-builder algebra."
-        },
-        {
-          "kind": "source",
           "filePath": "packages/semantic-runtime/src/source-plan/source-plan.ts",
           "symbolName": "SourcePlan",
-          "summary": "Source artifact boundary app-builder should emit before any host write policy."
+          "summary": "Source artifact boundary remains internal substrate; it is not part of the public Aurelia Patterns fetch path."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through",
-          "summary": "Contract proving MCP pass-through for app-query continuations and app-builder detail request envelopes."
+          "summary": "Contract proving MCP pass-through for app-query continuations after the app-builder public surface was removed."
         },
         {
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/mcp contract:adversarial-surface",
-          "summary": "Contract proving public MCP startup orientation, compact described schema surface, source-file selector honesty, and onboarding affordance claims."
+          "summary": "Contract proving public MCP startup orientation, compact described schema surface, source-file selector honesty, pattern-tool exposure, and retired app-builder absence."
         }
       ],
       "createdAt": "2026-05-18",
@@ -814,10 +809,11 @@
         "typescript"
       ],
       "summary": "The MCP preview release uses a generated GitHub Release tarball installed project-locally for trusted diagnostics, with direct URL npx reserved for quick trials.",
-      "rationale": "npm publishing is intentionally out of scope for the first preview, and monorepo git installs would force every user into workspace build mechanics. A generated two-file tarball keeps the workspace package private and inlines the workspace-only semantic-runtime dependency. Because au-mcp statically imports TypeScript, the trusted diagnostic path is installing the tarball as a dev dependency in the app so Node resolves the peer TypeScript package from the project-local install context.",
+      "rationale": "npm publishing is intentionally out of scope for the first preview, and monorepo git installs would force every user into workspace build mechanics. A generated tarball keeps the workspace package private, inlines workspace-only runtime code, and now carries the offline Aurelia user-docs snapshot required by the Aurelia Patterns direction. Because au-mcp statically imports TypeScript, the trusted diagnostic path is installing the tarball as a dev dependency in the app so Node resolves the peer TypeScript package from the project-local install context.",
       "guidance": [
         "Use `pnpm --filter @aurelia-ls/mcp release:pack` to build the staged tarball; do not mutate `packages/mcp/package.json` into a publishable manifest.",
-        "Keep the artifact to `au-mcp.js` plus generated `package.json`; if assets become necessary, re-check the bundle safety premise before shipping.",
+        "Keep runtime code bundled into `au-mcp.js`, keep TypeScript external, and include the package-owned Aurelia user-docs snapshot under `docs/` with its generated manifest.",
+        "Do not add runtime web fetches or Atlas corpus dependencies for docs/pattern grounding; package the docs snapshot through `@aurelia-ls/patterns` instead.",
         "Keep TypeScript external as a peer dependency and back the supported range with semantic-runtime compatibility contracts.",
         "Recommend project-local dev-dependency install for serious analysis so TypeScript diagnostics can report `relation=same-package`; document direct URL npx only as a quick trial path.",
         "Use `pnpm --filter @aurelia-ls/mcp probe:release-tarball` before uploading a GitHub Release asset; after upload, run one hosted-URL npx smoke before sharing install docs.",
@@ -828,7 +824,7 @@
         {
           "kind": "source",
           "filePath": "packages/mcp/esbuild.mjs",
-          "summary": "Release tarball staging and bundling script."
+          "summary": "Release tarball staging, server bundling, and offline docs snapshot copy script."
         },
         {
           "kind": "source",

@@ -18,6 +18,9 @@ import type { TypeSystemProject } from '../type-system/project.js';
 import { sourceSpanForCheckerNode } from '../type-system/declaration-source.js';
 import { CheckerTypeMemberKind } from '../type-system/type-shape.js';
 import {
+  RuntimeBindingKind,
+} from '../template/runtime-binding.js';
+import {
   RuntimeBindingObservedDependency,
   RuntimeObservedDependencyKind,
 } from './runtime-binding-observation.js';
@@ -177,6 +180,8 @@ function isTemplateMethodCallDependency(
   dependency: RuntimeBindingObservedDependency,
 ): boolean {
   return dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateExpressionRead
+    && dependency.binding.bindingKind !== RuntimeBindingKind.Listener
+    && dependency.binding.bindingKind !== RuntimeBindingKind.StateDispatch
     && dependency.observedMemberKind === CheckerTypeMemberKind.Method
     && dependency.observedMemberSourceAddressHandle != null
     && (dependency.expressionKind === 'CallScope' || dependency.expressionKind === 'CallMember');

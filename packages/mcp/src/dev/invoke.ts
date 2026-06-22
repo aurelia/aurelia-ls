@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { z } from 'zod/v4';
+import {
+  fetchAureliaDocs,
+  searchAureliaDocs,
+  type AureliaDocsFetchResult,
+  type AureliaDocsSearchResult,
+  aureliaPatternExamples,
+  getAureliaPatternExample,
+  searchAureliaPatternMenuItems,
+} from '@aurelia-ls/patterns';
+import { readAureliaDocsCorpusForMcp } from '../docs-runtime.js';
 import { AureliaMcpSemanticRuntimeAdapter } from '../runtime-adapter.js';
 import { aureliaMcpResultText } from '../result-text.js';
 import {
   appDiagnosticsInputSchema,
-  appBuilderCatalogInputSchema,
-  appBuilderQueryInputSchema,
   appOverviewInputSchema,
   appQueryCatalogInputSchema,
   appQueryBatchInputSchema,
@@ -14,7 +22,11 @@ import {
   analysisCacheOverviewInputSchema,
   clearAnalysisCacheInputSchema,
   diagnosticOverviewInputSchema,
+  docsFetchInputSchema,
+  docsSearchInputSchema,
   openSeamOverviewInputSchema,
+  patternExampleInputSchema,
+  patternMenuInputSchema,
   routerOverviewInputSchema,
   templateCursorInputSchema,
   templateDiagnosticsInputSchema,
@@ -23,8 +35,6 @@ import {
 import { aureliaMcpToolNames } from '../tool-contracts.js';
 import type {
   AureliaMcpAppDiagnosticsInput,
-  AureliaMcpAppBuilderCatalogInput,
-  AureliaMcpAppBuilderQueryInput,
   AureliaMcpAppOverviewInput,
   AureliaMcpAppQueryBatchInput,
   AureliaMcpAppQueryInput,
@@ -32,7 +42,12 @@ import type {
   AureliaMcpAnalysisCacheOverviewInput,
   AureliaMcpClearAnalysisCacheInput,
   AureliaMcpDiagnosticOverviewInput,
+  AureliaMcpDocsFetchInput,
+  AureliaMcpDocsSearchInput,
   AureliaMcpOpenSeamOverviewInput,
+  AureliaMcpPatternExampleInput,
+  AureliaMcpPatternMenuInput,
+  AureliaMcpResponse,
   AureliaMcpRouterOverviewInput,
   AureliaMcpTemplateCursorInput,
   AureliaMcpTemplateDiagnosticsInput,
@@ -44,8 +59,10 @@ const commandInputSchemas = {
   'analysis-cache-overview': z.object(analysisCacheOverviewInputSchema).strict(),
   'clear-analysis-cache': z.object(clearAnalysisCacheInputSchema).strict(),
   'app-query-catalog': z.object(appQueryCatalogInputSchema).strict(),
-  'app-builder-catalog': z.object(appBuilderCatalogInputSchema).strict(),
-  'app-builder-query': z.object(appBuilderQueryInputSchema).strict(),
+  'pattern-menu': z.object(patternMenuInputSchema).strict(),
+  'pattern-example': z.object(patternExampleInputSchema).strict(),
+  'docs-search': z.object(docsSearchInputSchema).strict(),
+  'docs-fetch': z.object(docsFetchInputSchema).strict(),
   'app-overview': z.object(appOverviewInputSchema).strict(),
   'router-overview': z.object(routerOverviewInputSchema).strict(),
   'app-query': z.object(appQueryInputSchema).strict(),
@@ -63,8 +80,10 @@ const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas>
   [aureliaMcpToolNames.analysisCacheOverview]: 'analysis-cache-overview',
   [aureliaMcpToolNames.clearAnalysisCache]: 'clear-analysis-cache',
   [aureliaMcpToolNames.appQueryCatalog]: 'app-query-catalog',
-  [aureliaMcpToolNames.appBuilderCatalog]: 'app-builder-catalog',
-  [aureliaMcpToolNames.appBuilderQuery]: 'app-builder-query',
+  [aureliaMcpToolNames.patternMenu]: 'pattern-menu',
+  [aureliaMcpToolNames.patternExample]: 'pattern-example',
+  [aureliaMcpToolNames.docsSearch]: 'docs-search',
+  [aureliaMcpToolNames.docsFetch]: 'docs-fetch',
   [aureliaMcpToolNames.appOverview]: 'app-overview',
   [aureliaMcpToolNames.routerOverview]: 'router-overview',
   [aureliaMcpToolNames.appQuery]: 'app-query',
@@ -129,10 +148,14 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
       return adapter.clearAnalysisCache(input as unknown as AureliaMcpClearAnalysisCacheInput);
     case 'app-query-catalog':
       return adapter.appQueryCatalog(input as unknown as AureliaMcpAppQueryCatalogInput);
-    case 'app-builder-catalog':
-      return adapter.appBuilderCatalog(input as unknown as AureliaMcpAppBuilderCatalogInput);
-    case 'app-builder-query':
-      return adapter.appBuilderQuery(input as unknown as AureliaMcpAppBuilderQueryInput);
+    case 'pattern-menu':
+      return patternMenu(input as unknown as AureliaMcpPatternMenuInput);
+    case 'pattern-example':
+      return patternExample(input as unknown as AureliaMcpPatternExampleInput);
+    case 'docs-search':
+      return docsSearch(input as unknown as AureliaMcpDocsSearchInput);
+    case 'docs-fetch':
+      return docsFetch(input as unknown as AureliaMcpDocsFetchInput);
     case 'app-query':
       return adapter.appQuery(input as unknown as AureliaMcpAppQueryInput);
     case 'app-query-batch':
@@ -156,6 +179,69 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
     default:
       throw new Error(`Unknown command '${command}'. ${usage()}`);
   }
+}
+
+function patternMenu(input: AureliaMcpPatternMenuInput): AureliaMcpResponse<{
+  readonly items: ReturnType<typeof searchAureliaPatternMenuItems>;
+}> {
+  const items = searchAureliaPatternMenuItems(input.query);
+  return localToolResponse(aureliaMcpToolNames.patternMenu, { items });
+}
+
+function patternExample(input: AureliaMcpPatternExampleInput): AureliaMcpResponse<unknown> {
+  const pattern = getAureliaPatternExample(input.patternId);
+  if (pattern === undefined) {
+    const supported = aureliaPatternExamples.map((candidate) => candidate.patternId).join(', ');
+    throw new Error(`Unknown Aurelia patternId '${input.patternId}'. Use pattern-menu first. Available patternId values: ${supported}`);
+  }
+  return localToolResponse(aureliaMcpToolNames.patternExample, pattern);
+}
+
+function docsSearch(input: AureliaMcpDocsSearchInput): AureliaMcpResponse<AureliaDocsSearchResult & { readonly displayText: string }> {
+  const result = searchAureliaDocs(readAureliaDocsCorpusForMcp(), input);
+  return localToolResponse(aureliaMcpToolNames.docsSearch, {
+    ...result,
+    displayText: docsSearchDisplayText(result),
+  });
+}
+
+function docsFetch(input: AureliaMcpDocsFetchInput): AureliaMcpResponse<AureliaDocsFetchResult & { readonly displayText: string }> {
+  const result = fetchAureliaDocs(readAureliaDocsCorpusForMcp(), input);
+  return localToolResponse(aureliaMcpToolNames.docsFetch, {
+    ...result,
+    displayText: docsFetchDisplayText(result),
+  });
+}
+
+function localToolResponse<TValue>(tool: string, value: TValue): AureliaMcpResponse<TValue> {
+  return {
+    tool,
+    generatedAt: new Date().toISOString(),
+    workspaceRoot: null,
+    value,
+  };
+}
+
+function docsSearchDisplayText(result: AureliaDocsSearchResult): string {
+  if (result.items.length === 0 && result.page.size === 0) {
+    return `Docs search for "${result.query}" returned no rows because page.size=0.`;
+  }
+  if (result.items.length === 0) {
+    return `No bundled Aurelia docs results for "${result.query}".`;
+  }
+  const rows = result.items
+    .slice(0, 5)
+    .map((item) => `${item.documentPath}${item.sectionAnchor === undefined ? '' : `#${item.sectionAnchor}`}: ${item.heading ?? item.title}`);
+  const next = result.page.nextCursor === undefined ? '' : ` nextCursor=${result.page.nextCursor}.`;
+  return `Docs results for "${result.query}": ${rows.join(' | ')}.${next}`;
+}
+
+function docsFetchDisplayText(result: AureliaDocsFetchResult): string {
+  const sectionRows = result.sections
+    .slice(0, 3)
+    .map((section) => section.heading ?? result.title);
+  const cautions = result.cautions.length === 0 ? '' : ` Caution: ${result.cautions.join(' ')}`;
+  return `Fetched ${result.mode} docs for ${result.documentPath}: ${sectionRows.join(' | ') || result.title}.${result.truncated ? ' Truncated.' : ''}${cautions}`;
 }
 
 type DevInvokeOutputMode = 'json' | 'text';
@@ -224,6 +310,36 @@ function parseInvocation(args: readonly string[]): {
     }
     if (key === '--sourceFilePath') {
       input.sourceFilePath = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--query') {
+      input.query = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--patternId') {
+      input.patternId = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--documentPath') {
+      input.documentPath = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--documentPathPrefix') {
+      input.documentPathPrefix = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--sectionAnchor') {
+      input.sectionAnchor = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--maxChars') {
+      input.maxChars = parsePositiveInteger(requireValue(rest, index, key), key);
       index += 1;
       continue;
     }
@@ -491,10 +607,10 @@ function readBooleanOption(
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:invoke -- <command> --workspaceRoot <path> [options]',
-    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, app-builder-catalog, app-builder-query, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
+    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, app-query-catalog, pattern-menu, pattern-example, docs-search, docs-fetch, app-overview, router-overview, app-query, app-query-batch, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
     'Public tool names such as aurelia_app_query and aurelia_app_diagnostics are accepted as aliases.',
     'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
-    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --query, --patternId, --documentPath, --documentPathPrefix, --sectionAnchor, --maxChars, --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --sourceFilePath, --cursor file:line:character[:offset], --diagnosticProjection, --openSeamKindKey, --openSeamReasonKind, --sourceRole, --continuationIntent, --appRetention, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
 }
 

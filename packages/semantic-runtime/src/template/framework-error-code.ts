@@ -31,6 +31,8 @@ export const TemplateCompilerFrameworkErrorCode = {
   CompilerLocalElementBindableNameMissing: frameworkErrorCode('template-compiler', 'ErrorNames', 'compiler_local_el_bindable_name_missing', 'AUR0711'),
   /** `template-compiler ErrorNames.compiler_local_el_bindable_duplicate`; local element bindable property/attribute names were duplicated. */
   CompilerLocalElementBindableDuplicate: frameworkErrorCode('template-compiler', 'ErrorNames', 'compiler_local_el_bindable_duplicate', 'AUR0712'),
+  /** `template-compiler ErrorNames.compiler_unknown_binding_command`; a binding command was not registered in the compiler world. */
+  CompilerUnknownBindingCommand: frameworkErrorCode('template-compiler', 'ErrorNames', 'compiler_unknown_binding_command', 'AUR0713'),
   /** `template-compiler ErrorNames.compiler_local_name_empty`; a local element template used an empty as-custom-element name. */
   CompilerLocalNameEmpty: frameworkErrorCode('template-compiler', 'ErrorNames', 'compiler_local_name_empty', 'AUR0715'),
   /** `template-compiler ErrorNames.compiler_duplicate_local_name`; two local element templates used the same name. */

@@ -27,6 +27,8 @@ export const enum SourcePackageId {
   Atlas = "atlas",
   /** Product-owned semantic runtime substrate. */
   SemanticRuntime = "semantic-runtime",
+  /** Clean-slate Aurelia Patterns contract, catalog, and corpus parser package. */
+  Patterns = "patterns",
   /** Public Model Context Protocol shell over semantic-runtime APIs. */
   Mcp = "mcp",
 }
@@ -786,6 +788,12 @@ export function defaultSourcePackageDefinitions(
       packageName: "@aurelia-ls/semantic-runtime",
       rootPath: "packages/semantic-runtime",
       tsconfigPath: "packages/semantic-runtime/tsconfig.json",
+    },
+    {
+      id: SourcePackageId.Patterns,
+      packageName: "@aurelia-ls/patterns",
+      rootPath: "packages/patterns",
+      tsconfigPath: "packages/patterns/tsconfig.json",
     },
     {
       id: SourcePackageId.Mcp,

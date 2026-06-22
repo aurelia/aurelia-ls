@@ -5,3 +5,5 @@
 <slot></slot>
 <div template-probe="value.bind: enabled; missing.bind: enabled">Non-bindable custom attribute segment</div>
 <let item.trigger="enabled"></let>
+<button click.delegate="enabled = !enabled">Legacy delegate command</button>
+<button click.call="enabled = !enabled">Legacy call command</button>

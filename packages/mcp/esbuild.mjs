@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
 
 const packageRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -15,6 +15,7 @@ const releaseVersion = process.env.AURELIA_MCP_RELEASE_VERSION ?? `${packageJson
 const releaseRoot = path.resolve(process.env.AURELIA_MCP_RELEASE_DIR ?? path.join(packageRoot, '.release'));
 const stageDir = path.join(releaseRoot, 'package');
 const bundlePath = path.join(stageDir, 'au-mcp.js');
+const patternsSnapshotModulePath = path.join(workspaceRoot, 'packages/patterns/out/corpus/docs-snapshot.js');
 
 ensureDirectoryContains(releaseRoot, stageDir, 'release staging directory');
 
@@ -25,6 +26,27 @@ if (!existsSync(serverEntry)) {
 
 await fs.rm(stageDir, { recursive: true, force: true });
 await fs.mkdir(stageDir, { recursive: true });
+
+const {
+  createAureliaUserDocsSnapshot,
+  readGitRevisionForPath,
+} = await import(pathToFileURL(patternsSnapshotModulePath).href).catch((error) => {
+  throw new Error([
+    `Failed to load patterns docs snapshot module: ${patternsSnapshotModulePath}`,
+    'Run pnpm --filter @aurelia-ls/patterns build before packaging the MCP release.',
+    error instanceof Error ? error.message : String(error),
+  ].join('\n'));
+});
+
+const docsSourceRoot = path.resolve(
+  process.env.AURELIA_DOCS_USER_DOCS_ROOT ?? path.join(workspaceRoot, 'aurelia/docs/user-docs'),
+);
+const docsSourceRevision = process.env.AURELIA_DOCS_SOURCE_REVISION ?? readGitRevisionForPath(docsSourceRoot);
+const docsManifest = createAureliaUserDocsSnapshot({
+  sourceRootDir: docsSourceRoot,
+  outputRootDir: stageDir,
+  ...(docsSourceRevision !== undefined ? { sourceRevision: docsSourceRevision } : {}),
+});
 
 await esbuild.build({
   entryPoints: [serverEntry],
@@ -58,6 +80,7 @@ const releasePackageJson = {
   },
   files: [
     'au-mcp.js',
+    'docs/',
   ],
   engines: workspacePackageJson.engines ?? { node: '>=22.13 <25' },
   repository: {
@@ -104,6 +127,18 @@ console.log(JSON.stringify({
   bundlePath,
   tarballPath,
   peerDependencies: releasePackageJson.peerDependencies,
+  docs: {
+    sourceRoot: docsSourceRoot,
+    sourceRevision: docsManifest.source.sourceRevision,
+    rootRelativePath: docsManifest.snapshot.rootRelativePath,
+    manifestRelativePath: docsManifest.snapshot.manifestRelativePath,
+    fileCount: docsManifest.snapshot.fileCount,
+    markdownFileCount: docsManifest.snapshot.markdownFileCount,
+    imageFileCount: docsManifest.snapshot.imageFileCount,
+    otherFileCount: docsManifest.snapshot.otherFileCount,
+    totalBytes: docsManifest.snapshot.totalBytes,
+    sha256: docsManifest.snapshot.sha256,
+  },
 }, null, 2));
 
 async function ensureExecutableShebang(filePath) {

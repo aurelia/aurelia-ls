@@ -556,13 +556,32 @@ function strictQueryScore(
       const coverage = queryTokenCoverage(query, values);
       if (
         coverage.queryTokenCount > 0 &&
-        coverage.matchedTokenCount === coverage.queryTokenCount
+        coverage.matchedTokenCount === coverage.queryTokenCount &&
+        (
+          !singleTokenQuery ||
+          singleTokenQueryMatchesSingleTokenValue(query, values)
+        )
       ) {
         return score + group.weight;
       }
     }
     return score;
   }, 0);
+}
+
+function singleTokenQueryMatchesSingleTokenValue(
+  query: string,
+  values: readonly string[],
+): boolean {
+  const queryCoverage = queryTokenCoverage(query, []);
+  if (queryCoverage.queryTokenCount !== 1) {
+    return false;
+  }
+  return values.some((value) => {
+    const valueCoverage = queryTokenCoverage(value, []);
+    return valueCoverage.queryTokenCount === 1 &&
+      queryTokenCoverage(query, [value]).matchedTokenCount === 1;
+  });
 }
 
 function queryCoversExactPhrase(query: string, phrase: string): boolean {

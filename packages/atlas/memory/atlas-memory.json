@@ -18,6 +18,10 @@
       "summary": "app-builder memory records."
     },
     {
+      "path": "packages/atlas/memory/records/patterns.json",
+      "summary": "Aurelia Patterns public surface and corpus parser memory records."
+    },
+    {
       "path": "packages/atlas/memory/records/configuration.json",
       "summary": "configuration memory records."
     },

@@ -12,9 +12,6 @@ import {
 const appQueryKindSchema = z.string()
   .describe('App query kind; discover values with aurelia_app_query_catalog.');
 
-const appBuilderQueryKindSchema = z.string()
-  .describe('App-builder query kind; discover values with aurelia_app_builder_catalog.');
-
 const pageSchema = z.object({
   size: z.number().int().nonnegative().optional()
     .describe('Rows to return. Omit for default; use 0 for summary rollup only; large values clamp.'),
@@ -181,11 +178,6 @@ const semanticAppQuerySchema = z.object({
     .describe('Per-query file locus. Check supportsSourceFile in aurelia_app_query_catalog.'),
 }).strict().describe('Child app query for aurelia_app_query_batch.');
 
-function compactEnvelope(description: string) {
-  return z.record(z.string(), z.unknown())
-    .describe(description);
-}
-
 export const workspaceOverviewInputSchema = {
   ...workspaceShape,
   projectPage: pageSchema.nullable().optional()
@@ -218,48 +210,32 @@ export const appQueryCatalogInputSchema = {
     .describe('Optional exact query kind; omit for the menu.'),
 } as const;
 
-export const appBuilderCatalogInputSchema = {
-  workspaceRoot: optionalWorkspaceRootSchema,
-  storeKey: optionalStoreKeySchema,
-  group: z.string().nullable().optional()
-    .describe('Optional app-builder group filter.'),
-  queryKind: appBuilderQueryKindSchema.nullable().optional()
-    .describe('Optional exact app-builder query kind.'),
-  inquiryProfile: z.string().nullable().optional()
-    .describe('Optional inquiry profile for retention/cost attribution.'),
-  ...continuationIntentShape,
+export const patternMenuInputSchema = {
+  query: z.string().nullable().optional()
+    .describe('Optional case-insensitive search over pattern id, title, and summary.'),
 } as const;
 
-export const appBuilderQueryInputSchema = {
-  workspaceRoot: optionalWorkspaceRootSchema,
-  storeKey: optionalStoreKeySchema,
-  queryKind: appBuilderQueryKindSchema,
-  inquiryProfile: z.string().nullable().optional()
-    .describe('Optional inquiry profile for retention/cost attribution.'),
-  ...continuationIntentShape,
+export const patternExampleInputSchema = {
+  patternId: z.string()
+    .describe('Stable pattern id returned by aurelia_pattern_menu.'),
+} as const;
+
+export const docsSearchInputSchema = {
+  query: z.string().min(1)
+    .describe('Non-empty search text for the bundled Aurelia docs corpus.'),
+  documentPathPrefix: z.string().nullable().optional()
+    .describe('Optional docs path prefix such as router/ or templates/. Omit for all current docs except permanently excluded search surfaces.'),
   page: pageSchema.nullable().optional()
-    .describe('Optional app-builder page request.'),
-  partMenu: compactEnvelope('part-menu payload; ask catalog/detail for field contracts.').optional(),
-  ontologyCatalog: compactEnvelope('ontology-catalog payload.').optional(),
-  inputReadiness: compactEnvelope('input-readiness payload.').optional(),
-  inputContractDetail: compactEnvelope('input-contract-detail payload.').optional(),
-  architectureOptions: compactEnvelope('architecture-options payload.').optional(),
-  affordanceDetail: compactEnvelope('affordance-detail payload.').optional(),
-  applicationPatternDetail: compactEnvelope('application-pattern-detail payload.').optional(),
-  collectionConceptDetail: compactEnvelope('collection-concept-detail payload.').optional(),
-  controlManifestDetail: compactEnvelope('control-manifest-detail payload.').optional(),
-  controlPatternDetail: compactEnvelope('control-pattern-detail payload.').optional(),
-  effectContractDetail: compactEnvelope('effect-contract-detail payload.').optional(),
-  policyDetail: compactEnvelope('policy-detail payload.').optional(),
-  recommendationPolicy: compactEnvelope('recommendation-policy payload.').optional(),
-  styleDetail: compactEnvelope('style-detail payload.').optional(),
-  targetCatalog: compactEnvelope('target-catalog payload.').optional(),
-  sourceLoweringPreflight: compactEnvelope('source-lowering-preflight payload.').optional(),
-  sourceLoweringInvocation: compactEnvelope('source-lowering-invocation payload.').optional(),
-  sourceLoweringComposition: compactEnvelope('source-lowering-composition payload.').optional(),
-  sourceLoweringSourcePlan: compactEnvelope('source-lowering-source-plan payload.').optional(),
-  partSourceLoweringPreview: compactEnvelope('part-source-lowering-preview payload.').optional(),
-  partSourceInvocation: compactEnvelope('part-source-invocation payload.').optional(),
+    .describe('Optional page request; large sizes clamp. Use nextCursor from the prior docs search response.'),
+} as const;
+
+export const docsFetchInputSchema = {
+  documentPath: z.string()
+    .describe('Docs path returned by aurelia_docs_search, such as router/route-parameters.md.'),
+  sectionAnchor: z.string().nullable().optional()
+    .describe('Optional section anchor returned by aurelia_docs_search; omit for a compact page fetch.'),
+  maxChars: z.number().int().positive().nullable().optional()
+    .describe('Optional content character budget; omitted uses a compact default and large values clamp.'),
 } as const;
 
 export const appQueryInputSchema = {
