@@ -11,7 +11,7 @@ const packageJsonPath = path.join(packageRoot, 'package.json');
 const workspacePackageJsonPath = path.join(workspaceRoot, 'package.json');
 const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
 const workspacePackageJson = JSON.parse(await fs.readFile(workspacePackageJsonPath, 'utf8'));
-const releaseVersion = process.env.AURELIA_MCP_RELEASE_VERSION ?? `${packageJson.version}-preview.1`;
+const releaseVersion = process.env.AURELIA_MCP_RELEASE_VERSION ?? packageJson.version;
 const releaseRoot = path.resolve(process.env.AURELIA_MCP_RELEASE_DIR ?? path.join(packageRoot, '.release'));
 const stageDir = path.join(releaseRoot, 'package');
 const bundlePath = path.join(stageDir, 'au-mcp.js');
@@ -72,7 +72,7 @@ await ensureExecutableShebang(bundlePath);
 const releasePackageJson = {
   name: packageJson.name,
   version: releaseVersion,
-  description: 'Aurelia MCP server (semantic-runtime) preview distribution via GitHub Releases',
+  description: 'Aurelia MCP server (semantic-runtime) distribution via GitHub Releases',
   license: 'MIT',
   type: 'module',
   bin: {

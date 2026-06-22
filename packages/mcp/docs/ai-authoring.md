@@ -80,6 +80,10 @@ Deferred or docs-first lanes:
   state/store plugins, validation localization, lazy i18n namespaces, external
   auth SDK flows, persistence/offline queues, design-system governance, and
   broad migration/modernization.
+- Do not use `@aurelia/router-direct` for new public guidance; prefer the
+  standard router patterns surfaced by the MCP.
+- Do not ask for the old `app-builder` or `source-lowering` public grammar;
+  use Patterns, bundled docs, and semantic-runtime verification instead.
 - Do not revive Aurelia 1 `.delegate` or `.call`; semantic-runtime reports
   those removed binding commands as `AUR0713`.
 ```
@@ -130,4 +134,6 @@ Deferred gaps:
 - persistence, browser storage, and offline queues;
 - advanced accessibility such as focus traps and roving tabindex;
 - design-system or component-library governance;
-- broad migration and fixer/edit-planning flows.
+- broad migration and fixer/edit-planning flows;
+- `@aurelia/router-direct`;
+- old public `app-builder` or `source-lowering` grammar.

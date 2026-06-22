@@ -1,9 +1,9 @@
 # Claude Desktop MCP Setup
 
-Install the preview tarball inside the Aurelia app:
+Install the MCP release tarball inside the Aurelia app:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Open Claude Desktop settings, go to Developer settings, and edit

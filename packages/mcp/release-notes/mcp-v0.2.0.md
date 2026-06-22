@@ -1,6 +1,8 @@
-# Aurelia MCP 0.1.0 Preview 1
+# Aurelia MCP 0.2.0
 
-First public preview tarball for the Aurelia semantic-runtime MCP server.
+Second public tarball release for the Aurelia MCP server, adding Aurelia
+Patterns, bundled docs grounding, and removed Aurelia 1 binding-command
+diagnostics on top of the semantic-runtime query surface.
 
 This is a local, read-only MCP server for inspecting Aurelia projects. It gives
 AI coding tools source-grounded access to workspace/app overview, TypeScript
@@ -16,7 +18,7 @@ can act on.
 Recommended project-local install for trustworthy TypeScript diagnostics:
 
 ```sh
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Then configure your MCP client to run:
@@ -28,7 +30,7 @@ node ./node_modules/@aurelia-ls/mcp/au-mcp.js
 Quick trial:
 
 ```sh
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 ## Requirements
@@ -40,12 +42,12 @@ npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-previe
 
 ## What Is Included
 
-This preview focuses on semantic-runtime analysis:
+This release focuses on semantic-runtime analysis:
 
 - workspace and Aurelia app discovery
 - TypeScript and Aurelia diagnostics
 - template diagnostics, cursor info, and completions
-- removed Aurelia 1 `.delegate` / `.call` binding-command diagnostics
+- removed Aurelia 1 `.delegate` / `.call` binding-command diagnostics (`AUR0713`)
 - router and route-surface inspection
 - binding/resource/open-seam query surfaces
 - typed query catalogs and continuation hints
@@ -55,7 +57,7 @@ This preview focuses on semantic-runtime analysis:
 
 ## Aurelia Patterns And Docs
 
-This preview includes a compact Aurelia Patterns surface:
+This release includes a compact Aurelia Patterns surface:
 
 - `aurelia_pattern_menu`
 - `aurelia_pattern_example`
@@ -75,7 +77,7 @@ The guarded catalog currently includes 49 patterns. Release sentinels include
 `localization.i18n-locale-service`, `dialog.confirm-edit`,
 `resource.template-controller`, and `template.portal-overlay`.
 
-The preview also includes bundled docs tools:
+The release also includes bundled docs tools:
 
 - `aurelia_docs_search`
 - `aurelia_docs_fetch`

@@ -7,14 +7,30 @@ import {
 } from './pattern-sentinels.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const workspaceRoot = path.resolve(packageRoot, '../..');
 
 const docs = {
+  rootReadme: await readWorkspaceFile('README.md'),
+  ciWorkflow: await readWorkspaceFile('.github/workflows/ci.yml'),
   readme: await readPackageFile('README.md'),
   release: await readPackageFile('RELEASE.md'),
-  releaseNotes: await readPackageFile('release-notes/mcp-v0.1.0-preview.1.md'),
+  releaseNotes: await readPackageFile('release-notes/mcp-v0.2.0.md'),
   aiAuthoring: await readPackageFile('docs/ai-authoring.md'),
   providers: await readPackageFile('docs/providers/README.md'),
 };
+
+expectIncludes(docs.rootReadme, 'mcp-v0.2.0', 'Root README should point to the current MCP release tag.');
+expectIncludes(docs.rootReadme, 'aurelia-ls-mcp-0.2.0.tgz', 'Root README should point to the current MCP release tarball.');
+expectIncludes(docs.rootReadme, 'Aurelia Patterns', 'Root README should mention the Patterns surface shipped in the MCP release.');
+expectIncludes(docs.rootReadme, 'bundled Aurelia docs', 'Root README should mention bundled docs grounding.');
+expectIncludes(docs.rootReadme, 'packages/mcp/release-notes/mcp-v0.2.0.md', 'Root README should link the current MCP release notes.');
+
+expectIncludes(docs.ciWorkflow, 'mcp-release', 'CI workflow should use release wording for the MCP job id.');
+expectIncludes(docs.ciWorkflow, 'MCP Release Pack', 'CI workflow should use release wording for the MCP job name.');
+expectIncludes(docs.ciWorkflow, 'Pack MCP release tarball', 'CI workflow should use release wording for the pack step.');
+expectIncludes(docs.ciWorkflow, 'aurelia-ls-mcp-release', 'CI artifact name should use release wording.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp contract:release', 'CI workflow should run the aggregate MCP release contract.');
+expectIncludes(docs.ciWorkflow, 'pnpm --filter @aurelia-ls/mcp release:pack', 'CI workflow should pack the MCP release tarball.');
 
 expectIncludes(docs.readme, 'aurelia_pattern_menu', 'README should name the pattern menu tool.');
 expectIncludes(docs.readme, 'aurelia_pattern_example', 'README should name the pattern example tool.');
@@ -38,6 +54,7 @@ expectIncludes(docs.release, 'release:pack', 'Release checklist should build the
 expectIncludes(docs.release, 'contract:release', 'Release checklist should run the aggregate MCP release contract.');
 expectIncludes(docs.release, 'probe:release-tarball', 'Release checklist should probe the packaged tarball.');
 expectIncludes(docs.release, 'probe:project-local-install', 'Release checklist should probe the recommended project-local install path.');
+expectNotIncludes(docs.release, '--prerelease', 'Release upload flow should publish 0.2.0 as the normal GitHub release for this line.');
 expectIncludes(docs.release, 'semantic-runtime app diagnostics', 'Release checklist should mention semantic-runtime diagnostics over pattern examples.');
 expectIncludes(docs.release, `${expectedPatternCatalogCount} patterns`, 'Release checklist should state the guarded pattern catalog size.');
 expectIncludes(docs.release, 'docs/ai-authoring.md', 'Release checklist should link persistent AI authoring guidance.');
@@ -97,6 +114,20 @@ for (const [name, text] of Object.entries(docs)) {
   expectNotIncludes(text, 'aurelia://semantic-runtime/app-builder', `${name} should not advertise retired app-builder resources.`);
 }
 
+for (const [name, text] of Object.entries(docs)) {
+  for (const staleReleaseFragment of [
+    'mcp-v0.1.0-preview.1',
+    '0.1.0-preview.1',
+    'mcp-v0.1.0-preview.2',
+    '0.1.0-preview.2',
+    'aurelia-ls-mcp-preview',
+    'MCP Preview',
+    'preview tarball',
+  ]) {
+    expectNotIncludes(text, staleReleaseFragment, `${name} should not contain stale MCP release fragment: ${staleReleaseFragment}`);
+  }
+}
+
 for (const stalePhrase of [
   'Experimental App-Builder Surface',
   'app-builder/source-guidance surface',
@@ -110,6 +141,10 @@ console.log('MCP release docs contract passed.');
 
 async function readPackageFile(relativePath) {
   return fs.readFile(path.join(packageRoot, relativePath), 'utf8');
+}
+
+async function readWorkspaceFile(relativePath) {
+  return fs.readFile(path.join(workspaceRoot, relativePath), 'utf8');
 }
 
 function expectIncludes(text, fragment, message) {

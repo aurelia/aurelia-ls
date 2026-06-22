@@ -4,19 +4,19 @@ This package is the local MCP shell for `@aurelia-ls/semantic-runtime`. It shoul
 semantic-runtime owns app discovery, query contracts, diagnostics, query claims, cache disposal, and text summaries.
 Atlas, Work Router, memory, framework corpus, and other development-only surfaces stay internal.
 
-The current preview is read-only. It helps MCP clients inspect Aurelia workspaces, query app semantics, diagnose
+The current GitHub tarball release is read-only. It helps MCP clients inspect Aurelia workspaces, query app semantics, diagnose
 TypeScript/Aurelia/template issues, follow typed continuations, fetch curated Aurelia Patterns examples for
 authoring starting points, and search/fetch the bundled Aurelia docs corpus without runtime web requests. App-builder is
 legacy/internal substrate unless a later product decision reopens it.
 
-## Preview Install
+## Release Install
 
-The preview is distributed as a GitHub Release tarball until npm publishing is
+The MCP package is distributed as a GitHub Release tarball until npm publishing is
 available. For diagnostics that should agree with project-local `tsc`, install
 the tarball as a dev dependency in the Aurelia app being analyzed:
 
 ```powershell
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Then configure your MCP client to run from that project:
@@ -31,7 +31,7 @@ Provider-specific config examples are in the
 For a quick trial:
 
 ```powershell
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Direct URL `npx` is convenient for smoke testing, but the project-local
@@ -50,8 +50,8 @@ behind the registered server tools. If discovery looks empty after setup,
 restart the client and try calling an Aurelia MCP tool directly.
 
 See [RELEASE.md](./RELEASE.md) for the temporary GitHub Release flow and
-[mcp-v0.1.0-preview.1.md](./release-notes/mcp-v0.1.0-preview.1.md) for the
-current preview notes.
+[mcp-v0.2.0.md](./release-notes/mcp-v0.2.0.md) for the
+current release notes.
 
 ## Local Development
 
@@ -66,7 +66,7 @@ pnpm --filter @aurelia-ls/mcp build
 ```
 
 The `aurelia/` submodule must be initialized because workspace overrides link
-to its packages, but it does not need to be built for the MCP preview path.
+to its packages, but it does not need to be built for the MCP tarball path.
 
 Build the package:
 
@@ -136,7 +136,7 @@ pnpm --filter @aurelia-ls/mcp dev:prompt -- aurelia_build_app_feature --workspac
 
 ## Tool Shape
 
-The preview exposes read-only semantic-runtime queries:
+The MCP exposes read-only semantic-runtime queries:
 
 - `aurelia_workspace_overview`
 - `aurelia_analysis_cache_overview`

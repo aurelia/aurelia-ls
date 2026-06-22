@@ -1,17 +1,18 @@
 # Aurelia Language Server
 
-Language intelligence for Aurelia 2: IDE features, semantic-runtime analysis, and a read-only MCP preview for AI coding tools.
+Language intelligence for Aurelia 2: IDE features, semantic-runtime analysis, and a read-only MCP release for AI coding tools.
 
-## MCP Preview
+## MCP Release
 
-The first `@aurelia-ls/mcp` preview is distributed as a GitHub Release tarball. It is a local, read-only MCP server that
-lets AI coding tools inspect Aurelia workspaces, query TypeScript/Aurelia/template diagnostics, follow router and
-open-seam surfaces, and use typed continuation hints.
+The `@aurelia-ls/mcp` package is distributed as a GitHub Release tarball until npm publishing is available. It is a
+local, read-only MCP server that lets AI coding tools inspect Aurelia workspaces, query TypeScript/Aurelia/template
+diagnostics, follow router and open-seam surfaces, fetch curated Aurelia Patterns examples, use bundled Aurelia docs
+without runtime web requests, and use typed continuation hints.
 
 For trustworthy TypeScript diagnostics, install it inside the project being analyzed:
 
 ```bash
-npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npm i -D https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Then configure your MCP client to run:
@@ -26,13 +27,13 @@ Provider-specific config examples are in the
 For a quick trial:
 
 ```bash
-npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.1.0-preview.1/aurelia-ls-mcp-0.1.0-preview.1.tgz
+npx -y https://github.com/aurelia/aurelia-ls/releases/download/mcp-v0.2.0/aurelia-ls-mcp-0.2.0.tgz
 ```
 
 Direct URL `npx` is convenient for smoke testing, but project-local install is preferred for serious diagnostics because
 the analyzer can resolve the same TypeScript package as the workspace. After restarting the MCP client, verify that the
 TypeScript relation is `same-package`. See the [MCP README](packages/mcp/README.md) and
-[MCP release notes](packages/mcp/release-notes/mcp-v0.1.0-preview.1.md) for details.
+[MCP release notes](packages/mcp/release-notes/mcp-v0.2.0.md) for details.
 
 ## VS Code Extension
 
@@ -68,7 +69,7 @@ When the analysis hits a limit — a dynamic registration pattern, a third-party
 | Package | What it does |
 |---------|-------------|
 | `@aurelia-ls/mcp` | Read-only MCP server for semantic-runtime workspace/app queries |
-| `@aurelia-ls/semantic-runtime` | Aurelia semantic substrate used by the MCP preview |
+| `@aurelia-ls/semantic-runtime` | Aurelia semantic substrate used by the MCP release |
 | `@aurelia-ls/atlas` | Internal repo/framework navigation and maintenance lenses |
 | `@aurelia-ls/compiler` | Template compiler and project analysis pipeline |
 | `@aurelia-ls/semantic-workspace` | Semantic model, incremental invalidation, and feature query surface |
@@ -93,7 +94,7 @@ pnpm run build
 
 The repo links Aurelia framework packages from the `aurelia/` submodule through
 `pnpm-workspace.yaml` overrides, so the submodule must be initialized. The MCP
-and semantic-runtime preview paths do not require building the Aurelia submodule
+and semantic-runtime MCP paths do not require building the Aurelia submodule
 itself.
 
 ## Documentation

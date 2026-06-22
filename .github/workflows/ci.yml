@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # PR 35 preview CI is scoped to semantic-runtime and MCP release confidence.
+  # CI is currently scoped to semantic-runtime and MCP release confidence.
   # Legacy compiler/SSR/SSG/Vite/playground lanes are parked until they target semantic-runtime.
   semantic-runtime:
     name: Semantic Runtime Contracts
@@ -55,8 +55,8 @@ jobs:
       - name: Check open-seam release contracts
         run: node packages/semantic-runtime/scripts/contract-suite.mjs --route evaluation --route di --domain 'mcp;api;open-seams;reason-kinds' --skip-build
 
-  mcp-preview:
-    name: MCP Preview Pack
+  mcp-release:
+    name: MCP Release Pack
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,13 +91,10 @@ jobs:
       - name: Probe source stdio MCP
         run: pnpm --filter @aurelia-ls/mcp probe:stdio
 
-      - name: Check MCP surface contracts
-        run: pnpm --filter @aurelia-ls/mcp contract:adversarial-surface
+      - name: Check MCP release contracts
+        run: pnpm --filter @aurelia-ls/mcp contract:release
 
-      - name: Check MCP continuation pass-through
-        run: pnpm --filter @aurelia-ls/mcp contract:continuation-pass-through
-
-      - name: Pack MCP preview tarball
+      - name: Pack MCP release tarball
         run: pnpm --filter @aurelia-ls/mcp release:pack
 
       - name: Probe release tarball
@@ -106,10 +103,10 @@ jobs:
       - name: Probe project-local install
         run: pnpm --filter @aurelia-ls/mcp probe:project-local-install
 
-      - name: Upload MCP preview tarball
+      - name: Upload MCP release tarball
         uses: actions/upload-artifact@v4
         with:
-          name: aurelia-ls-mcp-preview
+          name: aurelia-ls-mcp-release
           path: packages/mcp/.release/*.tgz
           if-no-files-found: error
           include-hidden-files: true
