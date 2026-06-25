@@ -1,12 +1,9 @@
 /**
  * LSP feature handlers: completions, hover, definition, references, rename, code actions.
  *
- * All semantics come from the Semantic Workspace engine. This adapter only maps
- * workspace results into LSP types and handles the FeatureResponse boundary.
- *
- * Invariant: Never catch-and-return-null. All workspace calls go through
- * adaptWorkspaceCall which produces FeatureResponse<T>. Degradation is
- * rendered as structured output, not silence.
+ * Runtime-retargeted features call semantic-runtime through the LSP session.
+ * Runtime-backed handlers catch at the protocol boundary and return the best
+ * feature-specific degradation shape.
  */
 import {
   ResponseError,
@@ -18,6 +15,8 @@ import {
   type LocationLink,
   type WorkspaceEdit,
   type CodeAction,
+  DocumentHighlightKind,
+  type DocumentHighlight,
   type TextDocumentPositionParams,
   type ReferenceParams,
   type RenameParams,
@@ -25,31 +24,32 @@ import {
   type CodeActionParams,
   type CompletionParams,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import type { RenameResult } from "@aurelia-ls/semantic-workspace/types.js";
 import type { ServerContext } from "../context.js";
+import { handleDocumentSymbols } from "./document-symbols.js";
+import { handleWorkspaceSymbols } from "./workspace-symbols.js";
+import { handleSelectionRanges } from "./selection-ranges.js";
+import { handleLinkedEditingRange } from "./linked-editing-ranges.js";
+import { handleFoldingRanges } from "./folding-ranges.js";
 import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
+import { handleCodeLens } from "./code-lens.js";
+import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
   createCompletionGapMarker,
-  mapPrepareRename,
-  mapRenameResult,
-  mapSemanticWorkspaceEdit,
-  mapWorkspaceCompletions,
-  mapWorkspaceHover,
-  mapWorkspaceLocations,
-  mapWorkspaceLocationsAsLinks,
+  mapSemanticRuntimeTemplateCodeActions,
+  mapSemanticRuntimeTemplateDefinition,
+  mapSemanticRuntimeTemplateHover,
+  mapSemanticRuntimeTemplateCompletions,
+  mapSemanticRuntimeTemplateReferences,
+  mapSemanticRuntimeTemplatePrepareRename,
+  mapSemanticRuntimeTemplateRenameEdit,
+  mapSemanticRuntimeRouteNodeDefinition,
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
 import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 import {
-  adaptWorkspaceCall,
-  isDegradation,
-  isNotApplicable,
-  isSuccess,
   degradationFromError,
   renderDegradationAsHoverMarkdown,
   renderDegradationAsMessage,
-  type FeatureResponse,
   type Degradation,
 } from "../feature-response.js";
 
@@ -70,128 +70,146 @@ function logDegradation(ctx: ServerContext, feature: string, d: Degradation, uri
 // Completion Handler
 // ============================================================================
 
-export function handleCompletion(ctx: ServerContext, params: CompletionParams): CompletionList {
+export async function handleCompletion(ctx: ServerContext, params: CompletionParams): Promise<CompletionList> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return { isIncomplete: false, items: [] };
 
-  const canonical = canonicalDocumentUri(doc.uri);
-
-  const response = adaptWorkspaceCall("completions", () =>
-    ctx.workspace.query(canonical.uri).completions(params.position),
-  );
-
-  if (isDegradation(response)) {
+  try {
+    const response = await ctx.semanticRuntime.templateCompletions(doc, params.position);
+    return mapSemanticRuntimeTemplateCompletions(response);
+  } catch (error) {
+    const response = degradationFromError("completion", error);
     logDegradation(ctx, "completion", response, params.textDocument.uri);
-    // Degradation → incomplete list with gap marker explaining the degradation
     return createCompletionGapMarker([]);
   }
-
-  if (isNotApplicable(response)) {
-    return { isIncomplete: false, items: [] };
-  }
-
-  // L2 convergence: isIncomplete is now a scope-model signal from the workspace,
-  // not inferred from diagnostics at this boundary.
-  const result = response;
-  const mapped = mapWorkspaceCompletions(result.items);
-
-  if (result.isIncomplete) {
-    if (mapped.length === 0) return { isIncomplete: true, items: [] };
-    return createCompletionGapMarker(mapped);
-  }
-
-  return { isIncomplete: false, items: mapped };
 }
 
 // ============================================================================
 // Hover Handler
 // ============================================================================
 
-export function handleHover(ctx: ServerContext, params: TextDocumentPositionParams): Hover | null {
+export async function handleHover(ctx: ServerContext, params: TextDocumentPositionParams): Promise<Hover | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const canonical = canonicalDocumentUri(doc.uri);
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
-  const response = adaptWorkspaceCall("hover", () =>
-    ctx.workspace.query(canonical.uri).hover(params.position),
-  );
-
-  if (isDegradation(response)) {
+  try {
+    const response = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    return mapSemanticRuntimeTemplateHover(response);
+  } catch (error) {
+    const response = degradationFromError("hover", error);
     logDegradation(ctx, "hover", response, params.textDocument.uri);
-    // Boot doc: "Degradation rung 2/3 → hover with explanation text (NOT null)"
     return {
       contents: { kind: "markdown", value: renderDegradationAsHoverMarkdown(response) },
     };
   }
-
-  if (isNotApplicable(response)) {
-    // Legitimate absence — cursor on whitespace
-    return null;
-  }
-
-  return mapWorkspaceHover(response, lookupText);
 }
 
 // ============================================================================
 // Definition Handler
 // ============================================================================
 
-export function handleDefinition(
+export async function handleDefinition(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
-): Definition | LocationLink[] | null {
+): Promise<Definition | LocationLink[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const canonical = canonicalDocumentUri(doc.uri);
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+  try {
+    const response = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    const templateDefinition = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
+    });
+    if (templateDefinition != null) {
+      return templateDefinition;
+    }
 
-  const response = adaptWorkspaceCall("definition", () =>
-    ctx.workspace.query(canonical.uri).definition(params.position),
-  );
+    try {
+      const routeNodes = await ctx.semanticRuntime.routeNodes();
+      const routeDefinition = mapSemanticRuntimeRouteNodeDefinition(routeNodes, lookupText, {
+        workspaceRoot: ctx.workspaceRoot,
+        originDocument: doc,
+        position: params.position,
+      });
+      if (routeDefinition != null) {
+        return routeDefinition;
+      }
+    } catch (error) {
+      const response = degradationFromError("routeDefinition", error);
+      logDegradation(ctx, "routeDefinition", response, params.textDocument.uri);
+    }
 
-  if (isDegradation(response)) {
+    return null;
+  } catch (error) {
+    const response = degradationFromError("definition", error);
     logDegradation(ctx, "definition", response, params.textDocument.uri);
     // Definition can't render explanation text in standard LSP; log and return null
     return null;
   }
-
-  if (isNotApplicable(response)) {
-    return null;
-  }
-
-  // Use LocationLink for richer navigation (origin range, peek support)
-  return mapWorkspaceLocationsAsLinks(response, lookupText);
 }
 
 // ============================================================================
 // References Handler
 // ============================================================================
 
-export function handleReferences(ctx: ServerContext, params: ReferenceParams): Location[] | null {
+export async function handleReferences(ctx: ServerContext, params: ReferenceParams): Promise<Location[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const canonical = canonicalDocumentUri(doc.uri);
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
-  const response = adaptWorkspaceCall("references", () =>
-    ctx.workspace.query(canonical.uri).references(params.position),
-  );
-
-  if (isDegradation(response)) {
+  try {
+    const response = await ctx.semanticRuntime.templateReferences(
+      doc,
+      params.position,
+      params.context.includeDeclaration,
+    );
+    return mapSemanticRuntimeTemplateReferences(response, lookupText, {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
+    });
+  } catch (error) {
+    const response = degradationFromError("references", error);
     logDegradation(ctx, "references", response, params.textDocument.uri);
-    // References can't render inline; log and return null
     return null;
   }
+}
 
-  if (isNotApplicable(response)) {
+// ============================================================================
+// Document Highlight Handler
+// ============================================================================
+
+export async function handleDocumentHighlight(
+  ctx: ServerContext,
+  params: TextDocumentPositionParams,
+): Promise<DocumentHighlight[] | null> {
+  const doc = ctx.ensureProgramDocument(params.textDocument.uri);
+  if (!doc) return null;
+
+  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+  try {
+    const response = await ctx.semanticRuntime.templateReferences(doc, params.position, false);
+    const locations = mapSemanticRuntimeTemplateReferences(response, lookupText, {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
+    });
+    if (!locations) return null;
+
+    const originUri = canonicalDocumentUri(doc.uri).uri;
+    const highlights = locations
+      .filter((location) => canonicalDocumentUri(location.uri).uri === originUri)
+      .map((location): DocumentHighlight => ({
+        range: location.range,
+        kind: DocumentHighlightKind.Text,
+      }));
+
+    return highlights.length > 0 ? highlights : null;
+  } catch (error) {
+    const response = degradationFromError("documentHighlight", error);
+    logDegradation(ctx, "documentHighlight", response, params.textDocument.uri);
     return null;
   }
-
-  return mapWorkspaceLocations(response, lookupText);
 }
 
 // ============================================================================
@@ -201,59 +219,48 @@ export function handleReferences(ctx: ServerContext, params: ReferenceParams): L
 export function handlePrepareRename(
   ctx: ServerContext,
   params: PrepareRenameParams,
-): { range: import("vscode-languageserver/node.js").Range; placeholder: string } | null {
+): Promise<{ range: import("vscode-languageserver/node.js").Range; placeholder: string } | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-  if (!doc) return null;
+  if (!doc) return Promise.resolve(null);
 
-  const canonical = canonicalDocumentUri(doc.uri);
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
-  try {
-    const result = ctx.workspace.refactor().prepareRename({
-      uri: canonical.uri,
-      position: params.position,
-    });
-
-    if ("error" in result) {
-      throw new ResponseError(0, result.error.message);
+  return ctx.trace.spanAsync("lsp.prepareRename", async () => {
+    try {
+      const response = await ctx.semanticRuntime.templateRename(doc, params.position);
+      if (response.value.status !== "available") {
+        return null;
+      }
+      return mapSemanticRuntimeTemplatePrepareRename(response, {
+        workspaceRoot: ctx.workspaceRoot,
+        originDocument: doc,
+      });
+    } catch (e) {
+      if (e instanceof ResponseError) throw e;
+      const d = degradationFromError("prepareRename", e);
+      logDegradation(ctx, "prepareRename", d, params.textDocument.uri);
+      return null;
     }
-
-    return mapPrepareRename(result.result, lookupText, canonical.uri);
-  } catch (e) {
-    if (e instanceof ResponseError) throw e;
-    const d = degradationFromError("prepareRename", e);
-    logDegradation(ctx, "prepareRename", d, params.textDocument.uri);
-    return null;
-  }
+  });
 }
 
-export function handleRename(ctx: ServerContext, params: RenameParams): WorkspaceEdit | null {
+export async function handleRename(ctx: ServerContext, params: RenameParams): Promise<WorkspaceEdit | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const canonical = canonicalDocumentUri(doc.uri);
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
   try {
-    const result = ctx.workspace.refactor().rename({
-      uri: canonical.uri,
-      position: params.position,
-      newName: params.newName,
+    const response = await ctx.semanticRuntime.templateRename(doc, params.position, params.newName);
+    if (response.value.status !== "available") {
+      throw new ResponseError(0, response.value.displayText || response.summary);
+    }
+    const edit = mapSemanticRuntimeTemplateRenameEdit(response, lookupText, {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
     });
-
-    if ("error" in result) {
-      // Boot doc: "Degradation → returned as error response with the explanation, NOT as null"
-      throw new ResponseError(0, result.error.message);
+    if (edit == null) {
+      throw new ResponseError(0, `Rename produced no applicable edits for '${params.newName}'.`);
     }
-
-    // If the workspace returns a rich RenameResult (with annotations, file renames),
-    // use the rich mapping. Otherwise fall through to basic mapping.
-    if ("rename" in result) {
-      const renameResult = (result as { rename: RenameResult }).rename;
-      return mapRenameResult(renameResult, lookupText);
-    }
-
-    return mapSemanticWorkspaceEdit(result.edit, lookupText);
+    return edit;
   } catch (e) {
     if (e instanceof ResponseError) throw e;
     // Boot doc: Degradation for rename → error response, NOT null
@@ -267,38 +274,23 @@ export function handleRename(ctx: ServerContext, params: RenameParams): Workspac
 // Code Action Handler
 // ============================================================================
 
-export function handleCodeAction(ctx: ServerContext, params: CodeActionParams): CodeAction[] | null {
+export async function handleCodeAction(ctx: ServerContext, params: CodeActionParams): Promise<CodeAction[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
-  const canonical = canonicalDocumentUri(doc.uri);
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
-  const response = adaptWorkspaceCall("codeAction", () =>
-    ctx.workspace.refactor().codeActions({
-      uri: canonical.uri,
-      position: params.range.start,
-    }),
-  );
-
-  if (isDegradation(response)) {
-    logDegradation(ctx, "codeAction", response, params.textDocument.uri);
+  try {
+    const response = await ctx.semanticRuntime.templateCodeActions(doc, params.range.start);
+    return mapSemanticRuntimeTemplateCodeActions(response, lookupText, {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
+    });
+  } catch (e) {
+    const d = degradationFromError("codeAction", e);
+    logDegradation(ctx, "codeAction", d, params.textDocument.uri);
     return null;
   }
-
-  if (isNotApplicable(response)) {
-    return null;
-  }
-
-  const mapped: CodeAction[] = [];
-  for (const action of response) {
-    const edit = mapSemanticWorkspaceEdit(action.edit ?? null, lookupText);
-    if (!edit) continue;
-    const mappedAction: CodeAction = { title: action.title, edit };
-    if (action.kind) mappedAction.kind = action.kind;
-    mapped.push(mappedAction);
-  }
-  return mapped.length ? mapped : null;
 }
 
 // ============================================================================
@@ -310,25 +302,29 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   ctx.connection.onHover((params) => handleHover(ctx, params));
   ctx.connection.onDefinition((params) => handleDefinition(ctx, params));
   ctx.connection.onReferences((params) => handleReferences(ctx, params));
+  ctx.connection.onDocumentHighlight((params) => handleDocumentHighlight(ctx, params));
   ctx.connection.onPrepareRename((params) => handlePrepareRename(ctx, params));
   ctx.connection.onRenameRequest((params) => handleRename(ctx, params));
   ctx.connection.onCodeAction((params) => handleCodeAction(ctx, params));
+  ctx.connection.onDocumentSymbol((params) => handleDocumentSymbols(ctx, params));
+  ctx.connection.onWorkspaceSymbol((params) => handleWorkspaceSymbols(ctx, params));
+  ctx.connection.onCodeLens((params) => handleCodeLens(ctx, params));
+  ctx.connection.onSelectionRanges((params) => handleSelectionRanges(ctx, params));
+  ctx.connection.languages.onLinkedEditingRange((params) => handleLinkedEditingRange(ctx, params));
+  ctx.connection.onFoldingRanges((params) => handleFoldingRanges(ctx, params));
 
   // Inlay hints — binding mode resolution
   ctx.connection.languages.inlayHint.on((params) => handleInlayHintsRequest(ctx, params));
 
 
-  ctx.connection.onRequest(SemanticTokensRequest.type, (params) => {
-    const response = adaptWorkspaceCall("semanticTokens", () =>
-      handleSemanticTokensFull(ctx, params),
-    );
-
-    if (isDegradation(response)) {
+  ctx.connection.onRequest(SemanticTokensRequest.type, async (params) => {
+    try {
+      return await handleSemanticTokensFull(ctx, params) ?? { data: [] };
+    } catch (error) {
+      const response = degradationFromError("semanticTokens", error);
       logDegradation(ctx, "semanticTokens", response, params.textDocument.uri);
       return { data: [] };
     }
-
-    return isSuccess(response) && response ? response : { data: [] };
   });
 }
 

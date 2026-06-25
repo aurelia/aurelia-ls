@@ -77,7 +77,7 @@ export function bootWorkspace(input: BootWorkspaceInput): WorkspaceBootFrame {
     input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
   );
   const projects = projectInputs
-    .map((project) => bootProject(store, input.rootDir, project));
+    .map((project) => bootProject(store, input.rootDir, project, input.sourceTextProvider ?? null));
 
   return new WorkspaceBootFrame(input.rootDir, workspaceKey, store, projects);
 }
@@ -87,6 +87,7 @@ export function bootProject(
   store: KernelStore,
   workspaceRootDir: string,
   input: BootProjectInput,
+  sourceTextProvider: BootWorkspaceInput['sourceTextProvider'] = null,
 ): ProjectBootFrame {
   const projectKey = input.projectKey ?? defaultProjectKey(input.rootDir);
   const discovery: SourceDiscoveryResult | null = input.sourceFiles == null
@@ -97,7 +98,7 @@ export function bootProject(
     admitSourceFile(store, workspaceRootDir, input.rootDir, projectKey, source)
   );
 
-  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery);
+  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery, sourceTextProvider ?? null);
 }
 
 /** Admit one source file as an address plus evidence/provenance records. */

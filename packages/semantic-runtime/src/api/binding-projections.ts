@@ -32,6 +32,7 @@ import type {
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
   SemanticTargetOperationRow,
+  SemanticValueConverterApplicationRow,
 } from './contracts.js';
 import {
   resourceLocalBindingBehaviorApplications,
@@ -41,6 +42,7 @@ import {
   resourceLocalBindingTargetAccesses,
   resourceLocalBindingTargetOperations,
   resourceLocalBindingValueChannels,
+  resourceLocalValueConverterApplications,
 } from './runtime-resource-ownership.js';
 
 const BINDING_SUMMARY_NAME_LIMIT = 12;
@@ -192,6 +194,35 @@ export function readBindingBehaviorApplicationRows(
     .sort((left, right) =>
       `${left.definitionName}:${left.behaviorName}:${left.targetProperty ?? ''}:${left.bindingKind}`
         .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.targetProperty ?? ''}:${right.bindingKind}`)
+    );
+}
+
+export function readValueConverterApplicationRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticValueConverterApplicationRow[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticValueConverterApplicationRow[] =>
+      resourceLocalValueConverterApplications(store, resource).map((application) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: application.binding.bindingKind,
+        converterName: application.converterName,
+        phase: application.phase,
+        argumentCount: application.argumentCount,
+        source: describeAddress(store, application.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: application.binding.productHandle,
+            valueConverterApplicationProductHandle: application.productHandle,
+            sourceAddressHandle: application.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.converterName}:${left.phase}:${left.bindingKind}`
+        .localeCompare(`${right.definitionName}:${right.converterName}:${right.phase}:${right.bindingKind}`)
     );
 }
 

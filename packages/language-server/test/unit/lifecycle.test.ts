@@ -13,8 +13,11 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       update: vi.fn(),
       close: vi.fn(),
       diagnostics: vi.fn(() => ({ bySurface: new Map(), suppressed: [] })),
-      getOverlay: vi.fn(() => null),
       getCompilation: vi.fn(() => null),
+    },
+    semanticRuntime: {
+      invalidate: vi.fn(),
+      appDiagnostics: vi.fn(async () => ({ value: { rows: [] } })),
     },
     lookupText: vi.fn(() => null),
     ...overrides,
@@ -30,8 +33,8 @@ function createMockDoc(uri = "file:///app/src/my-app.html") {
 }
 
 describe("refreshDocument", () => {
-  // Pattern AP: compilation error → previous diagnostics preserved
-  test("does not send empty diagnostics when workspace throws (Pattern AP)", async () => {
+  // Pattern AP: diagnostic analysis error → previous diagnostics preserved
+  test("does not send empty diagnostics when runtime diagnostics throws (Pattern AP)", async () => {
     const ctx = createMockContext();
     const doc = createMockDoc();
 
@@ -39,9 +42,9 @@ describe("refreshDocument", () => {
     await refreshDocument(ctx as never, doc as never, "open");
     expect(ctx.connection.sendDiagnostics).toHaveBeenCalledTimes(1);
 
-    // Second call: workspace.diagnostics throws
+    // Second call: semantic-runtime diagnostics throws
     ctx.connection.sendDiagnostics.mockClear();
-    ctx.workspace.diagnostics.mockImplementation(() => {
+    ctx.semanticRuntime.appDiagnostics.mockImplementation(() => {
       throw new Error("compilation failed");
     });
 

@@ -12,10 +12,8 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { createSemanticWorkspace } from "@aurelia-ls/semantic-workspace/engine.js";
 import type { ServerContext } from "../context.js";
-import { mapWorkspaceDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
+import { mapSemanticRuntimeAppDiagnostics } from "../mapping/lsp-types.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
@@ -45,9 +43,9 @@ function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
 }
 
 async function reloadProjectConfiguration(ctx: ServerContext, reason: string): Promise<void> {
-  if (!ctx.workspace) return;
-  ctx.workspace.configureProject({ workspaceRoot: ctx.workspaceRoot });
-  ctx.logger.info(`[workspace] tsconfig reload (${reason}; fingerprint=${ctx.workspace.snapshot().meta.fingerprint})`);
+  ctx.semanticRuntime.invalidate();
+  ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
+  await notifyWorkspaceChanged(ctx, [reason, "diagnostics", "types", "resources"]);
   await refreshAllOpenDocuments(ctx, "change");
 }
 
@@ -69,33 +67,20 @@ export async function refreshDocument(
   _options?: { skipSync?: boolean }
 ): Promise<void> {
   try {
-    const canonical = canonicalDocumentUri(doc.uri);
-    if (reason === "open") {
-      ctx.workspace.open(canonical.uri, doc.getText(), doc.version);
-    } else {
-      ctx.workspace.update(canonical.uri, doc.getText(), doc.version);
-    }
+    ctx.semanticRuntime.invalidate();
 
-    const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
-    const diagnostics = ctx.workspace.diagnostics(canonical.uri);
-    const lspDiagnostics = mapWorkspaceDiagnostics(canonical.uri, diagnostics, lookupText);
+    const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc);
+    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(diagnostics, doc);
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
-    let overlay: ReturnType<ServerContext["workspace"]["getOverlay"]> | null = null;
-    let compilation: ReturnType<ServerContext["workspace"]["getCompilation"]> | null = null;
-    try {
-      overlay = ctx.workspace.getOverlay(canonical.uri);
-      compilation = ctx.workspace.getCompilation(canonical.uri);
-    } catch {}
-
-    await ctx.connection.sendNotification("aurelia/overlayReady", {
+    await ctx.connection.sendNotification("aurelia/workspaceChanged", {
+      fingerprint: semanticRuntimeFingerprint(ctx),
+      domains: ["diagnostics", "templates"],
+      reason,
+    });
+    await ctx.connection.sendNotification("aurelia/analysisReady", {
       uri: doc.uri,
-      overlayPath: overlay?.overlay.path,
-      calls: overlay?.calls.length ?? 0,
-      overlayLen: overlay?.overlay.text.length ?? 0,
       diags: lspDiagnostics.length,
-      meta: compilation?.meta,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
@@ -106,39 +91,6 @@ export async function refreshDocument(
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
   ctx.workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
   ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"}`);
-  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
-  ctx.workspace = createSemanticWorkspace({
-    logger: ctx.logger,
-    workspaceRoot: ctx.workspaceRoot,
-    discovery: {
-      stripSourcedNodes,
-    },
-  });
-
-  // Subscribe to workspace-level semantic changes (third-party scan,
-  // TS project version bump, config reload). Forward as LSP notifications
-  // so VS Code features can react to knowledge changes.
-  ctx.workspace.onDidChangeSemantics((event) => {
-    ctx.logger.info(`[workspace] semantics changed: domains=[${event.domains.join(",")}] fingerprint=${event.fingerprint}`);
-    void ctx.connection.sendNotification("aurelia/workspaceChanged", {
-      fingerprint: event.fingerprint,
-      domains: event.domains,
-    });
-    // Use standard LSP refresh for cross-file effects on standard features
-    if (event.domains.includes("diagnostics") || event.domains.includes("types")) {
-      void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
-    }
-    if (event.domains.includes("resources") || event.domains.includes("scopes")) {
-      void ctx.connection.sendRequest("workspace/semanticTokens/refresh").catch(() => {});
-    }
-    // Refresh open documents so they pick up the changed semantics
-    void refreshAllOpenDocuments(ctx, "change");
-  });
-
-  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
-  void ctx.workspace.initThirdParty().then(() => {
-    ctx.logger.info("[workspace] Third-party init complete");
-  });
 
   return {
     capabilities: {
@@ -146,18 +98,22 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
       hoverProvider: true,
       definitionProvider: { workDoneProgress: false },
+      documentHighlightProvider: true,
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
       codeActionProvider: true,
+      documentSymbolProvider: true,
+      workspaceSymbolProvider: true,
+      codeLensProvider: { resolveProvider: false },
+      selectionRangeProvider: true,
+      linkedEditingRangeProvider: true,
+      foldingRangeProvider: true,
       inlayHintProvider: true,
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
       },
       // Post-PR-19 feature stubs — uncomment when workspace adds support:
-      // documentSymbolProvider: true,
-      // codeLensProvider: { resolveProvider: false },
-      // inlayHintProvider: { resolveProvider: false },
       // codeActionProvider: { resolveProvider: true },
     },
   };
@@ -192,7 +148,9 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     // and clear incremental discovery cache.
     if (hasSourceFileStructuralChange(e.changes)) {
       ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
-      ctx.workspace.reloadProject();
+      ctx.semanticRuntime.invalidate();
+      void notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics"]);
+      void refreshAllOpenDocuments(ctx, "change");
     }
   });
 
@@ -227,8 +185,25 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       pendingRefreshes.delete(e.document.uri);
     }
 
-    const canonical = canonicalDocumentUri(e.document.uri);
-    ctx.workspace.close(canonical.uri);
+    ctx.semanticRuntime.invalidate();
     void ctx.connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
   });
+}
+
+async function notifyWorkspaceChanged(ctx: ServerContext, domains: readonly string[]): Promise<void> {
+  const fingerprint = semanticRuntimeFingerprint(ctx);
+  await ctx.connection.sendNotification("aurelia/workspaceChanged", {
+    fingerprint,
+    domains,
+  });
+  if (domains.includes("diagnostics") || domains.includes("types")) {
+    void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
+  }
+  if (domains.includes("resources") || domains.includes("templates")) {
+    void ctx.connection.sendRequest("workspace/semanticTokens/refresh").catch(() => {});
+  }
+}
+
+function semanticRuntimeFingerprint(ctx: ServerContext): string {
+  return `semantic-runtime:${ctx.workspaceRoot ?? "no-root"}:${ctx.documents.all().length}`;
 }

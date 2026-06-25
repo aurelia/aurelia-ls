@@ -19,11 +19,6 @@
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { DisposableStore } from "../../core/disposables.js";
 
-type Position = { line: number; character: number };
-type RenameFromTsResponse = {
-  changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
-} | null;
-
 export const TsRenameFeature: FeatureModule = {
   id: "rename.tsPropagate",
   isEnabled: () => true,
@@ -41,7 +36,7 @@ export const TsRenameFeature: FeatureModule = {
         const isTs = document.languageId === "typescript" || document.languageId === "typescriptreact";
         if (!isTs) return undefined;
 
-        log.info(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} → "${newName}"`);
+        log.debug(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} -> "${newName}"`);
 
         // Step 1: Delegate to the built-in TS rename (reentrancy-guarded)
         let tsEdit: import("vscode").WorkspaceEdit | undefined;
@@ -61,23 +56,15 @@ export const TsRenameFeature: FeatureModule = {
         }
 
         // Step 2: Ask Aurelia LS for template edits
-        let aureliaChanges: RenameFromTsResponse = null;
-        try {
-          aureliaChanges = await ctx.lsp.sendRequest<RenameFromTsResponse>(
-            "aurelia/renameFromTs",
-            {
-              uri: document.uri.toString(),
-              position: { line: position.line, character: position.character },
-              newName,
-            },
-          );
-        } catch (e) {
-          log.warn(`[TsRename] aurelia/renameFromTs failed: ${e instanceof Error ? e.message : e}`);
-        }
+        const aureliaChanges = await ctx.lsp.renameFromTs(
+          document.uri.toString(),
+          { line: position.line, character: position.character },
+          newName,
+        );
 
         // No template edits — return TS-only edits
         if (!aureliaChanges?.changes) {
-          log.info(`[TsRename] no template edits, TS-only rename`);
+          log.debug("[TsRename] no template edits, TS-only rename");
           return tsEdit;
         }
 
@@ -99,7 +86,7 @@ export const TsRenameFeature: FeatureModule = {
           }
         }
 
-        log.info(`[TsRename] merged: ${merged.entries().length} files, ${templateEditCount} template edits`);
+        log.debug(`[TsRename] merged: ${merged.entries().length} files, ${templateEditCount} template edits`);
         return merged;
       },
 
@@ -118,7 +105,7 @@ export const TsRenameFeature: FeatureModule = {
         if (!wordRange) return undefined;
 
         const placeholder = document.getText(wordRange);
-        log.info(`[TsRename] prepare: ${document.uri.fsPath}:${position.line}:${position.character} → "${placeholder}"`);
+        log.debug(`[TsRename] prepare: ${document.uri.fsPath}:${position.line}:${position.character} -> "${placeholder}"`);
         return { range: wordRange, placeholder };
       },
     };
@@ -135,7 +122,7 @@ export const TsRenameFeature: FeatureModule = {
       ),
     );
 
-    log.info("[TsRename] activated");
+    log.debug("[TsRename] activated");
     return store;
   },
 };

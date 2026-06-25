@@ -252,12 +252,9 @@ importers:
 
   packages/language-server:
     dependencies:
-      '@aurelia-ls/compiler':
+      '@aurelia-ls/semantic-runtime':
         specifier: workspace:*
-        version: link:../compiler
-      '@aurelia-ls/semantic-workspace':
-        specifier: workspace:*
-        version: link:../semantic-workspace
+        version: link:../semantic-runtime
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -406,9 +403,6 @@ importers:
 
   packages/vscode:
     dependencies:
-      '@aurelia-ls/compiler':
-        specifier: workspace:*
-        version: link:../compiler
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

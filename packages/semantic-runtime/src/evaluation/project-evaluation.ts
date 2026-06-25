@@ -192,6 +192,7 @@ class StaticProjectEvaluationFrame {
       this.project.rootDir,
       undefined,
       this.options.moduleResolutionPolicy,
+      this.project.sourceTextProvider,
     );
     this.runtimeHost = withStaticEvaluationAmbientGlobals(
       this.options.runtimeHost,

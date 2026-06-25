@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 
 import { AuthoredSourceTextCache } from '../kernel/authored-source-text.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type { KernelStore } from '../kernel/store.js';
 import { NamedResourceRecognizer } from './named-resource-recognizer.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
@@ -51,7 +52,13 @@ export class ResourceRecognitionResult {
 export class ResourceRecognitionPass {
   private readonly namedResources = new NamedResourceRecognizer();
   private readonly syntaxResources = new SyntaxResourceRecognizer();
-  private readonly sourceTextCache = new AuthoredSourceTextCache('');
+  private readonly sourceTextCache: AuthoredSourceTextCache;
+
+  constructor(
+    sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
+  ) {
+    this.sourceTextCache = new AuthoredSourceTextCache('', sourceTextProvider);
+  }
 
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return [

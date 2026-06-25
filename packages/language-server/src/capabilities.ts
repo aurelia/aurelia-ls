@@ -1,6 +1,6 @@
-import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 import type { ServerContext } from "./context.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./handlers/semantic-tokens.js";
+import { stableHash } from "./utils/stable-hash.js";
 
 export const CAPABILITIES_SCHEMA = "aurelia.capabilities/1" as const;
 
@@ -10,20 +10,10 @@ export const ContractKeys = {
   diagnostics: "diagnostics",
   semanticTokens: "semanticTokens",
   presentation: "presentation",
-  mapping: "mapping",
-} as const;
-
-export const CustomCapabilityKeys = {
-  overlay: "overlay",
-  mapping: "mapping",
-  queryAtPosition: "queryAtPosition",
-  ssr: "ssr",
-  diagnostics: "diagnostics",
-  dumpState: "dumpState",
 } as const;
 
 export const NotificationKeys = {
-  overlayReady: "overlayReady",
+  analysisReady: "analysisReady",
   workspaceChanged: "workspaceChanged",
 } as const;
 
@@ -43,7 +33,6 @@ export const OptionalLspKeys = {
 } as const;
 
 export type ContractKey = (typeof ContractKeys)[keyof typeof ContractKeys];
-export type CustomCapabilityKey = (typeof CustomCapabilityKeys)[keyof typeof CustomCapabilityKeys];
 export type NotificationKey = (typeof NotificationKeys)[keyof typeof NotificationKeys];
 export type OptionalLspKey = (typeof OptionalLspKeys)[keyof typeof OptionalLspKeys];
 
@@ -69,10 +58,6 @@ export interface PresentationContract {
   version: "presentation/1";
 }
 
-export interface MappingContract {
-  version: "mapping/1";
-}
-
 export interface AureliaCapabilities {
   schema: typeof CAPABILITIES_SCHEMA;
   server: {
@@ -85,7 +70,6 @@ export interface AureliaCapabilities {
     diagnostics: DiagnosticsContract;
     semanticTokens: SemanticTokensContract;
     presentation: PresentationContract;
-    mapping: MappingContract;
   };
   workspace: {
     meta: {
@@ -115,15 +99,12 @@ export interface AureliaCapabilities {
   lsp: {
     optional: Record<OptionalLspKey, boolean>;
   };
-  custom: Record<CustomCapabilityKey, boolean>;
   notifications: Record<NotificationKey, boolean>;
 }
 
 export type CapabilitiesResponse = AureliaCapabilities;
 
 export function buildCapabilities(ctx: ServerContext): CapabilitiesResponse {
-  const snapshot = ctx.workspace.snapshot();
-  const meta = snapshot.meta;
   const legendHash = computeLegendHash();
 
   return {
@@ -137,13 +118,12 @@ export function buildCapabilities(ctx: ServerContext): CapabilitiesResponse {
       diagnostics: { version: "diagnostics/1", taxonomy: "diagnostics-taxonomy/1" },
       semanticTokens: { version: "tokens/1", legendHash },
       presentation: { version: "presentation/1" },
-      mapping: { version: "mapping/1" },
     },
     workspace: {
       meta: {
-        fingerprint: meta.fingerprint,
-        configHash: meta.configHash,
-        docCount: meta.docCount,
+        fingerprint: `semantic-runtime:${ctx.workspaceRoot ?? "no-root"}:${ctx.documents.all().length}`,
+        configHash: ctx.workspaceRoot ?? "",
+        docCount: ctx.documents.all().length,
       },
       artifacts: {
         semantics: true,
@@ -151,45 +131,37 @@ export function buildCapabilities(ctx: ServerContext): CapabilitiesResponse {
         syntax: true,
         resourceGraph: true,
         provenance: true,
-        semanticSnapshot: Boolean(snapshot.semanticSnapshot),
-        apiSurface: Boolean(snapshot.apiSurface),
-        featureUsage: Boolean(snapshot.featureUsage),
-        registrationPlan: Boolean(snapshot.registrationPlan),
+        semanticSnapshot: true,
+        apiSurface: true,
+        featureUsage: true,
+        registrationPlan: true,
       },
       indexes: {
         resourceIndex: true,
-        symbolGraph: Boolean(snapshot.semanticSnapshot?.symbols?.length),
-        usageIndex: false,
-        scopeIndex: false,
-        templateIndex: ctx.workspace.templates.length > 0,
+        symbolGraph: true,
+        usageIndex: true,
+        scopeIndex: true,
+        templateIndex: true,
       },
     },
     lsp: {
       optional: {
-        documentSymbol: false,
-        workspaceSymbol: false,
-        documentHighlight: false,
-        selectionRange: false,
-        linkedEditingRange: false,
-        foldingRange: false,
-        inlayHint: false,
-        codeLens: false,
+        documentSymbol: true,
+        workspaceSymbol: true,
+        documentHighlight: true,
+        selectionRange: true,
+        linkedEditingRange: true,
+        foldingRange: true,
+        inlayHint: true,
+        codeLens: true,
         documentLink: false,
         callHierarchy: false,
         documentColor: false,
         semanticTokensDelta: false,
       },
     },
-    custom: {
-      overlay: true,
-      mapping: true,
-      queryAtPosition: true,
-      ssr: false,
-      diagnostics: true,
-      dumpState: true,
-    },
     notifications: {
-      overlayReady: true,
+      analysisReady: true,
       workspaceChanged: true,
     },
   };
@@ -213,7 +185,6 @@ export function buildCapabilitiesFallback(): CapabilitiesResponse {
       diagnostics: { version: "diagnostics/1", taxonomy: "diagnostics-taxonomy/1" },
       semanticTokens: { version: "tokens/1", legendHash: computeLegendHash() },
       presentation: { version: "presentation/1" },
-      mapping: { version: "mapping/1" },
     },
     workspace: {
       meta: {
@@ -242,30 +213,22 @@ export function buildCapabilitiesFallback(): CapabilitiesResponse {
     },
     lsp: {
       optional: {
-        documentSymbol: false,
-        workspaceSymbol: false,
-        documentHighlight: false,
-        selectionRange: false,
-        linkedEditingRange: false,
-        foldingRange: false,
-        inlayHint: false,
-        codeLens: false,
+        documentSymbol: true,
+        workspaceSymbol: true,
+        documentHighlight: true,
+        selectionRange: true,
+        linkedEditingRange: true,
+        foldingRange: true,
+        inlayHint: true,
+        codeLens: true,
         documentLink: false,
         callHierarchy: false,
         documentColor: false,
         semanticTokensDelta: false,
       },
     },
-    custom: {
-      overlay: false,
-      mapping: false,
-      queryAtPosition: false,
-      ssr: false,
-      diagnostics: false,
-      dumpState: false,
-    },
     notifications: {
-      overlayReady: false,
+      analysisReady: false,
       workspaceChanged: false,
     },
   };

@@ -1,31 +1,33 @@
-import type {
-  DiagnosticActionability,
-  DiagnosticCategory,
-  DiagnosticImpact,
-  DiagnosticStage,
-  DiagnosticStatus,
-  DiagnosticSurface,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { DiagnosticSeverity } from "@aurelia-ls/compiler/model/diagnostics.js";
-import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+export type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+export type DiagnosticCategory =
+  | "expression"
+  | "template-syntax"
+  | "resource-resolution"
+  | "bindable-validation"
+  | "project";
+export type DiagnosticImpact = "blocking" | "degraded" | "informational";
+export type DiagnosticStage = string;
+export type DiagnosticStatus = "canonical" | "suppressed" | "experimental";
+export type DiagnosticSurface = "lsp" | "vscode-panel" | "ci" | string;
+export type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
+export type SourceSpan = { start: number; end: number };
 
-export type OverlayReadyPayload = {
+export type AnalysisReadyPayload = {
   uri?: string;
-  overlayPath?: string;
-  calls?: number;
-  overlayLen?: number;
   diags?: number;
-  meta?: unknown;
-  coverage?: {
-    totalPositions?: number;
-    fullyAnalyzed?: number;
-    partiallyAnalyzed?: number;
-    emittedCount?: number;
-    suppressedCount?: number;
-  };
 };
 
 export type DiagnosticsSpan = SourceSpan;
+
+export type ProtocolPosition = {
+  line: number;
+  character: number;
+};
+
+export type ProtocolRange = {
+  start: ProtocolPosition;
+  end: ProtocolPosition;
+};
 
 export type DiagnosticsSnapshotIssue = {
   kind: string;
@@ -72,66 +74,6 @@ export type DiagnosticsSnapshotResponse = {
   diagnostics: DiagnosticsSnapshotBundle;
 };
 
-export interface MappingSpan {
-  start: number;
-  end: number;
-}
-
-export interface MappingEntry {
-  exprId?: string;
-  overlaySpan?: MappingSpan | null;
-  htmlSpan?: MappingSpan | null;
-}
-
-export interface OverlayCallSite {
-  exprId: string;
-  overlayStart: number;
-  overlayEnd: number;
-  htmlSpan: MappingSpan;
-}
-
-export interface OverlaySnapshot {
-  path: string;
-  text: string;
-  baseName?: string;
-}
-
-export interface OverlayBuildArtifactShape {
-  overlay: OverlaySnapshot;
-  mapping?: { entries?: readonly MappingEntry[] };
-  calls?: readonly OverlayCallSite[];
-}
-
-export interface OverlayResponse {
-  fingerprint?: string;
-  artifact?: OverlayBuildArtifactShape | null;
-  overlay?: OverlayBuildArtifactShape | null;
-}
-
-export interface MappingResponse {
-  overlayPath: string;
-  mapping: { entries: readonly MappingEntry[] };
-}
-
-export interface TemplateInfoResponse {
-  expr?: { exprId?: string | number | null } | null;
-  node?: { kind?: string | null } | null;
-  controller?: { kind?: string | null } | null;
-  bindables?: readonly unknown[] | null;
-  mappingSize?: number;
-}
-
-export interface SsrArtifactShape {
-  html: { text: string; path: string };
-  manifest: { text: string; path: string };
-}
-
-export interface SsrResponse {
-  fingerprint?: string;
-  artifact?: SsrArtifactShape | null;
-  ssr?: SsrArtifactShape | null;
-}
-
 export interface ResourceExplorerBindable {
   name: string;
   attribute?: string;
@@ -150,13 +92,10 @@ export interface ResourceExplorerItem {
   package?: string;
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
-  gapCount: number;
-  gapIntrinsicCount: number;
   origin?: string;
   scope: ResourceScope;
   scopeOwner?: string;
   declarationForm?: string;
-  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
 }
 
 export interface InspectEntityResponse {
@@ -194,7 +133,6 @@ export interface CapabilitiesResponse {
     diagnostics?: { version?: string; taxonomy?: string };
     semanticTokens?: { version?: string; legendHash?: string };
     presentation?: { version?: string };
-    mapping?: { version?: string };
   };
   workspace?: {
     meta?: {
@@ -237,16 +175,8 @@ export interface CapabilitiesResponse {
       semanticTokensDelta?: boolean;
     };
   };
-  custom?: {
-    overlay?: boolean;
-    mapping?: boolean;
-    queryAtPosition?: boolean;
-    ssr?: boolean;
-    diagnostics?: boolean;
-    dumpState?: boolean;
-  };
   notifications?: {
-    overlayReady?: boolean;
+    analysisReady?: boolean;
     workspaceChanged?: boolean;
   };
 }
@@ -267,3 +197,12 @@ export type ScopeResourcesResponse = {
   scopeLabel?: string;
   resources: ScopeResourceItem[];
 };
+
+export type RelatedFileResponse = {
+  uri: string;
+  kind: "template" | "component";
+} | null;
+
+export type RenameFromTsResponse = {
+  changes: Record<string, { range: ProtocolRange; newText: string }[]>;
+} | null;

@@ -4,27 +4,18 @@
  * Shows all discovered Aurelia resources organized by origin (Project,
  * Packages, Framework) then by kind (Elements, Attributes, etc.).
  *
- * Origin-awareness matters because scope and trust are different:
- * - Project resources: your code, full confidence, navigate to source
- * - Package resources: third-party, may have gaps, package name shown
- * - Framework resources: built-in, always available, behavioral docs
- *
- * This maps to the two-level resource visibility from L1 scope-resolution:
- * global (root container) vs local (per-CE container). Local resources
- * show which CE owns them.
- *
- * Derived from: capability map (Visualize × IDE), experience thesis
- * (Discovery + Revelation), feature principle #4 (gaps are information),
- * L1 scope-resolution (two-level lookup), F2 declaration forms (origin).
+ * Origin and scope are runtime facts: project/package/framework resources have
+ * different navigation affordances, and local resources reveal which compiler
+ * world made them visible.
  */
 import type { TreeDataProvider, TreeItem, ProviderResult, Event } from "vscode";
 import type { VscodeApi } from "../../vscode-api.js";
-import type { LspFacade } from "../../core/lsp-facade.js";
+import type { QueryClient } from "../../core/query-client.js";
 import type { ClientLogger } from "../../log.js";
 import type { ResourceExplorerItem, ResourceExplorerResponse } from "../../types.js";
 import { SimpleEmitter } from "../../core/events.js";
 
-/** Display grouping for the Resource Explorer tree — derived from compiler origin + package fields. */
+/** Display grouping for the Resource Explorer tree — derived from runtime source provenance. */
 type ExplorerGroup = "project" | "package" | "framework";
 
 function toExplorerGroup(item: ResourceExplorerItem): ExplorerGroup {
@@ -87,7 +78,6 @@ interface TreeNode {
 }
 
 function buildTree(response: ResourceExplorerResponse): TreeNode[] {
-  // Group by display group (derived from origin + package), then by kind
   const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
 
   for (const resource of response.resources) {
@@ -156,10 +146,9 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
 
   // Summary
   const totalResources = response.resources.length;
-  const projectCount = response.resources.filter((r) => r.origin === "project").length;
-  const packageCount = response.resources.filter((r) => r.origin === "package").length;
-  const frameworkCount = response.resources.filter((r) => r.origin === "framework").length;
-  const totalGaps = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
+  const projectCount = response.resources.filter((r) => toExplorerGroup(r) === "project").length;
+  const packageCount = response.resources.filter((r) => toExplorerGroup(r) === "package").length;
+  const frameworkCount = response.resources.filter((r) => toExplorerGroup(r) === "framework").length;
   const localCount = response.resources.filter((r) => r.scope === "local").length;
 
   const summaryParts = [`${totalResources} resources`];
@@ -168,7 +157,6 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
   if (frameworkCount > 0) summaryParts.push(`${frameworkCount} framework`);
   if (localCount > 0) summaryParts.push(`${localCount} local`);
   if (response.templateCount > 0) summaryParts.push(`${response.templateCount} templates`);
-  if (totalGaps > 0) summaryParts.push(`${totalGaps} gaps`);
 
   tree.push({
     nodeKind: "info",
@@ -207,7 +195,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
   }
 
   // Source file info (project resources)
-  if (item.file && item.origin === "project") {
+  if (item.file && toExplorerGroup(item) === "project") {
     const shortFile = item.file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
     children.push({
       nodeKind: "info",
@@ -217,34 +205,6 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
       collapsible: false,
       resourceFile: item.file,
       contextValue: "fileLink",
-    });
-  }
-
-  // Gap indicator
-  if (item.gapCount > 0) {
-    const intrinsic = item.gapIntrinsicCount ?? 0;
-    const gapDetail = intrinsic > 0
-      ? `${item.gapCount} gap${item.gapCount === 1 ? "" : "s"} (${intrinsic} require${intrinsic === 1 ? "s" : ""} manifest)`
-      : `${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`;
-    children.push({
-      nodeKind: "info",
-      id: `${item.kind}:${item.name}:gaps`,
-      label: gapDetail,
-      iconId: "warning",
-      collapsible: false,
-      contextValue: "gapInfo",
-    });
-  }
-
-  // Staleness indicator (builtins only)
-  if (item.staleness && item.staleness.fieldsFromAnalysis > 0) {
-    children.push({
-      nodeKind: "info",
-      id: `${item.kind}:${item.name}:staleness`,
-      label: `${item.staleness.fieldsFromAnalysis} field${item.staleness.fieldsFromAnalysis === 1 ? "" : "s"} found by analysis but not in encoding`,
-      iconId: "info",
-      collapsible: false,
-      contextValue: "stalenessInfo",
     });
   }
 
@@ -258,8 +218,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
     descParts.push("not registered");
   }
   if (item.bindableCount > 0) descParts.push(`${item.bindableCount} bindable${item.bindableCount === 1 ? "" : "s"}`);
-  if (item.gapCount > 0) descParts.push(`${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`);
-  if (item.package && item.origin === "package") descParts.push(item.package);
+  if (item.package) descParts.push(item.package);
 
   return {
     nodeKind: "resource",
@@ -284,26 +243,19 @@ function buildResourceTooltip(item: ResourceExplorerItem): string {
   if (item.file) lines.push(`File: ${item.file}`);
   if (item.package) lines.push(`Package: ${item.package}`);
   if (item.bindableCount > 0) lines.push(`Bindables: ${item.bindableCount}`);
-  if (item.gapCount > 0) {
-    const intrinsic = item.gapIntrinsicCount ?? 0;
-    lines.push(`Gaps: ${item.gapCount}${intrinsic > 0 ? ` (${intrinsic} intrinsic)` : ""}`);
-  }
-  if (item.staleness && item.staleness.fieldsFromAnalysis > 0) {
-    lines.push(`Staleness: ${item.staleness.fieldsFromAnalysis} undeclared fields found by analysis`);
-  }
   return lines.join("\n");
 }
 
 export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   #vscode: VscodeApi;
-  #lsp: LspFacade;
+  #queries: QueryClient;
   #logger: ClientLogger;
   #tree: TreeNode[] = [];
   #changeEmitter: { fire: () => void; event: Event<void> };
 
-  constructor(vscode: VscodeApi, lsp: LspFacade, logger: ClientLogger) {
+  constructor(vscode: VscodeApi, queries: QueryClient, logger: ClientLogger) {
     this.#vscode = vscode;
-    this.#lsp = lsp;
+    this.#queries = queries;
     this.#logger = logger;
 
     const eventEmitter = new vscode.EventEmitter<void>();
@@ -347,7 +299,7 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   async refresh(): Promise<void> {
     try {
       this.#logger.debug("resourceExplorer.refresh.start");
-      const response = await this.#lsp.getResources();
+      const response = await this.#queries.getResources({ timeoutMs: 1_500 });
       if (!response) {
         this.#tree = [{
           nodeKind: "info",

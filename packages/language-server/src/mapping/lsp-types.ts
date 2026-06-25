@@ -1,5 +1,5 @@
 /**
- * Type mapping utilities: workspace/compiler types -> LSP types
+ * Type mapping utilities: semantic-runtime types -> LSP types
  *
  * This is the Boundary 5 conversion layer. All workspace types are
  * converted to LSP wire format here. The FeatureResponse unwrapping
@@ -9,7 +9,7 @@
 import {
   CompletionItemKind,
   DiagnosticSeverity as LspDiagnosticSeverity,
-  DiagnosticTag as LspDiagnosticTag,
+  type CodeAction,
   type CompletionItem,
   type CompletionList,
   type Hover,
@@ -17,50 +17,48 @@ import {
   type LocationLink,
   type WorkspaceEdit,
   type Diagnostic,
-  type DiagnosticRelatedInformation,
   type Range,
-  type TextDocumentEdit,
-  type CreateFile,
-  type RenameFile,
-  type ChangeAnnotation,
 } from "vscode-languageserver/node.js";
+import path from "node:path";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { pathToFileURL } from "node:url";
 import type {
-  PrepareRenameResult,
-  RenameAnnotation,
-  RenameEdit,
-  RenameResult,
-  WorkspaceCompletionItem,
-  WorkspaceDiagnostic,
-  WorkspaceDiagnostics,
-  WorkspaceEdit as SemanticWorkspaceEdit,
-  WorkspaceHover,
-  WorkspaceLocation,
-} from "@aurelia-ls/semantic-workspace/types.js";
-import type {
-  DiagnosticActionability,
-  DiagnosticCategory,
-  DiagnosticConfidence,
-  DiagnosticImpact,
-  DiagnosticSurface,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { DocumentSpan } from "@aurelia-ls/compiler/program/overlay-span-index.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+  SemanticAppDiagnosticRow,
+  SemanticAppDiagnosticsResult,
+  SemanticRouteNodesResult,
+  SemanticRuntimeAnswer,
+  SemanticSourceReference,
+  SemanticTemplateCompletionCandidateRow,
+  SemanticTemplateCompletionResult,
+  SemanticTemplateCodeActionsResult,
+  SemanticTemplateCursorInfoResult,
+  SemanticTemplateReferencesResult,
+  SemanticTemplateRenameResult,
+} from "@aurelia-ls/semantic-runtime";
+import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
+
+export interface SourceSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface DocumentSpan {
+  readonly uri: DocumentUri;
+  readonly span: SourceSpan;
+}
+
 export type LookupTextFn = (uri: DocumentUri) => string | null;
 export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
 
-type AureliaLspDiagnosticTaxonomy = {
-  schema: typeof AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA;
-  impact?: DiagnosticImpact;
-  actionability?: DiagnosticActionability;
-  category?: DiagnosticCategory;
-  confidence?: DiagnosticConfidence;
-};
-
-type RecordValue = Readonly<Record<string, unknown>>;
+type DiagnosticImpact = "blocking" | "degraded" | "informational";
+type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+type DiagnosticCategory =
+  | "expression"
+  | "template-syntax"
+  | "resource-resolution"
+  | "bindable-validation"
+  | "project";
 
 // ============================================================================
 // URI and Span Conversion
@@ -68,6 +66,7 @@ type RecordValue = Readonly<Record<string, unknown>>;
 
 export function toLspUri(uri: DocumentUri): string {
   const canonical = canonicalDocumentUri(uri);
+  if (canonical.uri.startsWith("file://")) return canonical.uri;
   const pathOrUri = canonical.path;
   if (pathOrUri.startsWith("file://")) return pathOrUri;
   return pathToFileURL(pathOrUri).toString();
@@ -90,182 +89,265 @@ export function spanToRange(loc: DocumentSpan, lookupText: LookupTextFn): Range 
 // Severity Mapping — L2 demotion table produces 4 severity levels
 // ============================================================================
 
-function toLspSeverity(sev?: "error" | "warning" | "info" | "hint"): LspDiagnosticSeverity | undefined {
-  if (!sev) return undefined;
-  switch (sev) {
+function semanticRuntimeSeverityToLsp(
+  severity: SemanticAppDiagnosticRow["severity"],
+): LspDiagnosticSeverity {
+  switch (severity) {
     case "error": return LspDiagnosticSeverity.Error;
     case "warning": return LspDiagnosticSeverity.Warning;
-    case "info": return LspDiagnosticSeverity.Information;
-    case "hint": return LspDiagnosticSeverity.Hint;
-    default: return LspDiagnosticSeverity.Error;
+    case "information": return LspDiagnosticSeverity.Information;
   }
 }
 
-// ============================================================================
-// Diagnostic Tag Mapping
-// ============================================================================
-
-function mapDiagnosticTags(diag: WorkspaceDiagnostic): LspDiagnosticTag[] | undefined {
-  const tags: LspDiagnosticTag[] = [];
-  const data = diag.data;
-  if (data?.unnecessary === true) tags.push(LspDiagnosticTag.Unnecessary);
-  if (data?.deprecated === true) tags.push(LspDiagnosticTag.Deprecated);
-  return tags.length > 0 ? tags : undefined;
+function semanticRuntimeDiagnosticImpact(
+  severity: SemanticAppDiagnosticRow["severity"],
+): DiagnosticImpact {
+  switch (severity) {
+    case "error":
+      return "blocking";
+    case "warning":
+      return "degraded";
+    case "information":
+      return "informational";
+  }
 }
 
-// ============================================================================
-// Diagnostic Taxonomy (extended with confidence)
-// ============================================================================
-
-function asRecord(value: unknown): RecordValue | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as RecordValue;
+function semanticRuntimeDiagnosticActionability(
+  row: SemanticAppDiagnosticRow,
+): DiagnosticActionability {
+  return row.suggestion == null ? "manual" : "guided";
 }
 
-function buildTaxonomyPayload(diag: WorkspaceDiagnostic): AureliaLspDiagnosticTaxonomy {
-  const taxonomy: AureliaLspDiagnosticTaxonomy = {
-    schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-  };
-  if (diag.impact) taxonomy.impact = diag.impact;
-  if (diag.actionability) taxonomy.actionability = diag.actionability;
-  if (diag.spec.category) taxonomy.category = diag.spec.category;
-  const confidence = diag.data?.confidence;
-  if (typeof confidence === "string") taxonomy.confidence = confidence as DiagnosticConfidence;
-  return taxonomy;
+function semanticRuntimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCategory {
+  switch (row.diagnosticDomain) {
+    case "template":
+      return "template-syntax";
+    case "resource":
+      return "resource-resolution";
+    case "validation":
+      return "bindable-validation";
+    case "typescript":
+    case "evaluation":
+    case "observation":
+      return "expression";
+    default:
+      return "project";
+  }
 }
 
-function mergeDiagnosticData(diag: WorkspaceDiagnostic): Record<string, unknown> {
-  const data = { ...(diag.data ?? {}) };
-  const existingNamespace = asRecord(data[AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]);
-  const existingDiagnostics = asRecord(existingNamespace?.diagnostics);
-  data[AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY] = {
-    ...(existingNamespace ?? {}),
-    diagnostics: {
-      ...(existingDiagnostics ?? {}),
-      ...buildTaxonomyPayload(diag),
-    },
-  };
-  return data;
-}
-
-// ============================================================================
-// Diagnostics Mapping
-// ============================================================================
-
-export function mapWorkspaceDiagnostics(
-  uri: DocumentUri,
-  diags: WorkspaceDiagnostics,
-  lookupText: LookupTextFn,
-  options?: { surface?: DiagnosticSurface },
+export function mapSemanticRuntimeAppDiagnostics(
+  answer: SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>,
+  document: TextDocument,
 ): Diagnostic[] {
   const mapped: Diagnostic[] = [];
-  const surface = options?.surface ?? "lsp";
-  const entries = diags.bySurface.get(surface) ?? [];
-  for (const diag of entries) {
-    if (!diag.span) continue;
-    const targetUri = diag.uri ?? uri;
-    const range = spanToRange({ uri: targetUri, span: diag.span }, lookupText);
-    if (!range) continue;
-    const severity = toLspSeverity(diag.severity);
-    const related = mapRelatedDiagnostics(diag, targetUri, lookupText);
-    const tags = mapDiagnosticTags(diag);
-    const base: Diagnostic = {
+  for (const row of answer.value.rows) {
+    const range = semanticRuntimeDiagnosticRange(row.source, document);
+    if (range == null) continue;
+    mapped.push({
       range,
-      message: diag.message,
-      code: diag.code,
-      source: diag.source ?? "aurelia",
-    };
-    if (severity !== undefined) base.severity = severity;
-    base.data = mergeDiagnosticData(diag);
-    if (related.length > 0) base.relatedInformation = related;
-    if (tags) base.tags = tags;
-    mapped.push(base);
-  }
-  return mapped;
-}
-
-/**
- * Map suppressed diagnostics for the "Show Suppressed Diagnostics" command.
- * Emits suppressed diagnostics at Hint severity with [suppressed] prefix.
- */
-export function mapSuppressedDiagnostics(
-  uri: DocumentUri,
-  diags: WorkspaceDiagnostics,
-  lookupText: LookupTextFn,
-): Diagnostic[] {
-  const mapped: Diagnostic[] = [];
-  for (const diag of diags.suppressed) {
-    if (!diag.span) continue;
-    const targetUri = diag.uri ?? uri;
-    const range = spanToRange({ uri: targetUri, span: diag.span }, lookupText);
-    if (!range) continue;
-    const reason = diag.suppressionReason ? ` (${diag.suppressionReason})` : "";
-    const base: Diagnostic = {
-      range,
-      message: `[suppressed] ${diag.message}${reason}`,
-      code: diag.code,
-      source: "aurelia",
-      severity: LspDiagnosticSeverity.Hint,
-    };
-    base.data = mergeDiagnosticData(diag);
-    mapped.push(base);
-  }
-  return mapped;
-}
-
-function mapRelatedDiagnostics(
-  diag: WorkspaceDiagnostic,
-  defaultUri: DocumentUri,
-  lookupText: LookupTextFn,
-): DiagnosticRelatedInformation[] {
-  const related = diag.related ?? [];
-  if (related.length === 0) return [];
-  const results: DiagnosticRelatedInformation[] = [];
-  for (const entry of related) {
-    if (!entry.span) continue;
-    const range = spanToRange({ uri: defaultUri, span: entry.span }, lookupText);
-    if (!range) continue;
-    results.push({
-      message: entry.message,
-      location: { uri: toLspUri(defaultUri), range },
+      message: row.summary,
+      severity: semanticRuntimeSeverityToLsp(row.severity),
+      code: row.frameworkErrorCode ?? row.diagnosticKind,
+      source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
+      data: semanticRuntimeDiagnosticData(row),
     });
   }
-  return results;
+  return mapped;
+}
+
+function semanticRuntimeDiagnosticRange(
+  source: SemanticSourceReference | null,
+  document: TextDocument,
+): Range | null {
+  const exact = semanticRuntimeExactSourceReference(source);
+  if (exact?.start != null && exact.end != null) {
+    const length = document.getText().length;
+    const start = Math.max(0, Math.min(exact.start, length));
+    const end = Math.max(start, Math.min(exact.end, length));
+    return {
+      start: document.positionAt(start),
+      end: document.positionAt(end),
+    };
+  }
+  return source == null ? null : {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 0 },
+  };
+}
+
+function semanticRuntimeExactSourceReference(
+  source: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  if (source == null) return null;
+  if (source.start != null && source.end != null) return source;
+  return semanticRuntimeExactSourceReference(source.anchor ?? null);
+}
+
+function semanticRuntimeSourceReferencePath(
+  source: SemanticSourceReference | null,
+): string | null {
+  if (source == null) return null;
+  if (source.path != null && source.path.length > 0) return source.path;
+  return semanticRuntimeSourceReferencePath(source.anchor ?? null);
+}
+
+function semanticRuntimeSourceReferenceUri(
+  source: SemanticSourceReference,
+  workspaceRoot: string | null,
+): string | null {
+  const sourcePath = semanticRuntimeSourceReferencePath(source);
+  if (sourcePath == null) return null;
+  if (sourcePath.startsWith("file:")) {
+    return sourcePath;
+  }
+  if (path.isAbsolute(sourcePath)) {
+    return pathToFileURL(sourcePath).toString();
+  }
+  if (workspaceRoot == null) {
+    return null;
+  }
+  return pathToFileURL(path.resolve(workspaceRoot, sourcePath)).toString();
+}
+
+function semanticRuntimeRangeForSource(
+  source: SemanticSourceReference,
+  document: TextDocument,
+): Range | null {
+  if (source.start == null || source.end == null) {
+    return null;
+  }
+  const length = document.getText().length;
+  const start = Math.max(0, Math.min(source.start, length));
+  const end = Math.max(start, Math.min(source.end, length));
+  return {
+    start: document.positionAt(start),
+    end: document.positionAt(end),
+  };
+}
+
+function semanticRuntimeDiagnosticData(
+  row: SemanticAppDiagnosticRow,
+): Record<string, unknown> {
+  const impact = semanticRuntimeDiagnosticImpact(row.severity);
+  const actionability = semanticRuntimeDiagnosticActionability(row);
+  const category = semanticRuntimeDiagnosticCategory(row);
+  const runtime = {
+    queryKind: "app-diagnostics",
+    projectKey: row.projectKey,
+    diagnosticDomain: row.diagnosticDomain,
+    diagnosticKind: row.diagnosticKind,
+    diagnosticAuthority: row.diagnosticAuthority,
+    frameworkErrorCode: row.frameworkErrorCode,
+    frameworkRawErrorAuthority: row.frameworkRawErrorAuthority,
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
+    relatedQueryKind: row.relatedQueryKind,
+    sourceRole: row.sourceRole,
+    source: row.source,
+    suggestion: row.suggestion,
+  };
+  return {
+    semanticRuntime: runtime,
+    [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
+      diagnostics: {
+        schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
+        impact,
+        actionability,
+        category,
+        runtime,
+      },
+    },
+  };
 }
 
 // ============================================================================
 // Completions Mapping
 // ============================================================================
 
-const COMPLETION_KIND_BY_CANONICAL_CLASS_ID: Readonly<Record<string, CompletionItemKind>> = {
+const COMPLETION_KIND_BY_SEMANTIC_RUNTIME_CANDIDATE: Readonly<Record<string, CompletionItemKind>> = {
+  "binding-context-slot": CompletionItemKind.Property,
+  "override-context-slot": CompletionItemKind.Variable,
+  "scope-keyword": CompletionItemKind.Keyword,
   "custom-element": CompletionItemKind.Class,
-  "template-controller": CompletionItemKind.Struct,
   "custom-attribute": CompletionItemKind.Property,
-  "bindable-property": CompletionItemKind.Field,
+  "template-controller": CompletionItemKind.Struct,
+  "bindable-attribute": CompletionItemKind.Field,
+  "attribute-value": CompletionItemKind.Value,
+  "router-route": CompletionItemKind.Reference,
+  "i18n-translation-key": CompletionItemKind.Value,
   "value-converter": CompletionItemKind.Function,
   "binding-behavior": CompletionItemKind.Function,
   "binding-command": CompletionItemKind.Keyword,
-  "html-element": CompletionItemKind.Variable,
-  "html-attribute": CompletionItemKind.Variable,
-  "view-model-property": CompletionItemKind.Property,
-  "view-model-method": CompletionItemKind.Method,
-  "scope-variable": CompletionItemKind.Variable,
-  "gap-marker": CompletionItemKind.Text,
+  "attribute-pattern": CompletionItemKind.Keyword,
+  "type-member": CompletionItemKind.Property,
 };
 
-export function mapWorkspaceCompletions(items: readonly WorkspaceCompletionItem[]): CompletionItem[] {
-  return items.map((item) => {
-    const completion: CompletionItem = { label: item.label };
-    if (item.kind) {
-      const mappedKind = COMPLETION_KIND_BY_CANONICAL_CLASS_ID[item.kind];
-      if (mappedKind !== undefined) completion.kind = mappedKind;
-    }
-    if (item.detail) completion.detail = item.detail;
-    if (item.documentation) completion.documentation = item.documentation;
-    if (item.sortText) completion.sortText = item.sortText;
-    if (item.insertText) completion.insertText = item.insertText;
-    return completion;
-  });
+export function mapSemanticRuntimeTemplateCompletions(
+  answer: SemanticRuntimeAnswer<SemanticTemplateCompletionResult>,
+): CompletionList {
+  const items = answer.value.candidates.map(mapSemanticRuntimeTemplateCompletionCandidate);
+  const isIncomplete = answer.page?.nextCursor != null
+    || answer.outcome === "partial"
+    || answer.value.missingInputs.length > 0;
+  if (!isIncomplete) {
+    return { isIncomplete: false, items };
+  }
+  return items.length === 0
+    ? { isIncomplete: true, items: [] }
+    : createCompletionGapMarker(items);
+}
+
+function mapSemanticRuntimeTemplateCompletionCandidate(
+  candidate: SemanticTemplateCompletionCandidateRow,
+): CompletionItem {
+  const completion: CompletionItem = {
+    label: candidate.name,
+    kind: semanticRuntimeCompletionKind(candidate),
+    data: {
+      semanticRuntime: {
+        candidateKind: candidate.candidateKind,
+        sourceKind: candidate.sourceKind,
+        memberKind: candidate.memberKind,
+        aureliaHookKind: candidate.aureliaHookKind,
+      },
+    },
+  };
+  const detail = semanticRuntimeCompletionDetail(candidate);
+  if (detail != null) {
+    completion.detail = detail;
+  }
+  if (candidate.summary != null || candidate.typeDisplay != null) {
+    completion.documentation = [
+      candidate.summary,
+      candidate.typeDisplay == null ? null : `Type: \`${candidate.typeDisplay}\``,
+    ].filter((part): part is string => part != null && part.length > 0).join("\n\n");
+  }
+  return completion;
+}
+
+function semanticRuntimeCompletionKind(
+  candidate: SemanticTemplateCompletionCandidateRow,
+): CompletionItemKind {
+  if (candidate.memberKind === "method") {
+    return CompletionItemKind.Method;
+  }
+  if (candidate.memberKind === "accessor") {
+    return CompletionItemKind.Property;
+  }
+  return COMPLETION_KIND_BY_SEMANTIC_RUNTIME_CANDIDATE[candidate.candidateKind]
+    ?? CompletionItemKind.Text;
+}
+
+function semanticRuntimeCompletionDetail(
+  candidate: SemanticTemplateCompletionCandidateRow,
+): string | null {
+  const parts = [
+    candidate.candidateKind,
+    candidate.typeDisplay,
+    candidate.memberVisibility,
+    candidate.memberIsReadonly === true ? "readonly" : null,
+  ];
+  return parts.filter((part): part is string => part != null && part.length > 0).join(" | ") || null;
 }
 
 export const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -295,172 +377,455 @@ export function createCompletionGapMarker(items: readonly CompletionItem[]): Com
 // Hover Mapping
 // ============================================================================
 
-export function mapWorkspaceHover(hover: WorkspaceHover | null, lookupText: LookupTextFn): Hover | null {
-  if (!hover) return null;
-  const range = hover.location ? spanToRange({ uri: hover.location.uri, span: hover.location.span }, lookupText) : null;
+export function mapSemanticRuntimeTemplateHover(
+  answer: SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>,
+): Hover | null {
+  const value = answer.value;
+  const lines: string[] = [];
+
+  if (value.selectedMember != null || value.selectedMemberName != null || value.memberOwnerType != null) {
+    const name = value.selectedMemberName ?? value.selectedMember?.name ?? "(selected member)";
+    lines.push(`**${escapeMarkdown(name)}**`);
+    if (value.selectedMember?.typeDisplay != null) {
+      lines.push("", "```ts", `${name}: ${value.selectedMember.typeDisplay}`, "```");
+    }
+    const details = [
+      value.selectedMember?.memberKind == null ? null : `kind: \`${value.selectedMember.memberKind}\``,
+      value.memberOwnerType?.display == null ? null : `owner: \`${value.memberOwnerType.display}\``,
+      value.memberOwnerType?.shapeKind == null ? null : `owner shape: \`${value.memberOwnerType.shapeKind}\``,
+      value.selectedMember?.isReadonly === true ? "readonly" : null,
+      value.selectedMember?.isOptional === true ? "optional" : null,
+    ].filter((part): part is string => part != null);
+    if (details.length > 0) {
+      lines.push("", details.join("  \n"));
+    }
+  }
+
+  if (value.selectedBindable != null) {
+    addSectionBreak(lines);
+    lines.push(
+      `**Bindable** \`${value.selectedBindable.attribute}\``,
+      "",
+      `name: \`${value.selectedBindable.name}\`  `,
+      `mode: \`${value.selectedBindable.mode}\``,
+    );
+  }
+
+  if (value.selectedDefinition != null) {
+    addSectionBreak(lines);
+    const definitionName = value.selectedDefinition.name ?? value.selectedDefinition.targetName ?? "(unnamed)";
+    lines.push(
+      `**Resource** \`${definitionName}\``,
+      "",
+      `kind: \`${value.selectedDefinition.resourceKind}\``,
+    );
+  }
+
+  if (lines.length === 0 && value.valueSite != null) {
+    lines.push(
+      `**Aurelia ${value.valueSite.siteKind}**`,
+      "",
+      value.valueSite.bindingCommandName == null ? "" : `command: \`${value.valueSite.bindingCommandName}\`  `,
+      value.valueSite.bindableAttribute == null ? "" : `bindable: \`${value.valueSite.bindableAttribute}\`  `,
+      `value: \`${truncateHoverValue(value.valueSite.rawValue)}\``,
+    );
+  }
+
+  if (lines.length === 0 && value.selectedDefinition == null && value.html.attributeName != null) {
+    lines.push(
+      `**HTML attribute** \`${value.html.attributeName}\``,
+      "",
+      value.html.tagName == null ? "template HTML" : `on \`<${value.html.tagName}>\``,
+    );
+  }
+
+  if (value.diagnostics.length > 0) {
+    addSectionBreak(lines);
+    const first = value.diagnostics[0]!;
+    lines.push(
+      `**${first.severity}: ${first.diagnosticKind}**`,
+      "",
+      first.summary,
+    );
+  }
+
+  const content = lines.filter((line) => line.length > 0 || lines.length > 1).join("\n");
+  if (content.trim().length === 0) {
+    return null;
+  }
   return {
-    contents: { kind: "markdown", value: hover.contents },
-    ...(range ? { range } : {}),
+    contents: { kind: "markdown", value: content },
   };
+}
+
+function addSectionBreak(lines: string[]): void {
+  if (lines.length > 0) {
+    lines.push("", "---", "");
+  }
+}
+
+function truncateHoverValue(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= 80 ? normalized : `${normalized.slice(0, 77)}...`;
+}
+
+function escapeMarkdown(value: string): string {
+  return value.replace(/([\\`*_{}\[\]()#+.!|-])/g, "\\$1");
 }
 
 // ============================================================================
 // Location Mapping — both Location[] and LocationLink[]
 // ============================================================================
 
-export function mapWorkspaceLocations(
-  locs: readonly WorkspaceLocation[],
+export function mapSemanticRuntimeTemplateDefinition(
+  answer: SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>,
   lookupText: LookupTextFn,
-): Location[] {
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
+): LocationLink[] | null {
+  const target = semanticRuntimeDefinitionTarget(answer.value);
+  if (target == null) {
+    return null;
+  }
+
+  const targetUri = semanticRuntimeSourceReferenceUri(target, options.workspaceRoot);
+  if (targetUri == null) {
+    return null;
+  }
+
+  const targetCanonical = canonicalDocumentUri(targetUri).uri;
+  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+  const targetText = targetCanonical === originCanonical
+    ? options.originDocument.getText()
+    : lookupText(targetCanonical);
+  if (targetText == null) {
+    return null;
+  }
+
+  const targetDocument = TextDocument.create(
+    targetUri,
+    guessLanguage(targetCanonical),
+    0,
+    targetText,
+  );
+  const targetRange = semanticRuntimeRangeForSource(target, targetDocument);
+  if (targetRange == null) {
+    return null;
+  }
+
+  return [{
+    targetUri,
+    targetRange,
+    targetSelectionRange: targetRange,
+  }];
+}
+
+export function mapSemanticRuntimeRouteNodeDefinition(
+  answer: SemanticRuntimeAnswer<SemanticRouteNodesResult>,
+  lookupText: LookupTextFn,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+    readonly position: { readonly line: number; readonly character: number };
+  },
+): LocationLink[] | null {
+  const cursorOffset = options.originDocument.offsetAt(options.position);
+  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+
+  for (const row of answer.value.rows) {
+    const originSource = firstSemanticRuntimeExactSourceReference([
+      row.instruction?.source ?? null,
+      row.originalInstruction?.source ?? null,
+      row.source,
+    ]);
+    const targetSource = firstSemanticRuntimeExactSourceReference([
+      row.routeConfig?.source ?? null,
+      row.routeContext.source,
+    ]);
+    if (originSource == null || targetSource == null) {
+      continue;
+    }
+    if (!semanticRuntimeSourceContainsOffset(originSource, cursorOffset)) {
+      continue;
+    }
+    const originUri = semanticRuntimeSourceReferenceUri(originSource, options.workspaceRoot);
+    if (originUri == null || canonicalDocumentUri(originUri).uri !== originCanonical) {
+      continue;
+    }
+
+    const link = locationLinkForSemanticSource(
+      targetSource,
+      lookupText,
+      options.workspaceRoot,
+      options.originDocument,
+      originSource,
+    );
+    if (link != null) {
+      return [link];
+    }
+  }
+
+  return null;
+}
+
+function semanticRuntimeDefinitionTarget(
+  value: SemanticTemplateCursorInfoResult,
+): SemanticSourceReference | null {
+  return firstSemanticRuntimeExactSourceReference([
+    value.selectedMember?.source ?? null,
+    value.selectedBindable?.source ?? null,
+    value.selectedDefinition?.source ?? null,
+  ]);
+}
+
+function firstSemanticRuntimeExactSourceReference(
+  sources: readonly (SemanticSourceReference | null)[],
+): SemanticSourceReference | null {
+  for (const source of sources) {
+    const exact = semanticRuntimeExactSourceReference(source);
+    if (exact != null && semanticRuntimeSourceReferencePath(exact) != null) {
+      return exact;
+    }
+  }
+  return null;
+}
+
+function locationLinkForSemanticSource(
+  target: SemanticSourceReference,
+  lookupText: LookupTextFn,
+  workspaceRoot: string | null,
+  originDocument: TextDocument,
+  originSource?: SemanticSourceReference | null,
+): LocationLink | null {
+  const targetUri = semanticRuntimeSourceReferenceUri(target, workspaceRoot);
+  if (targetUri == null) {
+    return null;
+  }
+
+  const targetCanonical = canonicalDocumentUri(targetUri).uri;
+  const originCanonical = canonicalDocumentUri(originDocument.uri).uri;
+  const targetText = targetCanonical === originCanonical
+    ? originDocument.getText()
+    : lookupText(targetCanonical);
+  if (targetText == null) {
+    return null;
+  }
+
+  const targetDocument = TextDocument.create(
+    targetUri,
+    guessLanguage(targetCanonical),
+    0,
+    targetText,
+  );
+  const targetRange = semanticRuntimeRangeForSource(target, targetDocument);
+  if (targetRange == null) {
+    return null;
+  }
+
+  const originSelectionRange = originSource == null
+    ? null
+    : semanticRuntimeRangeForSource(originSource, originDocument);
+
+  return {
+    targetUri,
+    targetRange,
+    targetSelectionRange: targetRange,
+    ...(originSelectionRange == null ? {} : { originSelectionRange }),
+  };
+}
+
+function semanticRuntimeSourceContainsOffset(
+  source: SemanticSourceReference,
+  offset: number,
+): boolean {
+  return source.start != null
+    && source.end != null
+    && source.start <= offset
+    && offset <= source.end;
+}
+
+export function mapSemanticRuntimeTemplateReferences(
+  answer: SemanticRuntimeAnswer<SemanticTemplateReferencesResult>,
+  lookupText: LookupTextFn,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
+): Location[] | null {
   const mapped: Location[] = [];
-  for (const loc of locs) {
-    const range = spanToRange({ uri: loc.uri, span: loc.span }, lookupText);
-    if (!range) continue;
-    mapped.push({ uri: toLspUri(loc.uri), range });
+  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+
+  for (const row of answer.value.rows) {
+    const source = semanticRuntimeExactSourceReference(row.source);
+    if (source == null) {
+      continue;
+    }
+    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+    if (uri == null) {
+      continue;
+    }
+    const canonical = canonicalDocumentUri(uri).uri;
+    const text = canonical === originCanonical
+      ? options.originDocument.getText()
+      : lookupText(canonical);
+    if (text == null) {
+      continue;
+    }
+    const document = TextDocument.create(
+      uri,
+      guessLanguage(canonical),
+      0,
+      text,
+    );
+    const range = semanticRuntimeRangeForSource(source, document);
+    if (range == null) {
+      continue;
+    }
+    mapped.push({ uri, range });
   }
-  return mapped;
+
+  return mapped.length === 0 ? null : mapped;
 }
 
-/**
- * Map workspace locations to LSP LocationLink for definition.
- * LocationLink provides richer navigation: origin selection range,
- * target range vs target selection range, enabling peek-definition.
- *
- * When the workspace evolves to return DefinitionResult with DefinitionLinks,
- * this function will be updated to use the richer fields (originSelectionRange,
- * targetSelectionRange, declarationForm). For now, range serves double duty.
- */
-export function mapWorkspaceLocationsAsLinks(
-  locs: readonly WorkspaceLocation[],
-  lookupText: LookupTextFn,
-  originRange?: Range,
-): LocationLink[] {
-  const mapped: LocationLink[] = [];
-  for (const loc of locs) {
-    const range = spanToRange({ uri: loc.uri, span: loc.span }, lookupText);
-    if (!range) continue;
-    // Use selectionSpan for precise name highlighting when available (BC-2)
-    const selectionRange = loc.selectionSpan
-      ? spanToRange({ uri: loc.uri, span: loc.selectionSpan }, lookupText) ?? range
-      : range;
-    const link: LocationLink = {
-      targetUri: toLspUri(loc.uri),
-      targetRange: range,
-      targetSelectionRange: selectionRange,
-    };
-    if (originRange) link.originSelectionRange = originRange;
-    mapped.push(link);
+export function mapSemanticRuntimeTemplatePrepareRename(
+  answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
+): { range: Range; placeholder: string } | null {
+  if (answer.value.status !== "available" || answer.value.placeholder == null) {
+    return null;
   }
-  return mapped;
+  const source = semanticRuntimeExactSourceReference(answer.value.activeSource);
+  if (source == null) {
+    return null;
+  }
+  const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+  if (uri == null) {
+    return null;
+  }
+  if (canonicalDocumentUri(uri).uri !== canonicalDocumentUri(options.originDocument.uri).uri) {
+    return null;
+  }
+  const range = semanticRuntimeRangeForSource(source, options.originDocument);
+  return range == null ? null : { range, placeholder: answer.value.placeholder };
 }
 
-// ============================================================================
-// Workspace Edit Mapping — basic (changes) and rich (documentChanges)
-// ============================================================================
-
-export function mapSemanticWorkspaceEdit(
-  edit: SemanticWorkspaceEdit | null,
+export function mapSemanticRuntimeTemplateRenameEdit(
+  answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
   lookupText: LookupTextFn,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
 ): WorkspaceEdit | null {
-  if (!edit || !edit.edits.length) return null;
+  if (answer.value.status !== "available" || answer.value.edits.length === 0) {
+    return null;
+  }
   const changes: Record<string, { range: Range; newText: string }[]> = {};
-  for (const entry of edit.edits) {
-    const range = spanToRange({ uri: entry.uri, span: entry.span }, lookupText);
-    if (!range) continue;
-    const uri = toLspUri(entry.uri);
-    const lspEdit = { range, newText: entry.newText };
-    if (!changes[uri]) changes[uri] = [];
-    changes[uri].push(lspEdit);
+  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+
+  for (const row of answer.value.edits) {
+    const source = semanticRuntimeExactSourceReference(row.source);
+    if (source == null) {
+      continue;
+    }
+    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+    if (uri == null) {
+      continue;
+    }
+    const canonical = canonicalDocumentUri(uri).uri;
+    const text = canonical === originCanonical
+      ? options.originDocument.getText()
+      : lookupText(canonical);
+    if (text == null) {
+      continue;
+    }
+    const document = TextDocument.create(uri, guessLanguage(canonical), 0, text);
+    const range = semanticRuntimeRangeForSource(source, document);
+    if (range == null) {
+      continue;
+    }
+    const bucket = changes[uri] ?? [];
+    bucket.push({ range, newText: row.newText });
+    changes[uri] = bucket;
   }
-  return Object.keys(changes).length ? { changes } : null;
+
+  return Object.keys(changes).length === 0 ? null : { changes };
 }
 
-/**
- * Map a RenameResult to a rich LSP WorkspaceEdit with documentChanges
- * and change annotations. Supports:
- * - Text edits grouped by file (TextDocumentEdit)
- * - File rename operations (RenameFile)
- * - Change annotations with needsConfirmation for uncertain/file-ops groups
- *
- * This is the target mapping for when the workspace returns RenameResult
- * instead of basic WorkspaceEdit. Falls through to mapSemanticWorkspaceEdit
- * if the workspace hasn't evolved yet.
- */
-export function mapRenameResult(
-  result: RenameResult,
+export function mapSemanticRuntimeTemplateCodeActions(
+  answer: SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>,
   lookupText: LookupTextFn,
-): WorkspaceEdit | null {
-  const documentChanges: (TextDocumentEdit | CreateFile | RenameFile)[] = [];
-  const changeAnnotations: Record<string, ChangeAnnotation> = {};
-
-  // Map annotations
-  for (const annotation of result.annotations) {
-    changeAnnotations[annotation.id] = {
-      label: annotation.label,
-      description: annotation.description,
-      needsConfirmation: annotation.needsConfirmation,
-    };
-  }
-
-  // Group text edits by URI
-  const editsByUri = new Map<string, RenameEdit[]>();
-  for (const edit of result.edits) {
-    const lspUri = toLspUri(edit.uri);
-    const group = editsByUri.get(lspUri);
-    if (group) {
-      group.push(edit);
-    } else {
-      editsByUri.set(lspUri, [edit]);
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
+): CodeAction[] | null {
+  const actions: CodeAction[] = [];
+  for (const row of answer.value.rows) {
+    const edit = mapSemanticRuntimeTemplateCodeActionEdit(row.edits, lookupText, options);
+    if (edit == null) {
+      continue;
     }
-  }
-
-  // Create TextDocumentEdits
-  for (const [lspUri, edits] of editsByUri) {
-    const textEdits: ({ range: Range; newText: string; annotationId?: string })[] = [];
-    for (const edit of edits) {
-      const range = spanToRange({ uri: edit.uri, span: edit.span }, lookupText);
-      if (!range) continue;
-      const textEdit: { range: Range; newText: string; annotationId?: string } = { range, newText: edit.newText };
-      if (edit.annotationId) {
-        textEdit.annotationId = edit.annotationId;
-      }
-      textEdits.push(textEdit);
-    }
-    if (textEdits.length > 0) {
-      documentChanges.push({
-        textDocument: { uri: lspUri, version: null },
-        edits: textEdits,
-      });
-    }
-  }
-
-  // Map file renames
-  for (const fileRename of result.fileRenames) {
-    documentChanges.push({
-      kind: "rename",
-      oldUri: toLspUri(fileRename.oldPath as DocumentUri),
-      newUri: toLspUri(fileRename.newPath as DocumentUri),
+    actions.push({
+      title: row.title,
+      kind: row.kind,
+      edit,
+      isPreferred: row.isPreferred,
+      data: {
+        semanticRuntime: {
+          queryKind: "template-code-actions",
+          diagnosticKind: row.diagnosticKind,
+          suggestionKind: row.suggestionKind,
+          actionKind: row.actionKind,
+          actionTarget: row.actionTarget,
+        },
+      },
     });
   }
-
-  if (documentChanges.length === 0) return null;
-
-  const edit: WorkspaceEdit = { documentChanges };
-  if (Object.keys(changeAnnotations).length > 0) {
-    edit.changeAnnotations = changeAnnotations;
-  }
-  return edit;
+  return actions.length === 0 ? null : actions;
 }
 
-/**
- * Map a PrepareRenameResult to the LSP prepare rename response.
- */
-export function mapPrepareRename(
-  result: PrepareRenameResult,
+function mapSemanticRuntimeTemplateCodeActionEdit(
+  edits: SemanticTemplateCodeActionsResult["rows"][number]["edits"],
   lookupText: LookupTextFn,
-  uri: DocumentUri,
-): { range: Range; placeholder: string } | null {
-  const range = spanToRange({ uri, span: result.range }, lookupText);
-  if (!range) return null;
-  return { range, placeholder: result.placeholder };
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+  },
+): WorkspaceEdit | null {
+  const changes: Record<string, { range: Range; newText: string }[]> = {};
+  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
+
+  for (const row of edits) {
+    const source = semanticRuntimeExactSourceReference(row.source);
+    if (source == null) {
+      continue;
+    }
+    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
+    if (uri == null) {
+      continue;
+    }
+    const canonical = canonicalDocumentUri(uri).uri;
+    const text = canonical === originCanonical
+      ? options.originDocument.getText()
+      : lookupText(canonical);
+    if (text == null) {
+      continue;
+    }
+    const document = TextDocument.create(uri, guessLanguage(canonical), 0, text);
+    const range = semanticRuntimeRangeForSource(source, document);
+    if (range == null) {
+      continue;
+    }
+    const bucket = changes[uri] ?? [];
+    bucket.push({ range, newText: row.newText });
+    changes[uri] = bucket;
+  }
+
+  return Object.keys(changes).length === 0 ? null : { changes };
 }

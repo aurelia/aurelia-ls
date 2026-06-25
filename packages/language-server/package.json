@@ -26,8 +26,7 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/semantic-workspace": "workspace:*",
+    "@aurelia-ls/semantic-runtime": "workspace:*",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.11",
     "vscode-uri": "^3.0.8"

@@ -350,6 +350,8 @@ export class TemplateCompletionCursorContext {
     readonly valueSiteProductHandle: ProductHandle | null,
     /** Bindable selected by the cursor's classification or active value site, when one exists. */
     readonly selectedBindable: TemplateBindableReference | null,
+    /** Binding-scope slot selected by a root scope access such as `message` or `save()`. */
+    readonly selectedScopeSlot: BindingContextSlot | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
     readonly selectedMemberName: string | null,
     /** Parser frontier under the cursor, when the cursor selected an expression parse. */
@@ -445,6 +447,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       ['source-offset'],
     );
   }
@@ -470,6 +473,7 @@ class TemplateCompletionCursorContextBuilder {
     );
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
     const selectedBindable = selectedBindableForCursor(classification, valueSite);
+    const selectedScopeSlot = selectedScopeSlotForCursor(siteKind, expressionResult, offset, bindingScope);
     const missingInputs: string[] = [];
     const memberOwnerType = this.memberOwnerType(
       offset,
@@ -480,7 +484,8 @@ class TemplateCompletionCursorContextBuilder {
       valueSite,
       missingInputs,
     );
-    const selectedMemberName = selectedMemberNameForCursor(siteKind, expressionResult, offset);
+    const selectedMemberName = selectedScopeSlot?.name
+      ?? selectedMemberNameForCursor(siteKind, expressionResult, offset);
 
     return new TemplateCompletionCursorContext(
       new TemplateCompletionQuery(
@@ -501,6 +506,7 @@ class TemplateCompletionCursorContextBuilder {
       htmlAttribute?.productHandle ?? null,
       valueSite?.productHandle ?? null,
       selectedBindable,
+      selectedScopeSlot,
       selectedMemberName,
       expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
       memberOwnerType.openSubject,
@@ -615,6 +621,25 @@ function selectedMemberNameForCursor(
   return siteKind === TemplateCompletionSiteKind.ExpressionMember && expressionResult != null
     ? ExpressionParseResultInspector.memberNameAtOffset(expressionResult, offset)
     : null;
+}
+
+function selectedScopeSlotForCursor(
+  siteKind: TemplateCompletionSiteKind,
+  expressionResult: ExpressionParseResult | null,
+  offset: number,
+  bindingScope: BindingScope | null,
+): BindingContextSlot | null {
+  if (
+    siteKind !== TemplateCompletionSiteKind.Expression
+    || expressionResult == null
+    || bindingScope == null
+  ) {
+    return null;
+  }
+  const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
+  return access == null
+    ? null
+    : bindingScope.locate(access.name.name, access.ancestor).slot;
 }
 
 /** Answer template and expression completion candidates from already-materialized product details. */

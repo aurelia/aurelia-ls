@@ -171,6 +171,13 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'value-converter',
+    'template',
+    'mcp',
+  ], 'contract-value-converter-applications.mjs', 'Runtime value-converter application rows expose positive source-linked converter usage facts.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'callback',
     'template',
   ], 'contract-binding-source-arrow-callbacks.mjs', 'Binding-source value reduction evaluates Aurelia arrow callbacks with Scope.fromParent-shaped parameter scopes.'),
@@ -391,6 +398,12 @@ const contractSuites = [
     'completion',
     'type-system',
   ], 'contract-template-completion-member-metadata.mjs', 'Template completion candidates expose checker member kind, visibility, readonly/optional flags, and Aurelia hook categories.'),
+  contract('template', 'fast', [
+    'template',
+    'rename',
+    'type-system',
+    'lsp',
+  ], 'contract-template-rename-from-typescript.mjs', 'TypeScript-initiated member rename produces source-linked template-side edit rows through semantic-runtime.'),
   contract('template', 'fast', [
     'template',
     'completion',

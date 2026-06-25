@@ -45,7 +45,7 @@ activationTest("activate wires language client and feature graph", async () => {
   };
   const context = stubExtensionContext(stubVscode);
 
-  await activate(context, { vscode, languageClient, features: [feature] });
+  await activate(context, { vscode, languageClient: languageClient as never, features: [feature] });
 
   expect(languageClient.startCalls).toBe(1);
   expect(activated).toEqual(["test.feature"]);

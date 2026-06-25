@@ -1,9 +1,10 @@
 import type {
   DiagnosticActionability,
   DiagnosticCategory,
-  DiagnosticConfidence,
   DiagnosticImpact,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
+} from "../../types.js";
+
+type DiagnosticConfidence = "exact" | "high" | "partial" | "low" | "manual";
 
 export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
@@ -27,15 +28,7 @@ const DIAGNOSTIC_CATEGORIES = new Set<DiagnosticCategory>([
   "template-syntax",
   "resource-resolution",
   "bindable-validation",
-  "meta-imports",
-  "policy",
-  "gaps",
-  "toolchain",
-  "ssr",
-  "ssg",
-  "hmr",
   "project",
-  "legacy",
 ]);
 
 const DIAGNOSTIC_CONFIDENCES = new Set<DiagnosticConfidence>([

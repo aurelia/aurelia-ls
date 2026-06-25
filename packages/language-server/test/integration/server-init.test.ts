@@ -6,13 +6,16 @@
  */
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
-import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE } from "@aurelia-ls/semantic-workspace/types.js";
 import {
   createFixture,
   startServer,
   waitForExit,
 } from "./helpers/lsp-harness.js";
 import { URI } from "vscode-uri";
+import {
+  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
+} from "@aurelia-ls/language-server/api";
 
 describe("Server initialization", () => {
   test("responds to initialize request with capabilities", async () => {
@@ -65,9 +68,17 @@ describe("Server initialization", () => {
       const capabilities = initResult.capabilities as Record<string, unknown>;
       expect(capabilities.hoverProvider).toBe(true);
       expect(capabilities.definitionProvider).toBeTruthy();
+      expect(capabilities.documentHighlightProvider).toBe(true);
       expect(capabilities.referencesProvider).toBe(true);
       expect(capabilities.renameProvider).toBeTruthy();
       expect(capabilities.codeActionProvider).toBe(true);
+      expect(capabilities.documentSymbolProvider).toBe(true);
+      expect(capabilities.workspaceSymbolProvider).toBe(true);
+      expect(capabilities.codeLensProvider).toEqual({ resolveProvider: false });
+      expect(capabilities.selectionRangeProvider).toBe(true);
+      expect(capabilities.linkedEditingRangeProvider).toBe(true);
+      expect(capabilities.foldingRangeProvider).toBe(true);
+      expect(capabilities.inlayHintProvider).toBe(true);
       expect(capabilities.completionProvider).toBeDefined();
       expect(capabilities.textDocumentSync).toBeDefined();
 

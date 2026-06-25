@@ -1,8 +1,14 @@
-import type { CompilerDiagnostic } from "@aurelia-ls/compiler/model/diagnostics.js";
-import { normalizeSpan, type SourceSpan } from "@aurelia-ls/compiler/model/span.js";
-import { diagnosticSpan } from "@aurelia-ls/compiler/shared/diagnostics.js";
 import type { Range } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
+
+export interface SourceSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface DiagnosticWithSpan {
+  readonly span?: SourceSpan | null;
+}
 
 export function spanToRange(doc: TextDocument, span: SourceSpan): Range {
   const normalized = normalizeSpan(span);
@@ -14,6 +20,12 @@ export function spanToRangeOrNull(doc: TextDocument, span: SourceSpan | null | u
   return spanToRange(doc, span);
 }
 
-export function diagnosticToRange(doc: TextDocument, diag: CompilerDiagnostic): Range | null {
-  return spanToRangeOrNull(doc, diagnosticSpan(diag));
+export function diagnosticToRange(doc: TextDocument, diag: DiagnosticWithSpan): Range | null {
+  return spanToRangeOrNull(doc, diag.span);
+}
+
+function normalizeSpan(span: SourceSpan): SourceSpan {
+  return span.start <= span.end
+    ? span
+    : { start: span.end, end: span.start };
 }

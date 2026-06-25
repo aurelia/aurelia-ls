@@ -19,6 +19,12 @@ const commonOptions = {
   platform: "node",
   target: "node18",
   format: "cjs", // VS Code extensions must be CJS
+  banner: {
+    js: 'const { pathToFileURL: __aureliaPathToFileURL } = require("url"); const import_meta_url = __aureliaPathToFileURL(__filename).href;',
+  },
+  define: {
+    "import.meta.url": "import_meta_url",
+  },
   sourcemap: true,
   minify,
   logLevel: "info",

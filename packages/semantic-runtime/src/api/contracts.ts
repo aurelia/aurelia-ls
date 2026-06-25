@@ -2,6 +2,7 @@ import type { SemanticSupportState } from '../support-state.js';
 import type { BootProjectDiscoveryMode, BootProjectInput } from '../boot/frames.js';
 import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type {
   DiagnosticActionChangeDomain,
   DiagnosticActionEvidenceKind,
@@ -160,7 +161,10 @@ import type {
   ResourceIssuePhase,
 } from '../resources/resource-issue.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
-import type { TemplateInstructionKind } from '../template/instruction-ir.js';
+import type {
+  TemplateBindingMode,
+  TemplateInstructionKind,
+} from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
   RuntimeObservedDependencyKind,
@@ -209,6 +213,9 @@ import type {
 import type {
   RuntimeBindingBehaviorApplicationPhase,
 } from '../template/runtime-binding-behavior.js';
+import type {
+  RuntimeValueConverterApplicationPhase,
+} from '../template/runtime-value-converter.js';
 import type {
   RuntimeControllerCreationKind,
   RuntimeControllerLifecycleStage,
@@ -392,6 +399,13 @@ export const enum SemanticAppQueryKind {
   TemplateCompilations = 'template-compilations',
   TemplateCompletions = 'template-completions',
   TemplateCursorInfo = 'template-cursor-info',
+  TemplateReferences = 'template-references',
+  TemplateRename = 'template-rename',
+  TemplateRenameFromTypeScript = 'template-rename-from-typescript',
+  TemplateCodeActions = 'template-code-actions',
+  TemplateSemanticTokens = 'template-semantic-tokens',
+  TemplateFoldingRanges = 'template-folding-ranges',
+  TemplateInlayHints = 'template-inlay-hints',
   TemplateDiagnostics = 'template-diagnostics',
   RuntimeControllers = 'runtime-controllers',
   RuntimeWatchers = 'runtime-watchers',
@@ -402,6 +416,7 @@ export const enum SemanticAppQueryKind {
   BindingTargetOperations = 'binding-target-operations',
   BindingSourceOperations = 'binding-source-operations',
   BindingBehaviorApplications = 'binding-behavior-applications',
+  ValueConverterApplications = 'value-converter-applications',
   BindingValueChannels = 'binding-value-channels',
   BindingValueChannelSummary = 'binding-value-channel-summary',
   BindingDataFlows = 'binding-data-flows',
@@ -468,6 +483,13 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.TemplateCompilations,
   SemanticAppQueryKind.TemplateCompletions,
   SemanticAppQueryKind.TemplateCursorInfo,
+  SemanticAppQueryKind.TemplateReferences,
+  SemanticAppQueryKind.TemplateRename,
+  SemanticAppQueryKind.TemplateRenameFromTypeScript,
+  SemanticAppQueryKind.TemplateCodeActions,
+  SemanticAppQueryKind.TemplateSemanticTokens,
+  SemanticAppQueryKind.TemplateFoldingRanges,
+  SemanticAppQueryKind.TemplateInlayHints,
   SemanticAppQueryKind.TemplateDiagnostics,
   SemanticAppQueryKind.RuntimeControllers,
   SemanticAppQueryKind.RuntimeWatchers,
@@ -478,6 +500,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.BindingTargetOperations,
   SemanticAppQueryKind.BindingSourceOperations,
   SemanticAppQueryKind.BindingBehaviorApplications,
+  SemanticAppQueryKind.ValueConverterApplications,
   SemanticAppQueryKind.BindingValueChannels,
   SemanticAppQueryKind.BindingValueChannelSummary,
   SemanticAppQueryKind.BindingDataFlows,
@@ -527,6 +550,8 @@ export interface SemanticRuntimeOptions {
   readonly projects?: readonly SemanticRuntimeProjectInput[];
   /** Project discovery strategy used when projects are omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
+  readonly sourceTextProvider?: SemanticRuntimeSourceTextProvider | null;
 }
 
 export interface SemanticRuntimeSummaryRequest {
@@ -639,6 +664,10 @@ export interface SemanticAppQuery {
   readonly cursor?: SemanticRuntimeSourceCursorInput | null;
   /** Source file used by file-scoped authoring queries such as template diagnostics. */
   readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+  /** Include the declaration/source target when a cursor-scoped references query supports it. */
+  readonly includeDeclaration?: boolean | null;
+  /** New member/resource name for edit-planning queries; omitted when a caller only wants prepare/preflight data. */
+  readonly newName?: string | null;
 }
 
 export interface SemanticRuntimeAppQueryRequest extends SemanticAppQuery {
@@ -3477,6 +3506,210 @@ export interface SemanticTemplateDiagnosticsResult {
   readonly rows: readonly SemanticTemplateDiagnosticRow[];
 }
 
+export enum SemanticTemplateInlayHintKind {
+  BindingModeResolution = 'binding-mode-resolution',
+}
+
+export interface SemanticTemplateInlayHintRow {
+  readonly hintKind: SemanticTemplateInlayHintKind | `${SemanticTemplateInlayHintKind}`;
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly targetProperty: string;
+  readonly authoredMode: TemplateBindingMode | `${TemplateBindingMode}`;
+  readonly effectiveMode: TemplateBindingMode | `${TemplateBindingMode}`;
+  readonly effectiveModeLabel: string;
+  /** Exact authored insertion anchor, normally the binding attribute name span. */
+  readonly source: SemanticSourceReference | null;
+  /** Broader authored attribute span when different from the insertion anchor. */
+  readonly attributeSource: SemanticSourceReference | null;
+  /** Runtime binding source span used for explanation and lower-level follow-up queries. */
+  readonly bindingSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly instructionProductHandle: ProductHandle | null;
+    readonly attributeProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly attributeSourceAddressHandle: AddressHandle | null;
+    readonly bindingSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateInlayHintsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateInlayHintRow[];
+}
+
+export enum SemanticTemplateReferenceKind {
+  Declaration = 'declaration',
+  TemplateUsage = 'template-usage',
+}
+
+export interface SemanticTemplateReferenceRow {
+  readonly referenceKind: SemanticTemplateReferenceKind | `${SemanticTemplateReferenceKind}`;
+  readonly name: string;
+  readonly definitionName: string | null;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}` | null;
+  /** Exact source span for the returned reference/declaration. */
+  readonly source: SemanticSourceReference | null;
+  /** Declaration/member source that all returned template usages resolve to. */
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly observedDependencyProductHandle: ProductHandle | null;
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly targetSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateReferencesResult {
+  readonly displayText: string;
+  readonly selectedMemberName: string | null;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly rows: readonly SemanticTemplateReferenceRow[];
+}
+
+export enum SemanticTemplateRenameStatus {
+  Available = 'available',
+  NotAvailable = 'not-available',
+  InvalidName = 'invalid-name',
+}
+
+export enum SemanticTemplateRenameUnavailableReason {
+  NoSourceBackedMember = 'no-source-backed-member',
+  CursorNotOnRenameableReference = 'cursor-not-on-renameable-reference',
+  TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
+  InvalidNewName = 'invalid-new-name',
+}
+
+export enum SemanticTemplateRenameEditKind {
+  TypeScriptReference = 'typescript-reference',
+  TemplateUsage = 'template-usage',
+}
+
+export interface SemanticTemplateRenameEditRow {
+  readonly editKind: SemanticTemplateRenameEditKind | `${SemanticTemplateRenameEditKind}`;
+  readonly source: SemanticSourceReference | null;
+  readonly oldText: string | null;
+  readonly newText: string;
+}
+
+export interface SemanticTemplateRenameResult {
+  readonly displayText: string;
+  readonly status: SemanticTemplateRenameStatus | `${SemanticTemplateRenameStatus}`;
+  readonly reason: SemanticTemplateRenameUnavailableReason | `${SemanticTemplateRenameUnavailableReason}` | null;
+  readonly selectedMemberName: string | null;
+  readonly placeholder: string | null;
+  readonly targetSource: SemanticSourceReference | null;
+  /** Exact source token under the initiating cursor, used by LSP prepareRename. */
+  readonly activeSource: SemanticSourceReference | null;
+  readonly edits: readonly SemanticTemplateRenameEditRow[];
+  readonly templateReferenceCount: number;
+  readonly typeScriptReferenceCount: number;
+}
+
+export enum SemanticTemplateCodeActionEditKind {
+  DeclareViewModelMember = 'declare-view-model-member',
+}
+
+export interface SemanticTemplateCodeActionEditRow {
+  readonly editKind: SemanticTemplateCodeActionEditKind | `${SemanticTemplateCodeActionEditKind}`;
+  readonly source: SemanticSourceReference | null;
+  readonly oldText: string | null;
+  readonly newText: string;
+}
+
+export interface SemanticTemplateCodeActionRow {
+  readonly title: string;
+  readonly kind: 'quickfix';
+  readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
+  readonly suggestionKind: SemanticTemplateCursorSuggestionKind;
+  readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
+  readonly diagnosticSource: SemanticSourceReference | null;
+  readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
+  readonly edits: readonly SemanticTemplateCodeActionEditRow[];
+  readonly isPreferred: boolean;
+}
+
+export interface SemanticTemplateCodeActionsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateCodeActionRow[];
+}
+
+export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES = [
+  'aureliaElement',
+  'aureliaAttribute',
+  'aureliaBindable',
+  'aureliaController',
+  'aureliaCommand',
+  'aureliaConverter',
+  'aureliaBehavior',
+  'aureliaMetaElement',
+  'aureliaMetaAttribute',
+  'aureliaExpression',
+  'variable',
+  'property',
+  'function',
+  'keyword',
+  'string',
+] as const;
+
+export type SemanticTemplateSemanticTokenType = typeof SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES[number];
+
+export const SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS = [
+  'declaration',
+  'definition',
+  'defaultLibrary',
+  'deprecated',
+  'readonly',
+  'aureliaGapAware',
+  'aureliaGapConservative',
+] as const;
+
+export type SemanticTemplateSemanticTokenModifier =
+  typeof SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS[number];
+
+export interface SemanticTemplateSemanticTokenRow {
+  readonly tokenType: SemanticTemplateSemanticTokenType;
+  readonly tokenModifiers: readonly SemanticTemplateSemanticTokenModifier[];
+  readonly definitionName: string | null;
+  /** Exact source span for the token. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly semanticProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateSemanticTokensResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateSemanticTokenRow[];
+}
+
+export enum SemanticTemplateFoldingRangeKind {
+  Element = 'element',
+}
+
+export interface SemanticTemplateFoldingRangeRow {
+  readonly foldKind: SemanticTemplateFoldingRangeKind | `${SemanticTemplateFoldingRangeKind}`;
+  readonly definitionName: string;
+  readonly tagName: string;
+  readonly childCount: number;
+  readonly selfClosing: boolean;
+  /** Exact authored source span for the foldable template region. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly elementProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateFoldingRangesResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTemplateFoldingRangeRow[];
+}
+
 export interface SemanticTemplateCursorInfoResult {
   readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
@@ -3859,6 +4092,24 @@ export interface SemanticBindingBehaviorApplicationRow {
 
 export interface SemanticBindingBehaviorApplicationResult {
   readonly rows: readonly SemanticBindingBehaviorApplicationRow[];
+}
+
+export interface SemanticValueConverterApplicationRow {
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly converterName: string;
+  readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
+  readonly argumentCount: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly valueConverterApplicationProductHandle: ProductHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticValueConverterApplicationResult {
+  readonly rows: readonly SemanticValueConverterApplicationRow[];
 }
 
 export interface SemanticBindingValueChannelRow {

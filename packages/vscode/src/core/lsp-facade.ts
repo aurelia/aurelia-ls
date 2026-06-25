@@ -3,12 +3,10 @@ import type { ClientLogger } from "../log.js";
 import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
 import type {
   CapabilitiesResponse,
+  AnalysisReadyPayload,
   DiagnosticsSnapshotResponse,
-  MappingResponse,
-  OverlayReadyPayload,
-  OverlayResponse,
-  SsrResponse,
-  TemplateInfoResponse,
+  RelatedFileResponse,
+  RenameFromTsResponse,
 } from "../types.js";
 
 export class LspFacade {
@@ -61,24 +59,8 @@ export class LspFacade {
     });
   }
 
-  async getOverlay(uri: string): Promise<OverlayResponse | null> {
-    return this.sendRequest<OverlayResponse | null>("aurelia/getOverlay", { uri });
-  }
-
-  async getMapping(uri: string): Promise<MappingResponse | null> {
-    return this.sendRequest<MappingResponse | null>("aurelia/getMapping", { uri });
-  }
-
-  async getSsr(uri: string): Promise<SsrResponse | null> {
-    return this.sendRequest<SsrResponse | null>("aurelia/getSsr", { uri });
-  }
-
   async getDiagnostics(uri: string): Promise<DiagnosticsSnapshotResponse | null> {
     return this.sendRequest<DiagnosticsSnapshotResponse | null>("aurelia/getDiagnostics", { uri });
-  }
-
-  async queryAtPosition(uri: string, position: { line: number; character: number }): Promise<TemplateInfoResponse | null> {
-    return this.sendRequest<TemplateInfoResponse | null>("aurelia/queryAtPosition", { uri, position });
   }
 
   async dumpState(): Promise<unknown> {
@@ -115,8 +97,8 @@ export class LspFacade {
     }
   }
 
-  onOverlayReady(handler: (payload: OverlayReadyPayload) => void): void {
-    this.onNotification("aurelia/overlayReady", handler);
+  onAnalysisReady(handler: (payload: AnalysisReadyPayload) => void): void {
+    this.onNotification("aurelia/analysisReady", handler);
   }
 
   async getScopeResources(uri: string): Promise<import("../types.js").ScopeResourcesResponse | null> {
@@ -129,10 +111,24 @@ export class LspFacade {
     }
   }
 
-  async getRelatedFile(uri: string): Promise<{ uri: string; kind: "template" | "component" } | null> {
+  async getRelatedFile(uri: string): Promise<RelatedFileResponse> {
     try {
-      return await this.sendRequest<{ uri: string; kind: "template" | "component" } | null>("aurelia/getRelatedFile", { uri });
+      return await this.sendRequest<RelatedFileResponse>("aurelia/getRelatedFile", { uri });
     } catch {
+      return null;
+    }
+  }
+
+  async renameFromTs(
+    uri: string,
+    position: { line: number; character: number },
+    newName: string,
+  ): Promise<RenameFromTsResponse> {
+    try {
+      return await this.sendRequest<RenameFromTsResponse>("aurelia/renameFromTs", { uri, position, newName });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.#logger.warn("renameFromTs.request.failed", { message });
       return null;
     }
   }

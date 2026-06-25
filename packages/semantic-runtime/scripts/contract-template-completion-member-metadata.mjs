@@ -10,11 +10,20 @@ import {
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
 const templatePath = path.join(fixtureRoot, 'src/app.html');
-const templateText = fs.readFileSync(templatePath, 'utf8');
+const originalTemplateText = fs.readFileSync(templatePath, 'utf8');
+const templateText = originalTemplateText.replace('${}', '${title}');
 
 const runtime = await createSemanticRuntime({
   workspaceRoot: fixtureRoot,
   storeKey: 'contract:template-completion-member-metadata',
+  sourceTextProvider: {
+    readFile(fileName) {
+      return samePath(fileName, templatePath) ? templateText : undefined;
+    },
+    fileExists(fileName) {
+      return samePath(fileName, templatePath) ? true : undefined;
+    },
+  },
 });
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
@@ -29,6 +38,10 @@ const thisMemberCompletion = app.ask({
   kind: SemanticAppQueryKind.TemplateCompletions,
   cursor: cursorAfter('${$this.'),
   page: { size: 60 },
+});
+const titleCursorInfo = app.ask({
+  kind: SemanticAppQueryKind.TemplateCursorInfo,
+  cursor: cursorInside('${title}', 'title', 1),
 });
 
 const byName = new Map(completion.value.candidates.map((candidate) => [candidate.name, candidate]));
@@ -91,6 +104,16 @@ assertThisMember('attached', {
   memberIsReadonly: false,
   aureliaHookKind: 'component-lifecycle',
 });
+assert.equal(titleCursorInfo.value.selectedMemberName, 'title');
+assert.equal(titleCursorInfo.value.selectedMember?.memberKind, 'property');
+assert.equal(titleCursorInfo.value.selectedMember?.typeDisplay, 'string');
+assert.equal(titleCursorInfo.value.selectedMember?.source?.role, 'name');
+assert.equal(
+  titleCursorInfo.value.selectedMember?.source?.path?.replace(/\\/g, '/'),
+  'src/app.ts',
+);
+assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.start, 'number');
+assert.equal(typeof titleCursorInfo.value.selectedMember?.source?.end, 'number');
 
 console.log(JSON.stringify({
   ok: true,
@@ -128,6 +151,12 @@ console.log(JSON.stringify({
         aureliaHookKind: candidate?.aureliaHookKind ?? null,
       };
     }),
+    cursorInfo: {
+      selectedMemberName: titleCursorInfo.value.selectedMemberName,
+      selectedMemberKind: titleCursorInfo.value.selectedMember?.memberKind ?? null,
+      selectedMemberType: titleCursorInfo.value.selectedMember?.typeDisplay ?? null,
+      selectedMemberSource: titleCursorInfo.value.selectedMember?.source ?? null,
+    },
   },
 }, null, 2));
 
@@ -143,6 +172,27 @@ function cursorAfter(marker) {
     character: lines[lines.length - 1].length,
     offset,
   };
+}
+
+function cursorInside(marker, needle, delta = 0) {
+  const markerOffset = templateText.indexOf(marker);
+  assert.notEqual(markerOffset, -1, `Expected marker: ${marker}`);
+  const needleOffset = templateText.indexOf(needle, markerOffset);
+  assert.notEqual(needleOffset, -1, `Expected needle ${needle} in marker ${marker}.`);
+  const offset = needleOffset + delta;
+  const before = templateText.slice(0, offset);
+  const lines = before.split(/\r?\n/u);
+  return {
+    filePath: 'src/app.html',
+    line: lines.length - 1,
+    character: lines[lines.length - 1].length,
+    offset,
+  };
+}
+
+function samePath(left, right) {
+  return path.resolve(left).replace(/\\/g, '/').toLowerCase()
+    === path.resolve(right).replace(/\\/g, '/').toLowerCase();
 }
 
 function assertMember(name, expected) {

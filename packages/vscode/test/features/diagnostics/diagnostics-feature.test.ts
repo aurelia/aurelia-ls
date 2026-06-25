@@ -4,12 +4,12 @@ import { DiagnosticsFeature } from "../../../out/features/diagnostics/diagnostic
 import { createTestConfig } from "../../helpers/test-helpers.js";
 
 function createContext(options: {
-  diagnosticsEnabled: boolean;
+  diagnosticsEnabled?: boolean;
   diagnosticsContract: boolean;
 }): ClientContext {
   const config = createTestConfig({
     features: {
-      diagnostics: options.diagnosticsEnabled,
+      diagnostics: options.diagnosticsEnabled ?? false,
     },
   });
 
@@ -34,6 +34,10 @@ function createContext(options: {
 }
 
 describe("DiagnosticsFeature", () => {
+  test("isEnabled defaults off to keep diagnostic messages quiet", () => {
+    expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsContract: true }))).toBe(false);
+  });
+
   test("isEnabled follows diagnostics feature toggle", () => {
     expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: true, diagnosticsContract: true }))).toBe(true);
     expect(DiagnosticsFeature.isEnabled?.(createContext({ diagnosticsEnabled: false, diagnosticsContract: true }))).toBe(false);

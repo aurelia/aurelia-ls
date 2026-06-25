@@ -1,5 +1,6 @@
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type {
   SourceFileRole,
   SourceLanguage,
@@ -42,6 +43,8 @@ export interface BootWorkspaceInput {
   readonly projects?: readonly BootProjectInput[];
   /** Project discovery strategy used when `projects` is omitted. */
   readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
+  /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
+  readonly sourceTextProvider?: SemanticRuntimeSourceTextProvider | null;
 }
 
 export const enum BootProjectDiscoveryMode {
@@ -100,6 +103,8 @@ export class ProjectBootFrame {
     readonly sourceFiles: readonly SourceFileAdmission[],
     /** Discovery result when boot discovered sources itself; null when the host supplied sources. */
     readonly sourceDiscovery: SourceDiscoveryResult | null = null,
+    /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
+    readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
   ) {}
 }
 

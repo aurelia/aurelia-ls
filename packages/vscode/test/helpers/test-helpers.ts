@@ -3,7 +3,13 @@ import type { PresentationConfig } from "../../out/core/config.js";
 import { ClientLogger } from "../../out/log.js";
 import type { VscodeApi } from "../../out/vscode-api.js";
 
-export function createTestConfig(overrides: Partial<PresentationConfig> = {}): PresentationConfig {
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Record<string, unknown>
+    ? DeepPartial<T[K]>
+    : T[K];
+};
+
+export function createTestConfig(overrides: DeepPartial<PresentationConfig> = {}): PresentationConfig {
   const base: PresentationConfig = {
     observability: {
       logging: {
@@ -38,7 +44,8 @@ export function createTestConfig(overrides: Partial<PresentationConfig> = {}): P
       statusBar: true,
       views: true,
       inline: true,
-      diagnostics: true,
+      diagnostics: false,
+      inlayHints: true,
     },
     experimental: {
       ai: false,
@@ -83,7 +90,7 @@ export function createTestConfig(overrides: Partial<PresentationConfig> = {}): P
   };
 }
 
-export function createTestObservability(vscode: VscodeApi, overrides: Partial<PresentationConfig> = {}) {
+export function createTestObservability(vscode: VscodeApi, overrides: DeepPartial<PresentationConfig> = {}) {
   const config = createTestConfig(overrides);
   const logger = new ClientLogger("test", vscode);
   const observability = new ObservabilityService(vscode, logger, config);

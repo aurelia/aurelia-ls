@@ -264,7 +264,10 @@ export class TemplateTypeSystemOverlayBuilder {
     readonly store: KernelStore,
     readonly typeSystem: TypeSystemProject,
   ) {
-    this.expressions = new TemplateTypeSystemOverlayExpressionProjector(typeSystem.project.rootDir);
+    this.expressions = new TemplateTypeSystemOverlayExpressionProjector(
+      typeSystem.project.rootDir,
+      typeSystem.project.sourceTextProvider,
+    );
   }
 
   build(

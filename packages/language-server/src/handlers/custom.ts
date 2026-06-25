@@ -1,36 +1,40 @@
 /**
- * Custom Aurelia request handlers: aurelia/getOverlay, aurelia/getMapping, etc.
+ * Custom Aurelia request handlers for VS Code-facing semantic-runtime facades.
  *
  * Each handler is wrapped in try/catch to prevent exceptions from destabilizing
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { computeBuiltinDiscrepancies } from "@aurelia-ls/compiler/convergence/convert.js";
+import { URI } from "vscode-uri";
 import type {
-  DiagnosticActionability,
-  DiagnosticCategory,
-  DiagnosticImpact,
-  DiagnosticStatus,
-  DiagnosticSurface,
-} from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { DiagnosticSeverity, DiagnosticStage } from "@aurelia-ls/compiler/model/diagnostics.js";
-import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
-import type {
-  Bindable,
-  BuiltinDiscrepancy,
-  DeclarationForm,
-  ResourceCatalog,
-  ResourceCollections,
-  ResourceGapSummary,
-  ResourceGraph,
-  ResourceOrigin,
-} from "@aurelia-ls/compiler/schema/types.js";
-import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace/types.js";
+  SemanticResourceDefinitionRow,
+  SemanticResourceVisibilityRow,
+  SemanticAppDiagnosticRow,
+  SemanticSourceReference,
+  SemanticTemplateCompilationRow,
+  SemanticTemplateCursorInfoResult,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticWorkspaceEdit } from "../mapping/lsp-types.js";
-import { handleCodeLens } from "./code-lens.js";
+import { mapSemanticRuntimeTemplateRenameEdit } from "../mapping/lsp-types.js";
+
+type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
+type DiagnosticImpact = "blocking" | "degraded" | "informational";
+type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+type DiagnosticCategory =
+  | "expression"
+  | "template-syntax"
+  | "resource-resolution"
+  | "bindable-validation"
+  | "project";
+type DiagnosticStatus = "canonical" | "suppressed" | "experimental";
+type DiagnosticStage = string;
+type DiagnosticSurface = "lsp" | "vscode-panel" | "ci" | string;
+type ResourceOrigin = "builtin" | "source" | "external" | string;
+type SourceSpan = { start: number; end: number };
 
 type MaybeUriParam = { uri?: string } | string | null;
 
@@ -90,124 +94,116 @@ function formatError(e: unknown): string {
   return String(e);
 }
 
-function toSnapshotRelated(diag: WorkspaceDiagnostic): DiagnosticsSnapshotRelated[] | undefined {
-  if (!diag.related?.length) return undefined;
-  return diag.related.map((entry) => ({
-    code: entry.code,
-    message: entry.message,
-    span: entry.span ?? undefined,
-  }));
-}
-
-function toSnapshotItem(diag: WorkspaceDiagnostic): DiagnosticsSnapshotItem {
+function serializeRuntimeDiagnosticsSnapshot(
+  workspaceRoot: string | null,
+  rows: readonly SemanticAppDiagnosticRow[],
+): DiagnosticsSnapshotBundle {
   return {
-    code: diag.code,
-    message: diag.message,
-    severity: diag.severity,
-    impact: diag.impact,
-    actionability: diag.actionability,
-    category: diag.spec.category,
-    status: diag.spec.status,
-    stage: diag.stage,
-    source: diag.source,
-    uri: diag.uri,
-    span: diag.span ?? undefined,
-    data: diag.data,
-    related: toSnapshotRelated(diag),
-    surfaces: diag.spec.surfaces,
-    suppressed: diag.suppressed,
-    suppressionReason: diag.suppressionReason,
-    issues: diag.issues,
+    bySurface: {
+      lsp: rows.map((row) => toRuntimeSnapshotItem(workspaceRoot, row)),
+    },
+    suppressed: [],
   };
 }
 
-function serializeDiagnosticsSnapshot(diagnostics: WorkspaceDiagnostics): DiagnosticsSnapshotBundle {
-  const bySurface: Record<string, readonly DiagnosticsSnapshotItem[]> = {};
-  const entries = Array.from(diagnostics.bySurface.entries()).sort(([a], [b]) => a.localeCompare(b));
-  for (const [surface, items] of entries) {
-    bySurface[surface] = items.map(toSnapshotItem);
-  }
+function toRuntimeSnapshotItem(
+  workspaceRoot: string | null,
+  row: SemanticAppDiagnosticRow,
+): DiagnosticsSnapshotItem {
+  const file = filePathForSource(workspaceRoot, row.source);
+  const span = sourceSpanForSource(row.source);
   return {
-    bySurface,
-    suppressed: diagnostics.suppressed.map(toSnapshotItem),
+    code: row.frameworkErrorCode ?? row.diagnosticKind,
+    message: row.summary,
+    severity: runtimeDiagnosticSeverity(row.severity),
+    impact: runtimeDiagnosticImpact(row.severity),
+    actionability: row.suggestion == null ? "manual" : "guided",
+    category: runtimeDiagnosticCategory(row),
+    status: "canonical",
+    source: `semantic-runtime:${row.diagnosticDomain}`,
+    uri: file == null ? undefined : pathToFileURL(file).toString(),
+    span,
+    data: {
+      semanticRuntime: true,
+      diagnosticDomain: row.diagnosticDomain,
+      diagnosticKind: row.diagnosticKind,
+      diagnosticAuthority: row.diagnosticAuthority,
+      frameworkErrorCode: row.frameworkErrorCode,
+      relatedQueryKind: row.relatedQueryKind,
+      missingInput: row.missingInput ?? null,
+      missingInputs: row.missingInputs ?? [],
+    },
+    surfaces: ["lsp", "vscode-panel"],
+    issues: [
+      {
+        kind: row.diagnosticKind,
+        message: row.summary,
+        code: row.frameworkErrorCode ?? row.diagnosticKind,
+        rawCode: row.frameworkRawErrorAuthority ?? undefined,
+      },
+    ],
   };
 }
 
-export function handleGetOverlay(ctx: ServerContext, params: MaybeUriParam) {
-  try {
-    const uri = uriFromParam(params);
-    ctx.logger.log(`RPC aurelia/getOverlay params=${JSON.stringify(params)}`);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-    const artifact = ctx.workspace.getOverlay(canonical.uri);
-    return artifact
-      ? { fingerprint: ctx.workspace.snapshot().meta.fingerprint, artifact }
-      : null;
-  } catch (e) {
-    ctx.logger.error(`[getOverlay] failed: ${formatError(e)}`);
-    return null;
+function runtimeDiagnosticSeverity(
+  severity: SemanticAppDiagnosticRow["severity"],
+): DiagnosticSeverity {
+  return severity === "information" ? "info" : severity;
+}
+
+function runtimeDiagnosticImpact(
+  severity: SemanticAppDiagnosticRow["severity"],
+): DiagnosticImpact {
+  switch (severity) {
+    case "error":
+      return "blocking";
+    case "warning":
+      return "degraded";
+    case "information":
+      return "informational";
   }
 }
 
-export function handleGetMapping(ctx: ServerContext, params: MaybeUriParam) {
-  try {
-    const uri = uriFromParam(params);
-    if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const mapping = ctx.workspace.getMapping(canonical.uri);
-    if (!mapping) return null;
-    const overlay = ctx.workspace.getOverlay(canonical.uri);
-    return { overlayPath: overlay.overlay.path, mapping };
-  } catch (e) {
-    ctx.logger.error(`[getMapping] failed: ${formatError(e)}`);
-    return null;
+function runtimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCategory {
+  switch (row.diagnosticDomain) {
+    case "template":
+      return "template-syntax";
+    case "resource":
+      return "resource-resolution";
+    case "validation":
+      return "bindable-validation";
+    case "typescript":
+    case "evaluation":
+    case "observation":
+      return "expression";
+    default:
+      return "project";
   }
 }
 
-export function handleQueryAtPosition(ctx: ServerContext, params: { uri: string; position: Position }) {
-  try {
-    const uri = params?.uri;
-    if (!uri || !params.position) return null;
-    const doc = ctx.ensureProgramDocument(uri);
-    if (!doc) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const query = ctx.workspace.getQueryFacade(canonical.uri);
-    if (!query) return null;
-    const offset = doc.offsetAt(params.position);
-    return {
-      expr: query.exprAt(offset),
-      node: query.nodeAt(offset),
-      controller: query.controllerAt(offset),
-      bindables: query.nodeAt(offset) ? query.bindablesFor(query.nodeAt(offset)!) : null,
-      mappingSize: ctx.workspace.getMapping(canonical.uri)?.entries.length ?? 0,
-    };
-  } catch (e) {
-    ctx.logger.error(`[queryAtPosition] failed for ${params?.uri}: ${formatError(e)}`);
-    return null;
+function sourceSpanForSource(source: SemanticSourceReference | null): SourceSpan | undefined {
+  if (source?.start == null || source.end == null) {
+    return undefined;
   }
+  return {
+    start: source.start,
+    end: source.end,
+  };
 }
 
-export function handleGetSsr(ctx: ServerContext, params: MaybeUriParam) {
-  const uri = uriFromParam(params);
-  if (!uri) return null;
-  ctx.logger.info(`aurelia/getSsr: SSR not yet available for ${uri}`);
-  return null;
-}
-
-export function handleGetDiagnostics(
+export async function handleGetDiagnostics(
   ctx: ServerContext,
   params: MaybeUriParam,
-): DiagnosticsSnapshotResponse | null {
+): Promise<DiagnosticsSnapshotResponse | null> {
   try {
     const uri = uriFromParam(params);
     if (!uri) return null;
     const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-    const diagnostics = serializeDiagnosticsSnapshot(ctx.workspace.diagnostics(canonical.uri));
-    const fingerprint = ctx.workspace.snapshot().meta.fingerprint;
+    const doc = ctx.ensureProgramDocument(uri);
+    if (!doc) return null;
+    const answer = await ctx.semanticRuntime.appDiagnostics(doc);
+    const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value.rows);
+    const fingerprint = `semantic-runtime:${answer.outcome}`;
     return { uri: canonical.uri, fingerprint, diagnostics };
   } catch (e) {
     ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
@@ -219,10 +215,9 @@ export function handleDumpState(ctx: ServerContext) {
   try {
     return {
       workspaceRoot: ctx.workspaceRoot,
-      fingerprint: ctx.workspace.snapshot().meta.fingerprint,
-      templateCount: ctx.workspace.templates.length,
-      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
-      programCache: ctx.workspace.getCacheStats(),
+      fingerprint: `semantic-runtime:${ctx.workspaceRoot ?? "no-root"}:${ctx.documents.all().length}`,
+      openDocumentCount: ctx.documents.all().length,
+      engine: "semantic-runtime",
     };
   } catch (e) {
     ctx.logger.error(`[dumpState] failed: ${formatError(e)}`);
@@ -248,13 +243,10 @@ export type ResourceExplorerItem = {
   package?: string;
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
-  gapCount: number;
-  gapIntrinsicCount: number;
   origin?: ResourceOrigin;
   scope: ResourceScope;
   scopeOwner?: string;
   declarationForm?: string;
-  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
 };
 
 export type ResourceExplorerResponse = {
@@ -264,80 +256,19 @@ export type ResourceExplorerResponse = {
   inlineTemplateCount: number;
 };
 
-export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse {
+export async function handleGetResources(ctx: ServerContext): Promise<ResourceExplorerResponse> {
   try {
-    // Ensure the index is current without a full reload.  reloadProject()
-    // clears the discovery cache and forces a full re-extraction, which is
-    // too expensive for a query that may be called on every workspace-changed
-    // event.  refresh() is sufficient: it rebuilds incrementally if the
-    // project version has changed, and is a no-op if already current.
-    ctx.workspace.refresh({ force: false });
-    const snapshot = ctx.workspace.snapshot();
-    const catalog = snapshot.catalog;
-    const semantics = snapshot.semantics;
-    const graph = snapshot.resourceGraph;
-
-    // Build scope index from ResourceGraph
-    const { index: scopeIndex, allScoped } = buildScopeIndex(graph);
-
-    // Compute builtin staleness (encoding vs analysis discrepancies)
-    let discrepancies: Map<string, BuiltinDiscrepancy> | null = null;
-    try {
-      discrepancies = computeBuiltinDiscrepancies(semantics);
-    } catch { /* may fail if semantics shape is unexpected */ }
-
-    const collections = catalog.resources;
-    const resources: ResourceExplorerItem[] = [];
-
-    // Walk elements
-    for (const [name, res] of Object.entries(collections.elements)) {
-      resources.push(mapCatalogResource(name, "custom-element", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk attributes — skip template controllers (they appear in controllers too)
-    for (const [name, res] of Object.entries(collections.attributes)) {
-      if (res.isTemplateController) continue;
-      resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk controllers — ControllerConfig lacks origin/declarationForm/gaps/package,
-    // so merge from the corresponding AttrRes entry (which always exists for TCs).
-    const seenControllers = new Set<string>();
-    for (const [name, controllerRes] of Object.entries(collections.controllers)) {
-      if (seenControllers.has(name)) continue;
-      seenControllers.add(name);
-      const attrRes = collections.attributes[name];
-      const merged = attrRes ? { ...controllerRes, origin: attrRes.origin, declarationForm: attrRes.declarationForm, gaps: attrRes.gaps, package: attrRes.package, className: attrRes.className ?? controllerRes.className, file: attrRes.file ?? controllerRes.file, bindables: attrRes.bindables } : controllerRes;
-      resources.push(mapCatalogResource(name, "template-controller", merged, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Pick up any TCs that are only in attributes (not in controllers)
-    for (const [name, res] of Object.entries(collections.attributes)) {
-      if (!res.isTemplateController) continue;
-      if (seenControllers.has(name)) continue;
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk value converters
-    for (const [name, res] of Object.entries(collections.valueConverters)) {
-      resources.push(mapCatalogResource(name, "value-converter", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-    // Walk binding behaviors
-    for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
-      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, allScoped, discrepancies));
-    }
-
-    // Sort by kind, then alphabetically — origin-based grouping is the consumer's concern
-    const kindOrder = ["custom-element", "template-controller", "custom-attribute", "value-converter", "binding-behavior"];
-    resources.sort((a, b) => {
-      const ka = kindOrder.indexOf(a.kind);
-      const kb = kindOrder.indexOf(b.kind);
-      if (ka !== kb) return ka - kb;
-      return a.name.localeCompare(b.name);
-    });
-
-    return {
-      fingerprint: snapshot.meta.fingerprint,
-      resources,
-      templateCount: ctx.workspace.templates.length,
-      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
-    };
+    const [definitions, visibility, compilations] = await Promise.all([
+      ctx.semanticRuntime.resourceDefinitions(),
+      ctx.semanticRuntime.resourceVisibility(),
+      ctx.semanticRuntime.templateCompilations(),
+    ]);
+    return buildRuntimeResourceExplorerResponse(
+      ctx.workspaceRoot,
+      definitions.value.rows,
+      visibility.value.rows,
+      compilations.value.rows,
+    );
   } catch (e) {
     ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
     return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
@@ -345,140 +276,201 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
 }
 
 type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
-type ScopeIndexResult = { index: Map<string, ScopeEntry>; allScoped: Set<string> };
 
-/**
- * Build an index of resource name → scope info from the ResourceGraph.
- *
- * Resource visibility is two-level (L1 scope-resolution): local container
- * then root container. A resource in the root scope is visible everywhere.
- * A resource is only "local" if it appears in a non-root scope AND is NOT
- * in the root scope. Resources in both root and local scopes are global —
- * the local copy is a pre-seeded duplicate, not an independent registration.
- *
- * Also returns `allScoped` — the set of ALL resource names that appear in
- * at least one scope. Resources in the catalog but NOT in this set are
- * orphans (discovered by analysis but not registered in any container).
- */
-function buildScopeIndex(
-  graph: ResourceGraph | undefined | null,
-): ScopeIndexResult {
-  const index = new Map<string, ScopeEntry>();
-  const allScoped = new Set<string>();
-  if (!graph) return { index, allScoped };
+const RESOURCE_EXPLORER_KIND_ORDER = [
+  "custom-element",
+  "template-controller",
+  "custom-attribute",
+  "value-converter",
+  "binding-behavior",
+] as const;
 
-  const categories = ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const;
+const RESOURCE_EXPLORER_KINDS = new Set<string>(RESOURCE_EXPLORER_KIND_ORDER);
 
-  // Collect root scope resources — these are global everywhere
-  const rootResources = new Set<string>();
-  const rootScope = graph.scopes[graph.root];
-  if (rootScope?.resources) {
-    for (const category of categories) {
-      const records = rootScope.resources[category];
-      if (!records) continue;
-      for (const name of Object.keys(records)) {
-        rootResources.add(name);
-        allScoped.add(name);
-      }
+function buildRuntimeResourceExplorerResponse(
+  workspaceRoot: string | null,
+  definitions: readonly SemanticResourceDefinitionRow[],
+  visibility: readonly SemanticResourceVisibilityRow[],
+  compilations: readonly SemanticTemplateCompilationRow[],
+): ResourceExplorerResponse {
+  const visibilityByResource = buildRuntimeVisibilityIndex(visibility);
+  const resources = new Map<string, ResourceExplorerItem>();
+
+  for (const definition of definitions) {
+    if (definition.name == null || !RESOURCE_EXPLORER_KINDS.has(definition.resourceKind)) {
+      continue;
     }
+    const key = resourceExplorerKey(definition.resourceKind, definition.name);
+    const source = definition.source ?? definition.targetSource;
+    const scope = visibilityByResource.get(key) ?? { scope: "orphan" as const };
+    resources.set(key, {
+      name: definition.name,
+      kind: definition.resourceKind,
+      className: definition.targetName ?? undefined,
+      file: filePathForSource(workspaceRoot, source),
+      package: packageNameForSource(source),
+      bindableCount: definition.bindables.length,
+      bindables: definition.bindables.map((bindable): ResourceExplorerBindable => ({
+        name: bindable.name,
+        attribute: bindable.attribute,
+        mode: bindable.mode,
+        type: bindable.valueType ?? undefined,
+      })),
+      origin: originForSource(source),
+      scope: scope.scope,
+      scopeOwner: scope.scopeOwner,
+      declarationForm: definition.declarationModes.join(", ") || undefined,
+    });
   }
 
-  // Walk non-root scopes — only mark resources as local if they're NOT in root
-  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
-    if (scopeId === graph.root) continue;
-
-    const resources = scope.resources;
-    if (!resources) continue;
-    const owner = scope.label ?? scopeId;
-
-    for (const category of categories) {
-      const records = resources[category];
-      if (!records) continue;
-      for (const name of Object.keys(records)) {
-        allScoped.add(name);
-        if (rootResources.has(name)) continue;
-        index.set(name, { scope: "local" as ResourceScope, scopeOwner: owner });
-      }
+  for (const row of visibility) {
+    if (!RESOURCE_EXPLORER_KINDS.has(row.resourceKind)) {
+      continue;
     }
+    const key = resourceExplorerKey(row.resourceKind, row.name);
+    if (resources.has(key)) {
+      continue;
+    }
+    const scope = visibilityByResource.get(key) ?? { scope: "global" as const };
+    resources.set(key, {
+      name: row.name,
+      kind: row.resourceKind,
+      file: filePathForSource(workspaceRoot, row.source),
+      package: packageNameForSource(row.source),
+      bindableCount: 0,
+      bindables: [],
+      origin: originForSource(row.source),
+      scope: scope.scope,
+      scopeOwner: scope.scopeOwner,
+    });
   }
-  return { index, allScoped };
+
+  const rows = [...resources.values()].sort(compareResourceExplorerItems);
+  const appTemplateRows = compilations.filter((row) => row.compilationLane === "app-runtime");
+
+  return {
+    fingerprint: `semantic-runtime:${definitions.length}:${visibility.length}:${compilations.length}`,
+    resources: rows,
+    templateCount: countDistinct(
+      appTemplateRows.map((row) => sourceReferencePath(row.source) ?? row.definitionName),
+    ),
+    inlineTemplateCount: appTemplateRows.filter((row) => row.templateSourceKind.toLowerCase().includes("inline")).length,
+  };
 }
 
-type FlatResourceLike = {
-  className?: string;
-  file?: string;
-  package?: string;
-  origin?: ResourceOrigin;
-  declarationForm?: DeclarationForm;
-  gaps?: ResourceGapSummary;
-  bindables?: Readonly<Record<string, Bindable>>;
-};
-
-function mapCatalogResource(
-  name: string,
-  kind: string,
-  res: FlatResourceLike,
-  catalog: ResourceCatalog,
-  scopeIndex: Map<string, ScopeEntry>,
-  allScoped: Set<string>,
-  discrepancies: Map<string, BuiltinDiscrepancy> | null,
-): ResourceExplorerItem {
-  const bindables: ResourceExplorerBindable[] = [];
-  if (res.bindables) {
-    for (const [, b] of Object.entries(res.bindables)) {
-      bindables.push({
-        name: b.name,
-        attribute: b.attribute,
-        mode: b.mode,
-        primary: b.primary,
-        type: b.type?.kind === "ts" ? b.type.name : b.type?.kind,
-      });
+function buildRuntimeVisibilityIndex(
+  rows: readonly SemanticResourceVisibilityRow[],
+): Map<string, ScopeEntry> {
+  const index = new Map<string, ScopeEntry>();
+  for (const row of rows) {
+    if (!RESOURCE_EXPLORER_KINDS.has(row.resourceKind)) {
+      continue;
+    }
+    const key = resourceExplorerKey(row.resourceKind, row.name);
+    const next = scopeEntryForVisibility(row);
+    const current = index.get(key);
+    if (current == null || (current.scope !== "global" && next.scope === "global")) {
+      index.set(key, next);
     }
   }
+  return index;
+}
 
-  // Use direct gaps when available, fall back to catalog cross-reference
-  const gapTotal = res.gaps?.total ?? 0;
-  const gapIntrinsic = res.gaps?.intrinsic ?? 0;
-  const fallbackGapCount = gapTotal > 0 ? gapTotal : (() => {
-    const gapKey = `${kind}:${name}`;
-    const catalogGaps = catalog.gapsByResource?.[gapKey] ?? [];
-    return Array.isArray(catalogGaps) ? catalogGaps.length : 0;
-  })();
-
-  const scopeEntry = scopeIndex.get(name);
-  // Three-way scope: local (non-root only), global (in root), orphan (not in any scope)
-  const scope: ResourceScope = scopeEntry
-    ? "local"
-    : allScoped.has(name) ? "global" : "orphan";
-
-  const item: ResourceExplorerItem = {
-    name,
-    kind,
-    className: res.className,
-    file: res.file,
-    package: res.package,
-    bindableCount: bindables.length,
-    bindables,
-    gapCount: fallbackGapCount,
-    gapIntrinsicCount: gapIntrinsic,
-    origin: res.origin,
-    scope,
-    scopeOwner: scopeEntry?.scopeOwner,
-    declarationForm: res.declarationForm,
-  };
-
-  // Attach staleness for builtin resources
-  if ((res.origin === "builtin" || res.origin === "config") && discrepancies) {
-    const disc = discrepancies.get(name);
-    if (disc) {
-      item.staleness = {
-        fieldsFromAnalysis: disc.fieldsFromAnalysis.length,
-        membersNotInSemantics: disc.membersNotInSemantics.length,
-      };
-    }
+function scopeEntryForVisibility(row: SemanticResourceVisibilityRow): ScopeEntry {
+  switch (row.visibilityKind) {
+    case "app-root":
+    case "configured":
+    case "inherited":
+      return { scope: "global" };
+    case "local":
+    case "routeable":
+      return { scope: "local", scopeOwner: row.compilerWorld };
+    case "open":
+    default:
+      return { scope: "orphan" };
   }
+}
 
-  return item;
+function compareResourceExplorerItems(left: ResourceExplorerItem, right: ResourceExplorerItem): number {
+  const leftKind = RESOURCE_EXPLORER_KIND_ORDER.indexOf(left.kind as typeof RESOURCE_EXPLORER_KIND_ORDER[number]);
+  const rightKind = RESOURCE_EXPLORER_KIND_ORDER.indexOf(right.kind as typeof RESOURCE_EXPLORER_KIND_ORDER[number]);
+  if (leftKind !== rightKind) {
+    return leftKind - rightKind;
+  }
+  return left.name.localeCompare(right.name);
+}
+
+function resourceExplorerKey(kind: string, name: string): string {
+  return `${kind}:${name}`;
+}
+
+function countDistinct(values: readonly string[]): number {
+  return new Set(values).size;
+}
+
+function originForSource(source: SemanticSourceReference | null): ResourceOrigin | undefined {
+  if (isFrameworkCatalogSource(source)) {
+    return "builtin";
+  }
+  return sourceReferencePath(source) == null && source?.kind !== "external-address"
+    ? undefined
+    : "source";
+}
+
+function packageNameForSource(source: SemanticSourceReference | null): string | undefined {
+  if (isFrameworkCatalogSource(source)) {
+    return undefined;
+  }
+  const sourcePath = sourceReferencePath(source);
+  if (sourcePath == null) {
+    return undefined;
+  }
+  return packageNameFromNodeModulesPath(sourcePath);
+}
+
+function filePathForSource(
+  workspaceRoot: string | null,
+  source: SemanticSourceReference | null,
+): string | undefined {
+  const sourcePath = sourceReferencePath(source);
+  if (sourcePath == null) {
+    return undefined;
+  }
+  if (sourcePath.startsWith("file://")) {
+    return URI.parse(sourcePath).fsPath;
+  }
+  if (path.isAbsolute(sourcePath)) {
+    return sourcePath;
+  }
+  return workspaceRoot == null ? sourcePath : path.resolve(workspaceRoot, sourcePath);
+}
+
+function sourceReferencePath(source: SemanticSourceReference | null): string | null {
+  if (source == null) {
+    return null;
+  }
+  return source.path ?? sourceReferencePath(source.anchor ?? null);
+}
+
+function isFrameworkCatalogSource(source: SemanticSourceReference | null): boolean {
+  return source?.kind === "external-address" && source.scheme === "aurelia-package-catalog";
+}
+
+function packageNameFromNodeModulesPath(sourcePath: string): string | undefined {
+  const parts = sourcePath.replace(/\\/g, "/").split("/");
+  const nodeModulesIndex = parts.lastIndexOf("node_modules");
+  if (nodeModulesIndex < 0 || nodeModulesIndex >= parts.length - 1) {
+    return undefined;
+  }
+  const first = parts[nodeModulesIndex + 1];
+  if (first == null) {
+    return undefined;
+  }
+  if (first.startsWith("@")) {
+    const second = parts[nodeModulesIndex + 2];
+    return second == null ? undefined : `${first}/${second}`;
+  }
+  return first;
 }
 
 export type InspectEntityResponse = {
@@ -497,61 +489,137 @@ export type InspectEntityResponse = {
   detail: Record<string, unknown>;
 } | null;
 
-export function handleInspectEntity(
+export async function handleInspectEntity(
   ctx: ServerContext,
   params: { uri: string; position: Position },
-): InspectEntityResponse {
+): Promise<InspectEntityResponse> {
   try {
     const uri = params?.uri;
     if (!uri || !params.position) return null;
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
-    const canonical = canonicalDocumentUri(uri);
-    const result = ctx.workspace.query(canonical.uri).inspect(params.position);
-    if (!result) return null;
-
-    const resolution = result.resolution;
-    const entity = resolution.entity;
-
-    // Extract key fields from the entity for display
-    const detail: Record<string, unknown> = { kind: entity.kind };
-    if ("name" in entity) detail.name = (entity as { name: string }).name;
-    if ("view" in entity) {
-      const view = entity.view as { name?: string; kind?: string; className?: string };
-      detail.resourceName = view?.name;
-      detail.resourceKind = view?.kind;
-      detail.className = view?.className;
-    }
-    if ("bindable" in entity) {
-      const b = entity.bindable as { property?: string; attribute?: { value?: string } };
-      detail.bindableProperty = b?.property;
-    }
-    if ("symbol" in entity) {
-      const sym = entity.symbol as { kind?: string; name?: string; type?: string };
-      detail.symbolKind = sym?.kind;
-      detail.symbolName = sym?.name;
-      detail.symbolType = sym?.type;
-    }
-
-    return {
-      uri: result.uri,
-      entityKind: entity.kind,
-      confidence: {
-        resource: resolution.confidence.resource,
-        type: resolution.confidence.type,
-        scope: resolution.confidence.scope,
-        expression: resolution.confidence.expression,
-        composite: resolution.compositeConfidence,
-      },
-      expressionLabel: resolution.expressionLabel,
-      exprId: resolution.exprId,
-      nodeId: resolution.nodeId,
-      detail,
-    };
+    const answer = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    return inspectEntityFromCursorInfo(uri, answer.outcome, answer.value);
   } catch (e) {
     ctx.logger.error(`[inspectEntity] failed for ${params?.uri}: ${formatError(e)}`);
     return null;
   }
+}
+
+function inspectEntityFromCursorInfo(
+  uri: string,
+  outcome: string,
+  value: SemanticTemplateCursorInfoResult,
+): InspectEntityResponse {
+  const entityKind = inspectEntityKind(value);
+  if (entityKind == null) {
+    return null;
+  }
+  const detail = inspectEntityDetail(entityKind, value);
+  const expressionLabel = value.selectedMemberName
+    ?? value.valueSite?.rawValue
+    ?? value.html.attributeValue
+    ?? value.html.attributeName
+    ?? value.html.tagName
+    ?? undefined;
+  return {
+    uri,
+    entityKind,
+    confidence: {
+      resource: value.selectedDefinition == null ? "not-selected" : "source-backed",
+      type: value.selectedMember?.typeDisplay != null || value.memberOwnerType?.display != null ? "projected" : "not-projected",
+      scope: value.selectedMember == null ? "not-selected" : "source-backed",
+      expression: value.valueSite == null && value.expressionFrontier == null ? "not-selected" : "parsed",
+      composite: outcome,
+    },
+    expressionLabel,
+    detail,
+  };
+}
+
+function inspectEntityKind(value: SemanticTemplateCursorInfoResult): string | null {
+  if (value.selectedMember != null || value.selectedMemberName != null) {
+    return "member";
+  }
+  if (value.selectedBindable != null) {
+    return "bindable";
+  }
+  if (value.selectedDefinition != null) {
+    return "resource";
+  }
+  if (value.valueSite != null) {
+    return "value-site";
+  }
+  if (value.html.attributeName != null || value.html.tagName != null) {
+    return "html";
+  }
+  if (value.diagnostics.length > 0) {
+    return "diagnostic";
+  }
+  return value.siteKind == null || value.siteKind === "unknown" ? null : "template-site";
+}
+
+function inspectEntityDetail(
+  entityKind: string,
+  value: SemanticTemplateCursorInfoResult,
+): Record<string, unknown> {
+  const detail: Record<string, unknown> = {
+    kind: entityKind,
+    siteKind: value.siteKind,
+    templateLane: value.template.compilationLane,
+  };
+  if (value.selectedDefinition != null) {
+    detail.name = value.selectedDefinition.name;
+    detail.resourceName = value.selectedDefinition.name;
+    detail.resourceKind = value.selectedDefinition.resourceKind;
+    detail.className = value.selectedDefinition.targetName;
+    detail.resourceSource = value.selectedDefinition.source?.label ?? null;
+  }
+  if (value.selectedBindable != null) {
+    detail.name = value.selectedBindable.name;
+    detail.bindableProperty = value.selectedBindable.name;
+    detail.bindableAttribute = value.selectedBindable.attribute;
+    detail.bindableMode = value.selectedBindable.mode;
+    detail.bindableSource = value.selectedBindable.source?.label ?? null;
+  }
+  if (value.selectedMember != null || value.selectedMemberName != null) {
+    detail.name = value.selectedMemberName ?? value.selectedMember?.name ?? null;
+    detail.symbolName = value.selectedMemberName ?? value.selectedMember?.name ?? null;
+    detail.symbolKind = value.selectedMember?.memberKind ?? null;
+    detail.symbolType = value.selectedMember?.typeDisplay ?? null;
+    detail.memberReadonly = value.selectedMember?.isReadonly ?? null;
+    detail.memberOptional = value.selectedMember?.isOptional ?? null;
+    detail.memberSource = value.selectedMember?.source?.label ?? null;
+  }
+  if (value.memberOwnerType != null) {
+    detail.ownerType = value.memberOwnerType.display;
+    detail.ownerTypeShape = value.memberOwnerType.shapeKind;
+    detail.ownerTypeOrigin = value.memberOwnerType.origin;
+    detail.ownerTypeSource = value.memberOwnerType.declarationSource?.label ?? null;
+  }
+  if (value.valueSite != null) {
+    detail.valueSiteKind = value.valueSite.siteKind;
+    detail.rawValue = value.valueSite.rawValue;
+    detail.bindingCommand = value.valueSite.bindingCommandName;
+    detail.valueBindable = value.valueSite.bindableAttribute ?? value.valueSite.bindableName;
+  }
+  detail.htmlNodeKind = value.html.nodeKind;
+  detail.htmlTag = value.html.tagName;
+  detail.htmlAttribute = value.html.attributeName;
+  if (value.html.attributeValue != null) {
+    detail.htmlAttributeValue = value.html.attributeValue;
+  }
+  detail.diagnosticCount = value.diagnostics.length;
+  const firstDiagnostic = value.diagnostics[0] ?? null;
+  if (firstDiagnostic != null) {
+    detail.firstDiagnosticKind = firstDiagnostic.diagnosticKind;
+    detail.firstDiagnosticSeverity = firstDiagnostic.severity;
+    detail.firstDiagnosticSummary = firstDiagnostic.summary;
+  }
+  if (value.missingInputs.length > 0) {
+    detail.missingInputs = value.missingInputs;
+  }
+  return detail;
 }
 
 export type ScopeResourceItem = {
@@ -571,84 +639,64 @@ export type ScopeResourcesResponse = {
   resources: ScopeResourceItem[];
 } | null;
 
-export function handleGetScopeResources(
+export async function handleGetScopeResources(
   ctx: ServerContext,
   params: { uri: string },
-): ScopeResourcesResponse {
+): Promise<ScopeResourcesResponse> {
   try {
     const uri = params?.uri;
     if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-    ctx.ensureProgramDocument(uri);
-
-    const snapshot = ctx.workspace.snapshot();
-    const graph = snapshot.resourceGraph;
-    if (!graph) return null;
-
-    // Find the scope for this template
-    const templateInfo = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
-    ) ?? ctx.workspace.inlineTemplates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-
-    const scopeId = templateInfo?.scopeId ?? graph.root;
-    const scope = graph.scopes[scopeId];
-    const rootScope = graph.scopes[graph.root];
-
-    const resources: ScopeResourceItem[] = [];
-    const seen = new Set<string>();
-
-    // Collect resources from both local scope and root scope (two-level lookup)
-    const collectFromScope = (scopeResources: Partial<ResourceCollections> | undefined, scopeType: "local" | "global") => {
-      if (!scopeResources) return;
-      const categories = [
-        ["elements", "custom-element"],
-        ["attributes", "custom-attribute"],
-        ["controllers", "template-controller"],
-        ["valueConverters", "value-converter"],
-        ["bindingBehaviors", "binding-behavior"],
-      ] as const;
-
-      for (const [category, kind] of categories) {
-        const entries = scopeResources[category as keyof typeof scopeResources];
-        if (!entries || typeof entries !== "object") continue;
-        for (const [name, res] of Object.entries(entries as Record<string, any>)) {
-          const key = `${kind}:${name}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          resources.push({
-            name,
-            kind,
-            origin: res.origin,
-            className: res.className,
-            file: res.file,
-            package: res.package,
-            bindableCount: res.bindables ? Object.keys(res.bindables).length : res.props ? Object.keys(res.props).length : 0,
-            scope: scopeType,
-          });
-        }
-      }
-    };
-
-    // Local scope first (if different from root)
-    if (scopeId !== graph.root && scope) {
-      collectFromScope(scope.resources, "local");
-    }
-    // Then root scope (global)
-    if (rootScope) {
-      collectFromScope(rootScope.resources, "global");
-    }
-
+    const doc = ctx.ensureProgramDocument(uri);
+    if (!doc) return null;
+    const filePath = URI.parse(uri).fsPath;
+    const [compilations, visibility] = await Promise.all([
+      ctx.semanticRuntime.templateCompilations(filePath),
+      ctx.semanticRuntime.resourceVisibility(),
+    ]);
+    const compilerWorlds = new Set(compilations.value.rows.map((row) => row.compilerWorld));
+    const rows = compilerWorlds.size === 0
+      ? visibility.value.rows
+      : visibility.value.rows.filter((row) => compilerWorlds.has(row.compilerWorld));
+    const resources = scopeResourcesForVisibility(ctx.workspaceRoot, rows);
+    const [scopeLabel] = compilerWorlds;
     return {
-      scopeId,
-      scopeLabel: scope?.label,
+      scopeId: scopeLabel ?? "semantic-runtime",
+      scopeLabel,
       resources,
     };
   } catch (e) {
     ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
     return null;
   }
+}
+
+function scopeResourcesForVisibility(
+  workspaceRoot: string | null,
+  rows: readonly SemanticResourceVisibilityRow[],
+): ScopeResourceItem[] {
+  const resources = new Map<string, ScopeResourceItem>();
+  for (const row of rows) {
+    if (!RESOURCE_EXPLORER_KINDS.has(row.resourceKind)) {
+      continue;
+    }
+    const key = resourceExplorerKey(row.resourceKind, row.name);
+    if (resources.has(key)) {
+      continue;
+    }
+    resources.set(key, {
+      name: row.name,
+      kind: row.resourceKind,
+      origin: originForSource(row.source),
+      file: filePathForSource(workspaceRoot, row.source),
+      package: packageNameForSource(row.source),
+      bindableCount: 0,
+      scope: scopeEntryForVisibility(row).scope === "global" ? "global" : "local",
+    });
+  }
+  return [...resources.values()].sort((left, right) => compareResourceExplorerItems(
+    { ...left, bindables: [] },
+    { ...right, bindables: [] },
+  ));
 }
 
 export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
@@ -675,45 +723,32 @@ export type RenameFromTsResponse = {
   changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
 } | null;
 
-export function handleRenameFromTs(
+export async function handleRenameFromTs(
   ctx: ServerContext,
   params: RenameFromTsParams,
-): RenameFromTsResponse {
+): Promise<RenameFromTsResponse> {
   try {
     if (!params?.uri || !params.position || !params.newName) return null;
 
     const canonical = canonicalDocumentUri(params.uri);
-
-    // tryExpressionMemberRename lives on SemanticWorkspaceEngine (implementation),
-    // not on the SemanticWorkspace interface. Runtime check guards the cast.
-    const engine = ctx.workspace as any;
-    if (typeof engine.tryExpressionMemberRename !== "function") {
-      ctx.logger.warn(`[renameFromTs] tryExpressionMemberRename not available on workspace`);
-      return null;
-    }
-
-    const result = engine.tryExpressionMemberRename({
-      uri: canonical.uri,
-      position: params.position,
-      newName: params.newName,
-    }) as import("@aurelia-ls/semantic-workspace/types.js").WorkspaceRefactorResult | null;
-
-    if (!result || !("edit" in result)) {
+    const doc = ctx.ensureProgramDocument(params.uri);
+    if (!doc) return null;
+    const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
+      doc,
+      params.position,
+      params.newName,
+    );
+    const templateReferenceCount = answer.value.templateReferenceCount;
+    if (answer.value.status !== "available" || answer.value.edits.length === 0) {
       ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
       return null;
     }
-
-    // Filter to template-only edits (TS edits are handled by VS Code's built-in TS rename)
-    const templateEdits = result.edit.edits.filter(
-      (e) => String(e.uri).endsWith(".html"),
-    );
-    if (!templateEdits.length) return null;
-
-    // Convert workspace edits to LSP format (span offsets → line/character ranges)
-    const lookupText = (uri: any) => ctx.lookupText(uri);
-    const mapped = mapSemanticWorkspaceEdit({ edits: templateEdits }, lookupText);
+    const mapped = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupText(uri), {
+      workspaceRoot: ctx.workspaceRoot,
+      originDocument: doc,
+    });
     if (!mapped?.changes) {
-      ctx.logger.warn(`[renameFromTs] span→range conversion failed for ${templateEdits.length} edits`);
+      ctx.logger.warn(`[renameFromTs] span→range conversion failed for ${answer.value.edits.length} runtime template edit(s)`);
       return null;
     }
 
@@ -721,7 +756,7 @@ export function handleRenameFromTs(
     const fileCount = Object.keys(changes).length;
 
     if (fileCount > 0) {
-      ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s)`);
+      ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s), ${templateReferenceCount} runtime reference(s)`);
     }
     return fileCount ? { changes } : null;
   } catch (e) {
@@ -732,40 +767,35 @@ export function handleRenameFromTs(
   }
 }
 
-export function handleGetRelatedFile(
+export async function handleGetRelatedFile(
   ctx: ServerContext,
   params: { uri: string },
-): { uri: string; kind: "template" | "component" } | null {
+): Promise<{ uri: string; kind: "template" | "component" } | null> {
   try {
     const uri = params?.uri;
     if (!uri) return null;
-    const canonical = canonicalDocumentUri(uri);
-
-    // Check if this is a template → find its component
-    const asTemplate = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
-    );
-    if (asTemplate) {
-      return { uri: canonicalDocumentUri(asTemplate.componentPath).uri, kind: "component" };
+    const filePath = URI.parse(uri).fsPath;
+    const definitions = await ctx.semanticRuntime.resourceDefinitions();
+    const requested = normalizedFilePath(filePath);
+    for (const definition of definitions.value.rows) {
+      if (definition.resourceKind !== "custom-element") {
+        continue;
+      }
+      const componentFile = filePathForSource(ctx.workspaceRoot, definition.targetSource ?? definition.source);
+      const templateFile = filePathForSource(ctx.workspaceRoot, definition.template?.source ?? null);
+      if (componentFile == null || templateFile == null) {
+        continue;
+      }
+      if (normalizedFilePath(componentFile) === normalizedFilePath(templateFile)) {
+        continue;
+      }
+      if (normalizedFilePath(templateFile) === requested) {
+        return { uri: pathToFileURL(componentFile).toString(), kind: "component" };
+      }
+      if (normalizedFilePath(componentFile) === requested) {
+        return { uri: pathToFileURL(templateFile).toString(), kind: "template" };
+      }
     }
-
-    // Check if this is a component → find its template
-    const asComponent = ctx.workspace.templates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-    if (asComponent) {
-      return { uri: canonicalDocumentUri(asComponent.templatePath).uri, kind: "template" };
-    }
-
-    // Check inline templates (component file IS the template)
-    const asInline = ctx.workspace.inlineTemplates.find(
-      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
-    );
-    if (asInline) {
-      // Inline template — no separate file to navigate to
-      return null;
-    }
-
     return null;
   } catch (e) {
     ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
@@ -773,22 +803,19 @@ export function handleGetRelatedFile(
   }
 }
 
+function normalizedFilePath(filePath: string): string {
+  return path.normalize(filePath).toLowerCase();
+}
+
 /**
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest("aurelia/getOverlay", (params: MaybeUriParam) => handleGetOverlay(ctx, params));
-  ctx.connection.onRequest("aurelia/getMapping", (params: MaybeUriParam) => handleGetMapping(ctx, params));
-  ctx.connection.onRequest("aurelia/queryAtPosition", (params: { uri: string; position: Position }) => handleQueryAtPosition(ctx, params));
-  ctx.connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => handleGetSsr(ctx, params));
   ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
   ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
   ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
   ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }) => handleGetScopeResources(ctx, params));
-  ctx.connection.onRequest("aurelia/getCodeLens", (params: { uri: string }) =>
-    handleCodeLens(ctx, { textDocument: { uri: params.uri } }),
-  );
   ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }) => handleGetRelatedFile(ctx, params));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
   ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams) => handleRenameFromTs(ctx, params));

@@ -1,10 +1,10 @@
 # Aurelia 2
 
-Language intelligence for Aurelia 2 templates.
+Language intelligence for Aurelia 2 templates, powered by the shared Aurelia semantic runtime.
 
-The extension analyzes your Aurelia project to understand what your components are, what they accept, and where they came from. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and the full binding syntax.
+The extension analyzes your Aurelia project to understand what your components are, what they accept, where they came from, and how templates connect to TypeScript. It handles decorators, conventions, `static $au`, `.define()` calls, third-party packages, and the full binding syntax.
 
-When it can't fully analyze something — a dynamic registration pattern, a third-party package with opaque configuration — it tells you what it doesn't know and why, rather than guessing or staying silent.
+When it cannot prove a fact, it keeps that uncertainty visible through diagnostics, inline markers, and inspection details instead of fabricating a confident answer.
 
 ## Features
 
@@ -14,7 +14,7 @@ Hover over any Aurelia construct to see what it is, what it accepts, and where i
 
 ### Diagnostics — catch real problems
 
-Real-time error detection for unknown elements, unknown attributes, and binding mismatches. The extension only reports problems it's confident about — when analysis is incomplete, errors demote to warnings instead of producing false positives on valid code.
+Real-time, source-linked diagnostics for unknown elements, unknown attributes, expression errors, and binding mismatches. Diagnostics are backed by the same semantic facts used by MCP and other runtime consumers.
 
 ### Completions — discover what's available
 
@@ -26,11 +26,11 @@ Jump from template usage to source definition. Works for custom elements, attrib
 
 ### Find References
 
-Find all usages of a component, attribute, or bindable across your templates.
+Find usages of source-backed template members and Aurelia resources across your project.
 
 ### Rename — refactor safely
 
-Rename a component, attribute, or bindable and all usages update across files. The extension checks that it can find all references before applying changes — if it can't, it tells you why rather than making partial edits.
+Rename source-backed template expression members across TypeScript and HTML. The extension only applies edits when semantic-runtime can prove the affected template references.
 
 ### Semantic Tokens — see the meaning
 
@@ -38,11 +38,15 @@ Templates are colored by semantic meaning: custom elements look different from H
 
 ### Resource Explorer
 
-Browse all Aurelia resources in your project from the sidebar — custom elements, attributes, template controllers, value converters, binding behaviors — organized by origin (local vs. package) and scope.
+Browse all Aurelia resources in your project from the sidebar — custom elements, attributes, template controllers, value converters, binding behaviors — organized by project, package, framework provenance, and scope.
 
 ### Binding Mode Hints
 
 Inline hints show the resolved binding mode so you can see whether `.bind` resolves to two-way or to-view for a given target.
+
+### Inspect and Reports
+
+Inspect at Cursor opens the semantic-runtime fact at the current template position in a markdown editor. Diagnostics Report opens a source-linked summary of current diagnostics without forcing focus to an output panel.
 
 ## What Aurelia constructs are supported
 
@@ -59,7 +63,7 @@ Inline hints show the resolved binding mode so you can see whether `.bind` resol
 
 Most framework tooling either achieves complete knowledge by restricting what you can write, or provides incomplete knowledge without telling you.
 
-This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic registration pattern, a complex third-party package), it tells you what it doesn't know and why. Diagnostics downgrade to warnings when confidence is partial. Hover cards show confidence indicators. Completions mark when the list may be incomplete.
+This extension takes a different approach: it analyzes what it can analyze, and when it reaches a limit (a dynamic registration pattern, a complex third-party package), it keeps the uncertainty visible. Diagnostics, inline markers, hover, Inspect at Cursor, and the Resource Explorer all prefer source-linked facts and provenance over guessed results.
 
 The goal is that you can trust what the extension tells you.
 
@@ -83,10 +87,10 @@ The goal is that you can trust what the extension tells you.
 | Aurelia: Inspect at Cursor | `Ctrl+Alt+I` (`Cmd+Alt+I`) | Show full semantic analysis at cursor |
 | Aurelia: Open Related File | `Alt+O` | Toggle between component class and template |
 | Aurelia: Show Available Resources | | List all resources visible in current scope |
-| Aurelia: Diagnostics Report | | Summary of current diagnostics |
-| Aurelia: Show Suppressed Diagnostics | | Show diagnostics suppressed by confidence rules |
-| Aurelia: Show Compiled Template | | View TypeScript overlay for template (debug) |
-| Aurelia: Show Overlay Mapping | | View expression position mapping (debug) |
+| Aurelia: Diagnostics Report | | Open a semantic-runtime diagnostics summary for the current template |
+| Aurelia: Refresh | | Refresh the Resource Explorer |
+
+`Aurelia Debug: Dump Server State` is available when `aurelia.features.debugCommands` is enabled. Observability commands are available from the command palette for troubleshooting.
 
 ## Troubleshooting
 

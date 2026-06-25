@@ -5,7 +5,13 @@ import {
   spanToRangeOrNull,
   diagnosticToRange,
 } from "@aurelia-ls/language-server/api";
-import type { CompilerDiagnostic } from "@aurelia-ls/compiler/model/diagnostics.js";
+
+type TestDiagnostic = {
+  code: string;
+  message: string;
+  severity: "error" | "warning";
+  span?: { start: number; end: number };
+};
 function createDoc(content: string): TextDocument {
   return TextDocument.create("file:///test.html", "html", 1, content);
 }
@@ -76,7 +82,7 @@ describe("spanToRangeOrNull", () => {
 describe("diagnosticToRange", () => {
   test("extracts span from diagnostic and converts to range", () => {
     const doc = createDoc("<div>${name}</div>");
-    const diag: CompilerDiagnostic = {
+    const diag: TestDiagnostic = {
       code: "TEST001",
       message: "Test error",
       severity: "error",
@@ -92,7 +98,7 @@ describe("diagnosticToRange", () => {
 
   test("returns null for diagnostic without span", () => {
     const doc = createDoc("hello");
-    const diag: CompilerDiagnostic = {
+    const diag: TestDiagnostic = {
       code: "TEST002",
       message: "No span",
       severity: "warning",

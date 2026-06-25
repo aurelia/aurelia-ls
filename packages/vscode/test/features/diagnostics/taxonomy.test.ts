@@ -17,7 +17,7 @@ describe("diagnostics taxonomy bridge", () => {
           schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
           impact: "degraded",
           actionability: "manual",
-          category: "toolchain",
+          category: "project",
         },
       },
     });
@@ -26,7 +26,7 @@ describe("diagnostics taxonomy bridge", () => {
       schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
       impact: "degraded",
       actionability: "manual",
-      category: "toolchain",
+      category: "project",
     });
   });
 
@@ -68,7 +68,7 @@ describe("diagnostics taxonomy bridge", () => {
               schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
               impact: "blocking",
               actionability: "guided",
-              category: "toolchain",
+              category: "project",
             },
           },
         },

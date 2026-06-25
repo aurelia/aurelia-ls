@@ -1,23 +1,168 @@
-import {
-  NOOP_TRACE,
-  createTrace,
-  type AttributeValue,
-  type CompileTrace,
-  type Span,
-  type SpanEvent,
-  type TraceExporter,
-} from "@aurelia-ls/compiler/shared/trace.js";
-import {
-  configureDebug,
-  getDebugChannel,
-  refreshDebugChannels,
-  type DebugChannel as CompilerDebugChannel,
-} from "@aurelia-ls/compiler/shared/debug.js";
 import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger, LogLevel } from "../log.js";
 import type { PresentationConfig } from "./config.js";
 
-export type DebugChannel = CompilerDebugChannel;
+export type AttributeValue = string | number | boolean | null | readonly AttributeValue[];
+export type DebugChannel = (point: string, data?: unknown) => void;
+
+export interface Span {
+  readonly name: string;
+  readonly attributes: ReadonlyMap<string, AttributeValue>;
+  readonly duration: bigint | null;
+}
+
+export interface SpanEvent {
+  readonly name: string;
+  readonly attributes: ReadonlyMap<string, AttributeValue>;
+}
+
+export interface TraceExporter {
+  onSpanStart(span: Span): void;
+  onSpanEnd(span: Span): void;
+  onEvent(span: Span, event: SpanEvent): void;
+  flush(): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
+export interface CompileTrace {
+  span<T>(name: string, fn: () => T): T;
+  spanAsync<T>(name: string, fn: () => Promise<T>): Promise<T>;
+  event(name: string, attributes?: Record<string, AttributeValue>): void;
+  setAttribute(key: string, value: AttributeValue): void;
+  setAttributes(attrs: Record<string, AttributeValue>): void;
+  startSpan(name: string): Span;
+  currentSpan(): Span | undefined;
+  rootSpan(): Span;
+  flush(): Promise<void>;
+}
+
+class MutableSpan implements Span {
+  readonly attributes = new Map<string, AttributeValue>();
+  #started = process.hrtime.bigint();
+  #ended: bigint | null = null;
+
+  constructor(readonly name: string) {}
+
+  get duration(): bigint | null {
+    return this.#ended == null ? null : this.#ended - this.#started;
+  }
+
+  end(): void {
+    this.#ended = process.hrtime.bigint();
+  }
+}
+
+class NoopTrace implements CompileTrace {
+  #root = new MutableSpan("root");
+
+  span<T>(_name: string, fn: () => T): T {
+    return fn();
+  }
+
+  spanAsync<T>(_name: string, fn: () => Promise<T>): Promise<T> {
+    return fn();
+  }
+
+  event(_name: string, _attributes?: Record<string, AttributeValue>): void {}
+  setAttribute(_key: string, _value: AttributeValue): void {}
+  setAttributes(_attrs: Record<string, AttributeValue>): void {}
+
+  startSpan(name: string): Span {
+    return new MutableSpan(name);
+  }
+
+  currentSpan(): Span | undefined {
+    return undefined;
+  }
+
+  rootSpan(): Span {
+    return this.#root;
+  }
+
+  async flush(): Promise<void> {}
+}
+
+const NOOP_TRACE: CompileTrace = new NoopTrace();
+
+function createTrace(options: { name: string; exporter: TraceExporter }): CompileTrace {
+  return new LocalTrace(options.name, options.exporter);
+}
+
+class LocalTrace implements CompileTrace {
+  #root: MutableSpan;
+  #stack: MutableSpan[];
+
+  constructor(name: string, private readonly exporter: TraceExporter) {
+    this.#root = new MutableSpan(name);
+    this.#stack = [this.#root];
+  }
+
+  span<T>(name: string, fn: () => T): T {
+    const span = this.begin(name);
+    try {
+      return fn();
+    } finally {
+      this.end(span);
+    }
+  }
+
+  async spanAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    const span = this.begin(name);
+    try {
+      return await fn();
+    } finally {
+      this.end(span);
+    }
+  }
+
+  event(name: string, attributes: Record<string, AttributeValue> = {}): void {
+    const span = this.#stack[this.#stack.length - 1] ?? this.#root;
+    this.exporter.onEvent(span, { name, attributes: new Map(Object.entries(attributes)) });
+  }
+
+  setAttribute(key: string, value: AttributeValue): void {
+    this.#stack[this.#stack.length - 1]?.attributes.set(key, value);
+  }
+
+  setAttributes(attrs: Record<string, AttributeValue>): void {
+    for (const [key, value] of Object.entries(attrs)) {
+      this.setAttribute(key, value);
+    }
+  }
+
+  startSpan(name: string): Span {
+    return this.begin(name);
+  }
+
+  currentSpan(): Span | undefined {
+    return this.#stack[this.#stack.length - 1];
+  }
+
+  rootSpan(): Span {
+    return this.#root;
+  }
+
+  flush(): Promise<void> {
+    return this.exporter.flush();
+  }
+
+  private begin(name: string): MutableSpan {
+    const span = new MutableSpan(name);
+    this.#stack.push(span);
+    this.exporter.onSpanStart(span);
+    return span;
+  }
+
+  private end(span: MutableSpan): void {
+    span.end();
+    if (this.#stack[this.#stack.length - 1] === span) {
+      this.#stack.pop();
+    } else {
+      this.#stack = this.#stack.filter((entry) => entry !== span);
+    }
+    this.exporter.onSpanEnd(span);
+  }
+}
 
 export interface ErrorReportOptions {
   notify?: boolean;
@@ -84,6 +229,10 @@ export class DebugService {
   #logger: ClientLogger;
   #channelCache = new Map<string, DebugChannel>();
   #envValue = "0";
+  #enabled = false;
+  #channels = new Set<string>();
+  #format: "pretty" | "json" = "pretty";
+  #timestamps = false;
 
   constructor(logger: ClientLogger) {
     this.#logger = logger;
@@ -92,6 +241,10 @@ export class DebugService {
   update(config: PresentationConfig): void {
     const debugConfig = config.observability.debug;
     const channels = normalizeChannels(debugConfig.channels);
+    this.#enabled = debugConfig.enabled;
+    this.#channels = new Set(channels);
+    this.#format = debugConfig.format;
+    this.#timestamps = debugConfig.timestamps;
     this.#envValue = debugConfig.enabled
       ? channels.length
         ? channels.join(",")
@@ -101,14 +254,6 @@ export class DebugService {
     process.env["AURELIA_DEBUG"] = this.#envValue;
     process.env["AURELIA_LS_DEBUG"] = this.#envValue;
 
-    configureDebug({
-      format: debugConfig.format,
-      timestamps: debugConfig.timestamps,
-      output: (message) => {
-        this.#logger.write("debug", message, undefined, { raw: true, force: true });
-      },
-    });
-    refreshDebugChannels();
     this.#channelCache.clear();
   }
 
@@ -122,10 +267,20 @@ export class DebugService {
     const existing = this.#channelCache.get(key);
     if (existing) return existing;
     const proxy: DebugChannel = (point, data) => {
-      getDebugChannel(key)(point, data);
+      this.writeDebug(key, point, data);
     };
     this.#channelCache.set(key, proxy);
     return proxy;
+  }
+
+  private writeDebug(channel: string, point: string, data?: unknown): void {
+    if (!this.#enabled) return;
+    if (this.#channels.size > 0 && !this.#channels.has(channel) && !this.#channels.has("*")) return;
+    const timestamp = this.#timestamps ? `${new Date().toISOString()} ` : "";
+    const message = this.#format === "json"
+      ? JSON.stringify({ channel, point, data, time: this.#timestamps ? new Date().toISOString() : undefined })
+      : `${timestamp}[debug:${channel}] ${point}${data === undefined ? "" : ` ${formatDebugData(data)}`}`;
+    this.#logger.write("debug", message, undefined, { raw: true, force: true });
   }
 }
 
@@ -363,6 +518,16 @@ function formatAttributeValue(value: AttributeValue): string {
     return `[${value.length}]`;
   }
   return "[unknown]";
+}
+
+function formatDebugData(data: unknown): string {
+  if (data == null) return String(data);
+  if (typeof data === "string") return data;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return "[unserializable]";
+  }
 }
 
 function formatDuration(nanos: bigint): string {

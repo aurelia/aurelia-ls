@@ -106,7 +106,7 @@ export class ResourceRecognitionProjectPass {
     const started = performance.now();
     const phases: ResourceRecognitionProjectPhaseTiming[] = [];
     const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
-    const recognition = new ResourceRecognitionPass();
+    const recognition = new ResourceRecognitionPass(project.sourceTextProvider);
     const sourceFiles = measureResourceRecognitionProjectPhase(phases, 'source-file-selection', () =>
       resourceRecognitionSourceFiles(project, projectEvaluation)
     );

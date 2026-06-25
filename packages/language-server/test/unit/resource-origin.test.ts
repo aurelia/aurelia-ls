@@ -1,148 +1,385 @@
 import { test, expect, describe, vi } from "vitest";
-import { handleGetResources } from "@aurelia-ls/language-server/api";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+  handleGetResources,
+  handleGetRelatedFile,
+  handleGetScopeResources,
+  type ResourceExplorerResponse,
+  type ScopeResourcesResponse,
+} from "@aurelia-ls/language-server/api";
 
 /**
- * Property: origin passthrough is faithful to compiler's ResourceOrigin.
- * The language server passes through the compiler's origin field without
- * display-layer mapping. Display grouping (project/package/framework)
- * is the VS Code extension's concern.
+ * Boundary: semantic-runtime resource rows -> VS Code resource explorer DTOs.
  *
- * Boundary: catalog resources → ResourceExplorerItem.origin
+ * The language server keeps the existing extension-facing shape, but the
+ * authority is now semantic-runtime ResourceDefinitions/ResourceVisibility
+ * instead of a legacy catalog snapshot.
  */
 
-function createCatalog(resources: {
-  elements?: Record<string, Record<string, unknown>>;
-  attributes?: Record<string, Record<string, unknown>>;
-  controllers?: Record<string, Record<string, unknown>>;
-  valueConverters?: Record<string, Record<string, unknown>>;
-  bindingBehaviors?: Record<string, Record<string, unknown>>;
+const workspaceRoot = path.resolve("test-workspace");
+const componentPath = path.join(workspaceRoot, "src", "my-app.html");
+const componentUri = pathToFileURL(componentPath).toString();
+
+function source(path: string, start = 0, end = 10) {
+  return {
+    kind: "source-span-address",
+    label: `${path}@${start}..${end}`,
+    path,
+    start,
+    end,
+    role: "range",
+  };
+}
+
+function externalCatalogSource(value = "runtime-html:default-resources") {
+  return {
+    kind: "external-address",
+    label: `Framework built-in resource catalog ${value}.`,
+    scheme: "aurelia-package-catalog",
+    value,
+  };
+}
+
+function definition(input: Partial<Record<string, unknown>> & { resourceKind: string; name: string }) {
+  return {
+    projectKey: "app",
+    resourceKind: input.resourceKind,
+    declarationModes: ["decorator"],
+    name: input.name,
+    aliases: [],
+    key: `au:resource:${input.resourceKind}:${input.name}`,
+    targetName: input.targetName ?? "MyResource",
+    captureKind: null,
+    template: input.template ?? null,
+    bindables: input.bindables ?? [],
+    watches: [],
+    issues: [],
+    dependencies: [],
+    isTemplateController: input.resourceKind === "template-controller" ? true : null,
+    containerStrategy: null,
+    defaultProperty: null,
+    containerless: null,
+    shadowMode: null,
+    hasSlots: null,
+    needsCompile: null,
+    patterns: [],
+    source: input.source ?? source("src/my-resource.ts"),
+    targetSource: input.targetSource ?? input.source ?? source("src/my-resource.ts", 2, 12),
+  };
+}
+
+function visibility(input: {
+  resourceKind: string;
+  name: string;
+  visibilityKind?: string;
+  compilerWorld?: string;
+  source?: Record<string, unknown>;
 }) {
   return {
-    resources: {
-      elements: resources.elements ?? {},
-      attributes: resources.attributes ?? {},
-      controllers: resources.controllers ?? {},
-      valueConverters: resources.valueConverters ?? {},
-      bindingBehaviors: resources.bindingBehaviors ?? {},
-    },
-    gapsByResource: {},
+    compilerWorld: input.compilerWorld ?? "app-root src/main.ts@0..10",
+    resourceKind: input.resourceKind,
+    name: input.name,
+    aliases: [],
+    visibilityKind: input.visibilityKind ?? "app-root",
+    source: input.source ?? source("src/my-resource.ts"),
   };
 }
 
-function createMockContext(catalog: ReturnType<typeof createCatalog>, semantics: Record<string, unknown> = {}) {
+function compilation(input: Partial<Record<string, unknown>> = {}) {
   return {
+    compilationLane: input.compilationLane ?? "app-runtime",
+    analysisDepth: "binding-observation",
+    definitionName: input.definitionName ?? "my-app",
+    compilerWorld: input.compilerWorld ?? "app-root src/main.ts@0..10",
+    templateSourceKind: input.templateSourceKind ?? "file",
+    htmlNodes: 0,
+    htmlAttributes: 0,
+    recoveries: 0,
+    attributeSyntaxes: 0,
+    classifications: 0,
+    valueSites: 0,
+    expressionParses: 0,
+    bindingCommandLowerings: 0,
+    instructions: 0,
+    renderTargets: 0,
+    runtimeControllers: 0,
+    runtimeChildContainers: 0,
+    runtimeChildContextResolverSlots: 0,
+    runtimeBindings: 0,
+    runtimeTargetOperations: 0,
+    runtimeRendererTargetOperations: 0,
+    runtimeBindingTargetAccesses: 0,
+    runtimeBindingTargetOperations: 0,
+    runtimeBindingSourceOperations: 0,
+    runtimeBindingValueChannels: 0,
+    runtimeBindingDataFlows: 0,
+    runtimeBindingObservedDependencies: 0,
+    bindingScopes: 0,
+    openSeams: 0,
+    source: input.source ?? source("src/my-app.html"),
+  };
+}
+
+function answer<T>(rows: T[]) {
+  return Promise.resolve({
+    schemaVersion: "0.1",
+    outcome: "hit",
+    closure: "complete",
+    summary: "mock",
+    value: { rows },
+    page: null,
+  });
+}
+
+function createMockContext(input: {
+  definitions?: unknown[];
+  visibility?: unknown[];
+  compilations?: unknown[];
+}) {
+  const document = {
+    uri: componentUri,
+    getText: vi.fn(() => "<template></template>"),
+  };
+  return {
+    workspaceRoot,
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-    workspace: {
-      refresh: vi.fn(),
-      snapshot: vi.fn(() => ({
-        meta: { fingerprint: "test" },
-        catalog,
-        semantics: { elements: {}, attributes: {}, controllers: {}, valueConverters: {}, bindingBehaviors: {}, ...semantics },
-        resourceGraph: null,
-      })),
-      templates: [],
-      inlineTemplates: [],
+    ensureProgramDocument: vi.fn(() => document),
+    semanticRuntime: {
+      resourceDefinitions: vi.fn(() => answer(input.definitions ?? [])),
+      resourceVisibility: vi.fn(() => answer(input.visibility ?? [])),
+      templateCompilations: vi.fn(() => answer(input.compilations ?? [])),
     },
   };
 }
 
-describe("resource origin passthrough", () => {
-  test("resource with package field passes through compiler origin as-is", () => {
-    const ctx = createMockContext(createCatalog({
-      elements: {
-        "my-el": { name: "my-el", className: "MyEl", package: "my-plugin", origin: undefined, bindables: {} },
+describe("runtime-backed resource explorer", () => {
+  test("maps semantic resource definitions to explorer items", async () => {
+    const bindables = [
+      {
+        name: "value",
+        attribute: "value",
+        callback: "valueChanged",
+        mode: "twoWay",
+        setterKind: "property",
+        valueType: "string",
+        valueTypeShapeKind: "primitive",
+        effectiveValueTypeShapeKind: "primitive",
+        valueTypeHasCallSignature: false,
+        valueTypeHasMembers: false,
+        valueTypeIsWeak: false,
+        source: source("src/my-resource.ts", 20, 25),
       },
+    ];
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "my-resource",
+          targetName: "MyResource",
+          bindables,
+        }),
+      ],
+      visibility: [
+        visibility({ resourceKind: "custom-element", name: "my-resource", visibilityKind: "app-root" }),
+      ],
+      compilations: [
+        compilation({ source: source("src/my-app.html"), templateSourceKind: "file" }),
+        compilation({ source: source("src/inline.ts"), templateSourceKind: "inline" }),
+      ],
+    });
+
+    const result: ResourceExplorerResponse = await handleGetResources(ctx as never);
+
+    expect(result.templateCount).toBe(2);
+    expect(result.inlineTemplateCount).toBe(1);
+    expect(result.resources).toEqual([
+      expect.objectContaining({
+        name: "my-resource",
+        kind: "custom-element",
+        className: "MyResource",
+        file: path.join(workspaceRoot, "src", "my-resource.ts"),
+        origin: "source",
+        scope: "global",
+        bindableCount: 1,
+        declarationForm: "decorator",
+      }),
+    ]);
+    expect(result.resources[0].bindables[0]).toEqual(expect.objectContaining({
+      name: "value",
+      attribute: "value",
+      mode: "twoWay",
+      type: "string",
     }));
-    const result = handleGetResources(ctx as never);
+  });
+
+  test("adds framework resources from visibility rows when no definition row exists", async () => {
+    const ctx = createMockContext({
+      definitions: [],
+      visibility: [
+        visibility({
+          resourceKind: "template-controller",
+          name: "if",
+          visibilityKind: "local",
+          source: externalCatalogSource(),
+        }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never);
+
+    expect(result.resources).toEqual([
+      expect.objectContaining({
+        name: "if",
+        kind: "template-controller",
+        origin: "builtin",
+        package: undefined,
+        scope: "local",
+      }),
+    ]);
+  });
+
+  test("derives package grouping from node_modules source paths", async () => {
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "plugin-card",
+          source: source("node_modules/@scope/plugin/dist/plugin-card.js"),
+        }),
+      ],
+      visibility: [
+        visibility({
+          resourceKind: "custom-element",
+          name: "plugin-card",
+          source: source("node_modules/@scope/plugin/dist/plugin-card.js"),
+        }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never);
+
+    expect(result.resources[0]).toEqual(expect.objectContaining({
+      name: "plugin-card",
+      package: "@scope/plugin",
+      origin: "source",
+      file: path.join(workspaceRoot, "node_modules", "@scope", "plugin", "dist", "plugin-card.js"),
+    }));
+  });
+
+  test("does not duplicate resources present in definitions and visibility", async () => {
+    const ctx = createMockContext({
+      definitions: [
+        definition({ resourceKind: "template-controller", name: "if" }),
+      ],
+      visibility: [
+        visibility({ resourceKind: "template-controller", name: "if", source: externalCatalogSource() }),
+      ],
+    });
+
+    const result = await handleGetResources(ctx as never);
+
     expect(result.resources).toHaveLength(1);
-    expect(result.resources[0].origin).toBeUndefined();
-    expect(result.resources[0].package).toBe("my-plugin");
-  });
-
-  test("builtin origin is passed through", () => {
-    const ctx = createMockContext(createCatalog({
-      elements: {
-        "au-slot": { name: "au-slot", className: "AuSlot", origin: "builtin", bindables: {} },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("builtin");
-  });
-
-  test("config origin is passed through", () => {
-    const ctx = createMockContext(createCatalog({
-      attributes: {
-        "my-attr": { kind: "attribute", name: "my-attr", origin: "config", bindables: {} },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("config");
-  });
-
-  test("resource with no origin passes through as undefined", () => {
-    const ctx = createMockContext(createCatalog({
-      elements: {
-        "my-el": { name: "my-el", className: "MyEl", file: "/src/my-el.ts", bindables: {} },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBeUndefined();
-  });
-
-  test("package field is available for consumer-side grouping", () => {
-    const ctx = createMockContext(createCatalog({
-      elements: {
-        "au-viewport": { name: "au-viewport", className: "AuViewport", origin: "builtin", package: "@aurelia/router", bindables: {} },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("builtin");
-    expect(result.resources[0].package).toBe("@aurelia/router");
-  });
-
-  test("every resource in the catalog is present in the response", () => {
-    const ctx = createMockContext(createCatalog({
-      elements: {
-        "project-el": { name: "project-el", className: "ProjectEl", file: "/src/el.ts", bindables: {} },
-        "package-el": { name: "package-el", className: "PackageEl", package: "some-pkg", bindables: {} },
-        "builtin-el": { name: "builtin-el", className: "BuiltinEl", origin: "builtin", bindables: {} },
-      },
-      valueConverters: {
-        "my-vc": { name: "my-vc", in: { kind: "any" }, out: { kind: "any" } },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    expect(result.resources).toHaveLength(4);
+    expect(result.resources[0].kind).toBe("template-controller");
   });
 });
 
-describe("template controller origin via attribute cross-reference", () => {
-  test("TC origin is derived from AttrRes entry when ControllerConfig lacks origin", () => {
-    const ctx = createMockContext(createCatalog({
-      controllers: {
-        "if": { name: "if", trigger: { kind: "value", prop: "value" }, scope: "overlay", props: {} },
-      },
-      attributes: {
-        "if": { kind: "attribute", name: "if", isTemplateController: true, origin: "builtin", bindables: { value: { name: "value" } } },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    const ifTC = result.resources.find((r) => r.name === "if" && r.kind === "template-controller");
-    expect(ifTC).toBeDefined();
-    expect(ifTC!.origin).toBe("builtin");
+describe("runtime-backed scope resources", () => {
+  test("filters visibility rows to the selected template compiler world", async () => {
+    const ctx = createMockContext({
+      visibility: [
+        visibility({ resourceKind: "custom-element", name: "in-scope", compilerWorld: "app-root selected" }),
+        visibility({ resourceKind: "custom-element", name: "out-of-scope", compilerWorld: "app-root other" }),
+      ],
+      compilations: [
+        compilation({ compilerWorld: "app-root selected", source: source("src/my-app.html") }),
+      ],
+    });
+
+    const result: ScopeResourcesResponse = await handleGetScopeResources(ctx as never, { uri: componentUri });
+
+    const calls = ctx.semanticRuntime.templateCompilations.mock.calls as unknown as [string][];
+    const calledPath = calls[0]?.[0] ?? "";
+    expect(path.normalize(calledPath).toLowerCase()).toBe(path.normalize(componentPath).toLowerCase());
+    expect(result?.scopeId).toBe("app-root selected");
+    expect(result?.resources.map((item) => item.name)).toEqual(["in-scope"]);
+  });
+});
+
+describe("runtime-backed related file lookup", () => {
+  test("opens the custom element template from the component source", async () => {
+    const componentFile = path.join(workspaceRoot, "src", "my-card.ts");
+    const templateFile = path.join(workspaceRoot, "src", "my-card.html");
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "my-card",
+          source: source("src/my-card.ts"),
+          targetSource: source("src/my-card.ts", 13, 19),
+          template: {
+            kind: "markup",
+            hasMarkup: true,
+            source: source("src/my-card.html"),
+          },
+        }),
+      ],
+    });
+
+    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() });
+
+    expect(result).toEqual({
+      uri: pathToFileURL(templateFile).toString(),
+      kind: "template",
+    });
   });
 
-  test("TC is not duplicated when present in both controllers and attributes", () => {
-    const ctx = createMockContext(createCatalog({
-      controllers: {
-        "if": { name: "if", trigger: { kind: "value", prop: "value" }, scope: "overlay" },
-      },
-      attributes: {
-        "if": { kind: "attribute", name: "if", isTemplateController: true, origin: "builtin", bindables: {} },
-      },
-    }));
-    const result = handleGetResources(ctx as never);
-    const ifResources = result.resources.filter((r) => r.name === "if");
-    expect(ifResources).toHaveLength(1);
+  test("opens the custom element component from the template source", async () => {
+    const componentFile = path.join(workspaceRoot, "src", "my-card.ts");
+    const templateFile = path.join(workspaceRoot, "src", "my-card.html");
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "my-card",
+          source: source("src/my-card.ts"),
+          targetSource: source("src/my-card.ts", 13, 19),
+          template: {
+            kind: "markup",
+            hasMarkup: true,
+            source: source("src/my-card.html"),
+          },
+        }),
+      ],
+    });
+
+    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(templateFile).toString() });
+
+    expect(result).toEqual({
+      uri: pathToFileURL(componentFile).toString(),
+      kind: "component",
+    });
+  });
+
+  test("does not return a related file for inline templates", async () => {
+    const componentFile = path.join(workspaceRoot, "src", "inline-card.ts");
+    const ctx = createMockContext({
+      definitions: [
+        definition({
+          resourceKind: "custom-element",
+          name: "inline-card",
+          source: source("src/inline-card.ts"),
+          targetSource: source("src/inline-card.ts", 13, 24),
+          template: {
+            kind: "inline",
+            hasMarkup: true,
+            source: source("src/inline-card.ts", 40, 80),
+          },
+        }),
+      ],
+    });
+
+    await expect(handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }))
+      .resolves.toBeNull();
   });
 });

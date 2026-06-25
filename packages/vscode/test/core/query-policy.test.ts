@@ -6,8 +6,8 @@ describe("QueryPolicies", () => {
     expect(QueryPolicies.capabilities.ttlMs).toBe(5000);
   });
 
-  test("position queries are fast and uncached", () => {
-    expect(QueryPolicies.queryAtPosition.ttlMs).toBe(0);
-    expect(QueryPolicies.queryAtPosition.timeoutMs).toBe(400);
+  test("diagnostics reports are uncached runtime reads", () => {
+    expect(QueryPolicies.diagnostics.ttlMs).toBe(0);
+    expect(QueryPolicies.diagnostics.timeoutMs).toBe(1500);
   });
 });

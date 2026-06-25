@@ -269,7 +269,7 @@ function isSameOrDescendantPath(parent: string, child: string): boolean {
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {
   const counts = new Map<SemanticProjectAureliaSourceSignalKind, number>();
-  const sourceText = new AuthoredSourceTextCache(project.rootDir);
+  const sourceText = new AuthoredSourceTextCache(project.rootDir, project.sourceTextProvider);
   for (const source of project.sourceFiles) {
     if (source.role !== SourceFileRole.AppSource) {
       continue;

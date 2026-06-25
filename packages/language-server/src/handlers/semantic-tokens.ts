@@ -1,44 +1,27 @@
 /**
  * Semantic tokens handler.
  *
- * The Semantic Workspace is the source of truth for token classification;
- * this adapter only maps workspace tokens into the LSP format.
+ * Semantic-runtime is the source of truth for token classification;
+ * this adapter only maps runtime token rows into the LSP format.
  */
 import type {
   SemanticTokens,
   SemanticTokensParams,
   SemanticTokensLegend,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import {
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
+  SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,
+  type SemanticSourceReference,
+  type SemanticTemplateSemanticTokenRow,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
-import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE, type WorkspaceToken } from "@aurelia-ls/semantic-workspace/types.js";
-export const TOKEN_TYPES = [
-  "aureliaElement",
-  "aureliaAttribute",
-  "aureliaBindable",
-  "aureliaController",
-  "aureliaCommand",
-  "aureliaConverter",
-  "aureliaBehavior",
-  "aureliaMetaElement",
-  "aureliaMetaAttribute",
-  "aureliaExpression",
-  "variable",
-  "property",
-  "function",
-  "keyword",
-  "string",
-] as const;
 
-export const TOKEN_MODIFIERS = [
-  "declaration",
-  "definition",
-  "defaultLibrary",
-  "deprecated",
-  "readonly",
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-] as const;
+export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
+export const WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE = "aureliaGapConservative" as const;
+
+export const TOKEN_TYPES = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES;
+export const TOKEN_MODIFIERS = SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS;
 
 export const SEMANTIC_TOKENS_LEGEND: SemanticTokensLegend = {
   tokenTypes: [...TOKEN_TYPES],
@@ -56,23 +39,22 @@ interface RawToken {
   modifiers: number;
 }
 
-export function handleSemanticTokensFull(
+export async function handleSemanticTokensFull(
   ctx: ServerContext,
   params: SemanticTokensParams,
-): SemanticTokens | null {
-  return ctx.trace.span("lsp.semanticTokens", () => {
+): Promise<SemanticTokens | null> {
+  return ctx.trace.spanAsync("lsp.semanticTokens", async () => {
     try {
       ctx.trace.setAttribute("lsp.semanticTokens.uri", params.textDocument.uri);
 
       const doc = ctx.ensureProgramDocument(params.textDocument.uri);
       if (!doc) return null;
 
-      const canonical = canonicalDocumentUri(doc.uri);
-      const text = ctx.workspace.lookupText(canonical.uri) ?? doc.getText();
-      const tokens = ctx.workspace.query(canonical.uri).semanticTokens();
-      if (!tokens.length) return null;
+      const response = await ctx.semanticRuntime.templateSemanticTokens(doc);
+      const tokens = response.value.rows;
+      if (tokens.length === 0) return null;
 
-      const encoded = encodeTokens(tokens, text);
+      const encoded = encodeTokens(tokens, doc.getText());
       return encoded.length ? { data: encoded } : null;
     } catch (e) {
       const message = e instanceof Error ? e.stack ?? e.message : String(e);
@@ -82,15 +64,17 @@ export function handleSemanticTokensFull(
   });
 }
 
-function encodeTokens(tokens: readonly WorkspaceToken[], text: string): number[] {
+export function encodeTokens(tokens: readonly SemanticTemplateSemanticTokenRow[], text: string): number[] {
   const raw: RawToken[] = [];
   for (const token of tokens) {
-    const typeIndex = TYPE_INDEX.get(token.type);
+    const typeIndex = TYPE_INDEX.get(token.tokenType);
     if (typeIndex === undefined) continue;
-    const length = token.span.end - token.span.start;
+    const source = exactSourceReference(token.source);
+    if (source?.start == null || source.end == null) continue;
+    const length = source.end - source.start;
     if (length <= 0) continue;
-    const start = positionAtOffset(text, token.span.start);
-    const modifiers = encodeModifiers(token.modifiers);
+    const start = positionAtOffset(text, source.start);
+    const modifiers = encodeModifiers(token.tokenModifiers);
     raw.push({
       line: start.line,
       char: start.character,
@@ -125,6 +109,12 @@ function encodeModifiers(modifiers?: readonly string[]): number {
     value |= 1 << idx;
   }
   return value;
+}
+
+function exactSourceReference(source: SemanticSourceReference | null): SemanticSourceReference | null {
+  if (source == null) return null;
+  if (source.start != null && source.end != null) return source;
+  return exactSourceReference(source.anchor ?? null);
 }
 
 function positionAtOffset(text: string, offset: number): { line: number; character: number } {

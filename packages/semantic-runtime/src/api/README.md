@@ -21,7 +21,7 @@ family. `route-query-registry.ts` owns the shared route query descriptors: `Sema
 `routeProductKind`, row reader, and answer label. `route-effect-facts.ts` is the authoring-facing bridge over those
 descriptors so API dispatch, verification, and orientation share one registry of router product rows.
 Template-family answerers live in `app-template-queries.ts`: that module owns template-compilation rows plus
-template completion, cursor-info, and diagnostic query handoff, while the runtime facade keeps only app opening,
+template completion, cursor-info, references, inlay hints, and diagnostic query handoff, while the runtime facade keeps only app opening,
 app-level dispatch, and direct cursor-locus convenience methods.
 App-query identity, locus, and invalidation epoch keys live in `app-query-identity.ts`. Keep reuse/invalidation keys
 there rather than rebuilding private string keys in the MCP adapter, scripts, or individual answerers.
@@ -442,6 +442,37 @@ const cursorInfo = app.ask({
     offset: 340,
   },
 });
+const templateReferences = app.ask({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
+  includeDeclaration: true,
+  page: { size: 50 },
+});
+const templateCodeActions = app.ask({
+  kind: SemanticAppQueryKind.TemplateCodeActions,
+  cursor: {
+    filePath: 'src/my-element.html',
+    line: 12,
+    character: 18,
+    offset: 340,
+  },
+  diagnosticProjection: 'type-projection',
+});
+const templateInlayHints = app.ask({
+  kind: SemanticAppQueryKind.TemplateInlayHints,
+  sourceFile: { filePath: 'src/my-element.html' },
+  page: { size: 50 },
+});
+const templateSemanticTokens = app.ask({
+  kind: SemanticAppQueryKind.TemplateSemanticTokens,
+  sourceFile: { filePath: 'src/my-element.html' },
+  page: { size: 200 },
+});
 const templateDiagnostics = app.ask({
   kind: SemanticAppQueryKind.TemplateDiagnostics,
   sourceFile: { filePath: 'src/my-element.html' },
@@ -552,6 +583,35 @@ authored on a known owner type but the owner does not project that member, curso
 completion hit.
 Cursor-info answers also own `displayText` for MCP/LSP-style hover or explanation surfaces: selected HTML/value site,
 resource/bindable/member/owner facts, cursor diagnostics, missing inputs, and the next focused tool family.
+`TemplateReferences` uses the same cursor-to-template and selected-member path, then joins the selected member's exact
+declaration source to runtime binding observed-dependency rows. Returned `template-usage` rows use the exact authored
+member token as their primary `source`; `declaration` rows are included only when `includeDeclaration` is true. This is
+the IDE/LSP reference projection for template expression reads and intentionally does not fall back to broad controller
+or framework declaration spans when a source-backed member cannot be proven.
+`TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
+It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
+can prove the authored target and exact insertion span. The first supported edit family is `declare-view-model-member`
+for missing root-scope members: it finds the custom element class that owns the selected template and inserts a
+definite-assignment `unknown` member through the TypeScript Program AST. Other diagnostic suggestions remain structured
+repair intent until a future planner can prove their source operation; clients should not treat every suggestion row as
+an autofix.
+`TemplateInlayHints` is the IDE-shaped template hint projection. Rows are source-file filterable and currently expose
+implicit binding-mode resolution: authored default `.bind` command intent, the resolved runtime binding mode, a
+display-friendly mode label, and exact authored insertion source. The row's primary `source` is the attribute-name span
+where an LSP client should place the hint; broader attribute and runtime binding spans remain available as
+`attributeSource` and `bindingSource` for explanation or lower-level follow-up. Explicit mode commands such as
+`.to-view` and `.two-way` should not produce rows because their intent is already visible in source.
+`TemplateSemanticTokens` is the shared IDE token-coloring projection. Rows are source-file filterable and use the
+stable LSP-facing token legend exported from the public contract. Tokens are conservative, source-linked facts derived
+from compiled templates and parsed expressions: resolved Aurelia elements, bindables, commands, template controllers,
+custom attributes, `<let>` declarations, interpolation/value-expression identifiers, value converters, and binding
+behaviors. Token rows are presentation evidence only; edit, rename, and repair features should use cursor-info,
+references, diagnostics, and future edit-policy answers rather than inferring authority from coloring.
+`TemplateFoldingRanges` is the shared IDE folding projection. Rows are source-file filterable and carry exact authored
+element spans derived from compiled HTML structure, with tag name, definition name, child count, and self-closing state
+for consumers that want explanation or secondary grouping. The query intentionally returns only multiline authored
+regions and requires only runtime-topology facts; LSP clients should translate the row `source` spans to native folding
+ranges rather than reparsing template text.
 Authoring orientation exposes both individual `repairs` and grouped `repairClusters`. Individual rows preserve the
 cursor/file evidence needed for later edits; clusters are the first large-data view for apps with many repeated weak
 typing diagnostics, grouping by repair kind, diagnostic/open-seam class, suggestion action, target kind, missing input
@@ -1415,6 +1475,12 @@ optional handles. Source addresses prefer the exact binding-behavior name span, 
 holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
 verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
 applications" before deriving higher-level validation ownership taste.
+
+`ValueConverterApplications` mirrors that positive-materialization lane for authored `| converter` expressions. Rows
+report the owning resource definition, binding kind, converter name, runtime phase (`to-view`/`from-view`), argument
+count, exact converter-name source address when available, and optional handles. Use this query when IDE/LSP, MCP, or
+future build/AOT consumers need to prove that a template actually applied a converter such as `featuredProducts`, rather
+than inferring converter usage from token coloring or diagnostics.
 
 `BindingValueChannels` exposes the observer/accessor or direct-operation value shape that runtime data flow should use
 instead of blindly treating the raw DOM property as the transported value. Use `BindingValueChannelSummary` first when

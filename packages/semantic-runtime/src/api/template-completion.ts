@@ -32,6 +32,7 @@ import {
   authoredSourcePositionForOffset,
   type AuthoredSourceText,
 } from '../kernel/authored-source-text.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -46,6 +47,7 @@ import {
 } from '../configuration/app-analysis.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import type { TemplateCompilerIssue } from '../template/compiler-issue.js';
+import type { BindingContextSlot } from '../configuration/scope.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
 import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
 import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-behavior.js';
@@ -69,7 +71,7 @@ import type {
 import { HtmlElement } from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   readTypeSystemOverlayDiagnostics,
   type TypeSystemOverlayDiagnostic,
@@ -771,7 +773,7 @@ function readContextForCursor(
   }
 
   const resolution = cursor.offset == null
-    ? offsetResolutionForCursor(workspaceRootDir, projectRootDir, cursor)
+    ? offsetResolutionForCursor(workspaceRootDir, projectRootDir, cursor, emission.project.sourceTextProvider)
     : { offset: cursor.offset, missingInputs: [], summary: null };
   const offset = resolution.offset;
   if (offset == null) {
@@ -1101,7 +1103,7 @@ function templateDiagnosticsScanContext(
     includeHandles,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
-    sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir),
+    sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.sourceTextProvider),
     seenRows: new Set(),
     semanticAgreementRows: new Set(),
   };
@@ -2383,6 +2385,10 @@ function cursorSelectedMemberRow(
   cursorContext: TemplateCompletionCursorContext,
   includeHandles: boolean,
 ): SemanticTemplateCursorMemberRow | null {
+  if (cursorContext.selectedScopeSlot != null) {
+    return cursorScopeSlotMemberRow(store, cursorContext, cursorContext.selectedScopeSlot, includeHandles);
+  }
+
   const memberName = cursorContext.selectedMemberName;
   if (memberName == null || cursorContext.query.memberOwnerTypeProductHandle == null) {
     return null;
@@ -2423,6 +2429,39 @@ function cursorSelectedMemberRow(
         ownerTypeIdentityHandle: member.ownerType.identityHandle,
         reachableIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
         sourceAddressHandle: checkerTypeMemberSourceAddressHandle(store, member),
+      },
+    } : {}),
+  };
+}
+
+function cursorScopeSlotMemberRow(
+  store: KernelStore,
+  cursorContext: TemplateCompletionCursorContext,
+  slot: BindingContextSlot,
+  includeHandles: boolean,
+): SemanticTemplateCursorMemberRow {
+  const member = slot.targetProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+  const sourceAddressHandle = slot.sourceAddressHandle
+    ?? (member == null ? null : checkerTypeMemberSourceAddressHandle(store, member));
+  const productHandle = slot.targetProductHandle ?? cursorContext.query.bindingScopeProductHandle;
+  return {
+    name: slot.name,
+    memberKind: member?.memberKind ?? CheckerTypeMemberKind.Property,
+    typeDisplay: slot.targetType?.display ?? member?.valueType?.display ?? null,
+    isOptional: member?.isOptional ?? false,
+    isReadonly: member?.isReadonly ?? false,
+    source: describeAddress(store, sourceAddressHandle),
+    ...(includeHandles && productHandle != null ? {
+      handles: {
+        productHandle,
+        declarationIdentityHandle: member?.declarationIdentityHandle ?? slot.targetIdentityHandle,
+        ownerTypeIdentityHandle: member?.ownerType.identityHandle ?? null,
+        reachableIdentityHandle: member == null
+          ? slot.targetIdentityHandle
+          : checkerTypeMemberReachableIdentityHandle(member),
+        sourceAddressHandle,
       },
     } : {}),
   };
@@ -2545,8 +2584,9 @@ function offsetResolutionForCursor(
   workspaceRootDir: string,
   projectRootDir: string,
   cursor: SemanticRuntimeSourceCursorInput,
+  sourceTextProvider: SemanticRuntimeSourceTextProvider | null,
 ): CursorOffsetResolution {
-  const source = new AuthoredSourceTextCache('').readFirst(authoredSourceHostPathCandidates(
+  const source = new AuthoredSourceTextCache('', sourceTextProvider).readFirst(authoredSourceHostPathCandidates(
     workspaceRootDir,
     projectRootDir,
     cursor.filePath,

@@ -15,6 +15,7 @@ import {
 import {
   SourceFileRole,
 } from '../kernel/address.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import { buildWorkspaceTypeSystemProjectOptions } from './project-options.js';
 import {
   diffCompilerHostSourceFileCacheStats,
@@ -564,7 +565,7 @@ export class TypeSystemProjectBuilder {
     const host = measureTypeSystemProjectPhase(
       phases,
       'compiler-host',
-      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir),
+      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir, project.sourceTextProvider),
       () => sourceFiles.byPath.size,
     );
 
@@ -1183,9 +1184,16 @@ function createTypeSystemCompilerHost(
   options: ts.CompilerOptions,
   byPath: ReadonlyMap<string, ts.SourceFile>,
   projectRootDir: string,
+  sourceTextProvider: SemanticRuntimeSourceTextProvider | null,
 ): ts.CompilerHost {
   const compilerHost = ts.createCompilerHost(options, true);
   const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
+  const defaultFileExists = compilerHost.fileExists.bind(compilerHost);
+  const defaultReadFile = compilerHost.readFile.bind(compilerHost);
+  compilerHost.fileExists = (fileName) =>
+    sourceTextProvider?.fileExists?.(fileName) ?? defaultFileExists(fileName);
+  compilerHost.readFile = (fileName) =>
+    sourceTextProvider?.readFile(fileName) ?? defaultReadFile(fileName);
   compilerHost.getSourceFile = (
     fileName,
     languageVersionOrOptions,
@@ -1193,6 +1201,16 @@ function createTypeSystemCompilerHost(
     shouldCreateNewSourceFile,
   ) => {
     const existing = byPath.get(canonicalTypeSystemPath(fileName));
+    const providerText = sourceTextProvider?.readFile(fileName);
+    if (providerText !== undefined) {
+      return ts.createSourceFile(
+        fileName,
+        providerText,
+        languageVersionOrOptions,
+        true,
+        scriptKindForTypeSystemPath(fileName),
+      );
+    }
     return existing ?? sharedCompilerHostSourceFileCache.readOrCreate(
       fileName,
       languageVersionOrOptions,
@@ -1202,6 +1220,23 @@ function createTypeSystemCompilerHost(
     );
   };
   return compilerHost;
+}
+
+function scriptKindForTypeSystemPath(fileName: string): ts.ScriptKind {
+  const extension = path.extname(fileName).toLowerCase();
+  if (extension === '.tsx') {
+    return ts.ScriptKind.TSX;
+  }
+  if (extension === '.jsx') {
+    return ts.ScriptKind.JSX;
+  }
+  if (extension === '.js' || extension === '.mjs' || extension === '.cjs') {
+    return ts.ScriptKind.JS;
+  }
+  if (extension === '.json') {
+    return ts.ScriptKind.JSON;
+  }
+  return ts.ScriptKind.TS;
 }
 
 function classDeclarationForTarget(

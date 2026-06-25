@@ -3,7 +3,6 @@
  *
  * These commands produce rewards for end-user developers:
  * - Diagnostics Report → Teaching + Revelation
- * - Show Suppressed Diagnostics → Teaching + Earned Reassurance
  * - Inspect at Cursor → Revelation
  *
  * Debug/framework-developer commands remain in debug-commands.ts behind
@@ -11,14 +10,13 @@
  */
 import type { TextEditor } from "vscode";
 import type { FeatureModule } from "../../core/feature-graph.js";
-import type { QueryClient } from "../../core/query-client.js";
-import type { ObservabilityService } from "../../core/observability.js";
 import { QueryPolicies } from "../../core/query-policy.js";
 import { DisposableStore } from "../../core/disposables.js";
 import type { VscodeApi } from "../../vscode-api.js";
 import type {
   DiagnosticsSnapshotItem,
   DiagnosticsSnapshotResponse,
+  InspectEntityResponse,
 } from "../../types.js";
 
 function activeEditor(vscode: VscodeApi): TextEditor | null {
@@ -104,6 +102,47 @@ function formatDiagnosticsReport(snapshot: DiagnosticsSnapshotResponse, fallback
   return lines.join("\n");
 }
 
+function formatInspectEntityReport(
+  entity: InspectEntityResponse,
+  position: { line: number; character: number },
+): string {
+  const lines: string[] = ["# Aurelia Inspect", ""];
+  lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`);
+  lines.push(`**Entity:** \`${entity.entityKind}\``);
+  if (entity.expressionLabel) lines.push(`**Expression:** \`${entity.expressionLabel}\``);
+  lines.push("");
+  lines.push("## Confidence", "");
+  lines.push("| Signal | Level |");
+  lines.push("|--------|-------|");
+  lines.push(`| Resource | ${entity.confidence.resource} |`);
+  lines.push(`| Type | ${entity.confidence.type} |`);
+  lines.push(`| Scope | ${entity.confidence.scope} |`);
+  lines.push(`| Expression | ${entity.confidence.expression} |`);
+  lines.push(`| Overall | ${entity.confidence.composite} |`);
+
+  const detailEntries = Object.entries(entity.detail).filter(([key]) => key !== "kind");
+  if (detailEntries.length > 0) {
+    lines.push("", "## Detail", "");
+    for (const [key, value] of detailEntries) {
+      lines.push(`- **${key}:** ${formatDetailValue(value)}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatDetailValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return `\`${JSON.stringify(value)}\``;
+  } catch {
+    return String(value);
+  }
+}
+
 export const UserCommandsFeature: FeatureModule = {
   id: "commands.user",
   isEnabled: (ctx) => ctx.config.current.features.commands,
@@ -121,7 +160,7 @@ export const UserCommandsFeature: FeatureModule = {
     // "Aurelia: Diagnostics Report" — the human-readable diagnostics view
     store.add(
       vscode.commands.registerCommand("aurelia.diagnosticsReport", () => {
-        void run("diagnosticsReport", async () => {
+        return run("diagnosticsReport", async () => {
           const editor = activeEditor(vscode);
           if (!editor) {
             vscode.window.showInformationMessage("No active editor");
@@ -134,53 +173,19 @@ export const UserCommandsFeature: FeatureModule = {
             return;
           }
           const report = formatDiagnosticsReport(snapshot, uri);
-          logger.write("info", report, undefined, { raw: true, force: true });
-          vscode.commands.executeCommand("aurelia.observability.openOutput");
-        });
-      }),
-    );
-
-    // "Aurelia: Show Suppressed Diagnostics"
-    store.add(
-      vscode.commands.registerCommand("aurelia.showSuppressedDiagnostics", () => {
-        void run("showSuppressedDiagnostics", async () => {
-          const editor = activeEditor(vscode);
-          if (!editor) {
-            vscode.window.showInformationMessage("No active editor");
-            return;
-          }
-          const uri = editor.document.uri.toString();
-          const snapshot = await queries.getDiagnostics(uri, QueryPolicies.diagnostics);
-          if (!snapshot) {
-            vscode.window.showInformationMessage("No diagnostics available for this document");
-            return;
-          }
-          const suppressed = snapshot.diagnostics?.suppressed ?? [];
-          if (suppressed.length === 0) {
-            vscode.window.showInformationMessage("No suppressed diagnostics for this document");
-            return;
-          }
-          const lines = suppressed.map((d) => {
-            const reason = d.suppressionReason ? ` — ${d.suppressionReason}` : "";
-            return `- ${d.code}: ${d.message}${reason}`;
+          const doc = await vscode.workspace.openTextDocument({
+            language: "markdown",
+            content: report,
           });
-          const report = [
-            `Suppressed Diagnostics (${suppressed.length})`,
-            "",
-            "These diagnostics were suppressed because analysis confidence is too low.",
-            "",
-            ...lines,
-          ].join("\n");
-          logger.write("info", report, undefined, { raw: true, force: true });
-          vscode.commands.executeCommand("aurelia.observability.openOutput");
+          await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
         });
       }),
     );
 
-    // "Aurelia: Inspect at Cursor" — show entity resolution as notification
+    // "Aurelia: Inspect at Cursor" — open source-linked runtime facts.
     store.add(
       vscode.commands.registerCommand("aurelia.inspectAtCursor", () => {
-        void run("inspectAtCursor", async () => {
+        return run("inspectAtCursor", async () => {
           const editor = activeEditor(vscode);
           if (!editor) {
             vscode.window.showInformationMessage("No active editor");
@@ -189,61 +194,18 @@ export const UserCommandsFeature: FeatureModule = {
           const uri = editor.document.uri.toString();
           const position = editor.selection.active;
 
-          const entity = await ctx.lsp.inspectEntity(uri, position);
+          const entity = await queries.inspectEntity(uri, position, { timeoutMs: 1_500 });
 
           if (entity) {
-            const parts: string[] = [`${entity.entityKind}`];
-            if (entity.detail.name) parts[0] += `: ${entity.detail.name}`;
-            parts.push(`confidence: ${entity.confidence.composite}`);
-            if (entity.expressionLabel) parts.push(`expr: ${entity.expressionLabel}`);
-            if (entity.detail.resourceKind) parts.push(`resource: ${entity.detail.resourceKind}`);
-            if (entity.detail.className) parts.push(`class: ${entity.detail.className}`);
-
-            const message = parts.join(" | ");
-            const action = await vscode.window.showInformationMessage(message, "Show Details");
-            if (action === "Show Details") {
-              const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
-              lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`);
-              lines.push(`**Entity:** \`${entity.entityKind}\``);
-              lines.push(`**Confidence:** ${entity.confidence.composite}`);
-              lines.push("");
-              lines.push("| Signal | Level |");
-              lines.push("|--------|-------|");
-              lines.push(`| Resource | ${entity.confidence.resource} |`);
-              lines.push(`| Type | ${entity.confidence.type} |`);
-              lines.push(`| Scope | ${entity.confidence.scope} |`);
-              lines.push(`| Expression | ${entity.confidence.expression} |`);
-              lines.push("");
-              if (entity.expressionLabel) lines.push(`**Expression:** \`${entity.expressionLabel}\``);
-              const detailEntries = Object.entries(entity.detail).filter(([k]) => k !== "kind");
-              if (detailEntries.length > 0) {
-                lines.push("", "## Detail", "");
-                for (const [key, value] of detailEntries) {
-                  lines.push(`- **${key}:** ${value ?? "\u2014"}`);
-                }
-              }
-              logger.write("info", lines.join("\n"), undefined, { raw: true, force: true });
-              vscode.commands.executeCommand("aurelia.observability.openOutput");
-            }
+            const doc = await vscode.workspace.openTextDocument({
+              language: "markdown",
+              content: formatInspectEntityReport(entity, position),
+            });
+            await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
             return;
           }
 
-          // Fallback to legacy queryAtPosition
-          const result = await queries.queryAtPosition(uri, position, {
-            ...QueryPolicies.queryAtPosition,
-            docVersion: editor.document.version,
-          });
-          if (!result) {
-            vscode.window.showInformationMessage("No Aurelia analysis available at this position");
-            return;
-          }
-
-          const parts: string[] = [];
-          if (result.node?.kind) parts.push(`node: ${result.node.kind}`);
-          if (result.controller?.kind) parts.push(`controller: ${result.controller.kind}`);
-          if (result.expr?.exprId) parts.push(`expr: ${result.expr.exprId}`);
-          if (result.bindables && Array.isArray(result.bindables)) parts.push(`${result.bindables.length} bindables`);
-          vscode.window.showInformationMessage(parts.length > 0 ? parts.join(" | ") : "No Aurelia entity at this position");
+          vscode.window.showInformationMessage("No Aurelia semantic fact at this position");
         });
       }),
     );
@@ -251,8 +213,8 @@ export const UserCommandsFeature: FeatureModule = {
     // "Aurelia: Find Resource" — quick-pick search across all known resources
     store.add(
       vscode.commands.registerCommand("aurelia.findResource", () => {
-        void run("findResource", async () => {
-          const response = await ctx.lsp.getResources();
+        return run("findResource", async () => {
+          const response = await queries.getResources({ timeoutMs: 1_500 });
           if (!response || response.resources.length === 0) {
             vscode.window.showInformationMessage("No resources available");
             return;
@@ -283,7 +245,6 @@ export const UserCommandsFeature: FeatureModule = {
             if (r.declarationForm) detailParts.push(r.declarationForm);
             if (r.package) detailParts.push(r.package);
             if (r.bindableCount > 0) detailParts.push(`${r.bindableCount} bindable${r.bindableCount === 1 ? "" : "s"}`);
-            if (r.gapCount > 0) detailParts.push(`${r.gapCount} gap${r.gapCount === 1 ? "" : "s"}`);
 
             return {
               label: `${originIcon} ${r.name}`,
@@ -310,7 +271,7 @@ export const UserCommandsFeature: FeatureModule = {
     // "Aurelia: Show Available Resources" — what's visible in the current template's scope
     store.add(
       vscode.commands.registerCommand("aurelia.showAvailableResources", () => {
-        void run("showAvailableResources", async () => {
+        return run("showAvailableResources", async () => {
           const editor = activeEditor(vscode);
           if (!editor) {
             vscode.window.showInformationMessage("No active editor");
@@ -318,7 +279,7 @@ export const UserCommandsFeature: FeatureModule = {
           }
           const uri = editor.document.uri.toString();
 
-          const response = await ctx.lsp.getScopeResources(uri);
+          const response = await queries.getScopeResources(uri, { timeoutMs: 1_500 });
           if (!response || response.resources.length === 0) {
             vscode.window.showInformationMessage("No Aurelia resources available in this scope");
             return;
@@ -381,14 +342,14 @@ export const UserCommandsFeature: FeatureModule = {
     // "Aurelia: Open Related File" — toggle between component class and template
     store.add(
       vscode.commands.registerCommand("aurelia.openRelatedFile", () => {
-        void run("openRelatedFile", async () => {
+        return run("openRelatedFile", async () => {
           const editor = activeEditor(vscode);
           if (!editor) {
             vscode.window.showInformationMessage("No active editor");
             return;
           }
           const uri = editor.document.uri.toString();
-          const related = await ctx.lsp.getRelatedFile(uri);
+          const related = await queries.getRelatedFile(uri, { timeoutMs: 1_500 });
           if (!related) {
             vscode.window.showInformationMessage("No related Aurelia file found");
             return;

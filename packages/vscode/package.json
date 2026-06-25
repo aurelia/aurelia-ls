@@ -68,11 +68,6 @@
         "category": "Aurelia"
       },
       {
-        "command": "aurelia.showSuppressedDiagnostics",
-        "title": "Show Suppressed Diagnostics",
-        "category": "Aurelia"
-      },
-      {
         "command": "aurelia.inspectAtCursor",
         "title": "Inspect at Cursor",
         "category": "Aurelia"
@@ -92,16 +87,6 @@
         "command": "aurelia.openRelatedFile",
         "title": "Open Related File",
         "category": "Aurelia"
-      },
-      {
-        "command": "aurelia.showOverlay",
-        "title": "Show Compiled Template",
-        "category": "Aurelia Debug"
-      },
-      {
-        "command": "aurelia.showOverlayMapping",
-        "title": "Show Overlay Mapping",
-        "category": "Aurelia Debug"
       },
       {
         "command": "aurelia.dumpState",
@@ -209,10 +194,6 @@
           "when": "aurelia.active"
         },
         {
-          "command": "aurelia.showSuppressedDiagnostics",
-          "when": "aurelia.active"
-        },
-        {
           "command": "aurelia.inspectAtCursor",
           "when": "aurelia.active"
         },
@@ -229,14 +210,6 @@
           "when": "aurelia.active"
         },
         {
-          "command": "aurelia.showOverlay",
-          "when": "aurelia.active && config.aurelia.features.debugCommands"
-        },
-        {
-          "command": "aurelia.showOverlayMapping",
-          "when": "aurelia.active && config.aurelia.features.debugCommands"
-        },
-        {
           "command": "aurelia.dumpState",
           "when": "aurelia.active && config.aurelia.features.debugCommands"
         }
@@ -249,17 +222,17 @@
         "aurelia.features.commands": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia commands (find resource, open related file, inspect at cursor, show available resources, diagnostics report, suppressed diagnostics)."
+          "description": "Enable Aurelia commands (find resource, open related file, inspect at cursor, show available resources, diagnostics report)."
         },
         "aurelia.features.debugCommands": {
           "type": "boolean",
           "default": false,
-          "description": "Expose framework developer commands (compiled template viewer, overlay mapping, server state dump)."
+          "description": "Expose framework developer commands for server state and observability."
         },
         "aurelia.features.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show Aurelia analysis status in the status bar (resource count, gap count, analysis progress)."
+          "description": "Show Aurelia analysis status in the status bar (resource count, template count, analysis progress)."
         },
         "aurelia.features.views": {
           "type": "boolean",
@@ -269,22 +242,17 @@
         "aurelia.features.inline": {
           "type": "boolean",
           "default": true,
-          "description": "Show inline gap confidence annotations in templates (partial/low indicators)."
+          "description": "Show inline partial/low-confidence semantic markers in templates."
         },
         "aurelia.features.diagnostics": {
           "type": "boolean",
-          "default": true,
-          "description": "Augment diagnostics with Aurelia taxonomy metadata (impact, actionability, confidence)."
+          "default": false,
+          "description": "Append Aurelia taxonomy details (impact, actionability, category) to diagnostic messages."
         },
         "aurelia.features.inlayHints": {
           "type": "boolean",
-          "default": false,
-          "description": "Show binding mode inlay hints in templates (e.g., .bind resolved to toView or twoWay based on the target bindable)."
-        },
-        "aurelia.features.codeLens": {
-          "type": "boolean",
           "default": true,
-          "description": "Show bindable count and template usage count above Aurelia resource class declarations."
+          "description": "Show semantic-runtime binding mode inlay hints in templates (for example, .bind resolved to toView or twoWay from the target bindable)."
         },
         "aurelia.observability.logging.level": {
           "type": "string",
@@ -396,7 +364,6 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
     "typescript": "^6.0.3",
     "vscode-languageclient": "^9.0.1"
   },

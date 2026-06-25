@@ -1,132 +1,69 @@
-/**
- * Unit tests for LSP mapping utilities that consume semantic-workspace types.
- */
 import { describe, test, expect } from "vitest";
 import { CompletionItemKind } from "vscode-languageserver/node.js";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  toLspUri,
-  guessLanguage,
-  spanToRange,
-  mapWorkspaceDiagnostics,
   AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
   AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-  COMPLETION_GAP_MARKER_LABEL,
   COMPLETION_GAP_MARKER_DETAIL,
+  COMPLETION_GAP_MARKER_LABEL,
   createCompletionGapMarker,
-  mapWorkspaceCompletions,
-  mapWorkspaceHover,
-  mapWorkspaceLocations,
-  mapSemanticWorkspaceEdit,
+  canonicalDocumentUri,
+  guessLanguage,
+  mapSemanticRuntimeAppDiagnostics,
+  mapSemanticRuntimeTemplateDefinition,
+  mapSemanticRuntimeTemplateHover,
+  spanToRange,
+  toLspUri,
   type LookupTextFn,
 } from "@aurelia-ls/language-server/api";
-import type { DiagnosticDataRecord, DiagnosticSpec, DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
-import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
-import type {
-  WorkspaceCompletionItem,
-  WorkspaceDiagnostic,
-  WorkspaceDiagnostics,
-  WorkspaceEdit,
-  WorkspaceHover,
-  WorkspaceLocation,
-} from "@aurelia-ls/semantic-workspace/types.js";
-const spanUri = asDocumentUri("file:///C:/projects/app/src/span.html");
-const otherUri = asDocumentUri("file:///C:/projects/app/src/other.html");
+
+type DocumentUri = string;
+type SourceSpan = { start: number; end: number };
+
+const spanUri: DocumentUri = canonicalDocumentUri("file:///C:/projects/app/src/span.html").uri;
+const definitionLspUri = "file:///C:/projects/app/src/component.ts";
+const definitionUri = canonicalDocumentUri(definitionLspUri).uri;
+const definitionText = "export class Component {\n  message = \"hello\";\n}";
 
 const textByUri = new Map<DocumentUri, string>([
   [spanUri, "alpha\nbeta\ngamma"],
-  [otherUri, "first line\nsecond line"],
+  [definitionUri, definitionText],
 ]);
 
 const lookupText: LookupTextFn = (uri) => textByUri.get(uri) ?? null;
 
-function makeSpan(uri: DocumentUri, start: number, end: number): SourceSpan {
-  return { start, end, file: canonicalDocumentUri(uri).file };
-}
-
-const TEST_SPEC: DiagnosticSpec<DiagnosticDataRecord> = {
-  category: "toolchain",
-  status: "canonical",
-  defaultSeverity: "warning",
-  impact: "degraded",
-  actionability: "manual",
-  span: "span",
-  stages: ["resolve"],
-};
-
-function makeDiagnostic(input: {
-  code: string;
-  message: string;
-  severity?: "error" | "warning" | "info";
-  span?: SourceSpan;
-  data?: Readonly<Record<string, unknown>>;
-  uri?: DocumentUri;
-}): WorkspaceDiagnostic {
-  const severity = input.severity ?? "warning";
-  const raw = {
-    code: input.code,
-    message: input.message,
-    ...(input.severity ? { severity: input.severity } : {}),
-    ...(input.span ? { span: input.span } : {}),
-    ...(input.data ? { data: input.data } : {}),
-    ...(input.uri ? { uri: input.uri } : {}),
-  };
-  return {
-    raw,
-    code: input.code,
-    spec: TEST_SPEC,
-    message: input.message,
-    severity,
-    impact: TEST_SPEC.impact,
-    actionability: TEST_SPEC.actionability,
-    span: input.span,
-    uri: input.uri,
-    data: input.data ?? {},
-  };
-}
-
-function toRouted(
-  diags: WorkspaceDiagnostic[],
-  surface: DiagnosticSurface = "lsp",
-): WorkspaceDiagnostics {
-  return { bySurface: new Map([[surface, diags]]), suppressed: [] };
+function makeSpan(start: number, end: number): SourceSpan {
+  return { start, end };
 }
 
 describe("toLspUri", () => {
-  test("converts document URI to proper file:// URI", () => {
-    const result = toLspUri(asDocumentUri("file:///C:/projects/app/src/component.html"));
+  test("converts document URI to proper file URI", () => {
+    const result = toLspUri(canonicalDocumentUri("file:///C:/projects/app/src/component.html").uri);
     expect(result).toMatch(/^file:\/\/\/[Cc]:\/projects\/app\/src\/component\.html$/);
   });
 
   test("preserves Unix paths correctly", () => {
-    const result = toLspUri(asDocumentUri("file:///home/user/project/src/view.html"));
+    const result = toLspUri(canonicalDocumentUri("file:///home/user/project/src/view.html").uri);
     expect(result).toBe("file:///home/user/project/src/view.html");
   });
 });
 
 describe("guessLanguage", () => {
-  test("returns typescript for .ts files", () => {
-    expect(guessLanguage(asDocumentUri("file:///app/src/component.ts"))).toBe("typescript");
+  test("returns typescript for .ts and .js files", () => {
+    expect(guessLanguage("file:///app/src/component.ts")).toBe("typescript");
+    expect(guessLanguage("file:///app/src/component.js")).toBe("typescript");
   });
 
-  test("returns typescript for .js files", () => {
-    expect(guessLanguage(asDocumentUri("file:///app/src/component.js"))).toBe("typescript");
-  });
-
-  test("returns json for .json files", () => {
-    expect(guessLanguage(asDocumentUri("file:///app/package.json"))).toBe("json");
-  });
-
-  test("returns html as default", () => {
-    expect(guessLanguage(asDocumentUri("file:///app/src/component.html"))).toBe("html");
-    expect(guessLanguage(asDocumentUri("file:///app/src/view.au"))).toBe("html");
+  test("returns json for .json files and html by default", () => {
+    expect(guessLanguage("file:///app/package.json")).toBe("json");
+    expect(guessLanguage("file:///app/src/component.html")).toBe("html");
+    expect(guessLanguage("file:///app/src/view.au")).toBe("html");
   });
 });
 
 describe("spanToRange", () => {
-  test("maps offsets to line/character positions", () => {
-    const range = spanToRange({ uri: spanUri, span: makeSpan(spanUri, 6, 10) }, lookupText);
+  test("maps offsets to line and character positions", () => {
+    const range = spanToRange({ uri: spanUri, span: makeSpan(6, 10) }, lookupText);
     expect(range).toEqual({
       start: { line: 1, character: 0 },
       end: { line: 1, character: 4 },
@@ -134,171 +71,66 @@ describe("spanToRange", () => {
   });
 });
 
-describe("mapWorkspaceDiagnostics", () => {
-  test("maps diagnostics with spans", () => {
-    const diagnostics: WorkspaceDiagnostic[] = [
-      makeDiagnostic({
-        code: "AU1000",
-        message: "Missing property",
-        severity: "warning",
-        span: makeSpan(spanUri, 6, 10),
-        data: { confidence: "high" },
-        uri: spanUri,
-      }),
-    ];
+describe("mapSemanticRuntimeAppDiagnostics", () => {
+  test("maps runtime diagnostic rows with authored spans and metadata", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "alpha\nbeta\ngamma",
+    );
+    const mapped = mapSemanticRuntimeAppDiagnostics({
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticDomain: "template",
+          diagnosticKind: "missing-expression-member",
+          diagnosticAuthority: "type-checker",
+          frameworkErrorCode: null,
+          severity: "warning",
+          summary: "Missing member",
+          missingInput: "expression-member:selected-member-missing",
+          missingInputs: ["expression-member:selected-member-missing"],
+          source: {
+            kind: "source-span-address",
+            label: "src/component.html@6..10",
+            path: "src/component.html",
+            start: 6,
+            end: 10,
+            role: "expression",
+          },
+          sourceRole: "template",
+          relatedQueryKind: "template-diagnostics",
+        }],
+      },
+    } as never, doc);
 
-    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
     expect(mapped).toHaveLength(1);
-    expect(mapped[0]?.severity).toBe(2); // DiagnosticSeverity.Warning
-    expect(mapped[0]?.data).toEqual({
-      confidence: "high",
+    expect(mapped[0]?.range).toEqual({
+      start: { line: 1, character: 0 },
+      end: { line: 1, character: 4 },
+    });
+    expect(mapped[0]?.source).toBe("aurelia");
+    expect(mapped[0]?.code).toBe("missing-expression-member");
+    expect(mapped[0]?.data).toMatchObject({
+      semanticRuntime: {
+        queryKind: "app-diagnostics",
+        diagnosticDomain: "template",
+        diagnosticKind: "missing-expression-member",
+        missingInputs: ["expression-member:selected-member-missing"],
+      },
       [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
         diagnostics: {
           schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
           impact: "degraded",
           actionability: "manual",
-          category: "toolchain",
-          confidence: "high",
-        },
-      },
-    });
-  });
-
-  test("merges taxonomy payload without dropping existing namespace data", () => {
-    const diagnostics: WorkspaceDiagnostic[] = [
-      makeDiagnostic({
-        code: "AU1002",
-        message: "Merge taxonomy",
-        severity: "warning",
-        span: makeSpan(spanUri, 6, 10),
-        data: {
-          confidence: "partial",
-          [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
-            traceId: "abc123",
-            diagnostics: {
-              detail: "existing",
-            },
+          category: "template-syntax",
+          runtime: {
+            relatedQueryKind: "template-diagnostics",
           },
         },
-        uri: spanUri,
-      }),
-    ];
-
-    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
-    expect(mapped).toHaveLength(1);
-    expect(mapped[0]?.data).toEqual({
-      confidence: "partial",
-      [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
-        traceId: "abc123",
-        diagnostics: {
-          detail: "existing",
-          schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
-          impact: "degraded",
-          actionability: "manual",
-          category: "toolchain",
-          confidence: "partial",
-        },
       },
     });
-  });
-
-  test("skips diagnostics without spans", () => {
-    const diagnostics: WorkspaceDiagnostic[] = [
-      makeDiagnostic({ code: "AU1001", message: "No span", severity: "error" }),
-    ];
-
-    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
-    expect(mapped).toEqual([]);
-  });
-});
-
-describe("mapWorkspaceCompletions", () => {
-  test("maps completion items", () => {
-    const items: WorkspaceCompletionItem[] = [
-      { label: "message", detail: "string" },
-      { label: "count", documentation: "A number", insertText: "count" },
-    ];
-
-    const mapped = mapWorkspaceCompletions(items);
-    expect(mapped).toHaveLength(2);
-    expect(mapped[0]?.detail).toBe("string");
-    expect(mapped[1]?.documentation).toBe("A number");
-  });
-
-  test("maps canonical completion class ids to CompletionItemKind", () => {
-    const items: WorkspaceCompletionItem[] = [
-      { label: "my-el", kind: "custom-element" },
-      { label: "if", kind: "template-controller" },
-      { label: "tooltip", kind: "custom-attribute" },
-      { label: "value", kind: "bindable-property" },
-      { label: "bind", kind: "binding-command" },
-      { label: "div", kind: "html-element" },
-      { label: "id", kind: "html-attribute" },
-      { label: "date", kind: "value-converter" },
-      { label: "throttle", kind: "binding-behavior" },
-      { label: "title", kind: "view-model-property" },
-      { label: "toLocaleString", kind: "view-model-method" },
-      { label: "item", kind: "scope-variable" },
-      { label: "partial", kind: "gap-marker" },
-    ];
-
-    const mapped = mapWorkspaceCompletions(items);
-    expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
-    expect(mapped[1]?.kind).toBe(CompletionItemKind.Struct);
-    expect(mapped[2]?.kind).toBe(CompletionItemKind.Property);
-    expect(mapped[3]?.kind).toBe(CompletionItemKind.Field);
-    expect(mapped[4]?.kind).toBe(CompletionItemKind.Keyword);
-    expect(mapped[5]?.kind).toBe(CompletionItemKind.Variable);
-    expect(mapped[6]?.kind).toBe(CompletionItemKind.Variable);
-    expect(mapped[7]?.kind).toBe(CompletionItemKind.Function);
-    expect(mapped[8]?.kind).toBe(CompletionItemKind.Function);
-    expect(mapped[9]?.kind).toBe(CompletionItemKind.Property);
-    expect(mapped[10]?.kind).toBe(CompletionItemKind.Method);
-    expect(mapped[11]?.kind).toBe(CompletionItemKind.Variable);
-    expect(mapped[12]?.kind).toBe(CompletionItemKind.Text);
-  });
-
-  test("omits kind for unknown canonical class ids", () => {
-    const items: WorkspaceCompletionItem[] = [
-      { label: "x", kind: "unknown-kind-id" },
-      { label: "y" },
-    ];
-
-    const mapped = mapWorkspaceCompletions(items);
-    expect(mapped[0]?.kind).toBeUndefined();
-    expect(mapped[1]?.kind).toBeUndefined();
-    expect(mapped).toHaveLength(2);
-  });
-
-  test("does not derive kind from detail labels when kind is missing", () => {
-    const items: WorkspaceCompletionItem[] = [
-      { label: "my-el", detail: "Custom Element" },
-    ];
-
-    const mapped = mapWorkspaceCompletions(items);
-    expect(mapped[0]?.kind).toBeUndefined();
-    expect(mapped[0]?.detail).toBe("Custom Element");
-  });
-
-  test("preserves all existing fields when kind is mapped", () => {
-    const items: WorkspaceCompletionItem[] = [
-      {
-        label: "my-el",
-        kind: "custom-element",
-        detail: "Custom Element",
-        documentation: "A custom element",
-        sortText: "0001",
-        insertText: "my-el",
-      },
-    ];
-
-    const mapped = mapWorkspaceCompletions(items);
-    expect(mapped[0]?.label).toBe("my-el");
-    expect(mapped[0]?.detail).toBe("Custom Element");
-    expect(mapped[0]?.documentation).toBe("A custom element");
-    expect(mapped[0]?.sortText).toBe("0001");
-    expect(mapped[0]?.insertText).toBe("my-el");
-    expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
   });
 });
 
@@ -327,49 +159,160 @@ describe("createCompletionGapMarker", () => {
   });
 });
 
-describe("mapWorkspaceHover", () => {
-  test("maps hover with location", () => {
-    const hover: WorkspaceHover = {
-      contents: "**message**: string",
-      location: { uri: spanUri, span: makeSpan(spanUri, 6, 10) },
-    };
-
-    const mapped = mapWorkspaceHover(hover, lookupText);
-    expect(mapped?.contents).toEqual({ kind: "markdown", value: "**message**: string" });
-    expect(mapped?.range).toEqual({
-      start: { line: 1, character: 0 },
-      end: { line: 1, character: 4 },
-    });
-  });
-});
-
-describe("mapWorkspaceLocations", () => {
-  test("maps locations with spans", () => {
-    const locations: WorkspaceLocation[] = [
-      { uri: spanUri, span: makeSpan(spanUri, 6, 10) },
-    ];
-
-    const mapped = mapWorkspaceLocations(locations, lookupText);
-    expect(mapped).toEqual([
-      {
-        uri: toLspUri(spanUri),
-        range: { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } },
+describe("mapSemanticRuntimeTemplateHover", () => {
+  test("maps selected runtime member facts to markdown hover", () => {
+    const mapped = mapSemanticRuntimeTemplateHover({
+      value: {
+        siteKind: "expression",
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "element",
+          tagName: "div",
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: "message",
+        selectedMember: {
+          name: "message",
+          memberKind: "property",
+          typeDisplay: "string",
+          isOptional: false,
+          isReadonly: false,
+          source: null,
+        },
+        memberOwnerType: {
+          display: "Component",
+          shapeKind: "object",
+          origin: "typescript",
+          source: null,
+          declarationSource: null,
+        },
+        diagnostics: [],
       },
-    ]);
+    } as never);
+
+    const value = (mapped?.contents as { value?: string }).value ?? "";
+    expect(value).toContain("message: string");
+    expect(value).toContain("owner: `Component`");
   });
 });
 
-describe("mapSemanticWorkspaceEdit", () => {
-  test("maps edits grouped by uri", () => {
-    const edit: WorkspaceEdit = {
-      edits: [
-        { uri: spanUri, span: makeSpan(spanUri, 6, 10), newText: "delta" },
-        { uri: otherUri, span: makeSpan(otherUri, 0, 5), newText: "first" },
-      ],
-    };
+describe("mapSemanticRuntimeTemplateDefinition", () => {
+  test("maps selected member source references to LSP location links", () => {
+    const messageStart = definitionText.indexOf("message");
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
 
-    const mapped = mapSemanticWorkspaceEdit(edit, lookupText);
-    expect(mapped?.changes?.[toLspUri(spanUri)]).toHaveLength(1);
-    expect(mapped?.changes?.[toLspUri(otherUri)]).toHaveLength(1);
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        displayText: "mock",
+        siteKind: "expression",
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "text",
+          tagName: null,
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: null,
+        selectedBindable: null,
+        selectedMemberName: "message",
+        selectedMember: {
+          name: "message",
+          memberKind: "property",
+          typeDisplay: "string",
+          isOptional: false,
+          isReadonly: false,
+          source: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@${messageStart}..${messageStart + "message".length}`,
+            path: definitionLspUri,
+            start: messageStart,
+            end: messageStart + "message".length,
+          },
+        },
+        memberOwnerType: null,
+        diagnostics: [],
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped).toEqual([{
+      targetUri: definitionLspUri,
+      targetRange: {
+        start: { line: 1, character: 2 },
+        end: { line: 1, character: 9 },
+      },
+      targetSelectionRange: {
+        start: { line: 1, character: 2 },
+        end: { line: 1, character: 9 },
+      },
+    }]);
+  });
+
+  test("returns null instead of inventing a link for broad source references", () => {
+    const originDocument = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "<template>${message}</template>",
+    );
+
+    const mapped = mapSemanticRuntimeTemplateDefinition({
+      value: {
+        displayText: "mock",
+        siteKind: "expression",
+        expressionFrontier: null,
+        missingInputs: [],
+        template: { compilationLane: "authoring", source: null },
+        html: {
+          nodeKind: "text",
+          tagName: null,
+          attributeName: null,
+          attributeValue: null,
+          source: null,
+          attributeSource: null,
+        },
+        valueSite: null,
+        selectedDefinition: {
+          resourceKind: "custom-element",
+          name: "my-el",
+          targetName: "MyEl",
+          source: {
+            kind: "source-file-address",
+            label: "src/my-el.ts",
+            path: "src/my-el.ts",
+          },
+        },
+        selectedBindable: null,
+        selectedMemberName: null,
+        selectedMember: null,
+        memberOwnerType: null,
+        diagnostics: [],
+      },
+    } as never, lookupText, {
+      workspaceRoot: "C:/projects/app",
+      originDocument,
+    });
+
+    expect(mapped).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { SemanticRuntimeSourceTextProvider } from './source-text-provider.js';
 
 /** Authored file text plus line metadata for source spans that must refer back to user-written files. */
 export interface AuthoredSourceText {
@@ -15,6 +16,7 @@ export class AuthoredSourceTextCache {
 
   constructor(
     private readonly rootDir: string,
+    private readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
   ) {}
 
   read(sourcePath: string): AuthoredSourceText | null {
@@ -41,7 +43,7 @@ export class AuthoredSourceTextCache {
     }
     let source: AuthoredSourceText | null;
     try {
-      const text = readFileSync(hostPath, 'utf8');
+      const text = this.sourceTextProvider?.readFile(hostPath) ?? readFileSync(hostPath, 'utf8');
       source = {
         sourcePath,
         hostPath,

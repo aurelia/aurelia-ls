@@ -11,7 +11,6 @@ import { ObservabilityService } from "./core/observability.js";
 import { PresentationStore } from "./core/presentation-store.js";
 import { QueryClient } from "./core/query-client.js";
 import { ServiceRegistry } from "./core/service-registry.js";
-import { VirtualDocRegistry } from "./core/virtual-docs-registry.js";
 import { DefaultFeatures } from "./features/index.js";
 import type { FeatureModule } from "./core/feature-graph.js";
 
@@ -49,7 +48,6 @@ export class ClientApp {
     const capabilities = new CapabilityStore();
     const presentation = new PresentationStore();
     const queries = new QueryClient(lsp, observability);
-    const virtualDocs = new VirtualDocRegistry(vscode);
     const features = new FeatureGraph();
     const services = new ServiceRegistry();
 
@@ -68,7 +66,6 @@ export class ClientApp {
       capabilities,
       presentation,
       queries,
-      virtualDocs,
       features,
       services,
     });
@@ -120,4 +117,3 @@ export class ClientApp {
     this.#ctx = null;
   }
 }
-

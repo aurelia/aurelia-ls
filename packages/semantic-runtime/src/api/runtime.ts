@@ -161,6 +161,7 @@ import {
   readBindingBehaviorApplicationRows,
   readBindingSourceOperationRows,
   readBindingTargetAccessRows,
+  readValueConverterApplicationRows,
   readBindingValueChannelSummary,
   readBindingValueChannelRows,
   readTargetOperationRows,
@@ -300,6 +301,7 @@ import {
   type SemanticBindingTargetOperationResult,
   type SemanticBindingValueChannelResult,
   type SemanticBindingValueChannelSummaryResult,
+  type SemanticValueConverterApplicationResult,
   type SemanticControlUseInventoryResult,
   type SemanticConfigurationIssuesResult,
   type SemanticDiIssuesResult,
@@ -452,6 +454,7 @@ export class SemanticRuntime {
       storeKey: options.storeKey,
       projects,
       projectDiscovery: options.projectDiscovery,
+      sourceTextProvider: options.sourceTextProvider ?? null,
     });
     return new SemanticRuntime(workspace);
   }
@@ -2717,6 +2720,20 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.templateQueries.templateCompletions(query));
       case SemanticAppQueryKind.TemplateCursorInfo:
         return answerCurrentQuery(() => this.templateQueries.templateCursorInfo(query));
+      case SemanticAppQueryKind.TemplateReferences:
+        return answerCurrentQuery(() => this.templateQueries.templateReferences(query));
+      case SemanticAppQueryKind.TemplateRename:
+        return answerCurrentQuery(() => this.templateQueries.templateRename(query));
+      case SemanticAppQueryKind.TemplateRenameFromTypeScript:
+        return answerCurrentQuery(() => this.templateQueries.templateRenameFromTypeScript(query));
+      case SemanticAppQueryKind.TemplateCodeActions:
+        return answerCurrentQuery(() => this.templateQueries.templateCodeActions(query));
+      case SemanticAppQueryKind.TemplateSemanticTokens:
+        return answerCurrentQuery(() => this.templateQueries.templateSemanticTokens(query));
+      case SemanticAppQueryKind.TemplateFoldingRanges:
+        return answerCurrentQuery(() => this.templateQueries.templateFoldingRanges(query));
+      case SemanticAppQueryKind.TemplateInlayHints:
+        return answerCurrentQuery(() => this.templateQueries.templateInlayHints(query));
       case SemanticAppQueryKind.TemplateDiagnostics:
         return answerCurrentQuery(() => this.templateQueries.templateDiagnostics(query));
       case SemanticAppQueryKind.RuntimeControllers:
@@ -2747,6 +2764,8 @@ export class SemanticApp {
         return answerCurrentQuery(() => this.bindingSourceOperations(query.page, query.detail));
       case SemanticAppQueryKind.BindingBehaviorApplications:
         return answerCurrentQuery(() => this.bindingBehaviorApplications(query.page, query.detail));
+      case SemanticAppQueryKind.ValueConverterApplications:
+        return answerCurrentQuery(() => this.valueConverterApplications(query.page, query.detail));
       case SemanticAppQueryKind.BindingValueChannels:
         return answerCurrentQuery(() => this.bindingValueChannels(query.page, query.detail));
       case SemanticAppQueryKind.BindingValueChannelSummary:
@@ -3051,7 +3070,7 @@ export class SemanticApp {
       return claimed;
     }
     const seamRows = this.openSeamRows(detail, filter);
-    const sourceTextCache = new AuthoredSourceTextCache('');
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
     const rows = openSeamSummaryRows(
       seamRows,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
@@ -3092,7 +3111,7 @@ export class SemanticApp {
       return claimed;
     }
     const seamRows = this.openSeamRows(detail, filter);
-    const sourceTextCache = new AuthoredSourceTextCache('');
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
     const rows = openSeamSiteRows(
       seamRows,
       (source) => this.sourceRangeForSourceReference(source, sourceTextCache),
@@ -3118,7 +3137,7 @@ export class SemanticApp {
     filter: SemanticOpenSeamQueryFilter = {},
   ): readonly SemanticOpenSeamRow[] {
     const handles = includeHandles(detail);
-    const sourceTextCache = new AuthoredSourceTextCache('');
+    const sourceTextCache = new AuthoredSourceTextCache('', this.project.sourceTextProvider);
     return readAppOpenSeams(this.emission, this.runtime.workspace.store)
       .map((seam): SemanticOpenSeamRow => {
         const source = describeAddress(this.runtime.workspace.store, seam.addressHandle);
@@ -4156,6 +4175,36 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding-behavior application row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  valueConverterApplications(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticValueConverterApplicationResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticValueConverterApplicationResult>({
+      kind: SemanticAppQueryKind.ValueConverterApplications,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime value-converter application rows',
+      { rows: [] } satisfies SemanticValueConverterApplicationResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readValueConverterApplicationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime value-converter application row(s).`,
       { rows: paged.rows },
       paged.page,
     );

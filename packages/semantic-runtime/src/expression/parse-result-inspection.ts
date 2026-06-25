@@ -1,5 +1,7 @@
 import type {
   AccessMemberExpression,
+  AccessScopeExpression,
+  CallScopeExpression,
   CallMemberExpression,
   ExpressionAstNode,
   ExpressionType,
@@ -180,6 +182,15 @@ export class ExpressionParseResultInspector {
     }
     return spans;
   }
+
+  static scopeAccessAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): ScopeAccessExpression | null {
+    return 'ast' in result
+      ? scopeAccessExpressionForNodeOffset(result.ast, offset)
+      : null;
+  }
 }
 
 function stableExpressionRoots(result: ExpressionParseResult): readonly ExpressionAstNode[] {
@@ -228,6 +239,10 @@ type MemberAccessExpression =
   | AccessMemberExpression
   | CallMemberExpression;
 
+type ScopeAccessExpression =
+  | AccessScopeExpression
+  | CallScopeExpression;
+
 function firstMemberOwnerExpression(expression: ExpressionAstNode): ExpressionAstNode | null {
   return findInExpression(expression, (candidate) =>
     isMemberAccessExpression(candidate)
@@ -243,6 +258,17 @@ function memberAccessExpressionForNodeOffset(
 ): MemberAccessExpression | null {
   return findInExpressionAtOffset(expression, offset, (candidate) =>
     isMemberAccessExpression(candidate) && matchesMember(candidate, offset)
+      ? candidate
+      : null
+  );
+}
+
+function scopeAccessExpressionForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): ScopeAccessExpression | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) =>
+    isScopeAccessExpression(candidate) && expressionSpanContainsOffset(candidate.name.span, offset)
       ? candidate
       : null
   );
@@ -399,6 +425,12 @@ function isMemberAccessExpression(
   expression: ExpressionAstNode,
 ): expression is MemberAccessExpression {
   return expression.$kind === 'AccessMember' || expression.$kind === 'CallMember';
+}
+
+function isScopeAccessExpression(
+  expression: ExpressionAstNode,
+): expression is ScopeAccessExpression {
+  return expression.$kind === 'AccessScope' || expression.$kind === 'CallScope';
 }
 
 function isMemberOwnerOffset(

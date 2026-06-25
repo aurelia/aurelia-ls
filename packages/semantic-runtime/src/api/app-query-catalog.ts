@@ -61,6 +61,13 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.TemplateCompilations, 'template', 'Compiled app-runtime and source-selected authoring template rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.TemplateCompletions, 'template', 'Template completion candidates at a source cursor.', 'cursor-locus', { pagingKind: 'continuation-cursor', supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.TemplateCursorInfo, 'template', 'Semantic template site, resource, bindable, member, and diagnostic context at a source cursor.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.TemplateReferences, 'template', 'Source-linked template references for the selected member at a source cursor.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.TemplateRename, 'template', 'Conservative edit plan for renaming a source-backed template expression member.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.TemplateRenameFromTypeScript, 'template', 'Template-side edit plan for a TypeScript member rename initiated at a source cursor.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.TemplateCodeActions, 'template', 'Conservative edit plans for runtime-owned template diagnostics at a source cursor.', 'cursor-locus', { supportsDetail: true, requiresCursor: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.TemplateSemanticTokens, 'template', 'Source-linked template semantic tokens derived from compiled template and expression facts.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true }),
+  queryRow(SemanticAppQueryKind.TemplateFoldingRanges, 'template', 'Source-linked foldable template regions derived from compiled HTML structure.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true }),
+  queryRow(SemanticAppQueryKind.TemplateInlayHints, 'template', 'Source-linked template inlay hints derived from runtime binding facts.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.TemplateDiagnostics, 'template', 'Template diagnostics across app-runtime and source-selected authoring templates; diagnosticProjection controls answer-time TypeChecker work.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, supportsSourceFile: true, supportsDiagnosticProjection: true, materializationPolicy: 'query-type-projection', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.RuntimeControllers, 'rendering', 'Runtime controller frames and recursive hydration handoff rows.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.RuntimeWatchers, 'rendering', 'Controller-owned ComputedWatcher and ExpressionWatcher rows created from resource watch metadata.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
@@ -71,6 +78,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.BindingTargetOperations, 'binding', 'Same projection as target operations for callers still using the older target-operation query name.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
   queryRow(SemanticAppQueryKind.BindingSourceOperations, 'binding', 'Source-side binding operations such as ref assignment and captured binding fan-out.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
   queryRow(SemanticAppQueryKind.BindingBehaviorApplications, 'binding', 'Materialized binding behavior applications after compiler resource scope and bind phase.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
+  queryRow(SemanticAppQueryKind.ValueConverterApplications, 'binding', 'Materialized value converter applications over runtime binding expressions.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingValueChannels, 'binding', 'Runtime value-channel shape selected for DOM/native/custom binding targets.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingValueChannelSummary, 'binding', 'Grouped runtime value-channel and observer-coupling mechanisms for compact form/control explanation.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingDataFlows, 'binding', 'Source-to-target and target-to-source binding data-flow rows with TypeChecker pressure.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
@@ -188,6 +196,13 @@ export function semanticAppQueryCatalogShape(
     ...(row.supportsOpenSeamFilters && query.sourceRole != null ? { sourceRole: query.sourceRole } : {}),
     ...(query.kind !== SemanticAppQueryKind.RouterOverview || query.rowPageSize == null ? {} : { rowPageSize: query.rowPageSize }),
     ...(row.requiresCursor && query.cursor != null ? { cursor: query.cursor } : {}),
+    ...(query.kind !== SemanticAppQueryKind.TemplateReferences || query.includeDeclaration == null ? {} : { includeDeclaration: query.includeDeclaration }),
+    ...(
+      (query.kind !== SemanticAppQueryKind.TemplateRename && query.kind !== SemanticAppQueryKind.TemplateRenameFromTypeScript)
+        || query.newName == null
+        ? {}
+        : { newName: query.newName }
+    ),
     ...(!row.requiresCursor && sourceFile != null ? { sourceFile } : {}),
   };
 }

@@ -44,15 +44,14 @@ export class I18nTranslationCatalogProjectResult {
 
 /** Read static i18n resource object values into translation-key products for analysis. */
 export class I18nTranslationCatalogMaterializationProjectPass {
-  private readonly sourceTextCache = new AuthoredSourceTextCache('');
-
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
   ): I18nTranslationCatalogProjectResult {
+    const sourceTextCache = new AuthoredSourceTextCache('', configuration.project.sourceTextProvider);
     const seeds = uniqueTranslationKeySeeds(readTranslationKeySeeds(configuration));
     const emissions = seeds.map((seed, index) =>
-      i18nTranslationKeyProductEmission(store, configuration.project.projectKey, seed, index, this.sourceTextCache)
+      i18nTranslationKeyProductEmission(store, configuration.project.projectKey, seed, index, sourceTextCache)
     );
     const records = emissions.flatMap((emission) => emission.records);
     if (records.length > 0) {

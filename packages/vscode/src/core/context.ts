@@ -10,7 +10,6 @@ import type { FeatureGraph } from "./feature-graph.js";
 import type { LspFacade } from "./lsp-facade.js";
 import type { DebugService, ErrorReporter, ObservabilityService, TraceService } from "./observability.js";
 import type { PresentationStore } from "./presentation-store.js";
-import type { VirtualDocRegistry } from "./virtual-docs-registry.js";
 import type { QueryClient } from "./query-client.js";
 import type { ServiceRegistry } from "./service-registry.js";
 
@@ -29,7 +28,6 @@ export interface ClientContext {
   capabilities: CapabilityStore;
   presentation: PresentationStore;
   queries: QueryClient;
-  virtualDocs: VirtualDocRegistry;
   features: FeatureGraph;
   services: ServiceRegistry;
   disposables: DisposableStore;

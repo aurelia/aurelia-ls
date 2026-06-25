@@ -8,8 +8,12 @@ export * from "./handlers/lifecycle.js";
 export * from "./handlers/semantic-tokens.js";
 export * from "./handlers/inlay-hints.js";
 export * from "./handlers/code-lens.js";
+export * from "./handlers/document-symbols.js";
+export * from "./handlers/workspace-symbols.js";
+export * from "./handlers/selection-ranges.js";
+export * from "./handlers/linked-editing-ranges.js";
+export * from "./handlers/folding-ranges.js";
 export * from "./mapping/lsp-types.js";
-export * from "./parity/diagnostics-parity-adapter.js";
 export {
   spanToRange as spanToDocumentRange,
   spanToRangeOrNull,

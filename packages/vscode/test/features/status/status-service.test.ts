@@ -45,19 +45,19 @@ describe("StatusService", () => {
     expect(statusItem.text).toContain("12 resources");
   });
 
-  test("ready() shows summary with check icon when no gaps", () => {
+  test("ready() shows resource and template summary", () => {
     const { service, statusItem } = createService();
-    service.ready(12, 3, 0);
+    service.ready(12, 3);
     expect(statusItem.text).toContain("12 resources");
     expect(statusItem.text).toContain("3 templates");
     expect(statusItem.text).toContain("$(check)");
   });
 
-  test("ready() shows warning icon when gaps exist", () => {
+  test("ready() keeps a quiet success state for runtime resource facts", () => {
     const { service, statusItem } = createService();
-    service.ready(12, 3, 2);
-    expect(statusItem.text).toContain("$(warning)");
-    expect(statusItem.text).toContain("2 gaps");
+    service.ready(12, 3);
+    expect(statusItem.text).toContain("$(check)");
+    expect(statusItem.text).not.toContain("$(warning)");
   });
 
   test("dispose() disposes status bar item", () => {
@@ -73,7 +73,7 @@ describe("StatusService", () => {
     expect(service.phase).toBe("discovering");
     service.analyzing(5);
     expect(service.phase).toBe("analyzing");
-    service.ready(5, 2, 0);
+    service.ready(5, 2);
     expect(service.phase).toBe("ready");
   });
 });

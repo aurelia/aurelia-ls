@@ -8,7 +8,7 @@ export const ViewsFeature: FeatureModule = {
   activate: (ctx) => {
     const store = new DisposableStore();
 
-    const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.lsp, ctx.logger);
+    const explorer = new ResourceExplorerProvider(ctx.vscode, ctx.queries, ctx.logger);
 
     const treeView = ctx.vscode.window.createTreeView("aureliaResourceExplorer", {
       treeDataProvider: explorer,
@@ -16,12 +16,7 @@ export const ViewsFeature: FeatureModule = {
     });
     store.add(treeView);
 
-    // Refresh on overlay ready (new compilation available)
-    ctx.lsp.onOverlayReady(() => {
-      void explorer.refresh();
-    });
-
-    // Refresh when workspace semantics change (third-party scan, TS project change, config reload)
+    // Refresh when semantic-runtime resource visibility changes.
     ctx.lsp.onWorkspaceChanged((payload) => {
       if (payload.domains.includes("resources") || payload.domains.includes("scopes")) {
         void explorer.refresh();

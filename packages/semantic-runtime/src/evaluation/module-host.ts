@@ -7,6 +7,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import ts from 'typescript';
 import { isHostPathWithin, readPackageManifest, sameHostPath } from '../boot/host-files.js';
+import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import { buildProjectCompilerOptions } from '../boot/project-compiler-options.js';
 import {
   EvaluationModuleGraph,
@@ -160,6 +161,10 @@ class CachedEvaluationModuleHostFileSystem {
   private getDirectoriesHits = 0;
   private getDirectoriesMisses = 0;
 
+  constructor(
+    private readonly sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
+  ) {}
+
   fileExists(fileName: string): boolean {
     this.fileExistsCalls += 1;
     const key = hostFileCacheKey(fileName);
@@ -169,7 +174,8 @@ class CachedEvaluationModuleHostFileSystem {
       return cached;
     }
     this.fileExistsMisses += 1;
-    const exists = existsSync(fileName);
+    const providerExists = this.sourceTextProvider?.fileExists?.(fileName);
+    const exists = providerExists ?? existsSync(fileName);
     this.fileExistsResults.set(key, exists);
     return exists;
   }
@@ -196,11 +202,13 @@ class CachedEvaluationModuleHostFileSystem {
       return this.fileTextResults.get(key);
     }
     this.readFileMisses += 1;
-    let text: string | undefined;
-    try {
-      text = readFileSync(fileName, 'utf8');
-    } catch {
-      text = undefined;
+    let text = this.sourceTextProvider?.readFile(fileName);
+    if (text === undefined) {
+      try {
+        text = readFileSync(fileName, 'utf8');
+      } catch {
+        text = undefined;
+      }
     }
     this.fileTextResults.set(key, text);
     return text;
@@ -258,7 +266,7 @@ class CachedEvaluationModuleHostFileSystem {
 /** File-system implementation for local source modules. */
 export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSourceHost {
   private readonly sourceFileCache = new Map<string, ts.SourceFile | null>();
-  private readonly fileSystem = new CachedEvaluationModuleHostFileSystem();
+  private readonly fileSystem: CachedEvaluationModuleHostFileSystem;
   private readonly moduleResolutionHost: ts.ModuleResolutionHost;
   private readonly moduleResolutionCache: ts.ModuleResolutionCache;
   private readonly resolvedModuleSpecifiers = new Map<string, string | null>();
@@ -311,7 +319,10 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
     readonly compilerOptions: ts.CompilerOptions = buildProjectCompilerOptions(rootDir),
     /** Completeness/performance policy for non-TypeScript module-resolution fallbacks. */
     readonly moduleResolutionPolicy: EvaluationModuleResolutionPolicy = DefaultEvaluationModuleResolutionPolicy,
+    /** Host-provided source text for editor buffers or other non-filesystem source epochs. */
+    sourceTextProvider: SemanticRuntimeSourceTextProvider | null = null,
   ) {
+    this.fileSystem = new CachedEvaluationModuleHostFileSystem(sourceTextProvider);
     this.moduleResolutionHost = {
       fileExists: (fileName) => this.fileSystem.fileExists(fileName),
       readFile: (fileName) => this.fileSystem.readFile(fileName),

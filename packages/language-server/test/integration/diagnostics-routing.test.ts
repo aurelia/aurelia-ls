@@ -105,7 +105,7 @@ test("routes definitions to the view-model via provenance", async () => {
   }
 });
 
-test("hover/definition map through overlay and rename succeeds for expression members", async () => {
+test("hover/definition map through semantic-runtime provenance and rename succeeds for expression members", async () => {
   const fixture = createFixture({
     "tsconfig.json": JSON.stringify({
       compilerOptions: {

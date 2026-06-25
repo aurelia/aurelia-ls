@@ -1,10 +1,10 @@
 import type {
   CapabilitiesResponse,
   DiagnosticsSnapshotResponse,
-  MappingResponse,
-  OverlayResponse,
-  SsrResponse,
-  TemplateInfoResponse,
+  InspectEntityResponse,
+  RelatedFileResponse,
+  ResourceExplorerResponse,
+  ScopeResourcesResponse,
 } from "../types.js";
 import type { DebugChannel, ErrorReporter, ObservabilityService, TraceService } from "./observability.js";
 import type { LspFacade } from "./lsp-facade.js";
@@ -143,30 +143,35 @@ export class QueryClient {
     return promise;
   }
 
-  getOverlay(uri: string, options?: QueryOptions): Promise<OverlayResponse | null> {
-    return this.query(["overlay", uri], () => this.#lsp.getOverlay(uri), { ...options, name: "overlay" });
-  }
-
-  getMapping(uri: string, options?: QueryOptions): Promise<MappingResponse | null> {
-    return this.query(["mapping", uri], () => this.#lsp.getMapping(uri), { ...options, name: "mapping" });
-  }
-
-  getSsr(uri: string, options?: QueryOptions): Promise<SsrResponse | null> {
-    return this.query(["ssr", uri], () => this.#lsp.getSsr(uri), { ...options, name: "ssr" });
-  }
-
   getDiagnostics(uri: string, options?: QueryOptions): Promise<DiagnosticsSnapshotResponse | null> {
     return this.query(["diagnostics", uri], () => this.#lsp.getDiagnostics(uri), { ...options, name: "diagnostics" });
   }
 
-  queryAtPosition(
+  inspectEntity(
     uri: string,
     position: { line: number; character: number },
-    options?: QueryOptions & { docVersion?: number },
-  ): Promise<TemplateInfoResponse | null> {
-    const { docVersion, ...queryOptions } = options ?? {};
-    const key: QueryKey = ["query", uri, position.line, position.character, docVersion ?? null];
-    return this.query(key, () => this.#lsp.queryAtPosition(uri, position), { ...queryOptions, name: "queryAtPosition" });
+    options?: QueryOptions,
+  ): Promise<InspectEntityResponse | null> {
+    return this.query(
+      ["inspectEntity", uri, position.line, position.character],
+      () => this.#lsp.inspectEntity(uri, position),
+      { ...options, name: "inspectEntity" },
+    );
+  }
+
+  getResources(options?: QueryOptions): Promise<ResourceExplorerResponse | null> {
+    return this.query("resources", () => this.#lsp.getResources(), { ...options, name: "resources" });
+  }
+
+  getScopeResources(uri: string, options?: QueryOptions): Promise<ScopeResourcesResponse | null> {
+    return this.query(["scopeResources", uri], () => this.#lsp.getScopeResources(uri), {
+      ...options,
+      name: "scopeResources",
+    });
+  }
+
+  getRelatedFile(uri: string, options?: QueryOptions): Promise<RelatedFileResponse> {
+    return this.query(["relatedFile", uri], () => this.#lsp.getRelatedFile(uri), { ...options, name: "relatedFile" });
   }
 
   dumpState(options?: QueryOptions): Promise<unknown> {

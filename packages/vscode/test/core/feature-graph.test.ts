@@ -29,8 +29,8 @@ describe("FeatureGraph", () => {
   test("activates features in dependency order", async () => {
     const ctx = createStubContext();
     const calls: string[] = [];
-    const featureA: FeatureModule = { id: "feature.a", activate: () => calls.push("a") };
-    const featureB: FeatureModule = { id: "feature.b", requires: ["feature.a"], activate: () => calls.push("b") };
+    const featureA: FeatureModule = { id: "feature.a", activate: () => { calls.push("a"); } };
+    const featureB: FeatureModule = { id: "feature.b", requires: ["feature.a"], activate: () => { calls.push("b"); } };
 
     const graph = new FeatureGraph();
     graph.register(featureB, featureA);

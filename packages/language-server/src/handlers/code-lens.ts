@@ -1,105 +1,213 @@
 /**
  * CodeLens for Aurelia resource class declarations.
  *
- * Shows bindable count and template usage count on custom element,
- * custom attribute, and value converter class declarations in .ts files.
- * Click navigates to template usages via the references provider.
+ * Shows bindable count and template usage count on source-backed resource
+ * class declarations. The source of truth is semantic-runtime row data; the
+ * custom request shape is the VS Code extension's small presentation contract.
  */
+import path from "node:path";
 import type {
   CodeLens,
   CodeLensParams,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import type { TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";
+import { URI } from "vscode-uri";
+import type {
+  SemanticBindingBehaviorApplicationRow,
+  SemanticResourceDefinitionRow,
+  SemanticRuntimeControllerRow,
+  SemanticSourceReference,
+  SemanticValueConverterApplicationRow,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 
-export function handleCodeLens(
+const CODE_LENS_RESOURCE_KINDS = new Set<string>([
+  "custom-element",
+  "template-controller",
+  "custom-attribute",
+  "value-converter",
+  "binding-behavior",
+]);
+
+const CODE_LENS_KIND_LABELS = new Map<string, string>([
+  ["custom-element", "element"],
+  ["template-controller", "controller"],
+  ["custom-attribute", "attribute"],
+  ["value-converter", "converter"],
+  ["binding-behavior", "behavior"],
+]);
+
+export async function handleCodeLens(
   ctx: ServerContext,
   params: CodeLensParams,
-): CodeLens[] | null {
+): Promise<CodeLens[] | null> {
   try {
     const uri = params.textDocument.uri;
-
-    // Only provide CodeLens for .ts files
     if (!uri.endsWith(".ts")) return null;
 
-    const canonical = canonicalDocumentUri(uri);
-    const snapshot = ctx.workspace.snapshot();
-    const catalog = snapshot.catalog;
-    const referentialIndex = ctx.workspace.referentialIndex;
+    const doc = ctx.documents.get(uri);
+    if (!doc) return null;
 
+    const requested = normalizedFilePath(URI.parse(uri).fsPath);
+    const [
+      definitionsAnswer,
+      controllerAnswer,
+      behaviorAnswer,
+      converterAnswer,
+    ] = await Promise.all([
+      ctx.semanticRuntime.resourceDefinitions(),
+      ctx.semanticRuntime.runtimeControllers(),
+      ctx.semanticRuntime.bindingBehaviorApplications(),
+      ctx.semanticRuntime.valueConverterApplications(),
+    ]);
+
+    const controllers = controllerAnswer.value.rows;
+    const bindingBehaviors = behaviorAnswer.value.rows;
+    const valueConverters = converterAnswer.value.rows;
+    const text = doc.getText();
     const lenses: CodeLens[] = [];
 
-    // Find resources whose source file matches this document
-    type AnyRes = { file?: string; className?: string; bindables?: Record<string, unknown> };
-    const categories = [
-      { entries: (catalog.resources.elements ?? {}) as Record<string, AnyRes>, kind: "custom-element", kindLabel: "element" },
-      { entries: (catalog.resources.attributes ?? {}) as Record<string, AnyRes>, kind: "custom-attribute", kindLabel: "attribute" },
-      { entries: (catalog.resources.valueConverters ?? {}) as Record<string, AnyRes>, kind: "value-converter", kindLabel: "converter" },
-      { entries: (catalog.resources.bindingBehaviors ?? {}) as Record<string, AnyRes>, kind: "binding-behavior", kindLabel: "behavior" },
-    ];
-
-    for (const { entries, kind, kindLabel } of categories) {
-      for (const [name, res] of Object.entries(entries)) {
-        if (!res.file) continue;
-        const resUri = canonicalDocumentUri(res.file).uri;
-        if (resUri !== canonical.uri) continue;
-
-        // Find the class declaration line in the document
-        const doc = ctx.documents.get(uri);
-        if (!doc) continue;
-
-        const className = res.className ?? name;
-        const text = doc.getText();
-        const classPattern = new RegExp(`\\bclass\\s+${escapeRegExp(className)}\\b`);
-        const match = classPattern.exec(text);
-        if (!match) continue;
-
-        const pos = doc.positionAt(match.index);
-
-        // Get bindable count
-        const bindables = (res as { bindables?: Record<string, unknown> }).bindables;
-        const bindableCount = bindables ? Object.keys(bindables).length : 0;
-
-        // Get usage count from referential index
-        const resourceKey = `${kind}:${name}`;
-        const refs = referentialIndex.getReferencesForResource(resourceKey);
-        const templateRefs = refs.filter((r): r is TextReferenceSite => r.kind === "text" && r.domain === "template");
-        const uniqueTemplates = new Set(templateRefs.map((r) => r.file));
-        const usageCount = uniqueTemplates.size;
-
-        // Build title
-        const parts: string[] = [];
-        if (bindableCount > 0) parts.push(`${bindableCount} bindable${bindableCount === 1 ? "" : "s"}`);
-        if (usageCount > 0) {
-          parts.push(`used in ${usageCount} template${usageCount === 1 ? "" : "s"}`);
-        } else {
-          parts.push("no template usages");
-        }
-        const title = `$(symbol-class) ${kindLabel}: ${parts.join(" · ")}`;
-
-        lenses.push({
-          range: {
-            start: { line: pos.line, character: 0 },
-            end: { line: pos.line, character: 0 },
-          },
-          command: usageCount > 0
-            ? {
-                title,
-                command: "editor.action.findReferences",
-                arguments: [uri, pos],
-              }
-            : { title, command: "" },
-        });
+    for (const definition of definitionsAnswer.value.rows) {
+      if (!isCodeLensResourceDefinition(definition)) {
+        continue;
       }
+      const resourceFile = filePathForSource(ctx.workspaceRoot, definition.targetSource ?? definition.source);
+      if (resourceFile == null || normalizedFilePath(resourceFile) !== requested) {
+        continue;
+      }
+      const className = definition.targetName ?? definition.name;
+      if (className == null) {
+        continue;
+      }
+      const classPattern = new RegExp(`\\bclass\\s+${escapeRegExp(className)}\\b`);
+      const match = classPattern.exec(text);
+      if (!match) {
+        continue;
+      }
+
+      const pos = doc.positionAt(match.index);
+      const usageCount = templateUsageCount(definition, controllers, bindingBehaviors, valueConverters);
+      const title = codeLensTitle(definition, usageCount);
+      lenses.push({
+        range: {
+          start: { line: pos.line, character: 0 },
+          end: { line: pos.line, character: 0 },
+        },
+        command: usageCount > 0
+          ? {
+              title,
+              command: "editor.action.findReferences",
+              arguments: [uri, pos],
+            }
+          : { title, command: "" },
+      });
     }
 
-    return lenses.length > 0 ? lenses : null;
+    return lenses.length > 0
+      ? lenses.sort((left, right) => left.range.start.line - right.range.start.line)
+      : null;
   } catch (e) {
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[codeLens] failed for ${params.textDocument.uri}: ${message}`);
     return null;
   }
+}
+
+function isCodeLensResourceDefinition(
+  definition: SemanticResourceDefinitionRow,
+): definition is SemanticResourceDefinitionRow & { readonly name: string } {
+  return definition.name != null && CODE_LENS_RESOURCE_KINDS.has(definition.resourceKind);
+}
+
+function codeLensTitle(
+  definition: SemanticResourceDefinitionRow & { readonly name: string },
+  usageCount: number,
+): string {
+  const kindLabel = CODE_LENS_KIND_LABELS.get(definition.resourceKind) ?? definition.resourceKind;
+  const parts: string[] = [];
+  const bindableCount = definition.bindables.length;
+  if (bindableCount > 0) {
+    parts.push(`${bindableCount} bindable${bindableCount === 1 ? "" : "s"}`);
+  }
+  if (usageCount > 0) {
+    parts.push(`used in ${usageCount} template${usageCount === 1 ? "" : "s"}`);
+  } else {
+    parts.push("no template usages");
+  }
+  return `$(symbol-class) ${kindLabel}: ${parts.join(" · ")}`;
+}
+
+function templateUsageCount(
+  definition: SemanticResourceDefinitionRow & { readonly name: string },
+  controllers: readonly SemanticRuntimeControllerRow[],
+  bindingBehaviors: readonly SemanticBindingBehaviorApplicationRow[],
+  valueConverters: readonly SemanticValueConverterApplicationRow[],
+): number {
+  switch (definition.resourceKind) {
+    case "custom-element":
+    case "custom-attribute":
+    case "template-controller":
+      return countDistinctSourcePaths(
+        controllers
+          .filter((row) =>
+            row.definitionName === definition.name
+            && (row.definitionKind === definition.resourceKind || row.controllerName === definition.name)
+          )
+          .map((row) => row.source),
+      );
+    case "binding-behavior":
+      return countDistinctSourcePaths(
+        bindingBehaviors
+          .filter((row) => row.behaviorName === definition.name)
+          .map((row) => row.source),
+      );
+    case "value-converter":
+      return countDistinctSourcePaths(
+        valueConverters
+          .filter((row) => row.converterName === definition.name)
+          .map((row) => row.source),
+      );
+    default:
+      return 0;
+  }
+}
+
+function countDistinctSourcePaths(sources: readonly (SemanticSourceReference | null)[]): number {
+  const keys = new Set<string>();
+  for (const source of sources) {
+    const key = sourceReferencePath(source) ?? source?.label ?? null;
+    if (key != null) {
+      keys.add(key);
+    }
+  }
+  return keys.size;
+}
+
+function filePathForSource(
+  workspaceRoot: string | null,
+  source: SemanticSourceReference | null,
+): string | undefined {
+  const sourcePath = sourceReferencePath(source);
+  if (sourcePath == null) {
+    return undefined;
+  }
+  if (sourcePath.startsWith("file://")) {
+    return URI.parse(sourcePath).fsPath;
+  }
+  if (path.isAbsolute(sourcePath)) {
+    return sourcePath;
+  }
+  return workspaceRoot == null ? sourcePath : path.resolve(workspaceRoot, sourcePath);
+}
+
+function sourceReferencePath(source: SemanticSourceReference | null): string | null {
+  if (source == null) {
+    return null;
+  }
+  return source.path ?? sourceReferencePath(source.anchor ?? null);
+}
+
+function normalizedFilePath(filePath: string): string {
+  return path.normalize(filePath).toLowerCase();
 }
 
 function escapeRegExp(s: string): string {

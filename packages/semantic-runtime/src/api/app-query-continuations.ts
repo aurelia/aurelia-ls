@@ -526,6 +526,14 @@ function addTemplateContinuations(
 ): void {
   const templateSourcePrecision = query.kind === SemanticAppQueryKind.TemplateDiagnostics
     ? templateDiagnosticSourcePrecision(result.value)
+    : query.kind === SemanticAppQueryKind.TemplateInlayHints
+        || query.kind === SemanticAppQueryKind.TemplateReferences
+        || query.kind === SemanticAppQueryKind.TemplateRename
+        || query.kind === SemanticAppQueryKind.TemplateRenameFromTypeScript
+        || query.kind === SemanticAppQueryKind.TemplateCodeActions
+        || query.kind === SemanticAppQueryKind.TemplateSemanticTokens
+        || query.kind === SemanticAppQueryKind.TemplateFoldingRanges
+      ? semanticSourcePrecisionForAnswerRows(result.value)
     : undefined;
   if (query.cursor != null) {
     switch (query.kind) {
@@ -534,6 +542,20 @@ function addTemplateContinuations(
           navigate(
             'Ask completion candidates at the same source cursor.',
             cursorQuery(SemanticAppQueryKind.TemplateCompletions, query),
+          ),
+          navigate(
+            'Inspect references for the selected member at the same source cursor.',
+            cursorQuery(SemanticAppQueryKind.TemplateReferences, query),
+          ),
+          diagnoseForRepair(
+            'Check whether the selected member has a conservative rename edit plan.',
+            cursorQuery(SemanticAppQueryKind.TemplateRename, query),
+            InquiryEvidenceState.TypeProjected,
+          ),
+          diagnoseForRepair(
+            'Check whether cursor diagnostics have conservative code-action edit plans.',
+            cursorQuery(SemanticAppQueryKind.TemplateCodeActions, query),
+            InquiryEvidenceState.TypeProjected,
           ),
           diagnose(
             'Inspect diagnostics for the cursor source file.',
@@ -553,6 +575,70 @@ function addTemplateContinuations(
             'Inspect diagnostics for the completion source file.',
             withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
             InquiryEvidenceState.TypeProjected,
+          ),
+          diagnoseForRepair(
+            'Check whether cursor diagnostics have conservative code-action edit plans.',
+            cursorQuery(SemanticAppQueryKind.TemplateCodeActions, query),
+            InquiryEvidenceState.TypeProjected,
+          ),
+        );
+        break;
+      case SemanticAppQueryKind.TemplateReferences:
+        seeds.push(
+          inspect(
+            'Inspect semantic cursor context for these references.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+          diagnose(
+            'Inspect diagnostics for the references source file.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+          diagnoseForRepair(
+            'Check whether these references can become a conservative rename edit plan.',
+            cursorQuery(SemanticAppQueryKind.TemplateRename, query),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+        );
+        break;
+      case SemanticAppQueryKind.TemplateRename:
+      case SemanticAppQueryKind.TemplateRenameFromTypeScript:
+        seeds.push(
+          inspect(
+            'Inspect semantic cursor context for this rename plan.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+          navigate(
+            'Inspect references used by this rename plan.',
+            cursorQuery(SemanticAppQueryKind.TemplateReferences, query),
+          ),
+          diagnose(
+            'Inspect diagnostics for the rename source file.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+        );
+        break;
+      case SemanticAppQueryKind.TemplateCodeActions:
+        seeds.push(
+          inspect(
+            'Inspect semantic cursor context for these code actions.',
+            cursorQuery(SemanticAppQueryKind.TemplateCursorInfo, query),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
+          ),
+          diagnose(
+            'Inspect diagnostics behind these code actions.',
+            withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+            InquiryEvidenceState.TypeProjected,
+            templateSourcePrecision,
           ),
         );
         break;
@@ -585,6 +671,60 @@ function addTemplateContinuations(
           'Inspect binding flow summaries behind template diagnostics.',
           rowQuery(SemanticAppQueryKind.BindingDataFlowSummary, query, page),
           InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+      );
+      break;
+    case SemanticAppQueryKind.TemplateInlayHints:
+      seeds.push(
+        diagnose(
+          'Inspect diagnostics for the inlay hint source file.',
+          withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+          InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+        inspect(
+          'Inspect binding data-flow rows behind resolved binding-mode hints.',
+          rowQuery(SemanticAppQueryKind.BindingDataFlows, query, page),
+          InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+        inspect(
+          'Inspect value-channel rows behind resolved binding-mode hints.',
+          rowQuery(SemanticAppQueryKind.BindingValueChannels, query, page),
+          InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+      );
+      break;
+    case SemanticAppQueryKind.TemplateSemanticTokens:
+      seeds.push(
+        diagnose(
+          'Inspect diagnostics for the semantic-token source file.',
+          withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+          InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+        inspect(
+          'Inspect compiled template rows behind semantic token classification.',
+          rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
+          InquiryEvidenceState.Inferred,
+          templateSourcePrecision,
+        ),
+      );
+      break;
+    case SemanticAppQueryKind.TemplateFoldingRanges:
+      seeds.push(
+        diagnose(
+          'Inspect diagnostics for the folding-range source file.',
+          withSourceFile(diagnosticQuery(SemanticAppQueryKind.TemplateDiagnostics, query, page), sourceFile),
+          InquiryEvidenceState.TypeProjected,
+          templateSourcePrecision,
+        ),
+        inspect(
+          'Inspect compiled template rows behind foldable authored regions.',
+          rowQuery(SemanticAppQueryKind.TemplateCompilations, query, page),
+          InquiryEvidenceState.Inferred,
           templateSourcePrecision,
         ),
       );
@@ -837,6 +977,7 @@ function addBindingContinuations(
     case SemanticAppQueryKind.BindingTargetOperations:
     case SemanticAppQueryKind.BindingSourceOperations:
     case SemanticAppQueryKind.BindingBehaviorApplications:
+    case SemanticAppQueryKind.ValueConverterApplications:
       seeds.push(
         inspect(
           'Inspect binding value-flow summaries after target/source operations.',
@@ -1348,12 +1489,25 @@ function diagnosticQuery(
 }
 
 function cursorQuery(
-  kind: SemanticAppQueryKind.TemplateCompletions | SemanticAppQueryKind.TemplateCursorInfo,
+  kind:
+    | SemanticAppQueryKind.TemplateCompletions
+    | SemanticAppQueryKind.TemplateCursorInfo
+    | SemanticAppQueryKind.TemplateReferences
+    | SemanticAppQueryKind.TemplateRename
+    | SemanticAppQueryKind.TemplateRenameFromTypeScript
+    | SemanticAppQueryKind.TemplateCodeActions,
   source: SemanticAppQuery,
 ): SemanticAppQuery {
   return {
     kind,
     cursor: source.cursor,
+    ...(kind !== SemanticAppQueryKind.TemplateReferences || source.includeDeclaration == null ? {} : { includeDeclaration: source.includeDeclaration }),
+    ...(
+      (kind !== SemanticAppQueryKind.TemplateRename && kind !== SemanticAppQueryKind.TemplateRenameFromTypeScript)
+        || source.newName == null
+        ? {}
+        : { newName: source.newName }
+    ),
     ...detailFromQuery(kind, source),
     ...diagnosticProjectionFromQuery(kind, source),
   };

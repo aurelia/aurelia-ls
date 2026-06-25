@@ -17,6 +17,7 @@ import type {
   RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
 import type { RuntimeBindingBehaviorApplication } from '../template/runtime-binding-behavior.js';
+import type { RuntimeValueConverterApplication } from '../template/runtime-value-converter.js';
 import {
   RuntimeControllerCreationKind,
   type RuntimeControllerFrame,
@@ -60,6 +61,15 @@ export function resourceLocalBindingBehaviorApplications(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly RuntimeBindingBehaviorApplication[] {
   return resource.runtimeAnalysis.bindingBehavior.applications.filter((application) =>
+    runtimeBindingReferenceBelongsToResource(store, resource, application.binding)
+  );
+}
+
+export function resourceLocalValueConverterApplications(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly RuntimeValueConverterApplication[] {
+  return resource.runtimeAnalysis.valueConverter.applications.filter((application) =>
     runtimeBindingReferenceBelongsToResource(store, resource, application.binding)
   );
 }

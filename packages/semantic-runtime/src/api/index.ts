@@ -35,6 +35,9 @@ export {
 export {
   BUILT_IN_RESOURCE_PACKAGES,
 } from '../resources/built-in-resources.js';
+export type {
+  SemanticRuntimeSourceTextProvider,
+} from '../kernel/source-text-provider.js';
 export {
   RESOURCE_DEFINITION_KINDS,
 } from '../resources/resource-kind.js';
