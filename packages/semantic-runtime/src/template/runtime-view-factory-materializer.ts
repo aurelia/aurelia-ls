@@ -5,7 +5,7 @@ import type {
 } from '../kernel/handles.js';
 import {
   AureliaResourceIdentity,
-  AureliaResourceIdentityKind,
+  AureliaResourceDeclarationKind,
   ConfigurationIdentity,
 } from '../kernel/identity.js';
 import {
@@ -383,7 +383,7 @@ export class RuntimeViewFactoryMaterializer {
     return [
       new AureliaResourceIdentity(
         publication.allocation.identityHandle,
-        AureliaResourceIdentityKind.CustomElement,
+        AureliaResourceDeclarationKind.CustomElement,
         publication.definition.name,
         null,
       ),

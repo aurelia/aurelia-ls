@@ -62,7 +62,7 @@ import {
 import type { FullResourceDefinition } from './resource-definition.js';
 import { materializeBuiltInResourceDefinition } from './built-in-resource-definition-materializer.js';
 import { BuiltInResourceTargetTypeProjector } from './built-in-resource-target-type.js';
-import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
+import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import { ResourceProductDetails } from './product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 
@@ -237,7 +237,7 @@ class BuiltInResourcePublicationMaterializer {
       return {
         identity: new AureliaResourceIdentity(
           aliasIdentityHandle,
-          toAureliaResourceIdentityKind(resource.resourceKind),
+          toAureliaResourceDeclarationKind(resource.resourceKind),
           alias,
           null,
         ),
@@ -297,7 +297,7 @@ class BuiltInResourcePublicationMaterializer {
   ): AureliaResourceIdentity {
     return new AureliaResourceIdentity(
       handles.identityHandle,
-      toAureliaResourceIdentityKind(resource.resourceKind),
+      toAureliaResourceDeclarationKind(resource.resourceKind),
       resource.name,
       null,
     );

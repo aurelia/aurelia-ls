@@ -135,3 +135,11 @@ export type FullResourceDefinition =
 export type TemplateCompilableResourceDefinition =
   | CustomElementDefinition
   | CustomAttributeDefinition;
+
+export function taxonomyResourceKindForDefinition(
+  definition: FullResourceDefinition,
+): ResourceDefinitionKind {
+  return definition.type === ResourceDefinitionKind.CustomAttribute && definition.isTemplateController
+    ? ResourceDefinitionKind.TemplateController
+    : definition.type;
+}

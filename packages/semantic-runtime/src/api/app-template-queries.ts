@@ -91,7 +91,10 @@ import {
 } from '../template/runtime-binding-mode-behavior.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
-import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import {
+  ResourceDefinitionKind,
+  resourceKindsShareRegistrationIdentity,
+} from '../resources/resource-kind.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -159,13 +162,7 @@ export class SemanticAppTemplateQueries {
   ): SemanticRuntimeAnswer<SemanticTemplateReferencesResult> {
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
-    // Template-origin first; TypeScript-origin cursors (Find References in a .ts file) fall back to
-    // the TypeScript reference context so template usages of a view-model member are reachable from
-    // the declaration side too. Reference providers merge client-side, so answering here is safe.
-    const context = this.templateReferenceContext(query, detail, handles)
-      ?? this.templateBindableReferenceContext(query, detail, handles)
-      ?? this.templateResourceReferenceContext(query, handles)
-      ?? this.templateReferenceContextFromTypeScript(query, handles);
+    const context = this.templateReferenceContextForCursor(query, detail, handles);
     if (context == null) {
       return answer(
         SemanticRuntimeAnswerOutcome.Miss,
@@ -182,11 +179,13 @@ export class SemanticAppTemplateQueries {
 
     // References and rename share one occurrence set: template rows from the reference context plus
     // TypeScript usages from the same collector rename edits are built from.
-    const tsUsageRows = typeScriptUsageReferenceRows(
-      this.emission,
-      context.selectedMemberName,
-      context.targetSource,
-    );
+    const tsUsageRows = context.includeTypeScriptReferences
+      ? typeScriptUsageReferenceRows(
+          this.emission,
+          context.selectedMemberName,
+          context.targetSource,
+        )
+      : [];
     const allRows = [...uniqueTemplateReferenceRows([...context.rows, ...tsUsageRows])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -197,7 +196,7 @@ export class SemanticAppTemplateQueries {
       ? allRows
       : allRows.filter((row) => row.referenceKind !== SemanticTemplateReferenceKind.Declaration);
     const paged = pageRows(rows, query.page);
-    const closure = context.candidateRows.length > 0 && paged.page.nextCursor == null
+    const closure = (context.forceOpen || context.candidateRows.length > 0) && paged.page.nextCursor == null
       ? SemanticRuntimeAnswerClosure.Open
       : closureForAnswer(outcomeForPagedRows(paged), paged.page);
     return answer(
@@ -221,27 +220,42 @@ export class SemanticAppTemplateQueries {
   ): SemanticRuntimeAnswer<SemanticTemplateRenameResult> {
     const detail = query.detail ?? SemanticRuntimeDetail.Compact;
     const handles = includeHandles(detail);
-    // FIXME(lane-rca:dispatch-collapse): Resource definition surfaces still do not reach the standard rename path.
-    const context = this.templateReferenceContext({ ...query, includeDeclaration: true }, detail, handles)
-      ?? this.templateBindableReferenceContext({ ...query, includeDeclaration: true }, detail, handles);
-    if (context == null) {
+    const contexts = this.templateReferenceContexts({ ...query, includeDeclaration: true }, detail, handles);
+    const selected = activeTemplateReferenceContext(contexts, query.cursor);
+    if (selected == null) {
+      const context = contexts[0] ?? null;
+      const reason = context == null
+        ? SemanticTemplateRenameUnavailableReason.NoSourceBackedMember
+        : SemanticTemplateRenameUnavailableReason.CursorNotOnRenameableReference;
       return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.NoSourceBackedMember,
-        'No source-backed template member is selected at this cursor.',
-        null,
-        null,
+        reason,
+        context == null
+          ? 'No source-backed template member is selected at this cursor.'
+          : 'The cursor is not on a renameable template reference for the selected member.',
+        context?.selectedMemberName ?? null,
+        context?.targetSource ?? null,
         null,
       );
     }
+    const { context, activeSource } = selected;
 
-    const activeSource = activeRenameSource(context.rows, query.cursor);
-    if (activeSource == null) {
+    if (context.renameSurface === TemplateRenameSurface.UnsupportedResource) {
       return templateRenameUnavailable(
-        SemanticTemplateRenameUnavailableReason.CursorNotOnRenameableReference,
-        'The cursor is not on a renameable template reference for the selected member.',
+        SemanticTemplateRenameUnavailableReason.UnsupportedResourceKind,
+        `Resource '${context.selectedMemberName}' is not renameable from this template position.`,
         context.selectedMemberName,
         context.targetSource,
-        null,
+        activeSource,
+      );
+    }
+
+    if (isResourceRenameSurface(context.renameSurface) && !context.hasAuthoredDeclarationSource) {
+      return templateRenameUnavailable(
+        SemanticTemplateRenameUnavailableReason.ResourceNameHasNoAuthoredSource,
+        `Resource name '${context.selectedMemberName}' is convention-derived or otherwise has no authored name token to rename.`,
+        context.selectedMemberName,
+        context.targetSource,
+        activeSource,
       );
     }
 
@@ -273,10 +287,10 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    if (!isValidRenameIdentifier(newName)) {
+    if (!isValidRenameName(newName, context.renameSurface)) {
       return templateRenameUnavailable(
         SemanticTemplateRenameUnavailableReason.InvalidNewName,
-        `Rename target '${newName}' is not a valid TypeScript identifier.`,
+        invalidRenameNameMessage(newName, context.renameSurface),
         context.selectedMemberName,
         context.targetSource,
         activeSource,
@@ -284,12 +298,18 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    const typeScriptEdits = typeScriptReferenceRenameEdits(
-      this.emission,
-      context.targetSource,
-      newName,
-    );
-    if (typeScriptEdits == null && sourceReferenceLooksTypeScript(context.targetSource)) {
+    const typeScriptEdits = context.includeTypeScriptReferences
+      ? typeScriptReferenceRenameEdits(
+          this.emission,
+          context.targetSource,
+          newName,
+        )
+      : [];
+    if (
+      context.includeTypeScriptReferences
+      && typeScriptEdits == null
+      && sourceReferenceLooksTypeScript(context.targetSource)
+    ) {
       return templateRenameUnavailable(
         SemanticTemplateRenameUnavailableReason.TypeScriptSymbolUnavailable,
         'The TypeScript symbol for this template member could not be proven in the current Program.',
@@ -302,13 +322,14 @@ export class SemanticAppTemplateQueries {
     const provenTypeScriptEdits = typeScriptEdits ?? [];
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
     const templateEdits = context.rows
-      .filter(referenceRowNeedsTemplateRenameEdit)
+      .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface))
       .map((row) =>
         templateRenameEditRow(
-          templateRenameEditKindForReferenceRow(row),
+          templateRenameEditKindForReferenceRow(row, context.renameSurface),
           row.source,
           row.name,
-          row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+          context.renameSurface === TemplateRenameSurface.Bindable
+            && row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
             ? bindableAttributeNameForProperty(newName)
             : newName,
         )
@@ -603,8 +624,101 @@ export class SemanticAppTemplateQueries {
       targetSource,
       declarationSource: selectedMember.source,
       declarationSourceAddressHandle: selectedMember.handles?.sourceAddressHandle ?? null,
+      renameSurface: TemplateRenameSurface.Member,
       includeBindableAttributeRows: true,
     }, handles);
+  }
+
+  private templateReferenceContexts(
+    query: SemanticAppQuery,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+    handles: boolean,
+  ): readonly TemplateReferenceContext[] {
+    return [
+      // Template-origin first; TypeScript-origin cursors (Find References in a .ts file) fall back to
+      // the TypeScript reference context so template usages of a view-model member are reachable from
+      // the declaration side too. Reference providers merge client-side, so answering here is safe.
+      this.templateReferenceContext(query, detail, handles),
+      this.templateBindableReferenceContext(query, detail, handles),
+      this.templateResourceReferenceContext(query, handles),
+      this.templateReferenceContextFromTypeScript(query, handles),
+    ].filter((context): context is TemplateReferenceContext => context != null);
+  }
+
+  private templateReferenceContextForCursor(
+    query: SemanticAppQuery,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+    handles: boolean,
+  ): TemplateReferenceContext | null {
+    const contexts = this.templateReferenceContexts(query, detail, handles);
+    return activeTemplateReferenceContext(contexts, query.cursor)?.context
+      ?? contexts[0]
+      ?? this.templateOpenMemberReferenceContext(query, detail, handles)
+      ?? null;
+  }
+
+  private templateOpenMemberReferenceContext(
+    query: SemanticAppQuery,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+    handles: boolean,
+  ): TemplateReferenceContext | null {
+    const cursor = query.cursor;
+    if (cursor == null || cursor.offset == null) {
+      return null;
+    }
+    const cursorInfo = readSemanticTemplateCursorInfo(
+      this.store,
+      this.workspaceRootDir,
+      this.projectRootDir,
+      this.emission,
+      cursor,
+      detail,
+      query.diagnosticProjection,
+    );
+    const selectedMemberName = cursorInfo.value.selectedMemberName;
+    if (
+      cursorInfo.value.siteKind !== 'expression-member'
+      || selectedMemberName == null
+      || cursorInfo.value.selectedMember != null
+    ) {
+      return null;
+    }
+
+    const observedRows = readBindingObservedDependencyRows(this.emission, this.store, handles);
+    const activeObservedRow = observedRows.find((row) =>
+      unprovenObservedMemberRowContainsCursor(row, selectedMemberName, cursor)
+    ) ?? null;
+    if (activeObservedRow == null) {
+      return null;
+    }
+    const activeSource = exactSourceReference(activeObservedRow.memberTokenSource ?? null);
+    if (activeSource == null) {
+      return null;
+    }
+    const activeRow = openMemberTemplateReferenceRowForObservedDependency(
+      activeObservedRow,
+      selectedMemberName,
+      activeSource,
+      handles,
+    );
+    const candidateRows = unprovenSameNameCandidateRows(
+      observedRows,
+      selectedMemberName,
+      activeSource,
+      handles,
+    ).filter((row) => !sourceReferencesMatchExactSpan(row.source, activeSource));
+
+    return {
+      selectedMemberName,
+      targetSource: activeSource,
+      renameSurface: TemplateRenameSurface.Member,
+      includeTypeScriptReferences: false,
+      hasAuthoredDeclarationSource: false,
+      forceOpen: true,
+      templateUsageRows: [activeRow],
+      candidateRows,
+      rows: [activeRow],
+    };
   }
 
   private templateBindableReferenceContext(
@@ -633,6 +747,7 @@ export class SemanticAppTemplateQueries {
       targetSource,
       declarationSource: selectedBindable.source,
       declarationSourceAddressHandle: selectedBindable.handles?.sourceAddressHandle ?? null,
+      renameSurface: TemplateRenameSurface.Bindable,
       includeBindableAttributeRows: true,
     }, handles);
   }
@@ -658,6 +773,7 @@ export class SemanticAppTemplateQueries {
       return null;
     }
 
+    const renameSurface = templateRenameSurfaceForResourceKind(selectedDefinition.resourceKind);
     const sourceAddressHandle = selectedDefinition.handles?.nameSourceAddressHandle
       ?? selectedDefinition.handles?.sourceAddressHandle
       ?? null;
@@ -677,6 +793,9 @@ export class SemanticAppTemplateQueries {
     return templateReferenceContextFromRows({
       selectedMemberName: selectedName,
       targetSource,
+      renameSurface,
+      includeTypeScriptReferences: false,
+      hasAuthoredDeclarationSource: selectedDefinition.nameSource != null,
       declarationRow: templateReferenceDeclarationRow(
         declarationSource,
         selectedName,
@@ -715,6 +834,9 @@ export class SemanticAppTemplateQueries {
     return templateReferenceContextFromRows({
       selectedMemberName: target.selectedMemberName,
       targetSource: target.targetSource,
+      renameSurface: target.renameSurface,
+      includeTypeScriptReferences: true,
+      hasAuthoredDeclarationSource: true,
       declarationRow: templateReferenceDeclarationRow(
         target.declarationSource,
         target.selectedMemberName,
@@ -763,6 +885,9 @@ export class SemanticAppTemplateQueries {
     return templateReferenceContextFromRows({
       selectedMemberName: tsContext.selectedMemberName,
       targetSource: tsContext.targetSource,
+      renameSurface: TemplateRenameSurface.Member,
+      includeTypeScriptReferences: true,
+      hasAuthoredDeclarationSource: true,
       declarationRow: templateReferenceDeclarationRow(
         tsContext.targetSource,
         tsContext.selectedMemberName,
@@ -825,9 +950,21 @@ export class SemanticAppTemplateQueries {
   }
 }
 
+const enum TemplateRenameSurface {
+  Member = 'member',
+  Bindable = 'bindable',
+  ResourceElement = 'resource-element',
+  ResourceAttribute = 'resource-attribute',
+  UnsupportedResource = 'unsupported-resource',
+}
+
 interface TemplateReferenceContext {
   readonly selectedMemberName: string;
   readonly targetSource: SemanticSourceReference;
+  readonly renameSurface: TemplateRenameSurface;
+  readonly includeTypeScriptReferences: boolean;
+  readonly hasAuthoredDeclarationSource: boolean;
+  readonly forceOpen: boolean;
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   /** Same-name template usages with unproven provenance; never mixed into proven rows. */
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
@@ -839,6 +976,7 @@ interface TemplateReferenceTarget {
   readonly targetSource: SemanticSourceReference;
   readonly declarationSource: SemanticSourceReference | null;
   readonly declarationSourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'];
+  readonly renameSurface: TemplateRenameSurface;
   readonly observedTargetSources?: readonly SemanticSourceReference[];
   readonly includeBindableAttributeRows: boolean;
 }
@@ -863,6 +1001,11 @@ interface TypeScriptReferenceContext {
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   /** Same-name template usages with unproven provenance; never mixed into proven rows. */
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
+}
+
+interface ActiveTemplateReferenceContext {
+  readonly context: TemplateReferenceContext;
+  readonly activeSource: SemanticSourceReference;
 }
 
 function diagnosticContainsCursor(
@@ -1109,25 +1252,29 @@ function templateRenameUnavailable(
   );
 }
 
+function activeTemplateReferenceContext(
+  contexts: readonly TemplateReferenceContext[],
+  cursor: SemanticAppQuery['cursor'],
+): ActiveTemplateReferenceContext | null {
+  for (const context of contexts) {
+    const activeSource = activeRenameSource(context.rows, cursor);
+    if (activeSource != null) {
+      return { context, activeSource };
+    }
+  }
+  return null;
+}
+
 function activeRenameSource(
   rows: readonly SemanticTemplateReferenceRow[],
   cursor: SemanticAppQuery['cursor'],
 ): SemanticSourceReference | null {
-  if (cursor == null || cursor.offset == null) {
-    return null;
-  }
   for (const row of rows) {
     if (!referenceRowSupportsRename(row)) {
       continue;
     }
     const source = exactSourceReference(row.source);
-    if (
-      source?.start != null
-      && source.end != null
-      && semanticSourceReferenceMatchesFilePath(source, cursor.filePath)
-      && cursor.offset >= source.start
-      && cursor.offset <= source.end
-    ) {
+    if (sourceReferenceContainsCursor(source, cursor)) {
       // Usage rows carry authored member-name token sources, so prepareRename ranges are token-granular.
       return source;
     }
@@ -1135,18 +1282,57 @@ function activeRenameSource(
   return null;
 }
 
+function sourceReferenceContainsCursor(
+  source: SemanticSourceReference | null,
+  cursor: SemanticAppQuery['cursor'],
+): source is SemanticSourceReference {
+  return cursor?.offset != null
+    && source?.start != null
+    && source.end != null
+    && semanticSourceReferenceMatchesFilePath(source, cursor.filePath)
+    && cursor.offset >= source.start
+    && cursor.offset <= source.end;
+}
+
 function referenceRowSupportsRename(row: SemanticTemplateReferenceRow): boolean {
   return row.referenceKind === SemanticTemplateReferenceKind.Declaration
     || row.referenceKind === SemanticTemplateReferenceKind.TemplateUsage
+    || row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage
     || row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute;
 }
 
-function referenceRowNeedsTemplateRenameEdit(row: SemanticTemplateReferenceRow): boolean {
+function referenceRowNeedsTemplateRenameEdit(
+  row: SemanticTemplateReferenceRow,
+  surface: TemplateRenameSurface,
+): boolean {
   return referenceRowSupportsRename(row)
     && (
       row.referenceKind !== SemanticTemplateReferenceKind.Declaration
+      || surface === TemplateRenameSurface.ResourceElement
+      || surface === TemplateRenameSurface.ResourceAttribute
       || !sourceReferenceLooksTypeScript(row.targetSource)
     );
+}
+
+function isValidRenameName(value: string, surface: TemplateRenameSurface): boolean {
+  return isResourceRenameSurface(surface)
+    ? isValidTemplateAddressableResourceName(value)
+    : isValidRenameIdentifier(value);
+}
+
+function invalidRenameNameMessage(value: string, surface: TemplateRenameSurface): string {
+  return isResourceRenameSurface(surface)
+    ? `Rename target '${value}' is not a valid Aurelia template resource name. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template element and attribute names from lowercased HTML.`
+    : `Rename target '${value}' is not a valid TypeScript identifier.`;
+}
+
+function isResourceRenameSurface(surface: TemplateRenameSurface): boolean {
+  return surface === TemplateRenameSurface.ResourceElement
+    || surface === TemplateRenameSurface.ResourceAttribute;
+}
+
+function isValidTemplateAddressableResourceName(value: string): boolean {
+  return /^[a-z][0-9a-z_-]*$/u.test(value);
 }
 
 function isValidRenameIdentifier(value: string): boolean {
@@ -1295,6 +1481,20 @@ function typeScriptUsageReferenceRows(
     }));
 }
 
+function templateRenameSurfaceForResourceKind(
+  resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`,
+): TemplateRenameSurface {
+  switch (resourceKind) {
+    case ResourceDefinitionKind.CustomElement:
+      return TemplateRenameSurface.ResourceElement;
+    case ResourceDefinitionKind.CustomAttribute:
+    case ResourceDefinitionKind.TemplateController:
+      return TemplateRenameSurface.ResourceAttribute;
+    default:
+      return TemplateRenameSurface.UnsupportedResource;
+  }
+}
+
 function declarationSourcesForSymbol(
   symbol: ts.Symbol,
 ): readonly SemanticSourceReference[] {
@@ -1411,7 +1611,22 @@ function templateRenameEditRow(
 
 function templateRenameEditKindForReferenceRow(
   row: SemanticTemplateReferenceRow,
+  surface: TemplateRenameSurface,
 ): SemanticTemplateRenameEditKind {
+  if (row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage) {
+    return surface === TemplateRenameSurface.ResourceAttribute
+      ? SemanticTemplateRenameEditKind.ResourceAttributeTarget
+      : SemanticTemplateRenameEditKind.ResourceElementTag;
+  }
+  if (
+    row.referenceKind === SemanticTemplateReferenceKind.Declaration
+    && (
+      surface === TemplateRenameSurface.ResourceElement
+      || surface === TemplateRenameSurface.ResourceAttribute
+    )
+  ) {
+    return SemanticTemplateRenameEditKind.ResourceNameDeclaration;
+  }
   if (row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute) {
     return SemanticTemplateRenameEditKind.BindableAttribute;
   }
@@ -1447,6 +1662,10 @@ function uniqueTemplateRenameEditRows(
 function templateReferenceContextFromRows(input: {
   readonly selectedMemberName: string;
   readonly targetSource: SemanticSourceReference;
+  readonly renameSurface: TemplateRenameSurface;
+  readonly includeTypeScriptReferences: boolean;
+  readonly hasAuthoredDeclarationSource: boolean;
+  readonly forceOpen?: boolean;
   readonly declarationRow: SemanticTemplateReferenceRow;
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   readonly candidateRows: readonly SemanticTemplateReferenceRow[];
@@ -1454,6 +1673,10 @@ function templateReferenceContextFromRows(input: {
   return {
     selectedMemberName: input.selectedMemberName,
     targetSource: input.targetSource,
+    renameSurface: input.renameSurface,
+    includeTypeScriptReferences: input.includeTypeScriptReferences,
+    hasAuthoredDeclarationSource: input.hasAuthoredDeclarationSource,
+    forceOpen: input.forceOpen ?? false,
     templateUsageRows: input.templateUsageRows,
     candidateRows: input.candidateRows,
     rows: uniqueSortedTemplateReferenceRows([input.declarationRow, ...input.templateUsageRows]),
@@ -1608,7 +1831,8 @@ function attributeResourceReferenceRows(
   return resource.compilation.attributeClassification.classifications.flatMap((classification): readonly SemanticTemplateReferenceRow[] => {
     if (
       classification.resource == null
-      || classification.resourceKind !== target.resourceKind
+      || classification.resourceKind == null
+      || !resourceKindsShareRegistrationIdentity(classification.resourceKind, target.resourceKind)
       || !visibleResourceMatchesTarget(store, classification.resource, target)
     ) {
       return [];
@@ -1663,7 +1887,7 @@ function visibleResourceMatchesTarget(
   resource: TemplateResourceEmission['compilation']['compilerWorld']['resourceScope']['resources'][number],
   target: ResourceReferenceTarget,
 ): boolean {
-  if (resource.resourceKind !== target.resourceKind) {
+  if (!resourceKindsShareRegistrationIdentity(resource.resourceKind, target.resourceKind)) {
     return false;
   }
   if (resource.definitionProductHandle != null && target.definitionProductHandle != null) {
@@ -1840,6 +2064,29 @@ function templateReferenceRowForObservedDependency(
   };
 }
 
+function openMemberTemplateReferenceRowForObservedDependency(
+  row: SemanticBindingObservedDependencyRow,
+  selectedMemberName: string,
+  targetSource: SemanticSourceReference,
+  handles: boolean,
+): SemanticTemplateReferenceRow {
+  const referenceRow = templateReferenceRowForObservedDependency(
+    row,
+    selectedMemberName,
+    targetSource,
+    handles,
+  );
+  return referenceRow.handles == null
+    ? referenceRow
+    : {
+        ...referenceRow,
+        handles: {
+          ...referenceRow.handles,
+          targetSourceAddressHandle: null,
+        },
+      };
+}
+
 /**
  * Same-name template usages whose provenance cannot prove a relationship to the selected symbol
  * (owner-value routes on weak, dynamic, keyed, or index-signature-shaped owners). Same-name rows
@@ -1865,6 +2112,17 @@ function unprovenSameNameCandidateRows(
       (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
       || (left.source?.start ?? -1) - (right.source?.start ?? -1)
     );
+}
+
+function unprovenObservedMemberRowContainsCursor(
+  row: SemanticBindingObservedDependencyRow,
+  selectedMemberName: string,
+  cursor: NonNullable<SemanticAppQuery['cursor']>,
+): boolean {
+  return row.source != null
+    && row.observedMemberSourceRoute !== 'member-declaration'
+    && row.memberName === selectedMemberName
+    && sourceReferenceContainsCursor(exactSourceReference(row.memberTokenSource ?? null), cursor);
 }
 
 function uniqueTemplateReferenceRows(

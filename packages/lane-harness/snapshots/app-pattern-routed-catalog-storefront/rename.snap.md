@@ -227,18 +227,18 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
  import { resolve } from 'aurelia';
  import type { Item, ItemBadge } from '../models/item';
  import { ItemCatalogService } from '../services/item-catalog-service';
- 
+
  export class ItemCollectionState {
    private readonly itemsById = new Map<string, Item>();
- 
+
 -  searchText = '';
 +  queryText = '';
    onlyInStock = false;
    readonly badgeFilters: readonly (ItemBadge | 'all')[] = ["all", "core", "featured", "seasonal", "standard"];
- 
+
    badgeFilter: ItemBadge | 'all' = 'all';
    isLoading = false;
- 
+
    get visibleItems(): readonly Item[] {
 -    const query = this.searchText.trim().toLowerCase();
 +    const query = this.queryText.trim().toLowerCase();
@@ -248,19 +248,19 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        && (this.badgeFilter === 'all' || item.badge === this.badgeFilter)
      );
    }
- 
+
    get hasItems(): boolean {
      return this.itemsById.size > 0;
    }
- 
+
    get hasVisibleItems(): boolean {
      return this.visibleItems.length > 0;
    }
- 
+
    readItem(entityId: string): Item | null {
      return this.itemsById.get(entityId) ?? null;
    }
- 
+
    replace(collection: readonly Item[]): void {
      this.itemsById.clear();
      for (const item of collection) {
@@ -268,42 +268,42 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
      }
    }
  }
- 
+
  export class SelectionState {
    readonly selectedItemIds: string[] = [];
- 
+
    get itemCount(): number {
      return this.selectedItemIds.length;
    }
- 
+
    selectItem(entityId: string): void {
      if (!this.selectedItemIds.includes(entityId)) {
        this.selectedItemIds.push(entityId);
      }
    }
  }
- 
+
  export class CatalogState {
    private readonly catalogService = resolve(ItemCatalogService);
- 
+
    readonly items = new ItemCollectionState();
    readonly selection = new SelectionState();
- 
+
    get selectionProgressPercent(): number {
      return Math.min(100, Math.round((this.selection.itemCount / 3) * 100));
    }
- 
+
    get selectedItemNames(): readonly string[] {
      return this.selection.selectedItemIds.map((entityId) =>
        this.items.readItem(entityId)?.name ?? entityId
      );
    }
- 
+
    async loadFeaturedItems(): Promise<void> {
      if (this.items.hasItems || this.items.isLoading) {
        return;
      }
- 
+
      this.items.isLoading = true;
      try {
        this.items.replace(await this.catalogService.loadFeaturedItems());
@@ -311,7 +311,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        this.items.isLoading = false;
      }
    }
- 
+
    selectItem(entityId: string): void {
      const item = this.items.readItem(entityId);
      if (item?.inStock === true) {
@@ -542,18 +542,18 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
  import { resolve } from 'aurelia';
  import type { Item, ItemBadge } from '../models/item';
  import { ItemCatalogService } from '../services/item-catalog-service';
- 
+
  export class ItemCollectionState {
    private readonly itemsById = new Map<string, Item>();
- 
+
    searchText = '';
 -  onlyInStock = false;
 +  inStockOnly = false;
    readonly badgeFilters: readonly (ItemBadge | 'all')[] = ["all", "core", "featured", "seasonal", "standard"];
- 
+
    badgeFilter: ItemBadge | 'all' = 'all';
    isLoading = false;
- 
+
    get visibleItems(): readonly Item[] {
      const query = this.searchText.trim().toLowerCase();
      return [...this.itemsById.values()].filter((item) =>
@@ -563,19 +563,19 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        && (this.badgeFilter === 'all' || item.badge === this.badgeFilter)
      );
    }
- 
+
    get hasItems(): boolean {
      return this.itemsById.size > 0;
    }
- 
+
    get hasVisibleItems(): boolean {
      return this.visibleItems.length > 0;
    }
- 
+
    readItem(entityId: string): Item | null {
      return this.itemsById.get(entityId) ?? null;
    }
- 
+
    replace(collection: readonly Item[]): void {
      this.itemsById.clear();
      for (const item of collection) {
@@ -583,42 +583,42 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
      }
    }
  }
- 
+
  export class SelectionState {
    readonly selectedItemIds: string[] = [];
- 
+
    get itemCount(): number {
      return this.selectedItemIds.length;
    }
- 
+
    selectItem(entityId: string): void {
      if (!this.selectedItemIds.includes(entityId)) {
        this.selectedItemIds.push(entityId);
      }
    }
  }
- 
+
  export class CatalogState {
    private readonly catalogService = resolve(ItemCatalogService);
- 
+
    readonly items = new ItemCollectionState();
    readonly selection = new SelectionState();
- 
+
    get selectionProgressPercent(): number {
      return Math.min(100, Math.round((this.selection.itemCount / 3) * 100));
    }
- 
+
    get selectedItemNames(): readonly string[] {
      return this.selection.selectedItemIds.map((entityId) =>
        this.items.readItem(entityId)?.name ?? entityId
      );
    }
- 
+
    async loadFeaturedItems(): Promise<void> {
      if (this.items.hasItems || this.items.isLoading) {
        return;
      }
- 
+
      this.items.isLoading = true;
      try {
        this.items.replace(await this.catalogService.loadFeaturedItems());
@@ -626,7 +626,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        this.items.isLoading = false;
      }
    }
- 
+
    selectItem(entityId: string): void {
      const item = this.items.readItem(entityId);
      if (item?.inStock === true) {
@@ -857,17 +857,17 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
  import { resolve } from 'aurelia';
  import type { Item, ItemBadge } from '../models/item';
  import { ItemCatalogService } from '../services/item-catalog-service';
- 
+
  export class ItemCollectionState {
    private readonly itemsById = new Map<string, Item>();
- 
+
    searchText = '';
    onlyInStock = false;
    readonly badgeFilters: readonly (ItemBadge | 'all')[] = ["all", "core", "featured", "seasonal", "standard"];
- 
+
    badgeFilter: ItemBadge | 'all' = 'all';
    isLoading = false;
- 
+
 -  get visibleItems(): readonly Item[] {
 +  get filteredItems(): readonly Item[] {
      const query = this.searchText.trim().toLowerCase();
@@ -877,20 +877,20 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        && (this.badgeFilter === 'all' || item.badge === this.badgeFilter)
      );
    }
- 
+
    get hasItems(): boolean {
      return this.itemsById.size > 0;
    }
- 
+
    get hasVisibleItems(): boolean {
 -    return this.visibleItems.length > 0;
 +    return this.filteredItems.length > 0;
    }
- 
+
    readItem(entityId: string): Item | null {
      return this.itemsById.get(entityId) ?? null;
    }
- 
+
    replace(collection: readonly Item[]): void {
      this.itemsById.clear();
      for (const item of collection) {
@@ -898,42 +898,42 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
      }
    }
  }
- 
+
  export class SelectionState {
    readonly selectedItemIds: string[] = [];
- 
+
    get itemCount(): number {
      return this.selectedItemIds.length;
    }
- 
+
    selectItem(entityId: string): void {
      if (!this.selectedItemIds.includes(entityId)) {
        this.selectedItemIds.push(entityId);
      }
    }
  }
- 
+
  export class CatalogState {
    private readonly catalogService = resolve(ItemCatalogService);
- 
+
    readonly items = new ItemCollectionState();
    readonly selection = new SelectionState();
- 
+
    get selectionProgressPercent(): number {
      return Math.min(100, Math.round((this.selection.itemCount / 3) * 100));
    }
- 
+
    get selectedItemNames(): readonly string[] {
      return this.selection.selectedItemIds.map((entityId) =>
        this.items.readItem(entityId)?.name ?? entityId
      );
    }
- 
+
    async loadFeaturedItems(): Promise<void> {
      if (this.items.hasItems || this.items.isLoading) {
        return;
      }
- 
+
      this.items.isLoading = true;
      try {
        this.items.replace(await this.catalogService.loadFeaturedItems());
@@ -941,7 +941,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
        this.items.isLoading = false;
      }
    }
- 
+
    selectItem(entityId: string): void {
      const item = this.items.readItem(entityId);
      if (item?.inStock === true) {
@@ -1134,6 +1134,75 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
    </div>
  </section>
 ```
+
+## template-controller-repeat-refusal
+
+### Probe
+
+```json
+{
+  "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+  "at": "repeat",
+  "atOccurrence": 1,
+  "displayPosition": "src/routes/item-list-route.html:25:13",
+  "file": "src/routes/item-list-route.html",
+  "lspPosition": {
+    "character": 12,
+    "line": 24
+  },
+  "newName": "loop",
+  "occurrence": 1
+}
+```
+
+### prepareRename
+
+```json
+{
+  "outcome": "result",
+  "result": null
+}
+```
+
+### rename
+
+```json
+{
+  "error": {
+    "code": 0,
+    "message": "No source-backed template member is selected at this cursor."
+  },
+  "outcome": "error"
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### In-memory apply
+
+```json
+{
+  "anomalies": [],
+  "editCount": 0,
+  "expectedOldTexts": [
+    "repeat"
+  ],
+  "filesTouched": [],
+  "outcome": "rename-error",
+  "validation": []
+}
+```
+
+### Applied diff
+
+_No in-memory diff._
 
 ## let-local-item-target
 
@@ -1556,7 +1625,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
 @@ -1,25 +1,25 @@
  <section class="item-detail">
    <a load="items">All items</a>
- 
+
 -  <let item.bind="state.items.readItem(routeParams.itemId)"></let>
 -  <template if.bind="item">
 -    <h1>${item.name}</h1>
@@ -2012,7 +2081,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
 @@ -1,25 +1,25 @@
  <section class="item-detail">
    <a load="items">All items</a>
- 
+
 -  <let item.bind="state.items.readItem(routeParams.itemId)"></let>
 -  <template if.bind="item">
 -    <h1>${item.name}</h1>
@@ -2627,14 +2696,14 @@ diff --git a/src/components/item-card.ts b/src/components/item-card.ts
  import type { Item } from '../models/item';
  import { CatalogState } from '../state/catalog-state';
  import template from './item-card.html';
- 
+
  @customElement({
    name: 'item-card',
    template,
  })
  export class ItemCard {
    readonly state = resolve(CatalogState);
- 
+
 -  @bindable item: Item | null = null;
 +  @bindable product: Item | null = null;
  }
@@ -2675,6 +2744,324 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
    </div>
  </section>
 ```
+
+## resource-element-item-card
+
+### Probe
+
+```json
+{
+  "anchor": "<item-card item.bind=\"item\">",
+  "at": "item-card",
+  "atOccurrence": 1,
+  "displayPosition": "src/routes/item-list-route.html:26:12",
+  "file": "src/routes/item-list-route.html",
+  "lspPosition": {
+    "character": 11,
+    "line": 25
+  },
+  "newName": "product-card",
+  "occurrence": 1
+}
+```
+
+### prepareRename
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "placeholder": "item-card",
+    "range": {
+      "end": {
+        "character": 20,
+        "line": 25
+      },
+      "start": {
+        "character": 11,
+        "line": 25
+      }
+    }
+  }
+}
+```
+
+### rename
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "changes": {
+      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts": [
+        {
+          "newText": "product-card",
+          "range": {
+            "end": {
+              "character": 18,
+              "line": 6
+            },
+            "start": {
+              "character": 9,
+              "line": 6
+            }
+          }
+        }
+      ],
+      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
+        {
+          "newText": "product-card",
+          "range": {
+            "end": {
+              "character": 20,
+              "line": 25
+            },
+            "start": {
+              "character": 11,
+              "line": 25
+            }
+          }
+        },
+        {
+          "newText": "product-card",
+          "range": {
+            "end": {
+              "character": 49,
+              "line": 25
+            },
+            "start": {
+              "character": 40,
+              "line": 25
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### In-memory apply
+
+```json
+{
+  "anomalies": [],
+  "editCount": 3,
+  "expectedOldTexts": [
+    "item-card",
+    "item"
+  ],
+  "filesTouched": [
+    "src/components/item-card.ts",
+    "src/routes/item-list-route.html"
+  ],
+  "outcome": "applied",
+  "validation": [
+    {
+      "file": "src/components/item-card.ts",
+      "newText": "product-card",
+      "oldText": "item-card",
+      "range": {
+        "end": {
+          "character": 18,
+          "line": 6
+        },
+        "start": {
+          "character": 9,
+          "line": 6
+        }
+      },
+      "source": "changes",
+      "status": "ok"
+    },
+    {
+      "file": "src/routes/item-list-route.html",
+      "newText": "product-card",
+      "oldText": "item-card",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 25
+        },
+        "start": {
+          "character": 11,
+          "line": 25
+        }
+      },
+      "source": "changes",
+      "status": "ok"
+    },
+    {
+      "file": "src/routes/item-list-route.html",
+      "newText": "product-card",
+      "oldText": "item-card",
+      "range": {
+        "end": {
+          "character": 49,
+          "line": 25
+        },
+        "start": {
+          "character": 40,
+          "line": 25
+        }
+      },
+      "source": "changes",
+      "status": "ok"
+    }
+  ]
+}
+```
+
+### Applied diff
+
+```diff
+diff --git a/src/components/item-card.ts b/src/components/item-card.ts
+--- a/src/components/item-card.ts
++++ b/src/components/item-card.ts
+@@ -1,14 +1,14 @@
+ import { bindable, customElement, resolve } from 'aurelia';
+ import type { Item } from '../models/item';
+ import { CatalogState } from '../state/catalog-state';
+ import template from './item-card.html';
+
+ @customElement({
+-  name: 'item-card',
++  name: 'product-card',
+   template,
+ })
+ export class ItemCard {
+   readonly state = resolve(CatalogState);
+
+   @bindable item: Item | null = null;
+ }
+diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
+--- a/src/routes/item-list-route.html
++++ b/src/routes/item-list-route.html
+@@ -1,31 +1,31 @@
+ <section>
+   <h2>Featured items</h2>
+   <p if.bind="state.items.isLoading">Loading items...</p>
+   <div else>
+     <form class="catalog-filters" submit.trigger="$event.preventDefault()">
+       <label>
+         Search
+         <input type="search" value.bind="state.items.searchText & debounce:150">
+       </label>
+       <label>
+         <input type="checkbox" checked.bind="state.items.onlyInStock">
+         In stock only
+       </label>
+       <label>
+         Badge
+         <select value.bind="state.items.badgeFilter">
+           <option repeat.for="badge of state.items.badgeFilters" model.bind="badge">${badge}</option>
+         </select>
+       </label>
+     </form>
+     <p if.bind="!state.items.hasItems">No featured items are available yet.</p>
+     <template else>
+       <p if.bind="!state.items.hasVisibleItems">No items match the current filters.</p>
+       <ul if.bind="state.items.hasVisibleItems" class="item-grid">
+         <li repeat.for="item of state.items.visibleItems">
+-          <item-card item.bind="item"></item-card>
++          <product-card item.bind="item"></product-card>
+         </li>
+       </ul>
+     </template>
+   </div>
+ </section>
+```
+
+## resource-element-uppercase-refusal
+
+### Probe
+
+```json
+{
+  "anchor": "<item-card item.bind=\"item\">",
+  "at": "item-card",
+  "atOccurrence": 1,
+  "displayPosition": "src/routes/item-list-route.html:26:12",
+  "file": "src/routes/item-list-route.html",
+  "lspPosition": {
+    "character": 11,
+    "line": 25
+  },
+  "newName": "ItemCard",
+  "occurrence": 1
+}
+```
+
+### prepareRename
+
+```json
+{
+  "outcome": "result",
+  "result": {
+    "placeholder": "item-card",
+    "range": {
+      "end": {
+        "character": 20,
+        "line": 25
+      },
+      "start": {
+        "character": 11,
+        "line": 25
+      }
+    }
+  }
+}
+```
+
+### rename
+
+```json
+{
+  "error": {
+    "code": 0,
+    "message": "Rename target 'ItemCard' is not a valid Aurelia template resource name. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template element and attribute names from lowercased HTML."
+  },
+  "outcome": "error"
+}
+```
+
+### Notifications
+
+```json
+{
+  "notificationCount": 0,
+  "notifications": []
+}
+```
+
+### In-memory apply
+
+```json
+{
+  "anomalies": [],
+  "editCount": 0,
+  "expectedOldTexts": [
+    "item-card",
+    "item"
+  ],
+  "filesTouched": [],
+  "outcome": "rename-error",
+  "validation": []
+}
+```
+
+### Applied diff
+
+_No in-memory diff._
 
 ## repeat-local-badge-three-sites
 

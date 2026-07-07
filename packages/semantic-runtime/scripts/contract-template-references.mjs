@@ -20,6 +20,9 @@ const storefrontTemplatePath = path.join(storefrontRoot, 'src/routes/item-list-r
 const storefrontDefinitionPath = path.join(storefrontRoot, 'src/components/item-card.ts');
 const storefrontTemplateText = fs.readFileSync(storefrontTemplatePath, 'utf8');
 const storefrontDefinitionText = fs.readFileSync(storefrontDefinitionPath, 'utf8');
+const mixedFormRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
+const mixedFormTemplatePath = path.join(mixedFormRoot, 'src/components/loose-picklist.html');
+const mixedFormTemplateText = fs.readFileSync(mixedFormTemplatePath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateReferences });
 assert.equal(catalog.value.rows.length, 1, 'TemplateReferences should be in the public app-query catalog.');
@@ -105,7 +108,46 @@ assert.equal(resourceReferences.value.targetSource?.path?.replace(/\\/g, '/'), '
 assert.equal(resourceReferences.value.targetSource?.start, resourceNameStart);
 assert.equal(resourceReferences.value.targetSource?.end, resourceNameStart + 'item-card'.length);
 
-console.log(`Template references contract passed (${withDeclaration.value.rows.length + resourceReferences.value.rows.length} row(s)).`);
+const mixedFormRuntime = await createSemanticRuntime({
+  workspaceRoot: mixedFormRoot,
+  storeKey: 'contract:template-references:open-member-self-row',
+});
+const openMemberReferences = await mixedFormRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: mixedFormTemplatePath,
+  cursor: cursorInsideSource(mixedFormTemplateText, mixedFormTemplatePath, '${option.label || option}', 'label', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(openMemberReferences.outcome, /^(hit|partial)$/u, openMemberReferences.summary);
+assert.equal(openMemberReferences.closure, 'open', 'Unproven member references should not claim complete coverage.');
+assert.equal(openMemberReferences.value.selectedMemberName, 'label');
+const optionLabelMarkerStart = mixedFormTemplateText.indexOf('${option.label || option}');
+assert.notEqual(optionLabelMarkerStart, -1, 'Expected option.label marker in mixed-form template.');
+const optionLabelStart = optionLabelMarkerStart + '${option.'.length;
+assert.equal(openMemberReferences.value.rows.length, 1, 'Unproven member references should return only the cursor occurrence.');
+const openMemberRow = openMemberReferences.value.rows[0];
+assert.equal(openMemberRow.referenceKind, 'template-usage');
+assert.equal(openMemberRow.source?.path?.replace(/\\/g, '/'), 'src/components/loose-picklist.html');
+assert.equal(openMemberRow.source?.start, optionLabelStart);
+assert.equal(openMemberRow.source?.end, optionLabelStart + 'label'.length);
+assert.equal(openMemberRow.targetSource?.start, optionLabelStart);
+assert.equal(openMemberRow.targetSource?.end, optionLabelStart + 'label'.length);
+assert.equal(openMemberRow.handles?.targetSourceAddressHandle ?? null, null, 'Open self-row must not expose an unproven owner source as the target handle.');
+assert.ok(openMemberReferences.value.candidateRows.length > 0, 'Same-name unproven candidates should stay outside returned rows.');
+assert.ok(
+  openMemberReferences.value.candidateRows.every((row) =>
+    row.source?.path?.replace(/\\/g, '/') !== 'src/components/loose-picklist.html'
+    || row.source.start !== optionLabelStart
+  ),
+  'The cursor occurrence should not also appear in candidateRows.',
+);
+
+console.log(`Template references contract passed (${withDeclaration.value.rows.length + resourceReferences.value.rows.length + openMemberReferences.value.rows.length} row(s)).`);
 
 async function askReferences(includeDeclaration) {
   const answer = await runtime.answerAppQuery({

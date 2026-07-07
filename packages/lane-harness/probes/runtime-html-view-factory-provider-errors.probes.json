@@ -1,0 +1,39 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/runtime-html-view-factory-provider-errors",
+  "lanes": {
+    "rename": [
+      {
+        "id": "template-controller-view-factory-template",
+        "file": "src/runtime-html-view-factory-provider-errors-app.html",
+        "anchor": "<div view-factory-template>",
+        "at": "view-factory-template",
+        "newName": "view-factory-panel",
+        "verdict": "correct",
+        "reason": "Explicit app-owned template-controller public-name rename edits the authored name literal plus the template attribute target, with no TypeScript-symbol edits.",
+        "note": "UPDATED 2026-07-07. This was fixed by separating public resource taxonomy from framework registration identity: template-controller remains the author-facing surface while joins use the custom-attribute registration key space."
+      }
+    ],
+    "references": [
+      {
+        "id": "template-controller-view-factory-template",
+        "file": "src/runtime-html-view-factory-provider-errors-app.html",
+        "anchor": "<div view-factory-template>",
+        "at": "view-factory-template",
+        "verdict": "correct",
+        "reason": "Returns the template-controller attribute usage plus the exact authored name-literal declaration span.",
+        "note": "UPDATED 2026-07-07. References now use registration identity for resource joins while preserving template-controller as the public taxonomy."
+      }
+    ],
+    "hover": [
+      {
+        "id": "template-controller-view-factory-template",
+        "file": "src/runtime-html-view-factory-provider-errors-app.html",
+        "anchor": "<div view-factory-template>",
+        "at": "view-factory-template",
+        "verdict": "correct",
+        "reason": "Hover resolves the resource token as a template-controller surface rather than the backing custom-attribute runtime type.",
+        "note": "UPDATED 2026-07-07. Cursor definition rows now project resource taxonomy through the shared definition helper, so app-owned template controllers present like built-ins."
+      }
+    ]
+  }
+}

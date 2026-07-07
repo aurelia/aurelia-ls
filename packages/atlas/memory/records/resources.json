@@ -567,6 +567,90 @@
       ],
       "createdAt": "2026-05-15",
       "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "decision:resource-registration-identity-vs-taxonomy",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "template",
+        "ide"
+      ],
+      "summary": "Template controllers use custom-attribute registration identity and template-controller taxonomy.",
+      "rationale": "Aurelia registers template controllers in the custom-attribute key space and branches on isTemplateController after attribute resolution. Semantic-runtime should mirror that framework model: public/editor rows may present template-controller as author-facing taxonomy, but resource joins, duplicate detection, dependency/container spending, and rename/reference declaration-to-usage matching must use registration identity.",
+      "guidance": [
+        "Use registrationResourceKindFor(...) for framework registration-key joins; TemplateController maps to CustomAttribute and AttributePattern maps to null.",
+        "Use taxonomyResourceKindForDefinition(...) when presenting converged definitions to authors or editor surfaces; CustomAttributeDefinition with isTemplateController=true presents as TemplateController.",
+        "Do not make ResourceDefinitionConverger emit a separate full TemplateControllerDefinition merely to align usage and declaration kinds; the full runtime definition remains a CustomAttributeDefinition with isTemplateController=true.",
+        "Runtime keys are not taxonomy carriers: au:resource:custom-attribute:<name> can only prove custom-attribute registration identity unless a full definition or configured resource row supplies the template-controller flag.",
+        "Keep source form separate from both axes: @templateController(...), @customAttribute({ isTemplateController: true }), static $au, define calls, and conventions are declaration/provenance forms, not registration key spaces."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-kind.ts",
+          "symbolName": "registrationResourceKindFor",
+          "summary": "Registration identity derivation for framework key-space joins."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition.ts",
+          "symbolName": "taxonomyResourceKindForDefinition",
+          "summary": "Author-facing taxonomy projection for converged resource definitions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "summary": "Template reference and rename resource joins use registration identity while retaining taxonomy surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "summary": "Template cursor definition rows present taxonomy for hover and resource dispatch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "ResourceDefinitionConverger",
+          "summary": "Converges template-controller source forms into custom-attribute definitions with isTemplateController."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/runtime-html/src/resources/custom-attribute.ts",
+          "summary": "Framework custom-attribute definition and templateController sugar use the custom-attribute type/key space."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/template-compiler/src/template-compiler.ts",
+          "summary": "Framework compiler resolves custom attributes first and branches on isTemplateController."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-rename",
+          "summary": "Contract covers app-owned template-controller rename and source-form/name-source equivalence."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-kind.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-rename.mjs"
+        }
+      ],
+      "createdAt": "2026-07-07",
+      "updatedAt": "2026-07-07"
     }
   ]
 }

@@ -1429,9 +1429,10 @@ function fencedJson(value) {
 }
 
 function fencedBlock(info, value) {
-  const maxRun = Math.max(2, ...[...value.matchAll(/`+/gu)].map((match) => match[0].length));
+  const cleanValue = value.split("\n").map((line) => line.trimEnd()).join("\n");
+  const maxRun = Math.max(2, ...[...cleanValue.matchAll(/`+/gu)].map((match) => match[0].length));
   const fence = "`".repeat(maxRun + 1);
-  return `${fence}${info}\n${value}\n${fence}`;
+  return `${fence}${info}\n${cleanValue}\n${fence}`;
 }
 
 function stableStringify(value) {
@@ -1545,12 +1546,13 @@ function renderUnifiedDiff(relativeFile, oldText, newText) {
   ];
 
   for (const operation of operations) {
+    const line = operation.line.trimEnd();
     if (operation.type === "equal") {
-      lines.push(` ${operation.line}`);
+      lines.push(line.length === 0 ? "" : ` ${line}`);
     } else if (operation.type === "delete") {
-      lines.push(`-${operation.line}`);
+      lines.push(`-${line}`);
     } else {
-      lines.push(`+${operation.line}`);
+      lines.push(`+${line}`);
     }
   }
 

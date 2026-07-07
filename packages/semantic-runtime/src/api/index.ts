@@ -40,6 +40,7 @@ export type {
 } from '../kernel/source-text-provider.js';
 export {
   RESOURCE_DEFINITION_KINDS,
+  registrationResourceKindFor,
 } from '../resources/resource-kind.js';
 export {
   SemanticProjectAnalysisKind,

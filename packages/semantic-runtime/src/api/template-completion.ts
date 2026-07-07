@@ -70,7 +70,10 @@ import type {
 } from '../template/html-ir.js';
 import { HtmlElement } from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import {
+  taxonomyResourceKindForDefinition,
+  type FullResourceDefinition,
+} from '../resources/resource-definition.js';
 import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   readTypeSystemOverlayDiagnostics,
@@ -2314,7 +2317,7 @@ function definitionRow(
   includeHandles: boolean,
 ): SemanticTemplateCursorDefinitionRow {
   return {
-    resourceKind: definition.type,
+    resourceKind: taxonomyResourceKindForDefinition(definition),
     name: 'name' in definition ? definition.name : null,
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),

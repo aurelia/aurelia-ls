@@ -68,8 +68,9 @@ Do not collapse these back into generic headers; resource queries and future gen
 `CustomElementDefinition`, `CustomAttributeDefinition`, `ValueConverterDefinition`, `BindingBehaviorDefinition`,
 `BindingCommandDefinition`, and `AttributePatternDefinition` are fully formed metadata definitions before DI admission
 or template compilation. Template controllers currently converge through the custom-attribute shape with
-`isTemplateController: true`, while retaining a distinct resource identity and query projection. Convergence is the
-operation that turns headers and source metadata into full definitions; it is recorded through
+`isTemplateController: true`, while retaining distinct author-facing taxonomy and query projection. Framework
+registration identity still uses the custom-attribute key space; use `registrationResourceKindFor(...)` for joins
+that mirror runtime lookup. Convergence is the operation that turns headers and source metadata into full definitions; it is recorded through
 materialization/provenance rather than being baked into the product name.
 
 Framework-owned built-ins enter the resource layer as resource headers. `built-in-resources.ts` records the runtime-html,

@@ -48,9 +48,9 @@
         "file": "src/components/loose-picklist.html",
         "anchor": "${option.label || option}",
         "at": "label",
-        "verdict": "wrong",
-        "reason": "Returns null instead of at least the cursor occurrence itself; TypeScript returns the current reference for unresolvable member accesses, and an empty answer with no honesty channel hides that the owner type is unknown.",
-        "note": "References at the unprovable member usage. Expected: null. A null here is silent about WHY (unknown element type); whether that silence is acceptable is an operator call. SUGGESTED verdict: wrong (null answer hides that the runtime classified this row source-backed via the owner-fallback and still cannot dispatch it)."
+        "verdict": "correct",
+        "reason": "Returns the cursor occurrence itself and keeps other same-name unproven sites out of the flat LSP Location[]; semantic-runtime marks the answer open with candidateRows.",
+        "note": "FLIPPED wrong->correct 2026-07-07. References initiated at an unprovable member usage now get a references-only open-member context: the exact member token under the cursor is returned as the current occurrence, while same-name unproven candidates stay separate and the answer closure remains open. Rename still refuses this cursor."
       }
     ],
     "hover": [

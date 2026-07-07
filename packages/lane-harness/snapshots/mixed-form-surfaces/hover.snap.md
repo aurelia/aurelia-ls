@@ -87,7 +87,7 @@ kind: `property`
 ```markdown
 **label**
 
-owner: `unknown`  
+owner: `unknown`
 owner shape: `unknown`
 
 ---
@@ -134,7 +134,7 @@ The owner type has no projected members at this cursor, so the selected member c
 ```markdown
 **label**
 
-owner: `"ticket-shell"`  
+owner: `"ticket-shell"`
 owner shape: `primitive`
 
 ---

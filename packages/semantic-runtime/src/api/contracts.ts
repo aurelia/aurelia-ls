@@ -1731,6 +1731,7 @@ export interface SemanticResourceIssueRow {
   readonly message: string;
   readonly source: SemanticSourceReference | null;
   readonly resource: {
+    /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
     readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
     readonly name: string | null;
     readonly key: string | null;
@@ -1780,6 +1781,7 @@ export type SemanticResourceDeclarationMode =
 
 export interface SemanticResourceDefinitionRow {
   readonly projectKey: string;
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind;
   readonly declarationModes: readonly SemanticResourceDeclarationMode[];
   readonly name: string | null;
@@ -3191,6 +3193,7 @@ export interface SemanticRecognizedRoutesResult {
 
 export interface SemanticResourceVisibilityRow {
   readonly compilerWorld: string;
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind;
   readonly name: string;
   readonly aliases: readonly string[];
@@ -3325,6 +3328,7 @@ export interface SemanticTemplateCursorValueSiteRow {
 }
 
 export interface SemanticTemplateCursorDefinitionRow {
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
   readonly name: string | null;
   readonly targetName: string | null;
@@ -3597,16 +3601,19 @@ export enum SemanticTemplateRenameUnavailableReason {
   CursorNotOnRenameableReference = 'cursor-not-on-renameable-reference',
   TypeScriptSymbolUnavailable = 'typescript-symbol-unavailable',
   InvalidNewName = 'invalid-new-name',
+  ResourceNameHasNoAuthoredSource = 'resource-name-has-no-authored-source',
+  UnsupportedResourceKind = 'unsupported-resource-kind',
 }
 
 export enum SemanticTemplateRenameEditKind {
-  // FIXME(lane-rca:contract-vocabulary): Resource-name edits still have no edit kind here; partiality
-  // and unproven candidates are expressed via answer closure + candidateRows.
   TypeScriptReference = 'typescript-reference',
   TemplateUsage = 'template-usage',
   TemplateLocalDeclaration = 'template-local-declaration',
   TemplateLocalUsage = 'template-local-usage',
   BindableAttribute = 'bindable-attribute',
+  ResourceNameDeclaration = 'resource-name-declaration',
+  ResourceElementTag = 'resource-element-tag',
+  ResourceAttributeTarget = 'resource-attribute-target',
 }
 
 export interface SemanticTemplateRenameEditRow {

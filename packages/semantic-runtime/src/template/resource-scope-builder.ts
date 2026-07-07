@@ -4,7 +4,10 @@ import type {
 } from '../kernel/handles.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import {
+  taxonomyResourceKindForDefinition,
+  type FullResourceDefinition,
+} from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { ResourceDependencyReference } from '../resources/resource-reference.js';
 import {
@@ -16,14 +19,6 @@ import {
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 
-export function visibleResourceKindForDefinition(
-  definition: FullResourceDefinition,
-): ResourceDefinitionKind {
-  return definition instanceof CustomAttributeDefinition && definition.isTemplateController
-    ? ResourceDefinitionKind.TemplateController
-    : definition.type;
-}
-
 export function visibleResourceForDefinition(
   definition: FullResourceDefinition,
   visibilityKind: TemplateResourceVisibilityKind,
@@ -32,7 +27,7 @@ export function visibleResourceForDefinition(
   if (definition.productHandle == null || definition.type === ResourceDefinitionKind.AttributePattern) {
     return null;
   }
-  const resourceKind = visibleResourceKindForDefinition(definition);
+  const resourceKind = taxonomyResourceKindForDefinition(definition);
   return new TemplateVisibleResource(
     resourceKind,
     definition.name,

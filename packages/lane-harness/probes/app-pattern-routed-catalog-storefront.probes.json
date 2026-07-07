@@ -43,6 +43,16 @@
         "note": "FLIPPED wrong->correct 2026-07-07. Repeat-local rename is template-scope only: the repeat declaration and the binding VALUE side of item.bind=\"item\" are edited, while the ItemCard bindable attribute NAME and all TS files are untouched. Root cause: repeat local slots inherited the whole iterator expression source and declaration-site cursor selection did not resolve BindingIdentifier tokens; iterator locals now carry token source addresses and selectedScopeSlot feeds the shared reference/rename path."
       },
       {
+        "id": "template-controller-repeat-refusal",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "repeat",
+        "newName": "loop",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Refusal probe for a framework-owned template-controller resource token. F2 on repeat in repeat.for should not synthesize edits against Aurelia's built-in Repeat resource or the .for binding command; the repeat local remains covered by the separate repeat-local-item probe."
+      },
+      {
         "id": "let-local-item-target",
         "file": "src/routes/item-detail-route.html",
         "anchor": "<let item.bind=\"state.items.readItem(routeParams.itemId)\">",
@@ -71,6 +81,26 @@
         "verdict": "correct",
         "reason": "",
         "note": "FLIPPED wrong->correct 2026-07-07. Bindable rename initiated at the attribute NAME now routes through selectedBindable, edits the @bindable declaration on ItemCard, all item root usages in item-card.html, and the item-card attribute name. The binding VALUE expression (the repeat local in item.bind=\"item\") is preserved. Root cause had two parts: references/rename ignored selectedBindable, and bound child component slots used the parent value expression as the slot source instead of the child bindable declaration."
+      },
+      {
+        "id": "resource-element-item-card",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item-card",
+        "newName": "product-card",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Explicit public resource-name rename for ItemCard. F2 on the authored custom-element tag edits the @customElement name literal plus the opening and closing tag-name tokens, skips TS class/import/dependency sites, and old-text validation proves the edit is token-granular."
+      },
+      {
+        "id": "resource-element-uppercase-refusal",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item-card",
+        "newName": "ItemCard",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Refusal probe: template-addressable resource names must stay lowercase because the framework compiler resolves element and attribute resource targets from lowercased HTML names while resource registration keys preserve case."
       },
       {
         "id": "repeat-local-badge-three-sites",

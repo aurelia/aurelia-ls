@@ -1,7 +1,10 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
-import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import {
+  taxonomyResourceKindForDefinition,
+  type FullResourceDefinition,
+} from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { ResourceIssue } from '../resources/resource-issue.js';
@@ -67,7 +70,7 @@ function resourceDefinitionRow(
 ): SemanticResourceDefinitionRow {
   return {
     projectKey: emission.project.projectKey,
-    resourceKind: resourceKindForApi(definition),
+    resourceKind: taxonomyResourceKindForDefinition(definition),
     declarationModes: declarationModesForDefinition(definition),
     name: readDefinitionName(definition),
     aliases: readDefinitionAliases(definition),
@@ -143,7 +146,7 @@ function resourceIssueRow(
     message: issue.message,
     source: describeAddress(store, issue.sourceAddressHandle),
     resource: {
-      resourceKind: definition == null ? null : resourceKindForApi(definition),
+      resourceKind: definition == null ? null : taxonomyResourceKindForDefinition(definition),
       name: definition == null ? null : readDefinitionName(definition),
       key: definition == null ? null : readDefinitionKey(definition),
       source: definition == null ? null : describeAddress(store, definition.sourceAddressHandle),
@@ -190,14 +193,6 @@ function declarationModeForContributionKind(kind: string): SemanticResourceDecla
     default:
       return null;
   }
-}
-
-function resourceKindForApi(definition: FullResourceDefinition): ResourceDefinitionKind {
-  return definition.type === ResourceDefinitionKind.CustomAttribute
-    && 'isTemplateController' in definition
-    && definition.isTemplateController
-    ? ResourceDefinitionKind.TemplateController
-    : definition.type;
 }
 
 function readDefinitionName(definition: FullResourceDefinition): string | null {

@@ -47,8 +47,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 searchText: string
 ```
 
-kind: `property`  
-owner: `ItemCollectionState`  
+kind: `property`
+owner: `ItemCollectionState`
 owner shape: `class`
 ````
 
@@ -93,8 +93,8 @@ owner shape: `class`
 onlyInStock: boolean
 ```
 
-kind: `property`  
-owner: `ItemCollectionState`  
+kind: `property`
+owner: `ItemCollectionState`
 owner shape: `class`
 ````
 
@@ -124,7 +124,7 @@ owner shape: `class`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 242,
+    "markdownCharacters": 245,
     "range": null
   }
 }
@@ -139,22 +139,22 @@ owner shape: `class`
 visibleItems: readonly Item[]
 ```
 
-kind: `accessor`  
-owner: `ItemCollectionState`  
+kind: `accessor`
+owner: `ItemCollectionState`
 owner shape: `class`
 
 ---
 
 **Bindable** `items`
 
-name: `items`  
+name: `items`
 mode: `toView`
 
 ---
 
 **Resource** `repeat`
 
-kind: `custom-attribute`
+kind: `template-controller`
 ````
 
 ## repeat-local-item
@@ -183,7 +183,7 @@ kind: `custom-attribute`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 161,
+    "markdownCharacters": 164,
     "range": null
   }
 }
@@ -204,14 +204,14 @@ kind: `property`
 
 **Bindable** `items`
 
-name: `items`  
+name: `items`
 mode: `toView`
 
 ---
 
 **Resource** `repeat`
 
-kind: `custom-attribute`
+kind: `template-controller`
 ````
 
 ## let-local-item-target
@@ -339,7 +339,7 @@ kind: `property`
 ```markdown
 **Bindable** `item`
 
-name: `item`  
+name: `item`
 mode: `toView`
 
 ---
@@ -375,7 +375,7 @@ kind: `custom-element`
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 176,
+    "markdownCharacters": 179,
     "range": null
   }
 }
@@ -396,14 +396,14 @@ kind: `property`
 
 **Bindable** `items`
 
-name: `items`  
+name: `items`
 mode: `toView`
 
 ---
 
 **Resource** `repeat`
 
-kind: `custom-attribute`
+kind: `template-controller`
 ````
 
 ## ts-property-state

@@ -116,7 +116,7 @@ import {
   namedResourceContributionKindForCarrier,
   runtimeResourceKeyForKind,
 } from './resource-kind.js';
-import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
+import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import {
   readHtmlTemplateMetadata,
   type HtmlTemplateMetadataImport,
@@ -1197,7 +1197,7 @@ export class ResourceDefinitionConverger {
       [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          toAureliaResourceIdentityKind(headerDefinition.type),
+          toAureliaResourceDeclarationKind(headerDefinition.type),
           alias,
           header.targetReference?.identityHandle ?? null,
         ),

@@ -44,6 +44,13 @@ export type SyntaxResourceDefinitionKind =
   | ResourceDefinitionKind.BindingCommand
   | ResourceDefinitionKind.AttributePattern;
 
+export type RuntimeRegistrationResourceDefinitionKind =
+  | ResourceDefinitionKind.CustomElement
+  | ResourceDefinitionKind.CustomAttribute
+  | ResourceDefinitionKind.ValueConverter
+  | ResourceDefinitionKind.BindingBehavior
+  | ResourceDefinitionKind.BindingCommand;
+
 export const enum NamedResourceDefinitionContributionKind {
   Header = 'header',
   DefinitionObject = 'definition-object',
@@ -109,6 +116,8 @@ export function readResourceKindFromRuntimeTypeName(
     case 'custom-attribute':
     case 'attrTypeName':
       return ResourceDefinitionKind.CustomAttribute;
+    // Semantic-runtime accepts this as an authoring/generation taxonomy spelling.
+    // Framework runtime keys still register template controllers as custom attributes.
     case 'template-controller':
       return ResourceDefinitionKind.TemplateController;
     case 'value-converter':
@@ -127,14 +136,44 @@ export function readResourceKindFromRuntimeTypeName(
   }
 }
 
+export function registrationResourceKindFor(
+  kind: ResourceDefinitionKind | `${ResourceDefinitionKind}`,
+): RuntimeRegistrationResourceDefinitionKind | null {
+  switch (kind) {
+    case ResourceDefinitionKind.CustomElement:
+      return ResourceDefinitionKind.CustomElement;
+    case ResourceDefinitionKind.CustomAttribute:
+    case ResourceDefinitionKind.TemplateController:
+      return ResourceDefinitionKind.CustomAttribute;
+    case ResourceDefinitionKind.ValueConverter:
+      return ResourceDefinitionKind.ValueConverter;
+    case ResourceDefinitionKind.BindingBehavior:
+      return ResourceDefinitionKind.BindingBehavior;
+    case ResourceDefinitionKind.BindingCommand:
+      return ResourceDefinitionKind.BindingCommand;
+    case ResourceDefinitionKind.AttributePattern:
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function resourceKindsShareRegistrationIdentity(
+  left: ResourceDefinitionKind | `${ResourceDefinitionKind}`,
+  right: ResourceDefinitionKind | `${ResourceDefinitionKind}`,
+): boolean {
+  const leftRegistrationKind = registrationResourceKindFor(left);
+  const rightRegistrationKind = registrationResourceKindFor(right);
+  return leftRegistrationKind != null && leftRegistrationKind === rightRegistrationKind;
+}
+
 export function runtimeResourceTypeNameForKind(
   kind: ResourceDefinitionKind,
 ): string | null {
-  switch (kind) {
+  switch (registrationResourceKindFor(kind)) {
     case ResourceDefinitionKind.CustomElement:
       return 'custom-element';
     case ResourceDefinitionKind.CustomAttribute:
-    case ResourceDefinitionKind.TemplateController:
       return 'custom-attribute';
     case ResourceDefinitionKind.ValueConverter:
       return 'value-converter';
@@ -142,7 +181,7 @@ export function runtimeResourceTypeNameForKind(
       return 'binding-behavior';
     case ResourceDefinitionKind.BindingCommand:
       return 'binding-command';
-    case ResourceDefinitionKind.AttributePattern:
+    case null:
       return null;
   }
 }

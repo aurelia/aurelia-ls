@@ -156,7 +156,21 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 ```json
 {
   "outcome": "result",
-  "result": null
+  "result": [
+    {
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 4
+        },
+        "start": {
+          "character": 15,
+          "line": 4
+        }
+      },
+      "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html"
+    }
+  ]
 }
 ```
 
@@ -164,7 +178,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "locationCount": 0,
-  "locations": []
+  "locationCount": 1,
+  "locations": [
+    {
+      "anomaly": null,
+      "file": "src/components/loose-picklist.html",
+      "range": {
+        "end": {
+          "character": 20,
+          "line": 4
+        },
+        "start": {
+          "character": 15,
+          "line": 4
+        }
+      },
+      "rangeText": "label",
+      "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html"
+    }
+  ]
 }
 ```

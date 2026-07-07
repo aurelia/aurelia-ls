@@ -5,7 +5,7 @@ import type {
   ProductKindKey,
 } from './vocabulary.js';
 
-export const enum AureliaResourceIdentityKind {
+export const enum AureliaResourceDeclarationKind {
   /** A custom element available by element name in markup. */
   CustomElement = 'custom-element',
   /** A custom attribute available by attribute name in markup. */
@@ -101,8 +101,8 @@ export class AureliaResourceIdentity {
   constructor(
     /** Store-local handle for this identity record. */
     readonly handle: IdentityHandle,
-    /** Aurelia resource kind that determines syntax and lookup behavior. */
-    readonly resourceKind: AureliaResourceIdentityKind,
+    /** Authoring declaration taxonomy for the resource; use runtime resource keys for registration joins. */
+    readonly resourceKind: AureliaResourceDeclarationKind,
     /** Resource name as available to templates or expression syntax. */
     readonly name: string | null,
     /** Optional declaration identity handle that produced or owns this resource. */

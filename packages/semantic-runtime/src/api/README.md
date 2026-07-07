@@ -1233,6 +1233,8 @@ dependencies, template shape, watch metadata, attribute-pattern entries, custom-
 optional kernel handles. Declaration modes preserve the convergence carrier mechanism, so public analysis and future
 generation policy can distinguish decorator, static, definition-object/factory, and current convention resource styles
 without re-reading source.
+Public `resourceKind` fields are author-facing taxonomy; consumers that need framework registration-key joins should
+derive registration identity with `registrationResourceKindFor(...)`.
 Watch rows expose the metadata shape that resource convergence can statically close: expression kind/property key,
 callback kind/property key, flush mode, and source references for the expression/callback carriers when known.
 `ResourceIssues` exposes known framework failures in that same resource metadata lane. It is for closed static errors,

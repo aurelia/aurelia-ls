@@ -215,7 +215,7 @@ diff --git a/src/components/loose-picklist.ts b/src/components/loose-picklist.ts
 @@ -1,12 +1,12 @@
  import { BindingMode, bindable, customElement } from '@aurelia/runtime-html';
  import template from './loose-picklist.html';
- 
+
  @customElement({
    name: 'loose-picklist',
    template,
@@ -237,7 +237,7 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
    data-ticket.attr="ticketId">
    <label for="customer-name">Customer</label>
    <input id="customer-name" value.bind="customerName">
- 
+
    <label for="customer-email">Email</label>
    <input
      id="customer-email"
@@ -245,14 +245,14 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
      value.bind="customerEmail"
      aria-invalid.attr="emailErrors.length > 0">
    <p repeat.for="message of emailErrors">${message}</p>
- 
+
    <loose-picklist
 -    label="Fulfillment"
 +    caption="Fulfillment"
      value.bind="fulfillmentMethod"
      options.bind="fulfillmentOptions">
    </loose-picklist>
- 
+
    <fieldset>
      <legend>Contact channels</legend>
      <label>
@@ -268,7 +268,7 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
        SMS
      </label>
    </fieldset>
- 
+
    <fieldset>
      <legend>Channel consent</legend>
      <label>
@@ -284,18 +284,18 @@ diff --git a/src/components/ticket-editor.html b/src/components/ticket-editor.ht
        SMS consent
      </label>
    </fieldset>
- 
+
    <label for="ticket-tags">Tags</label>
    <select id="ticket-tags" multiple value.bind="requestedTags">
      <option repeat.for="tag of tagOptions" model.bind="tag">${tag}</option>
    </select>
- 
+
    <label for="priority">Priority</label>
    <input id="priority" type="number" value.bind="priority">
- 
+
    <label for="floor">Loose floor field</label>
    <input id="floor" value.bind="looseFloor">
- 
+
    <button type="submit" disabled.bind="ticketId == ''">
      Save ticket
    </button>
@@ -568,7 +568,7 @@ diff --git a/src/app.html b/src/app.html
 -    <p>${shellTone.label}</p>
 +    <p>${theme.label}</p>
    </header>
- 
+
    <ticket-editor
      ticket-id.bind="selectedTicketId"
      draft.bind="selectedTicket"
@@ -585,7 +585,7 @@ diff --git a/src/app.ts b/src/app.ts
  import { SupportState } from './state/support-state';
  import { TicketEditor } from './components/ticket-editor';
  import template from './app.html';
- 
+
  @customElement({
    name: 'support-desk-app',
    template,
@@ -593,37 +593,37 @@ diff --git a/src/app.ts b/src/app.ts
  })
  export class SupportDeskApp {
    private readonly state = resolve(SupportState);
- 
+
 -  readonly shellTone = 'ticket-shell';
 +  readonly theme = 'ticket-shell';
- 
+
    get selectedTicketId(): string {
      return this.state.selectedTicketId;
    }
- 
+
    set selectedTicketId(value: string) {
      this.state.selectedTicketId = value;
    }
- 
+
    get selectedTicket() {
      return this.state.selectedTicket;
    }
- 
+
    get ticketIds(): readonly string[] {
      return this.state.ticketIds;
    }
- 
+
    get weakMetadata() {
      return this.state.selectedTicket?.metadata;
    }
- 
+
    get shellClasses(): Record<string, boolean> {
      return {
        'has-selection': this.selectedTicket != null,
        'has-channel-warning': this.state.selectedTicket?.preferredChannels.length === 0,
      };
    }
- 
+
    commitTicket = (ticketId: string): void => {
      this.state.commitTicket(ticketId);
    };

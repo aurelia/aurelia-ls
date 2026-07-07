@@ -57,7 +57,7 @@ import {
 import {
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
-import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
+import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
 
 class ResourceIdentityPublication {
@@ -337,7 +337,7 @@ export class ResourceRecognitionPublicationSupport {
       [
         new AureliaResourceIdentity(
           identityHandle,
-          toAureliaResourceIdentityKind(resourceKind),
+          toAureliaResourceDeclarationKind(resourceKind),
           name,
           declarationIdentityHandle,
         ),
@@ -496,7 +496,7 @@ export class ResourceRecognitionPublicationSupport {
       [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          toAureliaResourceIdentityKind(resourceKind),
+          toAureliaResourceDeclarationKind(resourceKind),
           alias,
           declarationIdentityHandle,
         ),
