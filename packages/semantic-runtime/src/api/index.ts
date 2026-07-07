@@ -10,6 +10,7 @@ export {
 export * from './app-overview.js';
 export * from './app-topology.js';
 export * from './contracts.js';
+export * from './diagnostic-presentation.js';
 export * from './i18n-projections.js';
 export * from './runtime.js';
 export * from './router-overview.js';

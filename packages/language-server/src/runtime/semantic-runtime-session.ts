@@ -3,6 +3,7 @@ import type { Position } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createSemanticRuntime,
+  appDiagnosticPresentation,
   SemanticAppQueryKind,
   type SemanticRouteNodesResult,
   type SemanticRuntime,
@@ -85,17 +86,39 @@ export class SemanticRuntimeLspSession {
   ): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>> {
     const runtime = await this.openRuntime();
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
-      kind: SemanticAppQueryKind.AppDiagnostics,
-      sourceFile: { filePath },
-      sourceFilePath: filePath,
-      page: { size: 500 },
-      inquiryProfile: "lsp-diagnostics",
-      diagnosticProjection: "type-projection",
-      analysisDepth: "binding-observation",
-      includeAuthoringTemplates: true,
-      appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>>;
+    const rows: SemanticAppDiagnosticsResult["rows"][number][] = [];
+    let cursor: string | null | undefined;
+    let answer: SemanticRuntimeAnswer<SemanticAppDiagnosticsResult> | null = null;
+    do {
+      answer = await runtime.answerAppQuery({
+        kind: SemanticAppQueryKind.AppDiagnostics,
+        sourceFile: { filePath },
+        sourceFilePath: filePath,
+        page: { size: 200, cursor },
+        inquiryProfile: "lsp-diagnostics",
+        diagnosticProjection: "type-projection",
+        analysisDepth: "binding-observation",
+        includeAuthoringTemplates: true,
+        appRetention: "retain-app",
+      }) as SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>;
+      rows.push(...answer.value.rows);
+      cursor = answer.page?.nextCursor;
+    } while (cursor != null);
+
+    if (answer == null) {
+      throw new Error("Semantic runtime returned no app diagnostic answer.");
+    }
+
+    return {
+      ...answer,
+      value: {
+        ...answer.value,
+        displayText: `${rows.length} app diagnostic row(s).`,
+        rows,
+        presentation: appDiagnosticPresentation(rows, true),
+      },
+      page: null,
+    };
   }
 
   async templateCursorInfo(

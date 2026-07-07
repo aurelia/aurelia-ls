@@ -182,6 +182,9 @@ import {
   appDiagnosticSummaryRows,
 } from './app-diagnostics.js';
 import {
+  appDiagnosticPresentation,
+} from './diagnostic-presentation.js';
+import {
   readSemanticTypeScriptDiagnosticRows,
   readSemanticTypeScriptDiagnostics,
   readSemanticTypeScriptDiagnosticSummary,
@@ -3289,6 +3292,7 @@ export class SemanticApp {
         displayText: appDiagnosticsDisplayText(paged.rows, rows.length, typeScript),
         typeScript,
         rows: paged.rows,
+        presentation: appDiagnosticPresentation(paged.rows, paged.rows.length === rows.length),
       },
       paged.page,
     );
@@ -3376,7 +3380,13 @@ export class SemanticApp {
     const configurationRows = readConfigurationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const diRows = readDiIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const observationRows = readObservationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const templateRows = this.templateQueries.templateDiagnosticRows({ ...query, detail });
+    const templateRows = this.templateQueries.templateDiagnosticRows({
+      ...query,
+      detail,
+      sourceFile: sourceFileIsProjectTemplate(this.project, query.sourceFile)
+        ? query.sourceFile
+        : null,
+    });
     const frameworkRows = readFrameworkCapabilityDemandDiagnosticRows(this.emission, this.runtime.workspace.store);
     const resourceRows = readResourceIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const stateRows = readStateIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
@@ -5286,6 +5296,18 @@ function canonicalizeSourceFileInput(
     ...sourceFile,
     filePath: canonicalProjectSourceFilePath(project, sourceFile.filePath),
   };
+}
+
+function sourceFileIsProjectTemplate(
+  project: ProjectBootFrame,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+): boolean {
+  const filePath = sourceFile?.filePath;
+  return filePath != null
+    && project.sourceFiles.some((source) =>
+      source.role === SourceFileRole.Template
+      && sourcePathMatchesFileName(source.path, filePath)
+    );
 }
 
 function canonicalProjectSourceFilePaths(

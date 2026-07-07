@@ -12,6 +12,8 @@ import type {
   SemanticResourceDefinitionRow,
   SemanticResourceVisibilityRow,
   SemanticAppDiagnosticRow,
+  SemanticAppDiagnosticsResult,
+  SemanticDiagnosticPresentationResult,
   SemanticSourceReference,
   SemanticTemplateCompilationRow,
   SemanticTemplateCursorInfoResult,
@@ -30,7 +32,7 @@ type DiagnosticCategory =
   | "resource-resolution"
   | "bindable-validation"
   | "project";
-type DiagnosticStatus = "canonical" | "suppressed" | "experimental";
+type DiagnosticStatus = "canonical" | "primary" | "contextual" | "suppressed" | "experimental";
 type DiagnosticStage = string;
 type DiagnosticSurface = "lsp" | "vscode-panel" | "ci" | string;
 type ResourceOrigin = "builtin" | "source" | "external" | string;
@@ -41,7 +43,9 @@ type MaybeUriParam = { uri?: string } | string | null;
 type DiagnosticsSnapshotRelated = {
   code?: string;
   message: string;
+  uri?: string;
   span?: SourceSpan;
+  sourceRole?: string;
 };
 
 type DiagnosticsSnapshotIssue = {
@@ -74,7 +78,38 @@ type DiagnosticsSnapshotItem = {
 
 type DiagnosticsSnapshotBundle = {
   bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
+  raw: readonly DiagnosticsSnapshotItem[];
+  presentation?: DiagnosticsSnapshotPresentation;
   suppressed: readonly DiagnosticsSnapshotItem[];
+};
+
+type DiagnosticsSnapshotPresentation = {
+  rawRowCount: number;
+  primaryCount: number;
+  contextualCount: number;
+  complete: boolean;
+  groups: readonly DiagnosticsSnapshotPresentationGroup[];
+};
+
+type DiagnosticsSnapshotPresentationGroup = {
+  groupKey: string;
+  subject?: {
+    subjectKind: string;
+    uri?: string;
+    span?: SourceSpan;
+  };
+  primary: DiagnosticsSnapshotPresentationItem;
+  related: readonly DiagnosticsSnapshotPresentationItem[];
+  rawRowCount: number;
+  primarySeverity: DiagnosticSeverity;
+  maxRawSeverity: DiagnosticSeverity;
+};
+
+type DiagnosticsSnapshotPresentationItem = {
+  rowId: string;
+  role: "primary" | "contextual";
+  relation?: string;
+  diagnostic: DiagnosticsSnapshotItem | null;
 };
 
 type DiagnosticsSnapshotResponse = {
@@ -96,12 +131,22 @@ function formatError(e: unknown): string {
 
 function serializeRuntimeDiagnosticsSnapshot(
   workspaceRoot: string | null,
-  rows: readonly SemanticAppDiagnosticRow[],
+  result: SemanticAppDiagnosticsResult,
 ): DiagnosticsSnapshotBundle {
+  const rows = result.rows;
+  const presentation = result.presentation;
+  const raw = rows.map((row) => toRuntimeSnapshotItem(workspaceRoot, row));
   return {
     bySurface: {
-      lsp: rows.map((row) => toRuntimeSnapshotItem(workspaceRoot, row)),
+      lsp: presentation == null
+        ? raw
+        : presentation.groups.flatMap((group) => {
+          const row = rowAt(rows, group.primary.rowIndex);
+          return row == null ? [] : [toRuntimeSnapshotItem(workspaceRoot, row, "primary")];
+        }),
     },
+    raw,
+    ...(presentation == null ? {} : { presentation: runtimeDiagnosticsPresentation(workspaceRoot, rows, presentation) }),
     suppressed: [],
   };
 }
@@ -109,6 +154,7 @@ function serializeRuntimeDiagnosticsSnapshot(
 function toRuntimeSnapshotItem(
   workspaceRoot: string | null,
   row: SemanticAppDiagnosticRow,
+  status: DiagnosticStatus = "canonical",
 ): DiagnosticsSnapshotItem {
   const file = filePathForSource(workspaceRoot, row.source);
   const span = sourceSpanForSource(row.source);
@@ -119,7 +165,7 @@ function toRuntimeSnapshotItem(
     impact: runtimeDiagnosticImpact(row.severity),
     actionability: row.suggestion == null ? "manual" : "guided",
     category: runtimeDiagnosticCategory(row),
-    status: "canonical",
+    status,
     source: `semantic-runtime:${row.diagnosticDomain}`,
     uri: file == null ? undefined : pathToFileURL(file).toString(),
     span,
@@ -132,7 +178,9 @@ function toRuntimeSnapshotItem(
       relatedQueryKind: row.relatedQueryKind,
       missingInput: row.missingInput ?? null,
       missingInputs: row.missingInputs ?? [],
+      subject: row.subject ?? null,
     },
+    related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation ?? []),
     surfaces: ["lsp", "vscode-panel"],
     issues: [
       {
@@ -142,6 +190,85 @@ function toRuntimeSnapshotItem(
         rawCode: row.frameworkRawErrorAuthority ?? undefined,
       },
     ],
+  };
+}
+
+function runtimeDiagnosticRelatedInformation(
+  workspaceRoot: string | null,
+  relatedInformation: NonNullable<SemanticAppDiagnosticRow["relatedInformation"]>,
+): readonly DiagnosticsSnapshotRelated[] {
+  return relatedInformation.map((related): DiagnosticsSnapshotRelated => {
+    const file = filePathForSource(workspaceRoot, related.source);
+    const span = sourceSpanForSource(related.source);
+    return {
+      ...(related.code == null ? {} : { code: related.code }),
+      message: related.message,
+      ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
+      ...(span == null ? {} : { span }),
+      ...(related.sourceRole == null ? {} : { sourceRole: related.sourceRole }),
+    };
+  });
+}
+
+function runtimeDiagnosticsPresentation(
+  workspaceRoot: string | null,
+  rows: readonly SemanticAppDiagnosticRow[],
+  presentation: SemanticDiagnosticPresentationResult,
+): DiagnosticsSnapshotPresentation {
+  return {
+    rawRowCount: presentation.rawRowCount,
+    primaryCount: presentation.primaryCount,
+    contextualCount: presentation.contextualCount,
+    complete: presentation.complete,
+    groups: presentation.groups.map((group): DiagnosticsSnapshotPresentationGroup => ({
+      groupKey: group.groupKey,
+      ...(group.subject == null ? {} : { subject: runtimeDiagnosticSubject(workspaceRoot, group.subject) }),
+      primary: {
+        rowId: group.primary.rowId,
+        role: group.primary.role,
+        ...(group.primary.relation == null ? {} : { relation: group.primary.relation }),
+        diagnostic: runtimePresentationSnapshotItem(workspaceRoot, rows, group.primary.rowIndex, "primary"),
+      },
+      related: group.related.map((row): DiagnosticsSnapshotPresentationItem => ({
+        rowId: row.rowId,
+        role: row.role,
+        ...(row.relation == null ? {} : { relation: row.relation }),
+        diagnostic: runtimePresentationSnapshotItem(workspaceRoot, rows, row.rowIndex, "contextual"),
+      })),
+      rawRowCount: group.rawRowCount,
+      primarySeverity: runtimeDiagnosticSeverity(group.primarySeverity),
+      maxRawSeverity: runtimeDiagnosticSeverity(group.maxRawSeverity),
+    })),
+  };
+}
+
+function runtimePresentationSnapshotItem(
+  workspaceRoot: string | null,
+  rows: readonly SemanticAppDiagnosticRow[],
+  rowIndex: number,
+  status: DiagnosticStatus,
+): DiagnosticsSnapshotItem | null {
+  const row = rowAt(rows, rowIndex);
+  return row == null ? null : toRuntimeSnapshotItem(workspaceRoot, row, status);
+}
+
+function rowAt<TRow>(rows: readonly TRow[], index: number): TRow | null {
+  return Number.isInteger(index) && index >= 0 && index < rows.length
+    ? rows[index] ?? null
+    : null;
+}
+
+function runtimeDiagnosticSubject(
+  workspaceRoot: string | null,
+  subject: NonNullable<SemanticAppDiagnosticRow["subject"]>,
+): NonNullable<DiagnosticsSnapshotPresentationGroup["subject"]> {
+  const file = filePathForSource(workspaceRoot, subject.source);
+  return {
+    subjectKind: subject.subjectKind,
+    ...(file == null ? {} : { uri: pathToFileURL(file).toString() }),
+    ...(subject.source?.start == null || subject.source.end == null
+      ? {}
+      : { span: { start: subject.source.start, end: subject.source.end } }),
   };
 }
 
@@ -202,7 +329,7 @@ export async function handleGetDiagnostics(
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
     const answer = await ctx.semanticRuntime.appDiagnostics(doc);
-    const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value.rows);
+    const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value);
     const fingerprint = `semantic-runtime:${answer.outcome}`;
     return { uri: canonical.uri, fingerprint, diagnostics };
   } catch (e) {

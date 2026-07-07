@@ -14,7 +14,8 @@ const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const OPEN_SETTLE_TIMEOUT_MS = 750;
-const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight"]);
+const DIAGNOSTICS_TIMEOUT_MS = 30000;
+const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics"]);
 
 // Keep in sync with COMPLETION_GAP_MARKER_LABEL in packages/language-server/src/mapping/lsp-types.ts.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -425,7 +426,7 @@ function requireValue(args, index, flag) {
 function usage() {
   return [
     "Usage:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight> [--probe <id>] [--update]",
+    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight|diagnostics> [--probe <id>] [--update]",
     "",
     "Example:",
     "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
@@ -535,6 +536,8 @@ async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
       return runDefinitionProbe(client, fixtureRoot, probe, readFixtureText);
     case "documentHighlight":
       return runDocumentHighlightProbe(client, fixtureRoot, probe, readFixtureText);
+    case "diagnostics":
+      return runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText);
     default:
       throw new HarnessError(`Unsupported lane: ${lane}`);
   }
@@ -765,6 +768,41 @@ async function runDocumentHighlightProbe(client, fixtureRoot, probe, readFixture
   };
 }
 
+async function runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText) {
+  const relativeFile = normalizeRelativePath(probe.file);
+  const sourceText = await readFixtureText(relativeFile);
+  const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
+  const uri = pathToFileURL(absoluteFile).href;
+
+  const publishNotifications = await client.waitForNotifications(
+    "textDocument/publishDiagnostics",
+    1,
+    (notification) => notification.params?.uri === uri,
+    DIAGNOSTICS_TIMEOUT_MS,
+  );
+  const publishNotification = publishNotifications.at(-1) ?? null;
+  const publishSummary = await summarizePublishDiagnosticsNotification(
+    publishNotification,
+    sourceText,
+    fixtureRoot,
+    readFixtureText,
+  );
+
+  const customResponse = await client.request("aurelia/getDiagnostics", { uri });
+  const customSummary = await summarizeCustomDiagnosticsResponse(customResponse, fixtureRoot, readFixtureText);
+
+  return {
+    lane: "diagnostics",
+    probe,
+    relativeFile,
+    publishNotification,
+    publishSummary,
+    customResponse,
+    customSummary,
+    alignment: summarizeDiagnosticsAlignment(publishSummary, customSummary),
+  };
+}
+
 function summarizeDocumentHighlights(result, sourceText) {
   if (!Array.isArray(result)) {
     return [];
@@ -787,6 +825,370 @@ function summarizeDocumentHighlights(result, sourceText) {
       anomaly: null,
     };
   });
+}
+
+async function summarizePublishDiagnosticsNotification(notification, sourceText, fixtureRoot, readFixtureText) {
+  if (notification == null) {
+    return {
+      outcome: "missing-notification",
+      uri: null,
+      diagnosticCount: 0,
+      diagnostics: [],
+    };
+  }
+
+  const diagnostics = Array.isArray(notification.params?.diagnostics)
+    ? notification.params.diagnostics
+    : [];
+  return {
+    outcome: "published",
+    uri: normalizeSnapshotString(notification.params?.uri ?? ""),
+    diagnosticCount: diagnostics.length,
+    diagnostics: await Promise.all(diagnostics.map((diagnostic) =>
+      summarizeLspDiagnostic(diagnostic, sourceText, fixtureRoot, readFixtureText)
+    )),
+  };
+}
+
+async function summarizeLspDiagnostic(diagnostic, sourceText, fixtureRoot, readFixtureText) {
+  const range = diagnostic?.range ?? null;
+  let rangeText = null;
+  let anomaly = null;
+  if (isRange(range)) {
+    try {
+      rangeText = readRangeText(sourceText, range);
+    } catch (error) {
+      anomaly = error instanceof Error ? error.message : String(error);
+    }
+  } else if (range != null) {
+    anomaly = "unsupported-range-shape";
+  }
+
+  return {
+    code: normalizeSnapshotValue(diagnostic?.code ?? null),
+    message: normalizeSnapshotString(String(diagnostic?.message ?? "")),
+    severity: diagnosticSeverityName(diagnostic?.severity),
+    source: diagnostic?.source ?? null,
+    range: isRange(range) ? normalizeRangeForSnapshot(range) : normalizeSnapshotValue(range),
+    rangeText,
+    anomaly,
+    relatedInformation: Array.isArray(diagnostic?.relatedInformation)
+      ? await Promise.all(diagnostic.relatedInformation.map((related) =>
+        summarizeLspDiagnosticRelatedInformation(related, sourceText, fixtureRoot, readFixtureText)
+      ))
+      : [],
+    data: summarizeDiagnosticData(diagnostic?.data),
+  };
+}
+
+async function summarizeLspDiagnosticRelatedInformation(related, sourceText, fixtureRoot, readFixtureText) {
+  const location = related?.location ?? null;
+  const range = location?.range ?? null;
+  const uri = typeof location?.uri === "string" ? location.uri : null;
+  const file = uri == null ? null : uriToFixtureRelativePath(uri, fixtureRoot);
+  let rangeText = null;
+  let anomaly = null;
+  if (isRange(range)) {
+    try {
+      const text = file == null ? sourceText : await readFixtureText(file);
+      rangeText = readRangeText(text, range);
+    } catch (error) {
+      anomaly = error instanceof Error ? error.message : String(error);
+    }
+  } else if (range != null) {
+    anomaly = "unsupported-range-shape";
+  }
+  if (uri != null && file == null && anomaly == null) {
+    anomaly = "outside-fixture";
+  }
+  return {
+    message: normalizeSnapshotString(String(related?.message ?? "")),
+    uri: normalizeSnapshotString(location?.uri ?? ""),
+    file,
+    range: isRange(range) ? normalizeRangeForSnapshot(range) : normalizeSnapshotValue(range),
+    rangeText,
+    anomaly,
+  };
+}
+
+async function summarizeCustomDiagnosticsResponse(response, fixtureRoot, readFixtureText) {
+  if (response.error) {
+    return {
+      outcome: "error",
+      error: normalizeSnapshotValue(response.error),
+    };
+  }
+
+  if (response.result == null) {
+    return {
+      outcome: "result",
+      result: null,
+    };
+  }
+
+  const diagnostics = response.result.diagnostics ?? {};
+  const bySurface = diagnostics.bySurface ?? {};
+  const surfaces = {};
+  for (const surface of Object.keys(bySurface).sort()) {
+    const items = Array.isArray(bySurface[surface]) ? bySurface[surface] : [];
+    surfaces[surface] = {
+      diagnosticCount: items.length,
+      diagnostics: await Promise.all(items.map((item) =>
+        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
+      )),
+    };
+  }
+
+  const raw = Array.isArray(diagnostics.raw) ? diagnostics.raw : [];
+  const suppressed = Array.isArray(diagnostics.suppressed) ? diagnostics.suppressed : [];
+  return {
+    outcome: "result",
+    uri: normalizeSnapshotString(response.result.uri ?? ""),
+    fingerprint: response.result.fingerprint ?? null,
+    surfaces,
+    raw: {
+      diagnosticCount: raw.length,
+      diagnostics: await Promise.all(raw.map((item) =>
+        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
+      )),
+    },
+    presentation: await summarizeCustomDiagnosticsPresentation(diagnostics.presentation, fixtureRoot, readFixtureText),
+    suppressed: {
+      diagnosticCount: suppressed.length,
+      diagnostics: await Promise.all(suppressed.map((item) =>
+        summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText)
+      )),
+    },
+  };
+}
+
+async function summarizeCustomDiagnosticsPresentation(presentation, fixtureRoot, readFixtureText) {
+  if (presentation == null || typeof presentation !== "object" || Array.isArray(presentation)) {
+    return null;
+  }
+  const groups = Array.isArray(presentation.groups) ? presentation.groups : [];
+  return {
+    rawRowCount: presentation.rawRowCount ?? null,
+    primaryCount: presentation.primaryCount ?? null,
+    contextualCount: presentation.contextualCount ?? null,
+    complete: presentation.complete ?? null,
+    groups: await Promise.all(groups.map((group) =>
+      summarizeCustomDiagnosticsPresentationGroup(group, fixtureRoot, readFixtureText)
+    )),
+  };
+}
+
+async function summarizeCustomDiagnosticsPresentationGroup(group, fixtureRoot, readFixtureText) {
+  return {
+    groupKey: normalizeSnapshotString(String(group?.groupKey ?? "")),
+    subject: summarizeDiagnosticSubject(group?.subject),
+    rawRowCount: group?.rawRowCount ?? null,
+    primarySeverity: group?.primarySeverity ?? null,
+    maxRawSeverity: group?.maxRawSeverity ?? null,
+    primary: await summarizeCustomDiagnosticsPresentationItem(group?.primary, fixtureRoot, readFixtureText),
+    related: await Promise.all((Array.isArray(group?.related) ? group.related : []).map((item) =>
+      summarizeCustomDiagnosticsPresentationItem(item, fixtureRoot, readFixtureText)
+    )),
+  };
+}
+
+async function summarizeCustomDiagnosticsPresentationItem(item, fixtureRoot, readFixtureText) {
+  return {
+    rowId: normalizeSnapshotString(String(item?.rowId ?? "")),
+    role: item?.role ?? null,
+    relation: item?.relation ?? null,
+    diagnostic: await summarizeCustomDiagnosticsItem(item?.diagnostic ?? {}, fixtureRoot, readFixtureText),
+  };
+}
+
+async function summarizeCustomDiagnosticsItem(item, fixtureRoot, readFixtureText) {
+  const uri = typeof item?.uri === "string" ? item.uri : null;
+  const file = uri == null ? null : uriToFixtureRelativePath(uri, fixtureRoot);
+  const span = isSourceSpan(item?.span) ? item.span : null;
+  let spanText = null;
+  let anomaly = null;
+
+  if (uri != null && file == null) {
+    anomaly = "outside-fixture";
+  } else if (file != null && span != null) {
+    try {
+      const text = await readFixtureText(file);
+      spanText = text.slice(span.start, span.end);
+    } catch (error) {
+      anomaly = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  return {
+    code: normalizeSnapshotValue(item?.code ?? null),
+    message: normalizeSnapshotString(String(item?.message ?? "")),
+    severity: item?.severity ?? null,
+    impact: item?.impact ?? null,
+    actionability: item?.actionability ?? null,
+    category: item?.category ?? null,
+    status: item?.status ?? null,
+    source: item?.source ?? null,
+    uri: uri == null ? null : normalizeSnapshotString(uri),
+    file,
+    span: span == null ? normalizeSnapshotValue(item?.span ?? null) : { start: span.start, end: span.end },
+    spanText,
+    anomaly,
+    data: summarizeDiagnosticData(item?.data),
+    related: await Promise.all((Array.isArray(item?.related) ? item.related : []).map((related) =>
+      summarizeCustomDiagnosticsRelatedItem(related, fixtureRoot, readFixtureText)
+    )),
+    issues: normalizeSnapshotValue(item?.issues ?? []),
+  };
+}
+
+async function summarizeCustomDiagnosticsRelatedItem(related, fixtureRoot, readFixtureText) {
+  const uri = typeof related?.uri === "string" ? related.uri : null;
+  const file = uri == null ? null : uriToFixtureRelativePath(uri, fixtureRoot);
+  const span = isSourceSpan(related?.span) ? related.span : null;
+  let spanText = null;
+  let anomaly = null;
+  if (uri != null && file == null) {
+    anomaly = "outside-fixture";
+  } else if (file != null && span != null) {
+    try {
+      const text = await readFixtureText(file);
+      spanText = text.slice(span.start, span.end);
+    } catch (error) {
+      anomaly = error instanceof Error ? error.message : String(error);
+    }
+  }
+  return {
+    code: normalizeSnapshotValue(related?.code ?? null),
+    message: normalizeSnapshotString(String(related?.message ?? "")),
+    uri: uri == null ? null : normalizeSnapshotString(uri),
+    file,
+    span: span == null ? normalizeSnapshotValue(related?.span ?? null) : { start: span.start, end: span.end },
+    spanText,
+    sourceRole: related?.sourceRole ?? null,
+    anomaly,
+  };
+}
+
+function summarizeDiagnosticsAlignment(publishSummary, customSummary) {
+  const lspDiagnostics = publishSummary.diagnostics ?? [];
+  const customLspDiagnostics = customSummary?.surfaces?.lsp?.diagnostics ?? [];
+  const lspKeys = new Map(lspDiagnostics.map((diagnostic) => [diagnosticComparisonKey(diagnostic), diagnostic]));
+  const customKeys = new Map(customLspDiagnostics.map((diagnostic) => [diagnosticComparisonKey(diagnostic), diagnostic]));
+  const lspOnly = [...lspKeys.keys()].filter((key) => !customKeys.has(key)).sort();
+  const customOnly = [...customKeys.keys()].filter((key) => !lspKeys.has(key)).sort();
+
+  return {
+    lspPublishCount: lspDiagnostics.length,
+    customLspSurfaceCount: customLspDiagnostics.length,
+    suppressedCount: customSummary?.suppressed?.diagnosticCount ?? 0,
+    countsMatch: lspDiagnostics.length === customLspDiagnostics.length,
+    comparisonKey: "domain/kind/code/severity/text/message",
+    lspOnly,
+    customOnly,
+  };
+}
+
+function diagnosticComparisonKey(diagnostic) {
+  const data = diagnostic.data ?? {};
+  return [
+    data.diagnosticDomain ?? "unknown-domain",
+    data.diagnosticKind ?? "unknown-kind",
+    String(diagnostic.code ?? "no-code"),
+    comparableDiagnosticSeverity(diagnostic.severity),
+    diagnostic.rangeText ?? diagnostic.spanText ?? "no-text",
+    diagnostic.message ?? "",
+  ].join("|");
+}
+
+function comparableDiagnosticSeverity(severity) {
+  return severity === "info"
+    ? "information"
+    : severity ?? "unknown-severity";
+}
+
+function summarizeDiagnosticData(data) {
+  const root = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const semanticRuntime = root.semanticRuntime && typeof root.semanticRuntime === "object"
+    ? root.semanticRuntime
+    : root.semanticRuntime === true
+      ? root
+      : {};
+  const taxonomyRoot = root.__aurelia && typeof root.__aurelia === "object" && root.__aurelia.diagnostics
+    ? root.__aurelia.diagnostics
+    : {};
+
+  return {
+    diagnosticDomain: semanticRuntime.diagnosticDomain ?? root.diagnosticDomain ?? null,
+    diagnosticKind: semanticRuntime.diagnosticKind ?? root.diagnosticKind ?? null,
+    diagnosticAuthority: semanticRuntime.diagnosticAuthority ?? root.diagnosticAuthority ?? null,
+    frameworkErrorCode: semanticRuntime.frameworkErrorCode ?? root.frameworkErrorCode ?? null,
+    relatedQueryKind: semanticRuntime.relatedQueryKind ?? root.relatedQueryKind ?? null,
+    missingInput: semanticRuntime.missingInput ?? root.missingInput ?? null,
+    missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? root.missingInputs ?? []),
+    subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? root.subject ?? null),
+    taxonomy: {
+      schema: taxonomyRoot.schema ?? null,
+      impact: taxonomyRoot.impact ?? null,
+      actionability: taxonomyRoot.actionability ?? null,
+      category: taxonomyRoot.category ?? null,
+      confidence: taxonomyRoot.confidence ?? null,
+    },
+  };
+}
+
+function summarizeDiagnosticSubject(subject) {
+  if (subject == null || typeof subject !== "object" || Array.isArray(subject)) {
+    return null;
+  }
+  return {
+    subjectKind: subject.subjectKind ?? null,
+    source: summarizeSourceReference(subject.source ?? null),
+    uri: subject.uri ?? null,
+    span: isSourceSpan(subject.span) ? { start: subject.span.start, end: subject.span.end } : normalizeSnapshotValue(subject.span ?? null),
+  };
+}
+
+function summarizeSourceReference(source) {
+  if (source == null || typeof source !== "object" || Array.isArray(source)) {
+    return null;
+  }
+  return {
+    kind: source.kind ?? null,
+    label: source.label == null ? null : normalizeSnapshotString(String(source.label)),
+    path: source.path == null ? null : normalizeSnapshotString(String(source.path)),
+    start: source.start ?? null,
+    end: source.end ?? null,
+    role: source.role ?? null,
+  };
+}
+
+function diagnosticSeverityName(severity) {
+  switch (severity) {
+    case 1:
+      return "error";
+    case 2:
+      return "warning";
+    case 3:
+      return "information";
+    case 4:
+      return "hint";
+    case undefined:
+    case null:
+      return null;
+    default:
+      return `severity-${String(severity)}`;
+  }
+}
+
+function isSourceSpan(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    Number.isInteger(value.start) &&
+    Number.isInteger(value.end) &&
+    value.start >= 0 &&
+    value.end >= value.start
+  );
 }
 
 function documentHighlightKindName(kind) {
@@ -1427,22 +1829,40 @@ function renderLaneSnapshotSections(lines, result) {
       lines.push(fencedJson({ mismatches, watched: membership }));
       return;
     }
+    case "diagnostics":
+      lines.push("### publishDiagnostics");
+      lines.push("");
+      lines.push(fencedJson(result.publishSummary));
+      lines.push("");
+      lines.push("### aurelia/getDiagnostics");
+      lines.push("");
+      lines.push(fencedJson(result.customSummary));
+      lines.push("");
+      lines.push("### Alignment");
+      lines.push("");
+      lines.push(fencedJson(result.alignment));
+      return;
     default:
       throw new HarnessError(`Unsupported result lane: ${result.lane}`);
   }
 }
 
 function probeSummary(result) {
-  return {
+  const summary = {
     file: result.relativeFile,
-    anchor: result.anchor.anchorText,
-    occurrence: result.anchor.anchorOccurrence,
-    at: result.anchor.atText,
-    atOccurrence: result.anchor.atOccurrence,
-    lspPosition: result.anchor.position,
-    displayPosition: `${result.relativeFile}:${result.anchor.displayPosition}`,
-    newName: result.probe.newName,
   };
+  if (result.anchor != null) {
+    summary.anchor = result.anchor.anchorText;
+    summary.occurrence = result.anchor.anchorOccurrence;
+    summary.at = result.anchor.atText;
+    summary.atOccurrence = result.anchor.atOccurrence;
+    summary.lspPosition = result.anchor.position;
+    summary.displayPosition = `${result.relativeFile}:${result.anchor.displayPosition}`;
+  }
+  if (result.probe.newName != null) {
+    summary.newName = result.probe.newName;
+  }
+  return summary;
 }
 
 function summarizeRpcResponse(response) {
@@ -1898,6 +2318,18 @@ function summaryRowForResult(result) {
         verdict: result.probe.verdict ?? "undecided",
       };
     }
+    case "diagnostics":
+      return {
+        id: result.probe.id,
+        outcome: result.publishSummary.outcome === "published"
+          ? result.alignment.countsMatch
+            ? "published"
+            : "alignment-mismatch"
+          : result.publishSummary.outcome,
+        count: String(result.publishSummary.diagnosticCount ?? 0),
+        files: result.relativeFile,
+        verdict: result.probe.verdict ?? "undecided",
+      };
     default:
       throw new HarnessError(`Unsupported result lane: ${result.lane}`);
   }

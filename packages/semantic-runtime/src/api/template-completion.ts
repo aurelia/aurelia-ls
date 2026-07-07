@@ -38,6 +38,7 @@ import { isAureliaExpressionGlobalName } from '../expression/global-names.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
   ExpressionParseResultInspector,
+  type ExpressionMemberAccessSpan,
 } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
@@ -109,6 +110,7 @@ import type {
   SemanticRuntimePageResult,
   SemanticRuntimeSourceFileInput,
   SemanticRuntimeSourceCursorInput,
+  SemanticDiagnosticSubject,
   SemanticTemplateCompilationRow,
   SemanticTemplateCursorBindableRow,
   SemanticTemplateCursorDiagnosticRow,
@@ -976,6 +978,7 @@ function templateOverlayDiagnosticRow(
     missingInput,
     missingInputs: [missingInput],
     source,
+    subject: templateOverlayDiagnosticSubject(selection.resource, diagnostic, source),
     selectedMemberName: null,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
@@ -997,6 +1000,49 @@ function templateOverlayDiagnosticRow(
       },
     } : {}),
   };
+}
+
+function templateOverlayDiagnosticSubject(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  diagnostic: TypeSystemOverlayDiagnostic,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticDiagnosticSubject | null {
+  if (source.path == null || source.start == null || source.end == null) {
+    return null;
+  }
+  const access = memberAccessSpanForDiagnosticRange(
+    resource,
+    diagnostic.semanticProductHandle,
+    source.start,
+    source.end,
+  );
+  if (access != null) {
+    return diagnosticSubjectForSpan(source.path, access.subjectKind, access.subjectSpan);
+  }
+  return {
+    subjectKind: 'template-expression',
+    source,
+  };
+}
+
+function memberAccessSpanForDiagnosticRange(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  semanticProductHandle: ProductHandle | null,
+  start: number,
+  end: number,
+): ExpressionMemberAccessSpan | null {
+  const parses = templateExpressionParsesForResource(resource);
+  const preferred = semanticProductHandle == null
+    ? []
+    : parses.filter((parse) => parse.productHandle === semanticProductHandle);
+  for (const parse of [...preferred, ...parses]) {
+    const access = ExpressionParseResultInspector.memberAccessSpans(parse.result)
+      .find((span) => span.subjectSpan.start <= start && end <= span.subjectSpan.end);
+    if (access != null) {
+      return access;
+    }
+  }
+  return null;
 }
 
 function templateOverlayDiagnosticSuggestion(
@@ -1134,7 +1180,7 @@ function templateDiagnosticRowsForSelection(
   if (source == null) {
     return [];
   }
-  return expressionMemberNameSpans(selection.resource)
+  return expressionMemberDiagnosticSpans(selection.resource)
     .flatMap((span) => templateDiagnosticRowsForMemberSpan(store, selection, source, span, context));
 }
 
@@ -1142,10 +1188,10 @@ function templateDiagnosticRowsForMemberSpan(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
   source: AuthoredSourceText,
-  span: SourceSpan,
+  span: ExpressionMemberAccessSpan,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  const offset = span.start + Math.floor((span.end - span.start) / 2);
+  const offset = span.nameSpan.start + Math.floor((span.nameSpan.end - span.nameSpan.start) / 2);
   if (offset < 0 || offset > source.text.length) {
     return [];
   }
@@ -1170,10 +1216,10 @@ function templateDiagnosticRowForDiagnostic(
   diagnostic: SemanticTemplateCursorDiagnosticRow,
   cursorInfo: SemanticTemplateCursorInfoResult,
   filePath: string,
-  span: SourceSpan,
+  span: ExpressionMemberAccessSpan,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  const source = sourceReferenceForSpan(filePath, span);
+  const source = sourceReferenceForSpan(filePath, span.nameSpan);
   const key = templateDiagnosticRowKey(diagnostic, source);
   if (context.seenRows.has(key)) {
     return [];
@@ -1186,6 +1232,7 @@ function templateDiagnosticRowForDiagnostic(
   return [{
     ...diagnostic,
     source,
+    subject: diagnosticSubjectForSpan(filePath, span.subjectKind, span.subjectSpan),
     siteKind: cursorInfo.siteKind,
     valueSiteKind: cursorInfo.valueSite?.siteKind ?? null,
     template: cursorInfo.template,
@@ -1941,14 +1988,14 @@ function templateSelectionSourceAddressHandle(
   return templateSourceSpan(store, resource)?.handle ?? null;
 }
 
-function expressionMemberNameSpans(
+function expressionMemberDiagnosticSpans(
   resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly SourceSpan[] {
-  const spans: SourceSpan[] = [];
+): readonly ExpressionMemberAccessSpan[] {
+  const spans: ExpressionMemberAccessSpan[] = [];
   const seen = new Set<string>();
   for (const parse of templateExpressionParsesForResource(resource)) {
-    for (const span of ExpressionParseResultInspector.memberNameSpans(parse.result)) {
-      const key = `${span.start}:${span.end}`;
+    for (const span of ExpressionParseResultInspector.memberAccessSpans(parse.result)) {
+      const key = `${span.subjectKind}:${span.subjectSpan.start}:${span.subjectSpan.end}:${span.nameSpan.start}:${span.nameSpan.end}`;
       if (seen.has(key)) {
         continue;
       }
@@ -1956,7 +2003,12 @@ function expressionMemberNameSpans(
       spans.push(span);
     }
   }
-  return spans.sort((left, right) => left.start - right.start || left.end - right.end);
+  return spans.sort((left, right) =>
+    left.nameSpan.start - right.nameSpan.start
+    || left.nameSpan.end - right.nameSpan.end
+    || left.subjectSpan.start - right.subjectSpan.start
+    || left.subjectSpan.end - right.subjectSpan.end
+  );
 }
 
 function templateSourceText(
@@ -1985,6 +2037,7 @@ function positionForOffset(
 function sourceReferenceForSpan(
   filePath: string,
   span: SourceSpan,
+  role: string = 'name',
 ): NonNullable<SemanticTemplateDiagnosticRow['source']> {
   return {
     kind: 'source-span-address',
@@ -1992,7 +2045,18 @@ function sourceReferenceForSpan(
     path: filePath,
     start: span.start,
     end: span.end,
-    role: 'name',
+    role,
+  };
+}
+
+function diagnosticSubjectForSpan(
+  filePath: string,
+  subjectKind: SemanticDiagnosticSubject['subjectKind'],
+  span: SourceSpan,
+): SemanticDiagnosticSubject {
+  return {
+    subjectKind,
+    source: sourceReferenceForSpan(filePath, span, subjectKind),
   };
 }
 

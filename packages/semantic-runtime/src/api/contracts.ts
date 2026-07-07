@@ -2098,6 +2098,25 @@ export type SemanticAppDiagnosticDomain =
   | 'router'
   | 'route-recognizer';
 
+export type SemanticDiagnosticSubjectKind =
+  | 'template-member-access'
+  | 'template-member-call'
+  | 'template-expression'
+  | 'template-value-site'
+  | 'source-span';
+
+export interface SemanticDiagnosticSubject {
+  readonly subjectKind: SemanticDiagnosticSubjectKind | string;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticDiagnosticRelatedInformation {
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  readonly code?: string | null;
+  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
+}
+
 export interface SemanticAppDiagnosticRow {
   readonly projectKey: string;
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
@@ -2110,6 +2129,8 @@ export interface SemanticAppDiagnosticRow {
   readonly missingInput?: string | null;
   readonly missingInputs?: readonly string[];
   readonly source: SemanticSourceReference | null;
+  readonly subject?: SemanticDiagnosticSubject | null;
+  readonly relatedInformation?: readonly SemanticDiagnosticRelatedInformation[];
   readonly suggestion?: SemanticTemplateCursorSuggestionRow | null;
   /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
@@ -2124,10 +2145,45 @@ export interface SemanticAppDiagnosticRow {
   };
 }
 
+export type SemanticDiagnosticPresentationRole =
+  | 'primary'
+  | 'contextual';
+
+export type SemanticDiagnosticPresentationRelation =
+  | 'same-subject'
+  | 'semantic-explanation'
+  | 'checker-evidence';
+
+export interface SemanticDiagnosticPresentationRow {
+  readonly rowId: string;
+  readonly rowIndex: number;
+  readonly role: SemanticDiagnosticPresentationRole;
+  readonly relation: SemanticDiagnosticPresentationRelation | null;
+}
+
+export interface SemanticDiagnosticPresentationGroup {
+  readonly groupKey: string;
+  readonly subject: SemanticDiagnosticSubject | null;
+  readonly primary: SemanticDiagnosticPresentationRow;
+  readonly related: readonly SemanticDiagnosticPresentationRow[];
+  readonly rawRowCount: number;
+  readonly primarySeverity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly maxRawSeverity: SemanticTemplateCursorDiagnosticSeverity;
+}
+
+export interface SemanticDiagnosticPresentationResult {
+  readonly rawRowCount: number;
+  readonly primaryCount: number;
+  readonly contextualCount: number;
+  readonly complete: boolean;
+  readonly groups: readonly SemanticDiagnosticPresentationGroup[];
+}
+
 export interface SemanticAppDiagnosticsResult {
   readonly displayText: string;
   readonly typeScript: SemanticRuntimeTypeSystemTypeScriptEnvironmentSummary | null;
   readonly rows: readonly SemanticAppDiagnosticRow[];
+  readonly presentation?: SemanticDiagnosticPresentationResult;
 }
 
 export interface SemanticAppDiagnosticSummaryRow {
@@ -3498,6 +3554,7 @@ export interface SemanticTemplateCursorDiagnosticRow {
 export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDiagnosticRow {
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
+  readonly subject?: SemanticDiagnosticSubject | null;
   readonly template: {
     readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
     readonly source: SemanticSourceReference | null;

@@ -17,6 +17,7 @@ import {
   type LocationLink,
   type WorkspaceEdit,
   type Diagnostic,
+  type DiagnosticRelatedInformation,
   type Range,
 } from "vscode-languageserver/node.js";
 import path from "node:path";
@@ -25,6 +26,7 @@ import { pathToFileURL } from "node:url";
 import type {
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticsResult,
+  SemanticDiagnosticRelatedInformation,
   SemanticRouteNodesResult,
   SemanticRuntimeAnswer,
   SemanticSourceReference,
@@ -138,21 +140,118 @@ function semanticRuntimeDiagnosticCategory(row: SemanticAppDiagnosticRow): Diagn
 export function mapSemanticRuntimeAppDiagnostics(
   answer: SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>,
   document: TextDocument,
+  workspaceRoot: string | null = null,
+  lookupText: LookupTextFn | null = null,
 ): Diagnostic[] {
   const mapped: Diagnostic[] = [];
+  const presentation = answer.value.presentation;
+  if (presentation != null) {
+    const rows = answer.value.rows;
+    for (const group of presentation.groups) {
+      const relatedInformation = group.related.flatMap((related) =>
+        semanticRuntimeDiagnosticRelatedInformation(rows[related.rowIndex] ?? null, document, workspaceRoot, lookupText)
+      );
+      const diagnostic = semanticRuntimeDiagnostic(
+        rows[group.primary.rowIndex] ?? null,
+        document,
+        workspaceRoot,
+        lookupText,
+        relatedInformation,
+      );
+      if (diagnostic != null) {
+        mapped.push(diagnostic);
+      }
+    }
+    return mapped;
+  }
   for (const row of answer.value.rows) {
-    const range = semanticRuntimeDiagnosticRange(row.source, document);
-    if (range == null) continue;
-    mapped.push({
-      range,
-      message: row.summary,
-      severity: semanticRuntimeSeverityToLsp(row.severity),
-      code: row.frameworkErrorCode ?? row.diagnosticKind,
-      source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
-      data: semanticRuntimeDiagnosticData(row),
-    });
+    const diagnostic = semanticRuntimeDiagnostic(row, document, workspaceRoot, lookupText, []);
+    if (diagnostic != null) {
+      mapped.push(diagnostic);
+    }
   }
   return mapped;
+}
+
+function semanticRuntimeDiagnostic(
+  row: SemanticAppDiagnosticRow | null,
+  document: TextDocument,
+  workspaceRoot: string | null,
+  lookupText: LookupTextFn | null,
+  relatedInformation: DiagnosticRelatedInformation[],
+): Diagnostic | null {
+  if (row == null) return null;
+  const range = semanticRuntimeDiagnosticRange(row.source, document);
+  if (range == null) return null;
+  const rowRelatedInformation = (row.relatedInformation ?? []).flatMap((related) =>
+    semanticRuntimeDiagnosticRelatedSourceInformation(related, document, workspaceRoot, lookupText)
+  );
+  const allRelatedInformation = [...rowRelatedInformation, ...relatedInformation];
+  return {
+    range,
+    message: row.summary,
+    severity: semanticRuntimeSeverityToLsp(row.severity),
+    code: row.frameworkErrorCode ?? row.diagnosticKind,
+    source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
+    data: semanticRuntimeDiagnosticData(row),
+    ...(allRelatedInformation.length === 0 ? {} : { relatedInformation: allRelatedInformation }),
+  };
+}
+
+function semanticRuntimeDiagnosticRelatedInformation(
+  row: SemanticAppDiagnosticRow | null,
+  document: TextDocument,
+  workspaceRoot: string | null,
+  lookupText: LookupTextFn | null,
+): readonly DiagnosticRelatedInformation[] {
+  if (row == null) return [];
+  return semanticRuntimeRelatedInformationForSource(row.source, row.summary, document, workspaceRoot, lookupText);
+}
+
+function semanticRuntimeDiagnosticRelatedSourceInformation(
+  related: SemanticDiagnosticRelatedInformation,
+  document: TextDocument,
+  workspaceRoot: string | null,
+  lookupText: LookupTextFn | null,
+): readonly DiagnosticRelatedInformation[] {
+  return semanticRuntimeRelatedInformationForSource(
+    related.source,
+    related.message,
+    document,
+    workspaceRoot,
+    lookupText,
+  );
+}
+
+function semanticRuntimeRelatedInformationForSource(
+  source: SemanticSourceReference | null,
+  message: string,
+  document: TextDocument,
+  workspaceRoot: string | null,
+  lookupText: LookupTextFn | null,
+): readonly DiagnosticRelatedInformation[] {
+  const exact = semanticRuntimeExactSourceReference(source);
+  if (exact == null) return [];
+  const uri = semanticRuntimeSourceReferenceUri(exact, workspaceRoot);
+  if (uri == null) return [];
+  const canonical = canonicalDocumentUri(uri).uri;
+  const originCanonical = canonicalDocumentUri(document.uri).uri;
+  const text = canonical === originCanonical
+    ? document.getText()
+    : lookupText?.(canonical);
+  if (text == null) return [];
+  const targetDocument = canonical === originCanonical
+    ? document
+    : TextDocument.create(canonical, guessLanguage(canonical), 0, text);
+  const range = semanticRuntimeRangeForSource(exact, targetDocument);
+  if (range == null) return [];
+  return [{
+    location: {
+      uri: canonical,
+      range,
+    },
+    message,
+  }];
 }
 
 function semanticRuntimeDiagnosticRange(
@@ -244,6 +343,7 @@ function semanticRuntimeDiagnosticData(
     relatedQueryKind: row.relatedQueryKind,
     sourceRole: row.sourceRole,
     source: row.source,
+    subject: row.subject ?? null,
     suggestion: row.suggestion,
   };
   return {

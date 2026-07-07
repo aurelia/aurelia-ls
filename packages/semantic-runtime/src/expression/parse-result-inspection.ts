@@ -15,6 +15,7 @@ import {
 } from './parse-result-algebra.js';
 import {
   expressionSpanContainsOffset,
+  sourceSpanFromBounds,
   type SourceSpan,
 } from './source-span.js';
 import type {
@@ -177,11 +178,17 @@ export class ExpressionParseResultInspector {
   static memberNameSpans(
     result: ExpressionParseResult,
   ): readonly SourceSpan[] {
-    const spans: SourceSpan[] = [];
+    return this.memberAccessSpans(result).map((span) => span.nameSpan);
+  }
+
+  static memberAccessSpans(
+    result: ExpressionParseResult,
+  ): readonly ExpressionMemberAccessSpan[] {
+    const accessSpans: ExpressionMemberAccessSpan[] = [];
     for (const expression of stableExpressionRoots(result)) {
-      collectMemberNameSpans(expression, spans);
+      collectMemberAccessSpans(expression, accessSpans);
     }
-    return spans;
+    return accessSpans;
   }
 
   static scopeAccessAtOffset(
@@ -201,6 +208,12 @@ export class ExpressionParseResultInspector {
       ? bindingIdentifierForNodeOffset(result.ast, offset)
       : null;
   }
+}
+
+export interface ExpressionMemberAccessSpan {
+  readonly subjectKind: 'template-member-access' | 'template-member-call';
+  readonly subjectSpan: SourceSpan;
+  readonly nameSpan: SourceSpan;
 }
 
 function stableExpressionRoots(result: ExpressionParseResult): readonly ExpressionAstNode[] {
@@ -233,13 +246,13 @@ function stableExpressionRoots(result: ExpressionParseResult): readonly Expressi
   }
 }
 
-function collectMemberNameSpans(
+function collectMemberAccessSpans(
   expression: ExpressionAstNode,
-  spans: SourceSpan[],
+  spans: ExpressionMemberAccessSpan[],
 ): void {
   findInExpression(expression, (candidate) => {
     if (isMemberAccessExpression(candidate)) {
-      spans.push(candidate.name.span);
+      spans.push(memberAccessSpan(candidate));
     }
     return null;
   });
@@ -446,6 +459,27 @@ function isMemberAccessExpression(
   expression: ExpressionAstNode,
 ): expression is MemberAccessExpression {
   return expression.$kind === 'AccessMember' || expression.$kind === 'CallMember';
+}
+
+function memberAccessSpan(
+  expression: MemberAccessExpression,
+): ExpressionMemberAccessSpan {
+  if (expression.$kind === 'CallMember') {
+    return {
+      subjectKind: 'template-member-call',
+      subjectSpan: sourceSpanFromBounds(
+        expression.object.span.start,
+        expression.name.span.end,
+        expression.span.file ?? null,
+      ),
+      nameSpan: expression.name.span,
+    };
+  }
+  return {
+    subjectKind: 'template-member-access',
+    subjectSpan: expression.span,
+    nameSpan: expression.name.span,
+  };
 }
 
 function isScopeAccessExpression(

@@ -203,6 +203,20 @@ const contracts = [
         ],
         'signature',
       ),
+      ExpectedSemanticEffect.exactly(
+        'Unknown repeat-local owner diagnostics should share the authored member-access subject across overlay and semantic rows.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('subject.subjectKind', 'template-member-access'),
+          effectFilter('subject.source.path', 'src/components/loose-picklist.html'),
+          effectFilter('subject.source.start', 121),
+          effectFilter('subject.source.end', 133),
+        ],
+        'signature',
+      ),
       ExpectedSemanticEffect.atLeast(
         'Binding data-flow rows should preserve the declaration source for assignment repair targets.',
         'binding-data-flow',
@@ -703,6 +717,7 @@ const contracts = [
   ),
 ];
 const mixedFormCursorProbe = await readMixedFormAssignmentCursorProbe();
+const viewFactoryProviderAppDiagnosticProbe = await readViewFactoryProviderAppDiagnosticProjectionProbe();
 
 const failures = contracts.flatMap((contract) => contract.verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
@@ -726,6 +741,15 @@ if (diagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSourc
 if (diagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.SourceEditPolicyOpen) {
   failures.push(`Expected framework capability registration readiness to stay ${DiagnosticActionPlanReadiness.SourceEditPolicyOpen}, observed ${diagnosticActionProbe.readiness}.`);
 }
+if (viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics !== 1) {
+  failures.push(`Expected broad app diagnostics to include exactly one AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics}.`);
+}
+if (viewFactoryProviderAppDiagnosticProbe.htmlAur0755Diagnostics !== 0) {
+  failures.push(`Expected HTML-scoped app diagnostics to stay clean for source-owned AUR0755, observed ${viewFactoryProviderAppDiagnosticProbe.htmlAur0755Diagnostics}.`);
+}
+if (viewFactoryProviderAppDiagnosticProbe.tsAur0755Diagnostics !== 1) {
+  failures.push(`Expected TS-scoped app diagnostics to include exactly one source-owned AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.tsAur0755Diagnostics}.`);
+}
 
 const summary = {
   contracts: contracts.map((contract) => ({
@@ -739,6 +763,7 @@ const summary = {
   })),
   mixedFormCursorProbe,
   diagnosticActionProbe,
+  viewFactoryProviderAppDiagnosticProbe,
 };
 
 if (failures.length > 0) {
@@ -816,6 +841,47 @@ async function readMixedFormAssignmentCursorProbe() {
       )
     ).length,
   };
+}
+
+async function readViewFactoryProviderAppDiagnosticProjectionProbe() {
+  const runtime = await createSemanticRuntime({
+    workspaceRoot: viewFactoryProviderFixtureRoot,
+    storeKey: 'template-diagnostics-contract:view-factory-provider-app-diagnostics',
+  });
+  const app = await runtime.openApp({
+    analysisDepth: 'binding-observation',
+  });
+  const broadRows = readAppDiagnosticRows(app, null);
+  const htmlRows = readAppDiagnosticRows(app, 'src/runtime-html-view-factory-provider-errors-app.html');
+  const tsRows = readAppDiagnosticRows(app, 'src/runtime-html-view-factory-provider-errors-app.ts');
+  return {
+    broadDiagnostics: broadRows.length,
+    htmlDiagnostics: htmlRows.length,
+    tsDiagnostics: tsRows.length,
+    broadAur0755Diagnostics: countAur0755Diagnostics(broadRows),
+    htmlAur0755Diagnostics: countAur0755Diagnostics(htmlRows),
+    tsAur0755Diagnostics: countAur0755Diagnostics(tsRows),
+    tsSources: tsRows.map((row) => row.source?.path ?? null),
+  };
+}
+
+function readAppDiagnosticRows(app, sourceFilePath) {
+  const answer = app.ask({
+    kind: SemanticAppQueryKind.AppDiagnostics,
+    diagnosticProjection: 'type-projection',
+    ...(sourceFilePath == null ? {} : { sourceFile: { filePath: sourceFilePath } }),
+    page: { size: 50 },
+  });
+  return answer.value.rows;
+}
+
+function countAur0755Diagnostics(rows) {
+  return rows.filter((row) =>
+    row.diagnosticDomain === 'template'
+    && row.diagnosticKind === 'runtime-controller-framework-error'
+    && row.frameworkErrorCode === 'AUR0755'
+    && row.missingInput === 'runtime-controller:AUR0755'
+  ).length;
 }
 
 function readCursorDiagnosticsForNeedle(app, htmlPath, htmlText, needle) {

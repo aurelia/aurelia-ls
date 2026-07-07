@@ -53,6 +53,22 @@
         "note": "FLIPPED wrong->correct 2026-07-07. References initiated at an unprovable member usage now get a references-only open-member context: the exact member token under the cursor is returned as the current occurrence, while same-name unproven candidates stay separate and the answer closure remains open. Rename still refuses this cursor."
       }
     ],
+    "diagnostics": [
+      {
+        "id": "app-template-weakMetadata-and-shellTone",
+        "file": "src/app.html",
+        "verdict": "correct",
+        "reason": "Correct as a file-level diagnostics baseline: LSP diagnostics are resource-scoped, so the full file should publish both independent template authoring diagnostics. `weakMetadata.source` and `shellTone.label` have precise spans, separate causes, non-blocking severity, and matching LSP/custom surfaces.",
+        "note": "NEW 2026-07-07. Diagnostics lane pressure for app-template weak/member authoring policy. RENAMED 2026-07-07 from app-template-missing-member-shellTone after verdict pass accepted the complete file diagnostic set: index-signature-only weak owner at `weakMetadata.source` plus primitive-owner missing member at `shellTone.label`. The missing-member row is informational because the owner is a primitive, so the policy can honestly suggest inspection but not a declaration edit."
+      },
+      {
+        "id": "loose-picklist-unknown-option-label",
+        "file": "src/components/loose-picklist.html",
+        "verdict": "correct",
+        "reason": "The raw facts remain available, while the editor surface now publishes one primary TS18046 diagnostic on `option` with the weak-owner `label` row as related/contextual evidence on the same `option.label` subject.",
+        "note": "NEW 2026-07-07. Diagnostics lane pressure for an unknown repeat-local member (`option.label`). Expected evidence class: weak owner/member policy with no false concrete-member claim. FLIPPED wrong->correct 2026-07-07: semantic-runtime now preserves a shared `template-member-access` subject for the overlay row and the semantic weak-owner row. AppDiagnostics returns rawRowCount=2 and a presentation group with primary TS18046 plus contextual weak-owner evidence; LSP publishes one diagnostic with relatedInformation. This follows LSP/VS Code diagnostic related-information semantics and TypeScript's `unknown` narrowing model: the actionable repair is to type/narrow the repeat source (`options`/`option`), not to edit the `label` token as an independent issue."
+      }
+    ],
     "hover": [
       {
         "id": "bindable-member-label-silent-partial",

@@ -409,6 +409,15 @@
         "note": "NEW 2026-07-07. TS-origin cursor. VERDICT (2026-07-07): null is correct because tsserver owns TS document highlights; the Aurelia handler now returns null for non-template documents."
       }
     ],
+    "diagnostics": [
+      {
+        "id": "clean-item-list-route-template",
+        "file": "src/routes/item-list-route.html",
+        "verdict": "correct",
+        "reason": "Clean storefront route template publishes zero diagnostics and the custom diagnostics report matches the LSP publish surface exactly.",
+        "note": "VERDICT 2026-07-07. This is a transport/custom-report alignment baseline, not a semantic pressure fixture."
+      }
+    ],
     "completions": [
       {
         "id": "member-completion-searchText",

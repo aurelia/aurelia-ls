@@ -70,7 +70,7 @@ export async function refreshDocument(
     ctx.semanticRuntime.invalidate();
 
     const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc);
-    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(diagnostics, doc);
+    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(diagnostics, doc, ctx.workspaceRoot, ctx.lookupText);
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
     await ctx.connection.sendNotification("aurelia/workspaceChanged", {

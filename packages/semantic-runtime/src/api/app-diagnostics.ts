@@ -64,6 +64,7 @@ export function appDiagnosticRows(
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), projectKey, sources)),
     ...templateRows
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .filter(templateDiagnosticContributesToAppDiagnostics)
       .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), projectKey, sources)),
     ...frameworkRows
@@ -196,6 +197,12 @@ function typeScriptAppDiagnosticRow(
     severity: row.severity,
     summary: row.message,
     source: row.source,
+    relatedInformation: row.relatedInformation.map((related) => ({
+      code: `TS${related.code}`,
+      message: related.message,
+      source: related.source,
+      sourceRole: related.sourceRole,
+    })),
     sourceRole: row.sourceRole,
     relatedQueryKind: 'typescript-diagnostics' satisfies `${SemanticAppQueryKind}`,
   };
@@ -324,7 +331,11 @@ function templateAppDiagnosticRow(
     frameworkErrorCode: row.frameworkErrorCode,
     severity: row.severity,
     summary: row.summary,
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
     source: row.source,
+    subject: row.subject,
+    suggestion: row.suggestion,
     relatedQueryKind: 'template-diagnostics' satisfies `${SemanticAppQueryKind}`,
   };
 }

@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-viewport-resolution-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "router-load-side-only",
+        "file": "src/router-viewport-resolution-errors-app.html",
+        "verdict": "correct",
+        "reason": "Publishes the owning router-domain AUR3174 row on the authored `side-only` value with related query `router-issues`, and LSP/custom alignment is exact.",
+        "note": "VERDICT 2026-07-07. Confirms the AppDiagnostics single-ownership doctrine: router rows own router framework errors instead of duplicated template projections."
+      }
+    ]
+  }
+}
