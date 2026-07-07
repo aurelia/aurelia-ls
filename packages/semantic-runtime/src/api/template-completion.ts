@@ -2322,12 +2322,14 @@ function definitionRow(
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),
     nameSource: describeAddress(store, definitionNameSourceAddressHandle(definition)),
+    targetSource: describeAddress(store, definition.target.addressHandle),
     ...(includeHandles ? {
       handles: {
         definitionProductHandle: definition.productHandle,
         identityHandle: definition.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
         nameSourceAddressHandle: definitionNameSourceAddressHandle(definition),
+        targetAddressHandle: definition.target.addressHandle,
       },
     } : {}),
   };

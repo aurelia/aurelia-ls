@@ -576,6 +576,7 @@ function semanticRuntimeDefinitionTarget(
   return firstSemanticRuntimeExactSourceReference([
     value.selectedMember?.source ?? null,
     value.selectedBindable?.source ?? null,
+    value.selectedDefinition?.targetSource ?? null,
     value.selectedDefinition?.source ?? null,
   ]);
 }

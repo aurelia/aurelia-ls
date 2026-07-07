@@ -3334,11 +3334,13 @@ export interface SemanticTemplateCursorDefinitionRow {
   readonly targetName: string | null;
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;
+  readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly targetAddressHandle: AddressHandle | null;
   };
 }
 

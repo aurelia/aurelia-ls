@@ -14,7 +14,7 @@ const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const OPEN_SETTLE_TIMEOUT_MS = 750;
-const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions"]);
+const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition"]);
 
 // Keep in sync with COMPLETION_GAP_MARKER_LABEL in packages/language-server/src/mapping/lsp-types.ts.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -425,7 +425,7 @@ function requireValue(args, index, flag) {
 function usage() {
   return [
     "Usage:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions> [--probe <id>] [--update]",
+    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition> [--probe <id>] [--update]",
     "",
     "Example:",
     "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
@@ -531,6 +531,8 @@ async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
       return runHoverProbe(client, fixtureRoot, probe, readFixtureText);
     case "completions":
       return runCompletionsProbe(client, fixtureRoot, probe, readFixtureText);
+    case "definition":
+      return runDefinitionProbe(client, fixtureRoot, probe, readFixtureText);
     default:
       throw new HarnessError(`Unsupported lane: ${lane}`);
   }
@@ -711,13 +713,43 @@ async function runHoverProbe(client, fixtureRoot, probe, readFixtureText) {
   };
 }
 
+async function runDefinitionProbe(client, fixtureRoot, probe, readFixtureText) {
+  const relativeFile = normalizeRelativePath(probe.file);
+  const sourceText = await readFixtureText(relativeFile);
+  const anchor = resolveAnchorPosition(sourceText, probe);
+  const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
+  const uri = pathToFileURL(absoluteFile).href;
+
+  const definitionResponse = await client.request("textDocument/definition", {
+    textDocument: { uri },
+    position: anchor.position,
+  });
+  const locations = definitionResponse.error
+    ? []
+    : await summarizeLocations(definitionResponse.result, fixtureRoot, readFixtureText);
+
+  return {
+    lane: "definition",
+    probe,
+    relativeFile,
+    anchor,
+    definitionResponse,
+    locations,
+  };
+}
+
 async function summarizeLocations(result, fixtureRoot, readFixtureText) {
-  if (!Array.isArray(result)) {
+  const entries = Array.isArray(result)
+    ? result
+    : result == null
+      ? []
+      : [result];
+  if (entries.length === 0) {
     return [];
   }
 
   const locations = [];
-  for (const location of result) {
+  for (const location of entries) {
     const uri = location.uri ?? location.targetUri ?? null;
     const range = location.range ?? location.targetSelectionRange ?? location.targetRange ?? null;
     if (typeof uri !== "string" || !isRange(range)) {
@@ -1277,6 +1309,18 @@ function renderLaneSnapshotSections(lines, result) {
         locations: result.locations,
       }));
       return;
+    case "definition":
+      lines.push("### definition");
+      lines.push("");
+      lines.push(fencedJson(summarizeRpcResponse(result.definitionResponse)));
+      lines.push("");
+      lines.push("### Resolved locations");
+      lines.push("");
+      lines.push(fencedJson({
+        locationCount: result.locations.length,
+        locations: result.locations,
+      }));
+      return;
     case "hover":
       lines.push("### hover");
       lines.push("");
@@ -1726,6 +1770,16 @@ function summaryRowForResult(result) {
       return {
         id: result.probe.id,
         outcome: result.referencesResponse.error ? "error" : result.locations.length > 0 ? "result" : "no-locations",
+        count: String(result.locations.length),
+        files: files.length > 0 ? files.join(",") : "-",
+        verdict: result.probe.verdict ?? "undecided",
+      };
+    }
+    case "definition": {
+      const files = [...new Set(result.locations.map((location) => location.file).filter(Boolean))].sort();
+      return {
+        id: result.probe.id,
+        outcome: result.definitionResponse.error ? "error" : result.locations.length > 0 ? "result" : "no-locations",
         count: String(result.locations.length),
         files: files.length > 0 ? files.join(",") : "-",
         verdict: result.probe.verdict ?? "undecided",
