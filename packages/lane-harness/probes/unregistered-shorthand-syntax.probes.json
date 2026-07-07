@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/unregistered-shorthand-syntax",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "unregistered-shorthand-syntax-template",
+        "file": "src/unregistered-shorthand-syntax-app.html",
+        "verdict": "correct",
+        "reason": "Publishes shorthand capability-demand rows on `:value` and `@click`, and no inert shorthand value-channel fallout leaks into diagnostics.",
+        "note": "NEW 2026-07-07. Framework capability-demand diagnostics for shorthand binding syntax when shorthand is not registered. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

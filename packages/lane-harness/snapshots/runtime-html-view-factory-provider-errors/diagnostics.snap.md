@@ -96,6 +96,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticDomain": "template",
         "diagnosticKind": "runtime-controller-framework-error",
         "frameworkErrorCode": "AUR0755",
+        "frameworkRawErrorAuthority": null,
         "missingInput": "runtime-controller:AUR0755",
         "missingInputs": [
           "runtime-controller:AUR0755"
@@ -156,6 +157,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticDomain": "template",
               "diagnosticKind": "runtime-controller-framework-error",
               "frameworkErrorCode": "AUR0755",
+              "frameworkRawErrorAuthority": null,
               "missingInput": "runtime-controller:AUR0755",
               "missingInputs": [
                 "runtime-controller:AUR0755"
@@ -217,6 +219,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticDomain": "template",
           "diagnosticKind": "runtime-controller-framework-error",
           "frameworkErrorCode": "AUR0755",
+          "frameworkRawErrorAuthority": null,
           "missingInput": "runtime-controller:AUR0755",
           "missingInputs": [
             "runtime-controller:AUR0755"
@@ -272,6 +275,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticDomain": "template",
             "diagnosticKind": "runtime-controller-framework-error",
             "frameworkErrorCode": "AUR0755",
+            "frameworkRawErrorAuthority": null,
             "missingInput": "runtime-controller:AUR0755",
             "missingInputs": [
               "runtime-controller:AUR0755"

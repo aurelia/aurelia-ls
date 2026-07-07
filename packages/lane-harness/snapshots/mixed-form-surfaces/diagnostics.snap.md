@@ -30,6 +30,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticDomain": "template",
         "diagnosticKind": "weak-expression-member-owner",
         "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
         "missingInput": "expression-member-owner-type:index-signature-only",
         "missingInputs": [
           "expression-member-owner-type:index-signature-only"
@@ -80,6 +81,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticDomain": "template",
         "diagnosticKind": "missing-expression-member",
         "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
         "missingInput": "expression-member:selected-member-missing",
         "missingInputs": [
           "expression-member:selected-member-missing"
@@ -152,6 +154,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticDomain": "template",
               "diagnosticKind": "weak-expression-member-owner",
               "frameworkErrorCode": null,
+              "frameworkRawErrorAuthority": null,
               "missingInput": "expression-member-owner-type:index-signature-only",
               "missingInputs": [
                 "expression-member-owner-type:index-signature-only"
@@ -230,6 +233,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticDomain": "template",
               "diagnosticKind": "missing-expression-member",
               "frameworkErrorCode": null,
+              "frameworkRawErrorAuthority": null,
               "missingInput": "expression-member:selected-member-missing",
               "missingInputs": [
                 "expression-member:selected-member-missing"
@@ -311,6 +315,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticDomain": "template",
           "diagnosticKind": "weak-expression-member-owner",
           "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
           "missingInput": "expression-member-owner-type:index-signature-only",
           "missingInputs": [
             "expression-member-owner-type:index-signature-only"
@@ -368,6 +373,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticDomain": "template",
           "diagnosticKind": "missing-expression-member",
           "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
           "missingInput": "expression-member:selected-member-missing",
           "missingInputs": [
             "expression-member:selected-member-missing"
@@ -435,6 +441,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticDomain": "template",
             "diagnosticKind": "weak-expression-member-owner",
             "frameworkErrorCode": null,
+            "frameworkRawErrorAuthority": null,
             "missingInput": "expression-member-owner-type:index-signature-only",
             "missingInputs": [
               "expression-member-owner-type:index-signature-only"
@@ -492,6 +499,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticDomain": "template",
             "diagnosticKind": "missing-expression-member",
             "frameworkErrorCode": null,
+            "frameworkRawErrorAuthority": null,
             "missingInput": "expression-member:selected-member-missing",
             "missingInputs": [
               "expression-member:selected-member-missing"
@@ -584,6 +592,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticDomain": "template",
         "diagnosticKind": "template-expression-typescript-diagnostic",
         "frameworkErrorCode": null,
+        "frameworkRawErrorAuthority": null,
         "missingInput": "typescript:TS18046",
         "missingInputs": [
           "typescript:TS18046"
@@ -674,6 +683,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticDomain": "template",
               "diagnosticKind": "template-expression-typescript-diagnostic",
               "frameworkErrorCode": null,
+              "frameworkRawErrorAuthority": null,
               "missingInput": "typescript:TS18046",
               "missingInputs": [
                 "typescript:TS18046"
@@ -739,6 +749,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "diagnosticDomain": "template",
                 "diagnosticKind": "weak-expression-member-owner",
                 "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
                 "missingInput": "expression-member-owner-type:no-members",
                 "missingInputs": [
                   "expression-member-owner-type:no-members"
@@ -818,6 +829,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticDomain": "template",
           "diagnosticKind": "template-expression-typescript-diagnostic",
           "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
           "missingInput": "typescript:TS18046",
           "missingInputs": [
             "typescript:TS18046"
@@ -875,6 +887,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticDomain": "template",
           "diagnosticKind": "weak-expression-member-owner",
           "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
           "missingInput": "expression-member-owner-type:no-members",
           "missingInputs": [
             "expression-member-owner-type:no-members"
@@ -942,6 +955,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticDomain": "template",
             "diagnosticKind": "template-expression-typescript-diagnostic",
             "frameworkErrorCode": null,
+            "frameworkRawErrorAuthority": null,
             "missingInput": "typescript:TS18046",
             "missingInputs": [
               "typescript:TS18046"

@@ -1122,6 +1122,7 @@ function summarizeDiagnosticData(data) {
     diagnosticKind: semanticRuntime.diagnosticKind ?? root.diagnosticKind ?? null,
     diagnosticAuthority: semanticRuntime.diagnosticAuthority ?? root.diagnosticAuthority ?? null,
     frameworkErrorCode: semanticRuntime.frameworkErrorCode ?? root.frameworkErrorCode ?? null,
+    frameworkRawErrorAuthority: semanticRuntime.frameworkRawErrorAuthority ?? root.frameworkRawErrorAuthority ?? null,
     relatedQueryKind: semanticRuntime.relatedQueryKind ?? root.relatedQueryKind ?? null,
     missingInput: semanticRuntime.missingInput ?? root.missingInput ?? null,
     missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? root.missingInputs ?? []),

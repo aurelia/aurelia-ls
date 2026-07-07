@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/fetch-client-config-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "fetch-client-app-source",
+        "file": "src/fetch-client-config-errors-app.ts",
+        "verdict": "correct",
+        "reason": "Publishes all eight fetch-client framework-runtime rows on the invalid configure inputs/options, preserving exact source spans and LSP/custom alignment.",
+        "note": "NEW 2026-07-07. Fetch-client source diagnostics for invalid configure inputs, retry interceptor order/count, and retry strategy values. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

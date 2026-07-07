@@ -11,6 +11,8 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/app-pattern-minimal-app');
 const htmlPath = path.join(fixtureRoot, 'src/app.html');
 const tsPath = path.join(fixtureRoot, 'src/app.ts');
+const resourceMetadataFixtureRoot = path.join(packageRoot, 'fixtures/pressure/resource-metadata-errors');
+const resourceMetadataTsPath = path.join(resourceMetadataFixtureRoot, 'src/resource-metadata-errors-app.ts');
 
 const originalHtml = fs.readFileSync(htmlPath, 'utf8');
 const originalTs = fs.readFileSync(tsPath, 'utf8');
@@ -54,12 +56,63 @@ assert.equal(
   `Expected disk-only message completion to disappear when app.ts is provided from memory; observed ${candidateNames.join(', ') || 'none'}.`,
 );
 
+const resourceMetadataText = fs.readFileSync(resourceMetadataTsPath, 'utf8');
+const resourceMetadataRuntime = await createSemanticRuntime({
+  workspaceRoot: resourceMetadataFixtureRoot,
+  storeKey: 'contract:source-text-provider:resource-metadata',
+  sourceTextProvider: {
+    readFile(fileName) {
+      return normalizedPath(fileName) === normalizedPath(resourceMetadataTsPath)
+        ? resourceMetadataText
+        : undefined;
+    },
+    fileExists(fileName) {
+      return normalizedPath(fileName) === normalizedPath(resourceMetadataTsPath)
+        ? true
+        : undefined;
+    },
+  },
+});
+const resourceMetadataDiagnostics = await resourceMetadataRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.AppDiagnostics,
+  sourceFilePath: resourceMetadataTsPath,
+  sourceFile: { filePath: resourceMetadataTsPath },
+  page: { size: 200 },
+  inquiryProfile: 'lsp-diagnostics',
+  diagnosticProjection: 'type-projection',
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+const resourceMetadataRows = resourceMetadataDiagnostics.value.rows;
+assert.equal(resourceMetadataRows.length, 27);
+assert.ok(
+  resourceMetadataRows.some((row) => row.diagnosticDomain === 'resource'),
+  'Expected source-provider resource metadata diagnostics to retain resource-domain rows.',
+);
+assert.ok(
+  resourceMetadataRows.some((row) => row.diagnosticDomain === 'template'),
+  'Expected source-provider resource metadata diagnostics to retain template-domain rows.',
+);
+assert.ok(
+  resourceMetadataRows.some((row) => row.diagnosticDomain === 'typescript'),
+  'Expected source-provider resource metadata diagnostics to retain TypeScript rows.',
+);
+assert.ok(
+  resourceMetadataRows.some((row) => row.frameworkErrorCode === 'AUR0717'),
+  'Expected source-provider resource metadata diagnostics to retain inline template compiler rows.',
+);
+
 console.log(JSON.stringify({
   ok: true,
   sourceTextProvider: {
     overlaidFiles: [...overlays.keys()].map((fileName) => path.relative(fixtureRoot, fileName).replace(/\\/g, '/')),
     completionOutcome: completion.outcome,
     candidateNames,
+    resourceMetadataDiagnostics: {
+      rows: resourceMetadataRows.length,
+      domains: [...new Set(resourceMetadataRows.map((row) => row.diagnosticDomain))],
+    },
   },
 }, null, 2));
 

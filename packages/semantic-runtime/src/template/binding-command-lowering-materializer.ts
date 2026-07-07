@@ -346,6 +346,7 @@ class MaterializedMultiBindingSegment {
     readonly syntax: AttributeSyntax,
     readonly bindable: TemplateBindableReference | null,
     readonly commandMatch: CommandHandlerMatch | null,
+    readonly targetSourceAddressHandle: AddressHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly sourceAddressRecord: SourceSpanAddress | null,
     readonly records: readonly KernelStoreRecord[],
@@ -1038,7 +1039,7 @@ export class BindingCommandLoweringMaterializer {
       TemplateCompilerIssueKind.BindingToNonBindable,
       `Template compilation error in custom attribute "${definition.name}": property "${materializedSegment.syntax.target}" is not bindable.`,
       TemplateCompilerFrameworkErrorCode.CompilerBindingToNonBindable,
-      materializedSegment.sourceAddressHandle,
+      materializedSegment.targetSourceAddressHandle ?? materializedSegment.sourceAddressHandle,
     ));
   }
 
@@ -1146,6 +1147,12 @@ export class BindingCommandLoweringMaterializer {
       parseAttributeSyntaxInWorld(compilerWorld, parsed.rawName, parsed.rawValue),
       segmentAddress.handle,
     );
+    const targetAddress = this.publisher.segmentTargetSourceAddress(
+      local,
+      site.sourceAddressHandle,
+      parsed,
+      syntax.syntax,
+    );
     const selection = this.selectMultiBindingSegment(
       compilerWorld,
       syntax.syntax,
@@ -1159,6 +1166,7 @@ export class BindingCommandLoweringMaterializer {
       syntax.syntax,
       parsed,
       selection,
+      targetAddress.handle,
       segmentAddress.handle,
     );
 
@@ -1167,9 +1175,11 @@ export class BindingCommandLoweringMaterializer {
       syntax.syntax,
       selection.bindable,
       selection.commandMatch,
+      targetAddress.handle,
       segmentAddress.handle,
       segmentAddress.record,
       [
+        ...(targetAddress.record == null ? [] : [targetAddress.record]),
         ...(segmentAddress.record == null ? [] : [segmentAddress.record]),
         ...syntax.records,
         ...segment.records,

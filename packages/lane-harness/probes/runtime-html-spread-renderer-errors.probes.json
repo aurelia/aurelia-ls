@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/runtime-html-spread-renderer-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "runtime-renderer-spread-template",
+        "file": "src/runtime-html-spread-renderer-errors-app.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0820 on the invalid `$element.spread` attribute, the actionable authored spread target.",
+        "note": "NEW 2026-07-07. Runtime-html spread renderer diagnostic for invalid $element spread target. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

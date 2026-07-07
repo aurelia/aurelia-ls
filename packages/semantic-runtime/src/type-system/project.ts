@@ -513,7 +513,11 @@ export class TypeSystemProject {
       return null;
     }
 
-    const symbol = this.checker.getSymbolAtLocation(expression) ?? null;
+    const checkerExpression = this.readProgramNode(expression);
+    if (checkerExpression == null) {
+      return null;
+    }
+    const symbol = this.checker.getSymbolAtLocation(checkerExpression) ?? null;
     const resolved = symbol == null ? null : this.resolveAliasedSymbol(symbol);
     const declarations = resolved?.declarations ?? (resolved?.valueDeclaration == null ? [] : [resolved.valueDeclaration]);
     for (const candidate of declarations) {

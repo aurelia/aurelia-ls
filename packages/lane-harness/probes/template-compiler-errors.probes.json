@@ -1,0 +1,56 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-compiler-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "compiler-main-template-errors",
+        "file": "src/template-compiler-errors-app.html",
+        "verdict": "correct",
+        "reason": "Publishes the expected compiler rows with framework-code authority and preserves LSP/custom alignment; AUR0707 now points at the offending segment target `missing`, not the RHS value.",
+        "note": "NEW 2026-07-07. File-level compiler diagnostics covering reserved spread/bindables syntax, invalid class binding syntax, au-slot/slot misuse, non-bindable attribute segment, invalid <let> command, and removed Aurelia 1 binding commands. VERDICT 2026-07-07: flipped partially wrong -> correct after multi-binding segments gained a target source address and AUR0707 spent that address."
+      },
+      {
+        "id": "compiler-local-bindable-errors",
+        "file": "src/local-bindable-probe.html",
+        "verdict": "correct",
+        "reason": "Publishes all six local-element bindable compiler rows with framework-code authority, blocking severity, exact authored spans, and matching LSP/custom surfaces.",
+        "note": "NEW 2026-07-07. Local-element bindable compiler diagnostics, including duplicate/missing bindable names and invalid local element placement. VERDICT 2026-07-07: correct."
+      },
+      {
+        "id": "compiler-local-nested-error",
+        "file": "src/local-nested-probe.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0709 on the nested local-element template block, which is the actionable authored source for the compiler rule.",
+        "note": "NEW 2026-07-07. Local element nested below the root template should publish AUR0709 on the authored template locus. VERDICT 2026-07-07: correct."
+      },
+      {
+        "id": "compiler-local-only-error",
+        "file": "src/local-only-probe.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0708 on the local-only template declaration, with no LSP/custom drift.",
+        "note": "NEW 2026-07-07. Local-only root template should publish AUR0708 on the owning template file. VERDICT 2026-07-07: correct."
+      },
+      {
+        "id": "compiler-local-root-error",
+        "file": "src/local-root-probe.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0701 on the `as-custom-element` declaration that makes the root template invalid.",
+        "note": "NEW 2026-07-07. Root local-template misuse should publish AUR0701 with an exact authored span. VERDICT 2026-07-07: correct."
+      },
+      {
+        "id": "compiler-surrogate-invalid-attribute-error",
+        "file": "src/surrogate-invalid-attribute.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0702 on the invalid surrogate attribute token, which is the exact repair locus.",
+        "note": "NEW 2026-07-07. Surrogate invalid attribute should publish AUR0702 on the surrogate template file. VERDICT 2026-07-07: correct."
+      },
+      {
+        "id": "compiler-surrogate-template-controller-error",
+        "file": "src/surrogate-template-probe.html",
+        "verdict": "correct",
+        "reason": "Publishes AUR0703 on the invalid surrogate template-controller attribute, with exact authored span and aligned custom/LSP surfaces.",
+        "note": "NEW 2026-07-07. Surrogate template-controller misuse should publish AUR0703 on the surrogate template file. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}

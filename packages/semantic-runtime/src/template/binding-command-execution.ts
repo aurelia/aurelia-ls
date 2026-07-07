@@ -386,6 +386,8 @@ export class MultiBindingSegment {
     readonly rawName: string,
     /** Raw segment value after the colon. */
     readonly rawValue: string,
+    /** Source address for the parsed target inside the segment name. */
+    readonly targetSourceAddressHandle: AddressHandle | null,
     /** Source address for the segment value. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */

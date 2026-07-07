@@ -1,0 +1,14 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/di-cyclic-dependency",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "di-cyclic-main-source",
+        "file": "src/main.ts",
+        "verdict": "correct",
+        "reason": "Publishes AUR0003 on the `container.get(IFoo)` activation site that triggers the statically visible singleton cycle.",
+        "note": "NEW 2026-07-07. DI framework diagnostic for a statically visible singleton dependency cycle. VERDICT 2026-07-07: correct."
+      }
+    ]
+  }
+}
