@@ -88,6 +88,7 @@ import type {
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
+import { camelCaseAttributeName } from '../template/attribute-mapper.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -473,7 +474,16 @@ class TemplateCompletionCursorContextBuilder {
     );
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
     const selectedBindable = selectedBindableForCursor(classification, valueSite);
-    const selectedScopeSlot = selectedScopeSlotForCursor(siteKind, expressionResult, offset, bindingScope);
+    const selectedScopeSlot = selectedScopeSlotForCursor(
+      this.store,
+      siteKind,
+      expressionResult,
+      offset,
+      bindingScope,
+      activeElement,
+      htmlAttribute,
+      syntax,
+    );
     const missingInputs: string[] = [];
     const memberOwnerType = this.memberOwnerType(
       offset,
@@ -624,22 +634,75 @@ function selectedMemberNameForCursor(
 }
 
 function selectedScopeSlotForCursor(
+  store: KernelStore,
   siteKind: TemplateCompletionSiteKind,
   expressionResult: ExpressionParseResult | null,
   offset: number,
   bindingScope: BindingScope | null,
+  activeElement: HtmlElement | null,
+  htmlAttribute: HtmlAttribute | null,
+  syntax: AttributeSyntax | null,
+): BindingContextSlot | null {
+  if (bindingScope == null) {
+    return null;
+  }
+
+  if (siteKind === TemplateCompletionSiteKind.Expression && expressionResult != null) {
+    const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
+    if (access != null) {
+      return bindingScope.locate(access.name.name, access.ancestor).slot;
+    }
+    const bindingIdentifier = ExpressionParseResultInspector.bindingIdentifierAtOffset(expressionResult, offset);
+    return bindingIdentifier == null
+      ? null
+      : bindingScope.locate(bindingIdentifier.name.name, 0).slot;
+  }
+
+  return selectedLetTargetScopeSlotForCursor(store, siteKind, offset, bindingScope, activeElement, htmlAttribute, syntax);
+}
+
+function selectedLetTargetScopeSlotForCursor(
+  store: KernelStore,
+  siteKind: TemplateCompletionSiteKind,
+  offset: number,
+  bindingScope: BindingScope,
+  activeElement: HtmlElement | null,
+  htmlAttribute: HtmlAttribute | null,
+  syntax: AttributeSyntax | null,
 ): BindingContextSlot | null {
   if (
-    siteKind !== TemplateCompletionSiteKind.Expression
-    || expressionResult == null
-    || bindingScope == null
+    siteKind !== TemplateCompletionSiteKind.AttributeName
+    || activeElement?.tagName.toLowerCase() !== 'let'
+    || htmlAttribute == null
+    || syntax == null
+    || htmlAttribute.rawName === 'to-binding-context'
+    || !cursorTouchesAttributeSyntaxTarget(store, htmlAttribute, syntax, offset)
   ) {
     return null;
   }
-  const access = ExpressionParseResultInspector.scopeAccessAtOffset(expressionResult, offset);
-  return access == null
-    ? null
-    : bindingScope.locate(access.name.name, access.ancestor).slot;
+  const slot = bindingScope.locate(camelCaseAttributeName(syntax.target), 0).slot;
+  return cursorTouchesSpan(sourceSpanFor(store, slot?.sourceAddressHandle ?? null), offset)
+    ? slot
+    : null;
+}
+
+function cursorTouchesAttributeSyntaxTarget(
+  store: KernelStore,
+  attribute: HtmlAttribute,
+  syntax: AttributeSyntax,
+  offset: number,
+): boolean {
+  const span = sourceSpanFor(store, attribute.nameAddressHandle);
+  if (span == null) {
+    return false;
+  }
+  const targetStart = syntax.rawName.toLowerCase().indexOf(syntax.target.toLowerCase());
+  if (targetStart < 0) {
+    return false;
+  }
+  const start = span.start + targetStart;
+  const end = start + syntax.target.length;
+  return start <= offset && offset <= end;
 }
 
 /** Answer template and expression completion candidates from already-materialized product details. */
@@ -1637,14 +1700,15 @@ function candidateKindForResource(
         ? TemplateCompletionCandidateKind.BindingBehavior
         : null;
     case ResourceDefinitionKind.BindingCommand:
+      // Binding commands are suffix syntax (`attr.bind`), authorable only after the dot; offering
+      // them as standalone attribute names would complete markup the user cannot legally write.
       return siteKind === TemplateCompletionSiteKind.BindingCommandName
-        || siteKind === TemplateCompletionSiteKind.AttributeName
         ? TemplateCompletionCandidateKind.BindingCommand
         : null;
     case ResourceDefinitionKind.AttributePattern:
-      return siteKind === TemplateCompletionSiteKind.AttributeName
-        ? TemplateCompletionCandidateKind.AttributePattern
-        : null;
+      // Attribute patterns are meta-resources that shape the attribute grammar; their resource name
+      // is a registration class name (DotSeparatedAttributePattern, ...), never authorable markup.
+      return null;
   }
 }
 
@@ -2379,6 +2443,11 @@ function bindingScopeForCursor(
   offset: number,
   expressionParse: TemplateExpressionParse | null,
 ): BindingScope | null {
+  const iteratorDeclarationScope = bindingScopeForIteratorDeclarationCursor(store, resource, offset, expressionParse);
+  if (iteratorDeclarationScope != null) {
+    return iteratorDeclarationScope;
+  }
+
   const instructionScope = expressionParse == null
     ? null
     : bindingSourceScopeForTemplateExpressionParse(store, resource, expressionWorld, expressionParse, offset)
@@ -2387,7 +2456,26 @@ function bindingScopeForCursor(
     return instructionScope;
   }
 
-  const root = resource.runtimeAnalysis.scopes.rootScope;
+  return bestBindingScopeForOffset(store, resource, offset) ?? resource.runtimeAnalysis.scopes.rootScope;
+}
+
+function bindingScopeForIteratorDeclarationCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  offset: number,
+  expressionParse: TemplateExpressionParse | null,
+): BindingScope | null {
+  return expressionParse?.result.kind === ExpressionParseResultKind.IteratorSuccess
+    && expressionSpanContainsOffset(expressionParse.result.ast.declaration.span, offset)
+    ? bestBindingScopeForOffset(store, resource, offset)
+    : null;
+}
+
+function bestBindingScopeForOffset(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  offset: number,
+): BindingScope | null {
   let best: { readonly scope: BindingScope; readonly span: SourceSpanAddress } | null = null;
   for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
     const span = sourceSpanFor(store, templateScopeRangeAddressHandle(resource, scope));
@@ -2402,7 +2490,7 @@ function bindingScopeForCursor(
       best = { scope, span };
     }
   }
-  return best?.scope ?? root;
+  return best?.scope ?? null;
 }
 
 function bindingSourceScopeForTemplateExpressionParse(

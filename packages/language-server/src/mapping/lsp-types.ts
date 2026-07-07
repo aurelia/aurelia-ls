@@ -714,6 +714,25 @@ export function mapSemanticRuntimeTemplatePrepareRename(
   return range == null ? null : { range, placeholder: answer.value.placeholder };
 }
 
+/** Rename mapping result: a complete WorkspaceEdit or the reasons no edit may be applied. */
+export interface SemanticRuntimeRenameEditMapping {
+  readonly edit: WorkspaceEdit | null;
+  /** Human-readable reasons for rows that could not be mapped or failed old-text validation. */
+  readonly failures: readonly string[];
+}
+
+type SemanticRuntimeWorkspaceEditRow = {
+  readonly source: SemanticSourceReference | null;
+  readonly oldText: string | null;
+  readonly newText: string;
+};
+
+/**
+ * Rename mapping is all-or-nothing: if any semantic edit row cannot be resolved to an authored
+ * document range, or the document text at a range no longer matches the row's `oldText`, no
+ * WorkspaceEdit is produced and the failures name every offending row. A partial rename that
+ * silently drops edits corrupts code with more certainty than a refusal ever could.
+ */
 export function mapSemanticRuntimeTemplateRenameEdit(
   answer: SemanticRuntimeAnswer<SemanticTemplateRenameResult>,
   lookupText: LookupTextFn,
@@ -721,20 +740,40 @@ export function mapSemanticRuntimeTemplateRenameEdit(
     readonly workspaceRoot: string | null;
     readonly originDocument: TextDocument;
   },
-): WorkspaceEdit | null {
+): SemanticRuntimeRenameEditMapping {
   if (answer.value.status !== "available" || answer.value.edits.length === 0) {
-    return null;
+    return { edit: null, failures: ["The rename answer carries no applicable edits."] };
   }
+  return mapSemanticRuntimeWorkspaceEditRows(answer.value.edits, lookupText, {
+    workspaceRoot: options.workspaceRoot,
+    originDocument: options.originDocument,
+    emptyFailure: "No rename edit rows could be mapped.",
+  });
+}
+
+function mapSemanticRuntimeWorkspaceEditRows(
+  rows: readonly SemanticRuntimeWorkspaceEditRow[],
+  lookupText: LookupTextFn,
+  options: {
+    readonly workspaceRoot: string | null;
+    readonly originDocument: TextDocument;
+    readonly emptyFailure: string;
+  },
+): SemanticRuntimeRenameEditMapping {
   const changes: Record<string, { range: Range; newText: string }[]> = {};
+  const failures: string[] = [];
   const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
 
-  for (const row of answer.value.edits) {
+  for (const row of rows) {
+    const rowLabel = row.source?.label ?? `${row.oldText ?? "?"} -> ${row.newText}`;
     const source = semanticRuntimeExactSourceReference(row.source);
     if (source == null) {
+      failures.push(`Edit ${rowLabel} has no exact authored source span.`);
       continue;
     }
     const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
     if (uri == null) {
+      failures.push(`Edit ${rowLabel} cannot be resolved to a workspace document.`);
       continue;
     }
     const canonical = canonicalDocumentUri(uri).uri;
@@ -742,19 +781,35 @@ export function mapSemanticRuntimeTemplateRenameEdit(
       ? options.originDocument.getText()
       : lookupText(canonical);
     if (text == null) {
+      failures.push(`Edit ${rowLabel} targets a document with no readable text.`);
       continue;
     }
     const document = TextDocument.create(uri, guessLanguage(canonical), 0, text);
     const range = semanticRuntimeRangeForSource(source, document);
     if (range == null) {
+      failures.push(`Edit ${rowLabel} has a span outside the current document text.`);
       continue;
+    }
+    if (row.oldText != null) {
+      const currentText = document.getText(range);
+      if (currentText !== row.oldText) {
+        failures.push(
+          `Edit ${rowLabel} expected ${JSON.stringify(row.oldText)} but the document contains ${JSON.stringify(currentText)}.`,
+        );
+        continue;
+      }
     }
     const bucket = changes[uri] ?? [];
     bucket.push({ range, newText: row.newText });
     changes[uri] = bucket;
   }
 
-  return Object.keys(changes).length === 0 ? null : { changes };
+  if (failures.length > 0) {
+    return { edit: null, failures };
+  }
+  return Object.keys(changes).length === 0
+    ? { edit: null, failures: [options.emptyFailure] }
+    : { edit: { changes }, failures: [] };
 }
 
 export function mapSemanticRuntimeTemplateCodeActions(
@@ -763,18 +818,27 @@ export function mapSemanticRuntimeTemplateCodeActions(
   options: {
     readonly workspaceRoot: string | null;
     readonly originDocument: TextDocument;
+    readonly onMappingFailure?: (
+      row: SemanticTemplateCodeActionsResult["rows"][number],
+      failures: readonly string[],
+    ) => void;
   },
 ): CodeAction[] | null {
   const actions: CodeAction[] = [];
   for (const row of answer.value.rows) {
-    const edit = mapSemanticRuntimeTemplateCodeActionEdit(row.edits, lookupText, options);
-    if (edit == null) {
+    const mapping = mapSemanticRuntimeWorkspaceEditRows(row.edits, lookupText, {
+      workspaceRoot: options.workspaceRoot,
+      originDocument: options.originDocument,
+      emptyFailure: `Code action '${row.title}' has no mapped edit rows.`,
+    });
+    if (mapping.edit == null) {
+      options.onMappingFailure?.(row, mapping.failures);
       continue;
     }
     actions.push({
       title: row.title,
       kind: row.kind,
-      edit,
+      edit: mapping.edit,
       isPreferred: row.isPreferred,
       data: {
         semanticRuntime: {
@@ -788,44 +852,4 @@ export function mapSemanticRuntimeTemplateCodeActions(
     });
   }
   return actions.length === 0 ? null : actions;
-}
-
-function mapSemanticRuntimeTemplateCodeActionEdit(
-  edits: SemanticTemplateCodeActionsResult["rows"][number]["edits"],
-  lookupText: LookupTextFn,
-  options: {
-    readonly workspaceRoot: string | null;
-    readonly originDocument: TextDocument;
-  },
-): WorkspaceEdit | null {
-  const changes: Record<string, { range: Range; newText: string }[]> = {};
-  const originCanonical = canonicalDocumentUri(options.originDocument.uri).uri;
-
-  for (const row of edits) {
-    const source = semanticRuntimeExactSourceReference(row.source);
-    if (source == null) {
-      continue;
-    }
-    const uri = semanticRuntimeSourceReferenceUri(source, options.workspaceRoot);
-    if (uri == null) {
-      continue;
-    }
-    const canonical = canonicalDocumentUri(uri).uri;
-    const text = canonical === originCanonical
-      ? options.originDocument.getText()
-      : lookupText(canonical);
-    if (text == null) {
-      continue;
-    }
-    const document = TextDocument.create(uri, guessLanguage(canonical), 0, text);
-    const range = semanticRuntimeRangeForSource(source, document);
-    if (range == null) {
-      continue;
-    }
-    const bucket = changes[uri] ?? [];
-    bucket.push({ range, newText: row.newText });
-    changes[uri] = bucket;
-  }
-
-  return Object.keys(changes).length === 0 ? null : { changes };
 }

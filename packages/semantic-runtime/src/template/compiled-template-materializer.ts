@@ -15,6 +15,13 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
+  SourceSpanRole,
+} from '../kernel/address.js';
+import {
+  sourceSpanAddressForAddress,
+  sourceSpanAddressForSite,
+} from '../kernel/source-address.js';
+import {
   CompilerIdentity,
   InstructionIdentity,
 } from '../kernel/identity.js';
@@ -1625,7 +1632,7 @@ class CompiledTemplateInstructionTraversal {
           `let-command:${attribute.productHandle}`,
           syntax.identityHandle,
           TemplateCompilerIssueKind.InvalidLetCommand,
-          `Template compilation error: Invalid command ".${syntax.command ?? ''}" for <let>. Only to-view/bind supported.`,
+          `Template compilation error: Invalid command ".${syntax.command ?? ''}" for <let>. Use .bind or remove the command`,
           TemplateCompilerFrameworkErrorCode.CompilerInvalidLetCommand,
           syntax.sourceAddressHandle,
         );
@@ -1638,6 +1645,7 @@ class CompiledTemplateInstructionTraversal {
       const expressionHandle = commandInstruction instanceof PropertyBindingInstruction
         ? commandInstruction.expressionProductHandle
         : site == null ? null : this.indexes.parseBySite.get(site.productHandle)?.productHandle ?? null;
+      const targetSourceAddressHandle = this.letBindingTargetSourceAddressHandle(attribute, syntax);
       result.push(this.assemblyState.createInstruction(
         `let-binding:${attribute.productHandle}`,
         TemplateInstructionKind.LetBinding,
@@ -1651,11 +1659,43 @@ class CompiledTemplateInstructionTraversal {
           camelCaseAttributeName(syntax.target),
           expressionHandle,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-        [],
+          targetSourceAddressHandle,
+          [],
         ),
       ));
     }
     return result;
+  }
+
+  private letBindingTargetSourceAddressHandle(
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+  ): AddressHandle | null {
+    const nameSource = sourceSpanAddressForAddress(this.assemblyState.store, attribute.nameAddressHandle);
+    if (nameSource == null) {
+      return null;
+    }
+    const targetStart = syntax.rawName.toLowerCase().indexOf(syntax.target.toLowerCase());
+    if (targetStart < 0) {
+      return null;
+    }
+    const source = sourceSpanAddressForSite(
+      this.assemblyState.store,
+      [
+        'compiled-template',
+        this.input.localKey,
+        'let-binding-target',
+        attribute.productHandle,
+      ].join(':'),
+      {
+        sourceFileAddressHandle: nameSource.fileHandle,
+        start: nameSource.start + targetStart,
+        end: nameSource.start + targetStart + syntax.target.length,
+      },
+      SourceSpanRole.Name,
+    );
+    this.assemblyState.records.push(...source.records);
+    return source.handle;
   }
 
   private surrogateInstructionsForTemplateElement(node: HtmlElement): readonly TemplateInstruction[] {

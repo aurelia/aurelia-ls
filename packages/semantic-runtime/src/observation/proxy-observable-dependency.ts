@@ -1258,6 +1258,7 @@ function withoutTemplateExpressionProjection<TDraft extends RuntimeObservedDepen
   return {
     ...draft,
     memberNameSpanStart: null,
+    memberNameSpanEnd: null,
     scopeLookupAncestor: null,
   };
 }

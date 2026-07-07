@@ -257,7 +257,9 @@ export type RuntimeBindingObservedDependencyField =
   | 'observedMemberKind'
   | 'observedMemberSource'
   | 'observedMemberSourceState'
+  | 'observedMemberSourceRoute'
   | 'span'
+  | 'memberNameSpan'
   | 'source';
 
 export const enum RuntimeObservedMemberSourceState {
@@ -266,6 +268,18 @@ export const enum RuntimeObservedMemberSourceState {
   RuntimeScopeName = 'runtime-scope-name',
   ScopeOpen = 'scope-open',
   Open = 'open',
+}
+
+/**
+ * Provenance of `observedMemberSourceAddressHandle`. The state above says whether a source route is
+ * closed at all; the route says WHOSE declaration the address is. Only `member-declaration` rows may
+ * be treated as proof that the address is the observed member's own declaration; `owner-value` rows
+ * carry the owner/root declaration as a best-effort navigation aid for weak, dynamic, keyed, or
+ * index-signature-shaped owners and must never be matched against a member declaration span.
+ */
+export const enum RuntimeObservedMemberSourceRoute {
+  MemberDeclaration = 'member-declaration',
+  OwnerValue = 'owner-value',
 }
 
 export type RuntimeBindingValueChannelField =
@@ -319,8 +333,12 @@ export class RuntimeBindingObservedDependency {
     readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
     readonly observedMemberSourceAddressHandle: AddressHandle | null,
     readonly observedMemberSourceState: RuntimeObservedMemberSourceState,
+    readonly observedMemberSourceRoute: RuntimeObservedMemberSourceRoute | null,
     readonly spanStart: number | null,
     readonly spanEnd: number | null,
+    /** Authored bounds of the member-name token inside the expression, for AccessMember/CallMember reads. */
+    readonly memberNameSpanStart: number | null,
+    readonly memberNameSpanEnd: number | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingObservedDependencyField>[] = [],
   ) {}

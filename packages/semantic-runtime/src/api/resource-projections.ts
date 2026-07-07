@@ -94,6 +94,7 @@ function resourceDefinitionRow(
       source: describeAddress(store, pattern.addressHandle),
     })) : [],
     source: describeAddress(store, definition.sourceAddressHandle),
+    nameSource: describeAddress(store, readDefinitionNameSourceAddressHandle(definition)),
     targetSource: describeAddress(store, definition.target.addressHandle),
     ...(handles ? {
       handles: {
@@ -101,6 +102,7 @@ function resourceDefinitionRow(
         identityHandle: definition.identityHandle,
         targetIdentityHandle: definition.target.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
+        nameSourceAddressHandle: readDefinitionNameSourceAddressHandle(definition),
         targetAddressHandle: definition.target.addressHandle,
       },
     } : {}),
@@ -200,6 +202,10 @@ function resourceKindForApi(definition: FullResourceDefinition): ResourceDefinit
 
 function readDefinitionName(definition: FullResourceDefinition): string | null {
   return 'name' in definition ? definition.name : null;
+}
+
+function readDefinitionNameSourceAddressHandle(definition: FullResourceDefinition) {
+  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
 }
 
 function readDefinitionAliases(definition: FullResourceDefinition): readonly string[] {

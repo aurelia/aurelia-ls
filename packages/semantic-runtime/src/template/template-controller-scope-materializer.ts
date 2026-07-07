@@ -16,6 +16,12 @@ import {
   EvaluationBoundaryValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
+import type {
+  BindingIdentifier,
+  BindingIdentifierOrPattern,
+  ExpressionAstNode,
+} from '../expression/ast.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { Container } from '../di/container.js';
 import {
   RuntimeBindingSourceValueEvaluator,
@@ -67,6 +73,7 @@ import {
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import {
   type BindableDefinition,
@@ -134,6 +141,7 @@ import {
 } from './template-controller-flow-state.js';
 import { TemplateScopeTypeProjector } from './template-scope-type-projector.js';
 import { repeatStaticLocalValue } from './repeat-static-value.js';
+import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { TemplateControllerFlowScopeMaterializer } from './template-controller-flow-scope-materializer.js';
 import {
   RuntimeBindingScopeIssue,
@@ -158,7 +166,6 @@ import {
   effectiveTemplateBindingMode,
   templateBindingModeIncludesTargetToSource,
 } from './runtime-binding-mode-behavior.js';
-import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
@@ -773,7 +780,10 @@ export class TemplateControllerScopeMaterializer {
     if (targetType == null) {
       return [];
     }
-    const sourceAddressHandle = value.sourceAddressHandle ?? sourceSlot?.sourceAddressHandle ?? null;
+    const sourceAddressHandle = this.boundControllerPropertySourceAddressHandle(value)
+      ?? value.sourceAddressHandle
+      ?? sourceSlot?.sourceAddressHandle
+      ?? null;
     return [new BindingContextSlotDraft(
       value.propertyName,
       sourceSlot?.targetIdentityHandle ?? null,
@@ -781,6 +791,17 @@ export class TemplateControllerScopeMaterializer {
       targetType,
       sourceAddressHandle,
     )];
+  }
+
+  private boundControllerPropertySourceAddressHandle(
+    value: RuntimeBoundControllerPropertyValue,
+  ): AddressHandle | null {
+    const definition = value.controllerDefinitionProductHandle == null
+      ? null
+      : this.store.productDetails.read(ResourceProductDetails.Definition, value.controllerDefinitionProductHandle);
+    return definition instanceof CustomElementDefinition
+      ? definition.bindables.find((bindable) => bindable.name === value.propertyName)?.sourceAddressHandle ?? null
+      : null;
   }
 
   private boundControllerExpressionType(
@@ -1473,27 +1494,62 @@ export class TemplateControllerScopeMaterializer {
       input,
       bindingExpressionScopes,
     } = frame;
+    const localSources = this.iteratorLocalSourceAddressHandles(effect, iteratorProjection);
     return effect.localNames.map((name) => new BindingContextSlotDraft(
+      name,
+      null,
+      null,
+      localTypes.has(name)
+        ? localTypes.get(name) ?? null
+        : elementTypeForFlattenedIteratorName(effect.localNames, iteratorProjection.elementType),
+      localSources.get(name) ?? effect.sourceAddressHandle,
+      [],
+      repeatStaticLocalValue(
+        iteratorProjection.parse,
+        parent,
+        effect,
         name,
-        null,
-        null,
-        localTypes.has(name)
-          ? localTypes.get(name) ?? null
-          : elementTypeForFlattenedIteratorName(effect.localNames, iteratorProjection.elementType),
+        sourceValueEvaluator,
+        binding,
+        input.runtimeBindings,
+        bindingExpressionScopes,
+        input.resourceScope,
+      ),
+    ));
+  }
+
+  private iteratorLocalSourceAddressHandles(
+    effect: IteratorBindingScopeEffect,
+    iteratorProjection: IteratorScopeProjection,
+  ): ReadonlyMap<string, AddressHandle> {
+    const parse = iteratorProjection.parse;
+    if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
+      return new Map();
+    }
+    const sources = new Map<string, AddressHandle>();
+    for (const identifier of bindingIdentifiersForPattern(parse.result.ast.declaration)) {
+      const source = sourceAddressForRuntimeExpressionSpan(
+        this.store,
+        [
+          'iterator-local-source',
+          effect.productHandle,
+          localKeyPart(identifier.name.name),
+          String(identifier.name.span.start),
+        ].join(':'),
         effect.sourceAddressHandle,
-        [],
-        repeatStaticLocalValue(
-          iteratorProjection.parse,
-          parent,
-          effect,
-          name,
-          sourceValueEvaluator,
-          binding,
-          input.runtimeBindings,
-          bindingExpressionScopes,
-          input.resourceScope,
-        ),
-      ))
+        identifier.name.span,
+      );
+      if (source.records.length > 0) {
+        this.store.commitMissing(new KernelStoreBatch(
+          source.records,
+          `iterator-local-source:${effect.productHandle}:${localKeyPart(identifier.name.name)}`,
+        ));
+      }
+      if (source.handle != null && !sources.has(identifier.name.name)) {
+        sources.set(identifier.name.name, source.handle);
+      }
+    }
+    return sources;
   }
 
   private constructLetElementScope(
@@ -1550,7 +1606,7 @@ export class TemplateControllerScopeMaterializer {
       null,
       null,
       targetType,
-      effect.sourceAddressHandle,
+      effect.targetSourceAddressHandle ?? effect.sourceAddressHandle,
       [],
       this.letStaticValue(input, parent, effect, targetType),
     );
@@ -1895,4 +1951,27 @@ function elementTypeForFlattenedIteratorName(
   elementType: CheckerTypeReference | null,
 ): CheckerTypeReference | null {
   return names.length === 1 ? elementType : null;
+}
+
+function bindingIdentifiersForPattern(
+  pattern: BindingIdentifierOrPattern,
+): readonly BindingIdentifier[] {
+  switch (pattern.$kind) {
+    case 'BindingIdentifier':
+      return [pattern];
+    case 'BindingPatternDefault':
+      return bindingIdentifiersForPattern(pattern.target);
+    case 'BindingPatternHole':
+      return [];
+    case 'ArrayBindingPattern':
+      return [
+        ...pattern.elements.flatMap((element) => bindingIdentifiersForPattern(element)),
+        ...(pattern.rest == null ? [] : bindingIdentifiersForPattern(pattern.rest)),
+      ];
+    case 'ObjectBindingPattern':
+      return [
+        ...pattern.properties.flatMap((property) => bindingIdentifiersForPattern(property.value)),
+        ...(pattern.rest == null ? [] : bindingIdentifiersForPattern(pattern.rest)),
+      ];
+  }
 }

@@ -360,6 +360,7 @@
         "Start here when a framework error frontier points at non-template source such as @watch, bindable metadata, DI resolver calls, router config, AppTask/customization callbacks, observer service configuration, or package configuration.",
         "Do not attach framework-error-code authority at the API boundary. Add or reuse a product-owned issue/diagnostic record in the substrate that owns the framework behavior, then let the API aggregate it.",
         "Keep template diagnostics as one diagnostic source, not the only diagnostics contract. AppDiagnostics currently aggregates TypeScript, configuration, DI, template, resource, router, and route-recognizer diagnostic products by source locus while preserving diagnosticDomain and relatedQueryKind.",
+        "Router issue products remain owned by the router lanes even when projected into template diagnostics for file/cursor loci: AppDiagnostics filters router-framework-error template copies and reads owning router/route-recognizer rows directly, preserving diagnostic ownership while template projections can still provide sharper expression/value spans.",
         "Keep ordinary TypeScript diagnostics TypeSystemProject-owned. Do not shell out to tsc from MCP or rebuild a local TypeScript Program in API code; use the shared Program/tsconfig epoch, including config root filenames and config diagnostics, and expose rows through typescript-diagnostics / typescript-diagnostic-summary plus the unified app diagnostic surfaces.",
         "When aggregating diagnostics, collect unpaged rows from each owning diagnostic family before applying the app-level page. Child-query paging before aggregation creates misleading pressure counts.",
         "Weak-owner template diagnostic suggestions should keep action targets source-bearing. For source-independent owner shapes such as any, prefer the value-producing type annotation or return type source route when one exists; if no navigable owner route exists, target the expression source rather than emitting owner-type:no-source.",
@@ -434,6 +435,11 @@
           "lensId": "framework.errors",
           "projection": "diagnostic-frontiers",
           "summary": "Framework error-code frontiers with exact semantic-runtime coverage and likely owner hints."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "Documents router-framework-error as a template projection over router-owned issues; AppDiagnostics keeps owning router rows to avoid double-counting (RouterIssues/RecognizedRoutes prose; the README has no section headings to anchor)."
         }
       ],
       "liveChecks": [
@@ -479,7 +485,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-22"
+      "updatedAt": "2026-07-07"
     },
     {
       "id": "decision:semantic-project-shape-open-policy",
@@ -858,6 +864,48 @@
       ],
       "createdAt": "2026-06-11",
       "updatedAt": "2026-06-11"
+    },
+    {
+      "id": "decision:reference-answer-candidate-honesty",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "references",
+        "rename",
+        "authoring"
+      ],
+      "summary": "Reference/rename answers separate proven rows from same-name unproven candidateRows and close 'open' when candidates exist; TypeScript parity is the floor, not the ceiling.",
+      "rationale": "Members on unknown owners or missing members on primitives cannot be proven to observe the selected declaration. Refusing the whole operation would be worse than TypeScript; silently excluding them produced the silent-partial class observed on the mixed-form-surfaces fixture (rename answered available/complete with unaccounted same-name usages). Operator ruling 2026-07-07: proceed with proven edits and surface candidates - the product should exceed TypeScript parity. Flat LSP Location[] has no honesty channel, so unproven candidates must not be poured into it; the standard-LSP rename consumer instead notifies 'prepared N verified edits; M same-name usages could not be verified', worded as 'prepared' because the server cannot know whether the client applied the returned WorkspaceEdit.",
+      "guidance": [
+        "Candidate matching is name-based by design (selected member name or root source name); same-name rows proven to a DIFFERENT declaration are shadowing, not candidates.",
+        "Answer closure must be 'open' whenever candidateRows is non-empty and paging is exhausted; 'complete' with silently missing usages is the defect class this decision exists to prevent.",
+        "References-side candidate UX (candidates as locations or richer surfaces) is deliberately deferred pending operator adjudication; do not invent it.",
+        "Any new consumer (custom request, MCP, future editor surface) must surface candidate existence before claiming the operation covered the workspace."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerClosure",
+          "summary": "Answer closure vocabulary; 'open' signals unproven candidates remain."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "symbolName": "unprovenSameNameCandidateRows",
+          "summary": "Shared candidate computation feeding references, rename, and rename-from-TypeScript answers."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticRuntimeAnswerClosure"
+        }
+      ],
+      "createdAt": "2026-07-07",
+      "updatedAt": "2026-07-07"
     }
   ]
 }

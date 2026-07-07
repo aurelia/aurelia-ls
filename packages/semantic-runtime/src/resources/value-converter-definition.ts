@@ -47,5 +47,7 @@ export class ValueConverterDefinition {
     readonly key: string,
     readonly contributions: readonly ValueConverterDefinitionContribution[] = [],
     readonly fieldProvenance: readonly FieldProvenance<ValueConverterDefinitionField>[] = [],
+    /** Exact address for the authored public resource-name token, when the declaration has one. */
+    readonly nameSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

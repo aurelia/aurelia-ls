@@ -713,8 +713,11 @@ export class RuntimeBindingDataFlowMaterializer {
           observedMember?.observedMemberKind ?? null,
           observedMember?.observedMemberSourceAddressHandle ?? null,
           observedMemberSourceState,
+          observedMember?.observedMemberSourceRoute ?? null,
           dependency.spanStart,
           dependency.spanEnd,
+          dependency.memberNameSpanStart ?? null,
+          dependency.memberNameSpanEnd ?? null,
           dependencySource.handle,
           [],
         );

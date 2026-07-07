@@ -23,6 +23,7 @@ import {
   type PrepareRenameParams,
   type CodeActionParams,
   type CompletionParams,
+  MessageType,
 } from "vscode-languageserver/node.js";
 import type { ServerContext } from "../context.js";
 import { handleDocumentSymbols } from "./document-symbols.js";
@@ -216,12 +217,23 @@ export async function handleDocumentHighlight(
 // Rename Handler
 // ============================================================================
 
+/**
+ * Rename ownership: this server answers template-origin renames. TypeScript documents belong to the
+ * TypeScript language service; answering (or erroring) for them would fight the owning provider, so
+ * non-template documents get a clean null. Template propagation for TS-origin renames stays on the
+ * custom `aurelia/renameFromTs` request, which the editor client merges with the TS provider's edit.
+ */
+function isTemplateRenameDocument(doc: { readonly languageId: string }): boolean {
+  return doc.languageId === "html";
+}
+
 export function handlePrepareRename(
   ctx: ServerContext,
   params: PrepareRenameParams,
 ): Promise<{ range: import("vscode-languageserver/node.js").Range; placeholder: string } | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return Promise.resolve(null);
+  if (!isTemplateRenameDocument(doc)) return Promise.resolve(null);
 
   return ctx.trace.spanAsync("lsp.prepareRename", async () => {
     try {
@@ -245,6 +257,7 @@ export function handlePrepareRename(
 export async function handleRename(ctx: ServerContext, params: RenameParams): Promise<WorkspaceEdit | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateRenameDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
@@ -253,14 +266,24 @@ export async function handleRename(ctx: ServerContext, params: RenameParams): Pr
     if (response.value.status !== "available") {
       throw new ResponseError(0, response.value.displayText || response.summary);
     }
-    const edit = mapSemanticRuntimeTemplateRenameEdit(response, lookupText, {
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
-    if (edit == null) {
-      throw new ResponseError(0, `Rename produced no applicable edits for '${params.newName}'.`);
+    if (mapping.edit == null) {
+      // All-or-nothing: name every unmappable or stale row instead of applying a partial rename.
+      throw new ResponseError(
+        0,
+        `Rename to '${params.newName}' was blocked: ${mapping.failures.join(" ")}`,
+      );
     }
-    return edit;
+    if (response.value.candidateRows.length > 0) {
+      await ctx.connection.sendNotification("window/showMessage", {
+        type: MessageType.Info,
+        message: candidateRenameMessage(response.value.edits.length, response.value.candidateRows.length),
+      });
+    }
+    return mapping.edit;
   } catch (e) {
     if (e instanceof ResponseError) throw e;
     // Boot doc: Degradation for rename → error response, NOT null
@@ -268,6 +291,12 @@ export async function handleRename(ctx: ServerContext, params: RenameParams): Pr
     logDegradation(ctx, "rename", d, params.textDocument.uri);
     throw new ResponseError(0, renderDegradationAsMessage(d));
   }
+}
+
+function candidateRenameMessage(verifiedEditCount: number, candidateCount: number): string {
+  const editNoun = verifiedEditCount === 1 ? "edit" : "edits";
+  const candidateNoun = candidateCount === 1 ? "usage" : "usages";
+  return `Aurelia rename prepared ${verifiedEditCount} verified ${editNoun}; ${candidateCount} same-name ${candidateNoun} could not be verified and were left unchanged.`;
 }
 
 // ============================================================================
@@ -285,6 +314,9 @@ export async function handleCodeAction(ctx: ServerContext, params: CodeActionPar
     return mapSemanticRuntimeTemplateCodeActions(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
+      onMappingFailure: (row, failures) => {
+        ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
+      },
     });
   } catch (e) {
     const d = degradationFromError("codeAction", e);

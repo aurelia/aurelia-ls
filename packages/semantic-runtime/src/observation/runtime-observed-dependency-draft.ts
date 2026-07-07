@@ -1,6 +1,6 @@
 import type { AddressHandle } from '../kernel/handles.js';
 import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
-import type { RuntimeObservedDependencyKind } from './runtime-binding-observation.js';
+import type { RuntimeObservedDependencyKind, RuntimeObservedMemberSourceRoute } from './runtime-binding-observation.js';
 
 export interface RuntimeObservedDependencyDraft {
   readonly dependencyKind: RuntimeObservedDependencyKind;
@@ -12,7 +12,9 @@ export interface RuntimeObservedDependencyDraft {
   readonly methodName: string | null;
   readonly observedMemberKind?: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSourceAddressHandle?: AddressHandle | null;
+  readonly observedMemberSourceRoute?: RuntimeObservedMemberSourceRoute | null;
   readonly memberNameSpanStart?: number | null;
+  readonly memberNameSpanEnd?: number | null;
   readonly scopeLookupAncestor?: number | null;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;

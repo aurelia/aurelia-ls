@@ -25,6 +25,7 @@ export interface RuntimeConnectableObservedDependencyDraft {
   readonly keyExpression: string | null;
   readonly methodName: string | null;
   readonly memberNameSpanStart: number | null;
+  readonly memberNameSpanEnd: number | null;
   readonly scopeLookupAncestor: number | null;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;
@@ -323,6 +324,7 @@ function observedDependencyDraft(
   expression: ExpressionAstNode,
   observedExpression: ExpressionAstNode = expression,
 ): RuntimeConnectableObservedDependencyDraft {
+  const memberNameSpan = observedMemberNameSpan(observedExpression);
   return {
     dependencyKind,
     expressionKind,
@@ -331,7 +333,8 @@ function observedDependencyDraft(
     memberName,
     keyExpression,
     methodName,
-    memberNameSpanStart: observedMemberNameSpanStart(observedExpression),
+    memberNameSpanStart: memberNameSpan?.start ?? null,
+    memberNameSpanEnd: memberNameSpan?.end ?? null,
     scopeLookupAncestor: observedScopeLookupAncestor(observedExpression),
     spanStart: expression.span.start,
     spanEnd: expression.span.end,
@@ -354,13 +357,17 @@ function observedCollectionOwnerMemberName(
   }
 }
 
-function observedMemberNameSpanStart(
+function observedMemberNameSpan(
   expression: ExpressionAstNode,
-): number | null {
+): { readonly start: number; readonly end: number } | null {
   switch (expression.$kind) {
     case 'AccessMember':
     case 'CallMember':
-      return expression.name.span.start;
+    // Scope reads carry the name token too so `$parent.title`-style lowerings keep a token-granular
+    // address distinct from the whole scope-access span.
+    case 'AccessScope':
+    case 'CallScope':
+      return { start: expression.name.span.start, end: expression.name.span.end };
     default:
       return null;
   }

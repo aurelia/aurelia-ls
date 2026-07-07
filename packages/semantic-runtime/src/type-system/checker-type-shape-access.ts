@@ -98,6 +98,8 @@ export interface CheckerTypeShapeMemberValueAccess {
   readonly valueType: CheckerTypeShape | null;
   readonly valueReference: CheckerTypeReference | null;
   readonly declarations: readonly ts.Declaration[];
+  readonly memberSourceAddressHandle: AddressHandle | null;
+  /** Source of the accessed value/type; may be a type annotation rather than the member declaration. */
   readonly sourceAddressHandle: AddressHandle | null;
 }
 
@@ -154,6 +156,7 @@ export class CheckerTypeShapeAccess {
         ownerType,
         ownerType.toReference(),
         [],
+        null,
         ownerType.sourceAddressHandle,
       );
     }
@@ -161,8 +164,9 @@ export class CheckerTypeShapeAccess {
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member != null) {
       const valueType = this.declaredMemberValueType(member, localKey);
+      const memberSourceAddressHandle = checkerTypeMemberSourceAddressHandle(this.store, member);
       const sourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(this.store, member)
-        ?? checkerTypeMemberSourceAddressHandle(this.store, member);
+        ?? memberSourceAddressHandle;
       return checkerTypeMemberValueAccessResult(
         valueType == null
           ? CheckerTypeShapeMemberValueAccessKind.MissingValueType
@@ -172,12 +176,14 @@ export class CheckerTypeShapeAccess {
         valueType,
         valueType?.toReference() ?? member.valueType,
         member.carrier?.declarations ?? [],
+        memberSourceAddressHandle,
         sourceAddressHandle,
       );
     }
 
     const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
     if (checkerMember != null) {
+      const memberSourceAddressHandle = this.checkerMemberSourceAddressHandle(checkerMember);
       const checkerMemberType = this.checkerMemberValueType(ownerType, checkerMember, memberName, localKey);
       if (checkerMemberType != null) {
         return checkerTypeMemberValueAccessResult(
@@ -187,8 +193,9 @@ export class CheckerTypeShapeAccess {
           checkerMemberType,
           checkerMemberType.toReference(),
           checkerMember.declarations,
+          memberSourceAddressHandle,
           this.checkerMemberValueSourceAddressHandle(checkerMember)
-            ?? this.checkerMemberSourceAddressHandle(checkerMember),
+            ?? memberSourceAddressHandle,
         );
       }
       return checkerTypeMemberValueAccessResult(
@@ -198,8 +205,9 @@ export class CheckerTypeShapeAccess {
         null,
         null,
         checkerMember.declarations,
+        memberSourceAddressHandle,
         this.checkerMemberValueSourceAddressHandle(checkerMember)
-          ?? this.checkerMemberSourceAddressHandle(checkerMember),
+          ?? memberSourceAddressHandle,
       );
     }
 
@@ -212,6 +220,7 @@ export class CheckerTypeShapeAccess {
         stringIndexMemberType,
         stringIndexMemberType.toReference(),
         [],
+        null,
         ownerType.sourceAddressHandle,
       );
     }
@@ -223,6 +232,7 @@ export class CheckerTypeShapeAccess {
       null,
       null,
       [],
+      null,
       null,
     );
   }
@@ -840,6 +850,7 @@ function checkerTypeMemberValueAccessResult(
   valueType: CheckerTypeShape | null,
   valueReference: CheckerTypeReference | null,
   declarations: readonly ts.Declaration[],
+  memberSourceAddressHandle: AddressHandle | null,
   sourceAddressHandle: AddressHandle | null,
 ): CheckerTypeShapeMemberValueAccess {
   return {
@@ -849,6 +860,7 @@ function checkerTypeMemberValueAccessResult(
     valueType,
     valueReference,
     declarations,
+    memberSourceAddressHandle,
     sourceAddressHandle,
   };
 }

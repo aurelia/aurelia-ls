@@ -457,6 +457,21 @@ const contracts = [
         ],
         'signature',
       ),
+      ExpectedSemanticEffect.exactly(
+        '<let> command diagnostics should mirror the framework compiler policy without advertising unsupported .to-view.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'template-compiler-error'),
+          effectFilter('frameworkErrorCode', 'AUR0704'),
+          effectFilter('missingInput', 'template-compiler:AUR0704'),
+          effectFilter('summary', 'Aurelia template compiler AUR0704 rejects this template syntax: Template compilation error: Invalid command ".trigger" for <let>. Use .bind or remove the command.'),
+          effectFilter('source.path', 'src/template-compiler-errors-app.html'),
+        ],
+        'signature',
+      ),
     ],
   ),
   await verifyFixture(

@@ -321,6 +321,7 @@ function withoutSourceSpan<TDraft extends RuntimeObservedDependencyDraft>(
   return {
     ...draft,
     memberNameSpanStart: null,
+    memberNameSpanEnd: null,
     scopeLookupAncestor: null,
     spanStart: null,
     spanEnd: null,

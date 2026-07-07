@@ -282,6 +282,7 @@ export class LetBindingInstruction {
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
 }

@@ -12,7 +12,10 @@ import {
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
   describeAddress,
+  sourceReferenceForParserSpan,
+  type SemanticSourceReference,
 } from './source-reference.js';
+import { sourceSpanFromBounds } from '../expression/source-span.js';
 import type {
   SemanticBindingDataFlowRow,
   SemanticBindingDataFlowIssueKind,
@@ -1265,6 +1268,7 @@ function bindingObservedDependencyRow(
   store: KernelStore,
   handles: boolean,
 ): SemanticBindingObservedDependencyRow {
+  const source = describeAddress(store, dependency.sourceAddressHandle);
   return {
     definitionName,
     bindingKind: dependency.binding.bindingKind,
@@ -1278,9 +1282,11 @@ function bindingObservedDependencyRow(
     observedMemberKind: dependency.observedMemberKind,
     observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
     observedMemberSourceState: dependency.observedMemberSourceState,
+    observedMemberSourceRoute: dependency.observedMemberSourceRoute,
     spanStart: dependency.spanStart,
     spanEnd: dependency.spanEnd,
-    source: describeAddress(store, dependency.sourceAddressHandle),
+    memberTokenSource: memberTokenSourceReference(source, dependency),
+    source,
     ...(handles ? {
       handles: {
         bindingProductHandle: dependency.binding.productHandle,
@@ -1300,4 +1306,27 @@ function expressionParseForDataFlow(
   dataFlow: RuntimeBindingDataFlow,
 ): TemplateExpressionParse | null {
   return readTemplateExpressionParse(store, dataFlow.expressionProductHandle);
+}
+
+/**
+ * Authored member-name token reference for AccessMember/CallMember reads, derived from the parser
+ * token bounds carried on the dependency record. The token lives in the same authored file as the
+ * expression source, so no separate kernel address is minted for it.
+ */
+function memberTokenSourceReference(
+  source: SemanticSourceReference | null,
+  dependency: RuntimeBindingObservedDependency,
+): SemanticSourceReference | null {
+  if (
+    source?.path == null
+    || dependency.memberNameSpanStart == null
+    || dependency.memberNameSpanEnd == null
+  ) {
+    return null;
+  }
+  return sourceReferenceForParserSpan(
+    source.path,
+    sourceSpanFromBounds(dependency.memberNameSpanStart, dependency.memberNameSpanEnd),
+    'name',
+  );
 }

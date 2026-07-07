@@ -28,6 +28,7 @@ const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
 function createMockRenameContext(value: Record<string, unknown>) {
   const document = {
     uri: "file:///app/src/my-app.html",
+    languageId: "html",
     offsetAt: vi.fn(() => renameStart + 1),
     positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => renameText),
@@ -45,7 +46,7 @@ function createMockRenameContext(value: Record<string, unknown>) {
         outcome: value.status === "available" ? "hit" : "miss",
         closure: "complete",
         summary: "mock semantic-runtime rename answer",
-        value,
+        value: { candidateRows: [], ...value },
       })),
     },
     lookupText: vi.fn((uri: string) => (uri === definitionUri ? renameDefinitionText : null)),
@@ -577,6 +578,80 @@ describe("handleCodeAction", () => {
     const ctx = createMockCodeActionContext({ actions: [] });
 
     await expect(handleCodeAction(ctx as never, params)).resolves.toBeNull();
+  });
+
+  test("does not offer a code action when any edit row cannot be mapped", async () => {
+    const ctx = createMockCodeActionContext({
+      actions: [{
+        title: "Declare member 'titel' on MyApp",
+        kind: "quickfix",
+        diagnosticKind: "missing-expression-member",
+        suggestionKind: "declare-explicit-member",
+        actionKind: "declare-member",
+        diagnosticSource: null,
+        actionTarget: null,
+        edits: [
+          {
+            editKind: "declare-view-model-member",
+            source: {
+              kind: "typescript-node",
+              label: `${definitionLspUri}@${codeActionInsertionOffset}..${codeActionInsertionOffset}`,
+              path: definitionLspUri,
+              start: codeActionInsertionOffset,
+              end: codeActionInsertionOffset,
+            },
+            oldText: null,
+            newText: "\n  titel!: unknown;",
+          },
+          {
+            editKind: "declare-view-model-member",
+            source: null,
+            oldText: null,
+            newText: "\n  partial!: unknown;",
+          },
+        ],
+        isPreferred: true,
+      }],
+    });
+
+    const result = await handleCodeAction(ctx as never, params);
+
+    expect(result).toBeNull();
+    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("skipped unsafe code action"));
+    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("has no exact authored source span"));
+  });
+
+  test("does not offer a code action when oldText validation fails", async () => {
+    const ctx = createMockCodeActionContext({
+      actions: [{
+        title: "Rewrite stale member",
+        kind: "quickfix",
+        diagnosticKind: "missing-expression-member",
+        suggestionKind: "declare-explicit-member",
+        actionKind: "declare-member",
+        diagnosticSource: null,
+        actionTarget: null,
+        edits: [{
+          editKind: "declare-view-model-member",
+          source: {
+            kind: "typescript-node",
+            label: `${definitionLspUri}@0..6`,
+            path: definitionLspUri,
+            start: 0,
+            end: 6,
+          },
+          oldText: "class",
+          newText: "interface",
+        }],
+        isPreferred: true,
+      }],
+    });
+
+    const result = await handleCodeAction(ctx as never, params);
+
+    expect(result).toBeNull();
+    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("expected \"class\""));
+    expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("document contains \"export\""));
   });
 });
 

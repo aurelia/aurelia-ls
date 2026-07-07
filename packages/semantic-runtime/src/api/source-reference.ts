@@ -66,6 +66,7 @@ export const PUBLIC_SOURCE_REFERENCE_CARRIER_KEYS = new Set<string>([
   'evidence',
   'suggestion',
   'actionTarget',
+  'edits',
   'expressionSource',
   'callbackSource',
   'targetSource',

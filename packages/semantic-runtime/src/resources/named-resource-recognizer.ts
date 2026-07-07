@@ -432,6 +432,7 @@ function readNamedResourceDefinition(
       target,
       name?.value ?? null,
       aliases?.value ?? [],
+      name?.valueNode ?? null,
     ),
     openSeams,
   };

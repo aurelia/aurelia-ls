@@ -14,6 +14,7 @@ import type { EvaluationOpenSeam } from '../evaluation/seams.js';
 import {
   type EvaluationArrayElement,
   type EvaluationArrayValue,
+  type EvaluationValue,
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import {
@@ -50,6 +51,8 @@ export class ResourceFieldRead<TValue> {
     readonly node: ts.Node | null,
     /** Explanation used when the field did not close. */
     readonly openSummary: string | null = null,
+    /** Exact authored value token, when this field closed from a directly editable literal. */
+    readonly valueNode: ts.Node | null = null,
   ) {}
 }
 
@@ -136,7 +139,7 @@ export function readResourceNameField(
 ): ResourceFieldRead<string> {
   const current = unwrapExpression(expression);
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
-    return new ResourceFieldRead(current.text, current);
+    return new ResourceFieldRead(current.text, current, null, current);
   }
 
   const value = reader.readObjectProperty(expression, 'name');
@@ -154,7 +157,7 @@ export function readResourceNameField(
       value.node,
       summaryWithEvaluationSeams('Resource definition name did not close to a static string.', value.openSeams),
     )
-    : new ResourceFieldRead(name, value.node);
+    : new ResourceFieldRead(name, value.node, null, resourceNameLiteralValueNode(value.value, value.node));
 }
 
 export function readResourceAliasesField(
@@ -243,6 +246,36 @@ function readAttributePatternArrayElement(
     ),
     open: false,
   };
+}
+
+function resourceNameLiteralValueNode(
+  value: EvaluationValue,
+  owningNode: ts.Node | null,
+): ts.Node | null {
+  if (
+    value.kind !== EvaluationValueKind.String
+    || value.node == null
+    || !ts.isStringLiteralLike(value.node)
+  ) {
+    return null;
+  }
+  return owningNode == null || nodeContains(owningNode, value.node)
+    ? value.node
+    : null;
+}
+
+function nodeContains(
+  parent: ts.Node,
+  node: ts.Node,
+): boolean {
+  let current: ts.Node | undefined = node;
+  while (current != null) {
+    if (current === parent) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
 }
 
 function attributePatternEntriesFieldRead(

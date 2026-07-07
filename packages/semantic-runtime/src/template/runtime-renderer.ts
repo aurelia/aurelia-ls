@@ -1503,6 +1503,7 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
     instruction.expressionProductHandle,
     targetContext,
     instruction.sourceAddressHandle,
+    instruction.targetSourceAddressHandle,
   );
   return new RuntimeRendererRenderResult(
     new LetBinding(
@@ -1517,6 +1518,7 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
       targetContext,
       [effect.toReference()],
       instruction.sourceAddressHandle,
+      instruction.targetSourceAddressHandle,
     ),
     [effect],
   );

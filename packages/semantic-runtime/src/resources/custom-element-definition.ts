@@ -153,5 +153,7 @@ export class CustomElementDefinition {
     readonly processContent: ResourceTargetReference | null,
     readonly contributions: readonly CustomElementDefinitionContribution[] = [],
     readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[] = [],
+    /** Exact address for the authored public resource-name token, when the declaration has one. */
+    readonly nameSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

@@ -2318,14 +2318,22 @@ function definitionRow(
     name: 'name' in definition ? definition.name : null,
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),
+    nameSource: describeAddress(store, definitionNameSourceAddressHandle(definition)),
     ...(includeHandles ? {
       handles: {
         definitionProductHandle: definition.productHandle,
         identityHandle: definition.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
+        nameSourceAddressHandle: definitionNameSourceAddressHandle(definition),
       },
     } : {}),
   };
+}
+
+function definitionNameSourceAddressHandle(
+  definition: FullResourceDefinition,
+): AddressHandle | null {
+  return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
 }
 
 function cursorBindableRow(

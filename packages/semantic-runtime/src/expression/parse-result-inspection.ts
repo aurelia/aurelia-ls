@@ -1,6 +1,7 @@
 import type {
   AccessMemberExpression,
   AccessScopeExpression,
+  BindingIdentifier,
   CallScopeExpression,
   CallMemberExpression,
   ExpressionAstNode,
@@ -191,6 +192,15 @@ export class ExpressionParseResultInspector {
       ? scopeAccessExpressionForNodeOffset(result.ast, offset)
       : null;
   }
+
+  static bindingIdentifierAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): BindingIdentifier | null {
+    return 'ast' in result
+      ? bindingIdentifierForNodeOffset(result.ast, offset)
+      : null;
+  }
 }
 
 function stableExpressionRoots(result: ExpressionParseResult): readonly ExpressionAstNode[] {
@@ -269,6 +279,17 @@ function scopeAccessExpressionForNodeOffset(
 ): ScopeAccessExpression | null {
   return findInExpressionAtOffset(expression, offset, (candidate) =>
     isScopeAccessExpression(candidate) && expressionSpanContainsOffset(candidate.name.span, offset)
+      ? candidate
+      : null
+  );
+}
+
+function bindingIdentifierForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+): BindingIdentifier | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) =>
+    candidate.$kind === 'BindingIdentifier' && expressionSpanContainsOffset(candidate.name.span, offset)
       ? candidate
       : null
   );

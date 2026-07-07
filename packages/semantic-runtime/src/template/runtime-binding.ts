@@ -307,6 +307,7 @@ export class LetBindingScopeEffect {
     readonly expressionProductHandle: ProductHandle | null,
     readonly targetContext: LetBindingTargetContext,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingScopeEffectField>[] = [],
   ) {}
 
@@ -724,6 +725,7 @@ export class LetBinding {
     readonly targetContext: LetBindingTargetContext,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
   ) {}
 

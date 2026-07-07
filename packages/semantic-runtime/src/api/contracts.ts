@@ -1801,12 +1801,14 @@ export interface SemanticResourceDefinitionRow {
   readonly needsCompile: boolean | null;
   readonly patterns: readonly SemanticResourceDefinitionPatternRow[];
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
   readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly targetIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
     readonly targetAddressHandle: AddressHandle | null;
   };
 }
@@ -3327,10 +3329,12 @@ export interface SemanticTemplateCursorDefinitionRow {
   readonly name: string | null;
   readonly targetName: string | null;
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3542,6 +3546,12 @@ export interface SemanticTemplateInlayHintsResult {
 export enum SemanticTemplateReferenceKind {
   Declaration = 'declaration',
   TemplateUsage = 'template-usage',
+  /** Authored resource-use token such as a custom-element tag or custom-attribute name. */
+  ResourceUsage = 'resource-usage',
+  /** Authored bindable attribute-name token such as `item` in `item.bind`. */
+  BindableAttribute = 'bindable-attribute',
+  /** Non-declaration TypeScript identifier usage of the selected symbol. */
+  TypeScriptUsage = 'typescript-usage',
 }
 
 export interface SemanticTemplateReferenceRow {
@@ -3568,6 +3578,12 @@ export interface SemanticTemplateReferencesResult {
   readonly selectedMemberName: string | null;
   readonly targetSource: SemanticSourceReference | null;
   readonly rows: readonly SemanticTemplateReferenceRow[];
+  /**
+   * Same-name template usages whose relationship to the selected symbol could not be proven
+   * (weak/dynamic/keyed owners). They are never mixed into `rows`; a non-empty list makes the
+   * answer closure `open` so clients know the enumeration is honest but not exhaustive.
+   */
+  readonly candidateRows: readonly SemanticTemplateReferenceRow[];
 }
 
 export enum SemanticTemplateRenameStatus {
@@ -3584,8 +3600,13 @@ export enum SemanticTemplateRenameUnavailableReason {
 }
 
 export enum SemanticTemplateRenameEditKind {
+  // FIXME(lane-rca:contract-vocabulary): Resource-name edits still have no edit kind here; partiality
+  // and unproven candidates are expressed via answer closure + candidateRows.
   TypeScriptReference = 'typescript-reference',
   TemplateUsage = 'template-usage',
+  TemplateLocalDeclaration = 'template-local-declaration',
+  TemplateLocalUsage = 'template-local-usage',
+  BindableAttribute = 'bindable-attribute',
 }
 
 export interface SemanticTemplateRenameEditRow {
@@ -3605,6 +3626,12 @@ export interface SemanticTemplateRenameResult {
   /** Exact source token under the initiating cursor, used by LSP prepareRename. */
   readonly activeSource: SemanticSourceReference | null;
   readonly edits: readonly SemanticTemplateRenameEditRow[];
+  /**
+   * Same-name template usages that could not be proven to reference the renamed symbol and are
+   * therefore deliberately NOT edited. A non-empty list makes the answer closure `open`; clients
+   * can surface these sites for manual review, matching TypeScript's behavior for dynamic access.
+   */
+  readonly candidateRows: readonly SemanticTemplateReferenceRow[];
   readonly templateReferenceCount: number;
   readonly typeScriptReferenceCount: number;
 }
@@ -4410,6 +4437,15 @@ export type SemanticObservedMemberSourceState =
   | 'scope-open'
   | 'open';
 
+/**
+ * Provenance of `observedMemberSource`: `member-declaration` is the observed member's own
+ * declaration; `owner-value` is the owner/root declaration carried as a best-effort navigation aid
+ * for weak, dynamic, keyed, or index-signature-shaped owners and must not be treated as member proof.
+ */
+export type SemanticObservedMemberSourceRoute =
+  | 'member-declaration'
+  | 'owner-value';
+
 export interface SemanticBindingObservedDependencyRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
@@ -4423,8 +4459,11 @@ export interface SemanticBindingObservedDependencyRow {
   readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
   readonly observedMemberSource: SemanticSourceReference | null;
   readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly observedMemberSourceRoute: SemanticObservedMemberSourceRoute | null;
   readonly spanStart: number | null;
   readonly spanEnd: number | null;
+  /** Authored member-name token span for AccessMember/CallMember reads; null for other shapes. */
+  readonly memberTokenSource: SemanticSourceReference | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;

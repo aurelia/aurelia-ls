@@ -12,6 +12,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  AddressHandle,
   ClaimHandle,
   EvidenceHandle,
   IdentityHandle,
@@ -851,10 +852,12 @@ export class ResourceDefinitionConverger {
       return null;
     }
 
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     return new ConvergedResourceDefinition(
-      this.createCustomElementDefinition(productHandle, header, observation, facts),
+      this.createCustomElementDefinition(productHandle, header, observation, facts, nameSource?.addressHandle ?? null),
       facts.open,
       [
+        ...(nameSource?.records ?? []),
         ...facts.template.records,
         ...facts.bindables.records,
         ...facts.watches.records,
@@ -869,6 +872,7 @@ export class ResourceDefinitionConverger {
     header: ResourceDefinitionHeaderEmission,
     observation: ResourceRecognitionObservation,
     facts: CustomElementConvergenceFacts,
+    nameSourceAddressHandle: AddressHandle | null,
   ): CustomElementDefinition {
     return new CustomElementDefinition(
       productHandle,
@@ -894,6 +898,8 @@ export class ResourceDefinitionConverger {
       facts.strict,
       facts.processContent,
       [this.customElementContribution(observation, facts)],
+      [],
+      nameSourceAddressHandle,
     );
   }
 
@@ -975,6 +981,7 @@ export class ResourceDefinitionConverger {
       ...watches.open,
       ...dependencies.open,
     ];
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     const aliasDefinitions = aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
     return new ConvergedResourceDefinition(
       new CustomAttributeDefinition(
@@ -1008,9 +1015,11 @@ export class ResourceDefinitionConverger {
             defaultProperty,
           ),
         ],
+        [],
+        nameSource?.addressHandle ?? null,
       ),
       open,
-      [...bindables.records, ...watches.records],
+      [...(nameSource?.records ?? []), ...bindables.records, ...watches.records],
       [...bindables.issues, ...watches.issues],
     );
   }
@@ -1042,6 +1051,7 @@ export class ResourceDefinitionConverger {
     const annotations = readAliasMetadataAnnotations(context, targetClass);
     const aliasNames = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
     const aliases = aliasNames.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
+    const nameSource = this.nameSourceForDefinition(context, definition, header);
     switch (definition.type) {
       case ResourceDefinitionKind.ValueConverter: {
         return new ConvergedResourceDefinition(
@@ -1054,8 +1064,11 @@ export class ResourceDefinitionConverger {
             aliases,
             key,
             [new ValueConverterDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
           annotations.open,
+          nameSource?.records ?? [],
         );
       }
       case ResourceDefinitionKind.BindingBehavior: {
@@ -1069,8 +1082,11 @@ export class ResourceDefinitionConverger {
             aliases,
             key,
             [new BindingBehaviorDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
           annotations.open,
+          nameSource?.records ?? [],
         );
       }
       case ResourceDefinitionKind.BindingCommand: {
@@ -1084,8 +1100,11 @@ export class ResourceDefinitionConverger {
             aliases,
             key,
             [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [],
+            nameSource?.addressHandle ?? null,
           ),
           annotations.open,
+          nameSource?.records ?? [],
         );
       }
       default:
@@ -1147,6 +1166,20 @@ export class ResourceDefinitionConverger {
     return new ResourceAliasClaimsEmission(
       emissions.flatMap((emission) => emission.records),
       emissions.map((emission) => emission.claimHandle),
+    );
+  }
+
+  private nameSourceForDefinition(
+    context: ResourceRecognitionContext,
+    definition: NamedResourceDefinitionHeader,
+    header: ResourceDefinitionHeaderEmission,
+  ): ReturnType<typeof sourceSpanAddressForNode> {
+    return sourceSpanAddressForNode(
+      this.store,
+      context,
+      definition.nameSourceNode,
+      `resource-definition-converged:${header.localKey}:name`,
+      SourceSpanRole.Name,
     );
   }
 

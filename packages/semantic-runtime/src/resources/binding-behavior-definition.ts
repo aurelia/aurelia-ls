@@ -47,5 +47,7 @@ export class BindingBehaviorDefinition {
     readonly key: string,
     readonly contributions: readonly BindingBehaviorDefinitionContribution[] = [],
     readonly fieldProvenance: readonly FieldProvenance<BindingBehaviorDefinitionField>[] = [],
+    /** Exact address for the authored public resource-name token, when the declaration has one. */
+    readonly nameSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

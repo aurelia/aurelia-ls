@@ -1,0 +1,410 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/app-pattern-routed-catalog-storefront",
+  "lanes": {
+    "rename": [
+      {
+        "id": "template-member-searchText",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "newName": "queryText",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Root cause of the old whole-expression edit: member-name token spans were captured by the parser but dropped at RuntimeBindingObservedDependency construction; fix published memberNameSpanStart/End through the record (binding-data-flow-materializer.ts) into row.memberTokenSource, and reference rows/edits now consume the token. Applied diff preserves the receiver chain: state.items.searchText -> state.items.queryText."
+      },
+      {
+        "id": "template-member-onlyInStock",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "checked.bind=\"state.items.onlyInStock\"",
+        "at": "onlyInStock",
+        "newName": "inStockOnly",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Same root cause and fix as template-member-searchText; checked.bind edit is token-granular."
+      },
+      {
+        "id": "template-getter-visibleItems",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "visibleItems",
+        "newName": "filteredItems",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Root cause: the repeat iterable observed-dependency row existed and carried the correct template token, but its observedMemberSource pointed at the getter return type annotation (`readonly Item[]`) because memberValueAccess exposed value/type source as its only source. Fix split memberSourceAddressHandle from sourceAddressHandle and observed-dependency provenance now matches member declarations by the getter name source; rename edits the template token, TS declaration, and TS usage."
+      },
+      {
+        "id": "repeat-local-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "item",
+        "newName": "entry",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Repeat-local rename is template-scope only: the repeat declaration and the binding VALUE side of item.bind=\"item\" are edited, while the ItemCard bindable attribute NAME and all TS files are untouched. Root cause: repeat local slots inherited the whole iterator expression source and declaration-site cursor selection did not resolve BindingIdentifier tokens; iterator locals now carry token source addresses and selectedScopeSlot feeds the shared reference/rename path."
+      },
+      {
+        "id": "let-local-item-target",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "<let item.bind=\"state.items.readItem(routeParams.itemId)\">",
+        "at": "item.bind",
+        "newName": "detailItem",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Declaration-site probe for <let item.bind>. FLIPPED wrong->correct 2026-07-07: rename now prepares the target token, edits <let detailItem.bind> plus all same-scope item usages in item-detail-route.html, and does not touch repeat locals, bindable attributes, or TypeScript. Root cause was data loss in the let instruction/effect path: the slot declaration source used the value expression; LetBindingInstruction now carries an authored target-token source from the HTML attribute name and selectedScopeSlot dispatches <let> target cursors."
+      },
+      {
+        "id": "let-local-item-usage",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "${item.name}",
+        "at": "item",
+        "newName": "detailItem",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Usage-site probe for the <let>-introduced item local. FLIPPED wrong->correct 2026-07-07: rename now resolves the usage to the <let> declaration, edits the declaration target and all same-scope usages, and old-text validation confirms every edit replaces item rather than the value expression."
+      },
+      {
+        "id": "bindable-attr-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item.bind",
+        "newName": "product",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Bindable rename initiated at the attribute NAME now routes through selectedBindable, edits the @bindable declaration on ItemCard, all item root usages in item-card.html, and the item-card attribute name. The binding VALUE expression (the repeat local in item.bind=\"item\") is preserved. Root cause had two parts: references/rename ignored selectedBindable, and bound child component slots used the parent value expression as the slot source instead of the child bindable declaration."
+      },
+      {
+        "id": "repeat-local-badge-three-sites",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"badge of state.items.badgeFilters\"",
+        "at": "badge",
+        "newName": "badgeOption",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Repeat-local with three sites on one line now edits exactly the declaration, model.bind=\"badge\", and ${badge}; state.items.badgeFilters and badgeFilter are preserved. Same root cause and fix as repeat-local-item."
+      },
+      {
+        "id": "ts-property-state",
+        "file": "src/routes/item-list-route.ts",
+        "anchor": "readonly state = resolve(CatalogState)",
+        "at": "state",
+        "newName": "catalog",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Rename ownership decided: the server answers template-origin renames only and returns null for non-template documents (features.ts isTemplateRenameDocument), deferring to the TypeScript provider instead of erroring; template propagation for TS-origin renames stays on the aurelia/renameFromTs channel which the editor client merges. F2 in a TS file no longer produces an Aurelia error."
+      },
+      {
+        "id": "refusal-invalid-new-name",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "newName": "not-valid-name",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Refusal probe: an invalid identifier must produce an honest decline with a reason and zero edits. Refusal is a first-class good answer."
+      }
+    ],
+    "references": [
+      {
+        "id": "template-member-searchText",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Both named omissions fixed: the template location is now the member token (memberTokenSource), and references share the TypeScript occurrence collector with rename (typeScriptReferenceSites), so the visibleItems-getter usage row is returned. 3 locations: token usage, declaration, TS usage."
+      },
+      {
+        "id": "template-member-onlyInStock",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "checked.bind=\"state.items.onlyInStock\"",
+        "at": "onlyInStock",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Same fixes as template-member-searchText."
+      },
+      {
+        "id": "template-getter-visibleItems",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "visibleItems",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Same fix as rename: observedMemberSource now points at the getter name token instead of the getter return type source, so references includes the template repeat-iterable usage under the cursor plus the TS declaration and TS usage."
+      },
+      {
+        "id": "repeat-local-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. References now returns the repeat-local declaration and binding-value usage. The same selectedScopeSlot/source-address fix used by rename is sufficient; no separate local-only reference collector was needed."
+      },
+      {
+        "id": "let-local-item-target",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "<let item.bind=\"state.items.readItem(routeParams.itemId)\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Declaration-site reference probe for the <let>-introduced item local. FLIPPED wrong->correct 2026-07-07: references now returns the target token plus all same-scope item usages, all in item-detail-route.html."
+      },
+      {
+        "id": "let-local-item-usage",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "${item.name}",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Usage-site reference probe for the <let>-introduced item local. FLIPPED wrong->correct 2026-07-07: the declaration row is now the item token in item.bind rather than the value expression."
+      },
+      {
+        "id": "bindable-attr-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Comparable cursor for the rename bindable-attr-item probe. References now returns the item-card.html template usages, the @bindable declaration, and the parent attribute-name site. This confirms selectedBindable dispatch and child-slot declaration provenance are both wired for the bindable surface."
+      },
+      {
+        "id": "resource-element-item-card",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item-card",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Resource-definition reference probe for the ItemCard custom element. Correct = source-backed resource references return the authored tag-name tokens for the usage, plus the declaration when the LSP request includes declarations. This is references-only; resource rename policy is intentionally still deferred."
+      },
+      {
+        "id": "repeat-local-badge-three-sites",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"badge of state.items.badgeFilters\"",
+        "at": "badge",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. References now returns the repeat-local declaration plus both same-line local uses, with token-sized ranges."
+      },
+      {
+        "id": "ts-property-state",
+        "file": "src/routes/item-list-route.ts",
+        "anchor": "readonly state = resolve(CatalogState)",
+        "at": "state",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. templateReferences falls back to the TypeScript-origin reference context (templateReferenceContextFromTypeScript), so Find All References on the TS declaration returns the declaration plus every state.* template root - 10 locations across both files. Reference providers merge client-side, so answering is safe."
+      }
+    ],
+    "completions": [
+      {
+        "id": "member-completion-searchText",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "watch": {
+          "present": [
+            "searchText",
+            "onlyInStock",
+            "badgeFilter",
+            "badgeFilters",
+            "isLoading",
+            "visibleItems",
+            "hasItems",
+            "hasVisibleItems",
+            "readItem",
+            "replace"
+          ],
+          "absent": [
+            "items",
+            "selection",
+            "item",
+            "badge",
+            "selectedItemIds"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "Member completion at the searchText token (owner ItemCollectionState). Watches all ItemCollectionState members including getters and methods; absences guard against parent-object members (CatalogState.items/selection), repeat locals, and unrelated members leaking in. VERDICT (2026-07-07): all ten class members present with accurate type details, parent-object members and locals correctly absent, and the candidate count matches the class surface exactly."
+      },
+      {
+        "id": "root-scope-in-repeat",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "${badge}",
+        "at": "badge",
+        "watch": {
+          "present": [
+            "badge",
+            "state"
+          ],
+          "absent": [
+            "item"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "Root-scope completion inside the badge repeat. The local badge must be visible; the sibling repeat's local item must NOT be (different template controller scope). Scope-visibility territory predicted to mint new clusters. VERDICT (2026-07-07): the local and the view-model root are both visible and the sibling repeat local is correctly scoped out. The additional variable-kind candidates are repeat contextuals, which belong here."
+      },
+      {
+        "id": "root-scope-outside-repeat",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.isLoading",
+        "at": "state",
+        "watch": {
+          "present": [
+            "state"
+          ],
+          "absent": [
+            "badge",
+            "item"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "Root-scope completion outside any repeat (if.bind on line 3). Neither repeat local may be visible here. Comparable scope check to root-scope-in-repeat. VERDICT (2026-07-07): locals correctly invisible outside their controller scope. Offering only proven scope entries at root position is a defensible austerity (false positives are worse); whether $this/$parent/globals should be offered is a product question, not a wrongness."
+      },
+      {
+        "id": "element-tag-item-card",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item-card",
+        "watch": {
+          "present": [
+            "item-card"
+          ],
+          "absent": [
+            "loose-picklist",
+            "ticket-editor"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "Element tag completion. item-card is admitted via the route component's dependency graph; loose-picklist/ticket-editor exist only in a different fixture and must not leak across app worlds. Resource-admission territory. VERDICT (2026-07-07): dependency-admitted element present, cross-app-world resources absent."
+      },
+      {
+        "id": "attr-on-item-card",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item.bind",
+        "watch": {
+          "present": [
+            "item",
+            "if",
+            "repeat",
+            "focus"
+          ],
+          "absent": [
+            "draft",
+            "onCommit",
+            "DotSeparatedAttributePattern",
+            "EventAttributePattern",
+            "bind"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Root cause: candidate admission conflated resource-scope visibility with site authorability; fix stops offering attribute-pattern registration class names anywhere and binding commands at AttributeName sites (candidateKindForResource). Bare bindables/controllers/custom attributes remain, with command completion at BindingCommandName sites after the dot (two-stage authoring). Composed-form synthesis (item.bind, repeat.for as single insertions) is a future UX enhancement, not a correctness gap."
+      },
+      {
+        "id": "binding-behavior-debounce",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "& debounce:150",
+        "at": "debounce",
+        "watch": {
+          "present": [
+            "debounce",
+            "throttle"
+          ],
+          "absent": [
+            "searchText"
+          ]
+        },
+        "verdict": "correct",
+        "reason": "",
+        "note": "Binding-behavior completion after the & combinator. Built-in behaviors (debounce, throttle) should be offered; expression members should not appear in behavior position. VERDICT (2026-07-07): built-in behaviors offered in behavior position, expression members correctly excluded."
+      }
+    ],
+    "hover": [
+      {
+        "id": "template-member-searchText",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Comparable cursor for the rename template-member-searchText probe. Verdict pass: semantically correct. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+      },
+      {
+        "id": "template-member-onlyInStock",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "checked.bind=\"state.items.onlyInStock\"",
+        "at": "onlyInStock",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Comparable cursor for the rename template-member-onlyInStock probe. Verdict pass: semantically correct. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+      },
+      {
+        "id": "template-getter-visibleItems",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "visibleItems",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Comparable cursor for the rename template-getter-visibleItems probe. Verdict pass: semantically correct; readonly Item[] and accessor kind are right. NOTE (2026-07-07): earlier presentation complaints (raw offsets, repeated Aurelia actions blocks) described a phantom 2026-06-26 build; current HEAD hover is lean and does not have them."
+      },
+      {
+        "id": "repeat-local-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Hover now leads with the lexical local answer `item: Item`. It still appends repeat/custom-attribute context blocks; that is presentation noise rather than a semantic wrong answer."
+      },
+      {
+        "id": "let-local-item-target",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "<let item.bind=\"state.items.readItem(routeParams.itemId)\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Declaration-site hover probe for <let item.bind>. FLIPPED wrong->correct 2026-07-07: hover now describes the introduced local as item: Item | null at the declaration target."
+      },
+      {
+        "id": "let-local-item-usage",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "${item.name}",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Usage-site hover probe for the <let>-introduced item local. FLIPPED wrong->correct 2026-07-07: hover describes the narrowed local as item: Item under the if.bind guard."
+      },
+      {
+        "id": "bindable-attr-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Comparable cursor for the rename bindable-attr-item probe. Verdict pass: selectedBindable hover is semantically correct. Presentation note, not RCA: the hover omits the bindable's declared type Item | null."
+      },
+      {
+        "id": "repeat-local-badge-three-sites",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"badge of state.items.badgeFilters\"",
+        "at": "badge",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Hover now leads with `badge: ItemBadge | \"all\"`. The remaining repeat/custom-attribute blocks are presentation noise and should stay outside the RCA cluster ledger."
+      },
+      {
+        "id": "ts-property-state",
+        "file": "src/routes/item-list-route.ts",
+        "anchor": "readonly state = resolve(CatalogState)",
+        "at": "state",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Comparable cursor for the rename ts-property-state probe. Verdict pass: null in TS files is an acceptable baseline because tsserver owns TS hover; template-usage enrichment is a differentiator candidate, not an obligation."
+      }
+    ]
+  }
+}

@@ -23,6 +23,7 @@ import type {
 import {
   type RuntimeBindingObservedDependency,
   RuntimeObservedMemberSourceState,
+  RuntimeObservedMemberSourceRoute,
   RuntimeObservedDependencyKind,
 } from './runtime-binding-observation.js';
 import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependency-draft.js';
@@ -30,6 +31,8 @@ import type { RuntimeObservedDependencyDraft } from './runtime-observed-dependen
 export interface RuntimeObservedMemberSourceProjection {
   readonly observedMemberKind: RuntimeObservedDependencyDraft['observedMemberKind'];
   readonly observedMemberSourceAddressHandle: RuntimeObservedDependencyDraft['observedMemberSourceAddressHandle'];
+  /** Whose declaration the address is; owner-value routes are navigation aids, never member proof. */
+  readonly observedMemberSourceRoute: RuntimeObservedMemberSourceRoute | null;
 }
 
 export function observedMemberSourceForCheckerSymbol(
@@ -44,17 +47,21 @@ export function observedMemberSourceForCheckerSymbol(
   return {
     observedMemberKind: projection.memberKind,
     observedMemberSourceAddressHandle: projection.sourceAddressHandle,
+    observedMemberSourceRoute: projection.sourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.MemberDeclaration,
   };
 }
 
 export function observedMemberSourceFields(
   projection: RuntimeObservedMemberSourceProjection | null,
-): Pick<RuntimeObservedDependencyDraft, 'observedMemberKind' | 'observedMemberSourceAddressHandle'> {
+): Pick<RuntimeObservedDependencyDraft, 'observedMemberKind' | 'observedMemberSourceAddressHandle' | 'observedMemberSourceRoute'> {
   return projection == null
     ? {}
     : {
       observedMemberKind: projection.observedMemberKind,
       observedMemberSourceAddressHandle: projection.observedMemberSourceAddressHandle,
+      observedMemberSourceRoute: projection.observedMemberSourceRoute,
     };
 }
 
@@ -63,6 +70,8 @@ export function observedMemberSourceStateForBindingDependency(input: {
   readonly scope: BindingScope | null;
   readonly projection: RuntimeObservedMemberSourceProjection | null;
 }): RuntimeObservedMemberSourceState {
+  // Source means "a source route is closed", including honest owner-value routes for weak/dynamic
+  // owners; consumers that need member-declaration proof must additionally check the route field.
   if (input.projection?.observedMemberSourceAddressHandle != null) {
     return RuntimeObservedMemberSourceState.Source;
   }
@@ -148,12 +157,25 @@ export function observedMemberSourceForBindingDependency(input: {
     input.evaluator,
     input.localKey,
   );
+  // When checker member lookup fails (unknown element type, missing member on a primitive), the
+  // owner's projection is returned as an owner-value route so navigation keeps its best source
+  // without masquerading as a member declaration.
   if (access == null) {
     return ownerSource;
   }
+  if (access.memberSourceAddressHandle != null) {
+    return {
+      observedMemberKind: access.memberKind,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle,
+      observedMemberSourceRoute: RuntimeObservedMemberSourceRoute.MemberDeclaration,
+    };
+  }
   return {
     observedMemberKind: access.memberKind,
-    observedMemberSourceAddressHandle: access.sourceAddressHandle ?? ownerSource?.observedMemberSourceAddressHandle ?? null,
+    observedMemberSourceAddressHandle: ownerSource?.observedMemberSourceAddressHandle ?? null,
+    observedMemberSourceRoute: ownerSource?.observedMemberSourceAddressHandle == null
+      ? null
+      : RuntimeObservedMemberSourceRoute.OwnerValue,
   };
 }
 
@@ -198,6 +220,12 @@ function directObservedMemberSourceProjection(
   return {
     observedMemberKind: dependency.observedMemberKind ?? null,
     observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle ?? null,
+    // Preset draft addresses come from checker member-source projections (proxy, trackable-method,
+    // checker-path walks), so an unrouted preset address is the member's own declaration.
+    observedMemberSourceRoute: dependency.observedMemberSourceRoute
+      ?? (dependency.observedMemberSourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration),
   };
 }
 
@@ -231,9 +259,15 @@ function observedScopeNameProjectionForDependency(
       name,
       `${localKey}:observed-dependency:scope-slot:${dependency.spanStart ?? 'open'}:${localKeyPart(name)}`,
     );
+    const sourceAddressHandle = lookup.slot.sourceAddressHandle ?? access?.memberSourceAddressHandle ?? null;
     return {
       observedMemberKind: access?.memberKind ?? null,
-      observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle ?? access?.sourceAddressHandle ?? null,
+      observedMemberSourceAddressHandle: sourceAddressHandle,
+      // The slot/context address names the scope entry the row itself observes, so it counts as the
+      // observed name's own declaration.
+      observedMemberSourceRoute: sourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration,
     };
   }
   const access = evaluator.memberValueAccessForReference(
@@ -245,7 +279,10 @@ function observedScopeNameProjectionForDependency(
     ? null
     : {
       observedMemberKind: access.memberKind,
-      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle,
+      observedMemberSourceRoute: access.memberSourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.MemberDeclaration,
     };
 }
 
@@ -264,6 +301,9 @@ function observedOwnerSourceProjectionForDependency(
     return {
       observedMemberKind: null,
       observedMemberSourceAddressHandle: lookup.slot.sourceAddressHandle,
+      observedMemberSourceRoute: lookup.slot.sourceAddressHandle == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.OwnerValue,
     };
   }
   const access = evaluator.memberValueAccessForReference(
@@ -275,7 +315,10 @@ function observedOwnerSourceProjectionForDependency(
     ? null
     : {
       observedMemberKind: null,
-      observedMemberSourceAddressHandle: access.sourceAddressHandle,
+      observedMemberSourceAddressHandle: access.memberSourceAddressHandle ?? access.sourceAddressHandle,
+      observedMemberSourceRoute: (access.memberSourceAddressHandle ?? access.sourceAddressHandle) == null
+        ? null
+        : RuntimeObservedMemberSourceRoute.OwnerValue,
     };
 }
 

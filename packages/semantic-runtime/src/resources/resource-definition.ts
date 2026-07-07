@@ -1,3 +1,4 @@
+import type ts from 'typescript';
 import type {
   AttributePatternObservation,
   ResourceTargetObservation,
@@ -20,6 +21,8 @@ export class CustomElementDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same custom element definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public custom element name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -33,6 +36,8 @@ export class CustomAttributeDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same custom attribute definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public custom attribute name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -46,6 +51,8 @@ export class TemplateControllerDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same template controller definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public template controller name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -59,6 +66,8 @@ export class ValueConverterDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same value converter definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public value converter name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -72,6 +81,8 @@ export class BindingBehaviorDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same binding behavior definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public binding behavior name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 
@@ -85,6 +96,8 @@ export class BindingCommandDefinitionHeader {
     readonly name: string | null,
     /** Static aliases that name the same binding command definition. */
     readonly aliases: readonly string[] = [],
+    /** Exact authored token for the public binding command name, when one exists. */
+    readonly nameSourceNode: ts.Node | null = null,
   ) {}
 }
 

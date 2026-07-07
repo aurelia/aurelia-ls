@@ -743,16 +743,16 @@ export async function handleRenameFromTs(
       ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
       return null;
     }
-    const mapped = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupText(uri), {
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupText(uri), {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
-    if (!mapped?.changes) {
-      ctx.logger.warn(`[renameFromTs] span→range conversion failed for ${answer.value.edits.length} runtime template edit(s)`);
+    if (mapping.edit?.changes == null) {
+      ctx.logger.warn(`[renameFromTs] template edit mapping was blocked: ${mapping.failures.join(" ")}`);
       return null;
     }
 
-    const changes = mapped.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+    const changes = mapping.edit.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
     const fileCount = Object.keys(changes).length;
 
     if (fileCount > 0) {

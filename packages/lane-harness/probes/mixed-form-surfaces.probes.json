@@ -1,0 +1,86 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/mixed-form-surfaces",
+  "lanes": {
+    "rename": [
+      {
+        "id": "bindable-member-label-silent-partial",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "newName": "caption",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. The source-backed @bindable label now renames the component template usage, the TS declaration, and the provable default bindable attribute name label=\"Fulfillment\" -> caption=\"Fulfillment\" in ticket-editor.html. The two same-name but unproven usages (option.label on unknown and shellTone.label on string) remain deliberately unedited; the semantic answer has closure=open/candidateRows and standard LSP rename emits the info notification captured in the snapshot. This is the desired honest-partial behavior."
+      },
+      {
+        "id": "open-member-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "newName": "caption",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Rename initiated AT the unprovable usage: label member on a repeat local whose element type is unknown (options: readonly unknown[]). The observed-dependency row for this usage carries observedMemberSourceState=source with the OWNER address (the repeat.for attribute span) as the member source - the owner-fallback masquerade. Expected at HEAD: refusal (no checker member for unknown). Refusal is correct here; the interesting evidence is which reason vocabulary it uses. SUGGESTED verdict: correct IF it refuses with an honest reason; wrong if it renames anything. VERDICT REASONING (2026-07-07): refusing to rename a member that cannot be proven on an unknown owner is the right call - false positives are worse than false negatives - and the refusal reason (no source-backed template member) is accurate. The substrate-level state masquerade behind this cursor is tracked as proposed/member-source-state-conflation, not as a rename-lane wrongness."
+      },
+      {
+        "id": "receiver-rename-shellTone-no-overlap",
+        "file": "src/app.html",
+        "anchor": "${shellTone}",
+        "at": "shellTone",
+        "newName": "theme",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Regression probe for the owner-fallback masquerade (member-source-state-conflation). At the pre-fix HEAD, renaming shellTone produced FOUR edits including two OVERLAPPING template edits: the receiver token 512..521 AND the whole shellTone.label expression 512..527, which would have destroyed the .label member access - a confident-wrong workspace edit answered as available/complete. Correct = 3 edits: TS declaration, the class-interpolation usage, and the receiver token inside shellTone.label; the .label token must survive. VERDICT 2026-07-07: 3 clean edits, .label survives (${theme.label}). Root cause of the pre-fix corruption: the owner-fallback wrote the owner declaration into the member-source slot and the state rule granted source, so the shellTone.label row span-matched the shellTone declaration; fix introduced observedMemberSourceRoute (member-declaration vs owner-value) and the reference context requires member-declaration routes."
+      }
+    ],
+    "references": [
+      {
+        "id": "bindable-member-label-silent-partial",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "FLIPPED wrong->correct 2026-07-07. Comparable cursor for the rename silent-partial probe. References now enumerates the component template usage, the TS declaration, and the ticket-editor.html bindable attribute-name site. The unproven same-name candidates remain outside the returned Location[]; semantic references carry candidateRows/closure=open, while standard LSP references has no honesty channel for that metadata."
+      },
+      {
+        "id": "open-member-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "verdict": "wrong",
+        "reason": "Returns null instead of at least the cursor occurrence itself; TypeScript returns the current reference for unresolvable member accesses, and an empty answer with no honesty channel hides that the owner type is unknown.",
+        "note": "References at the unprovable member usage. Expected: null. A null here is silent about WHY (unknown element type); whether that silence is acceptable is an operator call. SUGGESTED verdict: wrong (null answer hides that the runtime classified this row source-backed via the owner-fallback and still cannot dispatch it)."
+      }
+    ],
+    "hover": [
+      {
+        "id": "bindable-member-label-silent-partial",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Baseline hover at the source-backed bindable member usage. Expected: member label: string, owner LoosePicklist. SUGGESTED verdict: correct if it renders the member with its type. VERDICT REASONING (2026-07-07): label: string / kind property is semantically correct. Polish, not RCA: the hover omits the owner (LoosePicklist) and does not say the member is a @bindable, both of which the runtime knows."
+      },
+      {
+        "id": "open-member-option-label",
+        "file": "src/components/loose-picklist.html",
+        "anchor": "${option.label || option}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Hover at the label member on an unknown-element repeat local. Key question: does hover admit ignorance (good), fabricate a type (bad), or fall back to machinery? Evidence feeds the proposed member-source-state-conflation cluster: the observed row for this usage claims state=source with the repeat.for attribute as member source. VERDICT REASONING (2026-07-07): admitting ignorance with weak-expression-member-owner and an actionable explanation is exactly right for a member on an unknown element type."
+      },
+      {
+        "id": "masked-member-shellTone-label",
+        "file": "src/app.html",
+        "anchor": "${shellTone.label}",
+        "at": "label",
+        "verdict": "correct",
+        "reason": "",
+        "note": "Hover at a member that does not exist on string (shellTone = 'ticket-shell'). The observed row claims state=source pointing at the shellTone declaration (owner fallback). Key question: does hover or any diagnostic surface the missing member, or does the masquerade reach the human surface? VERDICT REASONING (2026-07-07): missing-expression-member with the primitive owner display is honest and correct; the substrate row behind this cursor still claims state=source (proposed/member-source-state-conflation) but hover does not consume that lie."
+      }
+    ]
+  }
+}
