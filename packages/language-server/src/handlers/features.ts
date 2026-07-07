@@ -187,10 +187,11 @@ export async function handleDocumentHighlight(
 ): Promise<DocumentHighlight[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
   try {
-    const response = await ctx.semanticRuntime.templateReferences(doc, params.position, false);
+    const response = await ctx.semanticRuntime.templateReferences(doc, params.position, true);
     const locations = mapSemanticRuntimeTemplateReferences(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
@@ -223,7 +224,7 @@ export async function handleDocumentHighlight(
  * non-template documents get a clean null. Template propagation for TS-origin renames stays on the
  * custom `aurelia/renameFromTs` request, which the editor client merges with the TS provider's edit.
  */
-function isTemplateRenameDocument(doc: { readonly languageId: string }): boolean {
+function isTemplateDocument(doc: { readonly languageId: string }): boolean {
   return doc.languageId === "html";
 }
 
@@ -233,7 +234,7 @@ export function handlePrepareRename(
 ): Promise<{ range: import("vscode-languageserver/node.js").Range; placeholder: string } | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return Promise.resolve(null);
-  if (!isTemplateRenameDocument(doc)) return Promise.resolve(null);
+  if (!isTemplateDocument(doc)) return Promise.resolve(null);
 
   return ctx.trace.spanAsync("lsp.prepareRename", async () => {
     try {
@@ -257,7 +258,7 @@ export function handlePrepareRename(
 export async function handleRename(ctx: ServerContext, params: RenameParams): Promise<WorkspaceEdit | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
-  if (!isTemplateRenameDocument(doc)) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 

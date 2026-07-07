@@ -317,6 +317,98 @@
         "note": "NEW 2026-07-07. TS-origin cursor. VERDICT (2026-07-07): null is the correct Aurelia-server baseline because tsserver owns TS definition. Template-origin enrichment belongs to references/rename custom paths, not standard TS F12."
       }
     ],
+    "documentHighlight": [
+      {
+        "id": "template-member-searchText",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "state.items.searchText",
+        "at": "searchText",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Comparable cursor for references/definition. VERDICT (2026-07-07): highlights stay in the current template document and use the member token span `searchText`."
+      },
+      {
+        "id": "template-member-onlyInStock",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "checked.bind=\"state.items.onlyInStock\"",
+        "at": "onlyInStock",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Comparable cursor for references/definition. VERDICT (2026-07-07): highlights stay in the current template document and use the member token span `onlyInStock`."
+      },
+      {
+        "id": "template-getter-visibleItems",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "visibleItems",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Getter highlight cursor. VERDICT (2026-07-07): documentHighlight inherits the repaired getter token behavior from references and highlights `visibleItems`."
+      },
+      {
+        "id": "repeat-local-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Repeat-local declaration cursor. FLIPPED wrong->correct 2026-07-07: the handler originally called templateReferences with includeDeclaration=false, so the declaration token under the cursor was omitted. DocumentHighlight now includes declarations for template documents and returns the declaration plus value-side usage."
+      },
+      {
+        "id": "template-controller-repeat",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "repeat.for=\"item of state.items.visibleItems\"",
+        "at": "repeat",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Framework-owned template-controller resource cursor. VERDICT (2026-07-07): null is an honest baseline matching definition; built-in resources are synthetic catalog entries without a path-backed reference context."
+      },
+      {
+        "id": "let-local-item-target",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "<let item.bind=\"state.items.readItem(routeParams.itemId)\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. <let> local declaration cursor. FLIPPED wrong->correct 2026-07-07: the handler originally omitted declaration rows. DocumentHighlight now includes the `item.bind` declaration token plus all same-scope usages."
+      },
+      {
+        "id": "let-local-item-usage",
+        "file": "src/routes/item-detail-route.html",
+        "anchor": "${item.name}",
+        "at": "item",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. <let> local usage cursor. FLIPPED wrong->correct 2026-07-07: usage and declaration now both highlight in the current document, for 11 total same-scope sites."
+      },
+      {
+        "id": "bindable-attr-item",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item.bind",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Bindable attribute-name cursor. VERDICT (2026-07-07): the attribute-name site highlights without confusing the value-side repeat local."
+      },
+      {
+        "id": "resource-element-item-card",
+        "file": "src/routes/item-list-route.html",
+        "anchor": "<item-card item.bind=\"item\">",
+        "at": "item-card",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. Resource tag cursor. VERDICT (2026-07-07): both open and close tag-name tokens in the current document highlight."
+      },
+      {
+        "id": "ts-property-state",
+        "file": "src/routes/item-list-route.ts",
+        "anchor": "readonly state = resolve(CatalogState)",
+        "at": "state",
+        "verdict": "correct",
+        "reason": "",
+        "note": "NEW 2026-07-07. TS-origin cursor. VERDICT (2026-07-07): null is correct because tsserver owns TS document highlights; the Aurelia handler now returns null for non-template documents."
+      }
+    ],
     "completions": [
       {
         "id": "member-completion-searchText",

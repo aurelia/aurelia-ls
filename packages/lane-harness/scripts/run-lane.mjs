@@ -14,7 +14,7 @@ const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const OPEN_SETTLE_TIMEOUT_MS = 750;
-const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition"]);
+const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight"]);
 
 // Keep in sync with COMPLETION_GAP_MARKER_LABEL in packages/language-server/src/mapping/lsp-types.ts.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -425,7 +425,7 @@ function requireValue(args, index, flag) {
 function usage() {
   return [
     "Usage:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition> [--probe <id>] [--update]",
+    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight> [--probe <id>] [--update]",
     "",
     "Example:",
     "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
@@ -533,6 +533,8 @@ async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
       return runCompletionsProbe(client, fixtureRoot, probe, readFixtureText);
     case "definition":
       return runDefinitionProbe(client, fixtureRoot, probe, readFixtureText);
+    case "documentHighlight":
+      return runDocumentHighlightProbe(client, fixtureRoot, probe, readFixtureText);
     default:
       throw new HarnessError(`Unsupported lane: ${lane}`);
   }
@@ -736,6 +738,71 @@ async function runDefinitionProbe(client, fixtureRoot, probe, readFixtureText) {
     definitionResponse,
     locations,
   };
+}
+
+async function runDocumentHighlightProbe(client, fixtureRoot, probe, readFixtureText) {
+  const relativeFile = normalizeRelativePath(probe.file);
+  const sourceText = await readFixtureText(relativeFile);
+  const anchor = resolveAnchorPosition(sourceText, probe);
+  const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
+  const uri = pathToFileURL(absoluteFile).href;
+
+  const documentHighlightResponse = await client.request("textDocument/documentHighlight", {
+    textDocument: { uri },
+    position: anchor.position,
+  });
+  const highlights = documentHighlightResponse.error
+    ? []
+    : summarizeDocumentHighlights(documentHighlightResponse.result, sourceText);
+
+  return {
+    lane: "documentHighlight",
+    probe,
+    relativeFile,
+    anchor,
+    documentHighlightResponse,
+    highlights,
+  };
+}
+
+function summarizeDocumentHighlights(result, sourceText) {
+  if (!Array.isArray(result)) {
+    return [];
+  }
+
+  return result.map((highlight) => {
+    const range = highlight?.range ?? null;
+    if (!isRange(range)) {
+      return {
+        range: normalizeSnapshotValue(range),
+        kind: documentHighlightKindName(highlight?.kind),
+        rangeText: null,
+        anomaly: "unsupported-highlight-shape",
+      };
+    }
+    return {
+      range: normalizeSnapshotValue(range),
+      kind: documentHighlightKindName(highlight?.kind),
+      rangeText: readRangeText(sourceText, range),
+      anomaly: null,
+    };
+  });
+}
+
+function documentHighlightKindName(kind) {
+  switch (kind) {
+    case 1:
+      return "text";
+    case 2:
+      return "read";
+    case 3:
+      return "write";
+    case undefined:
+    case null:
+      return null;
+    default:
+      return `kind-${String(kind)}`;
+  }
 }
 
 async function summarizeLocations(result, fixtureRoot, readFixtureText) {
@@ -1321,6 +1388,18 @@ function renderLaneSnapshotSections(lines, result) {
         locations: result.locations,
       }));
       return;
+    case "documentHighlight":
+      lines.push("### documentHighlight");
+      lines.push("");
+      lines.push(fencedJson(summarizeRpcResponse(result.documentHighlightResponse)));
+      lines.push("");
+      lines.push("### Resolved highlights");
+      lines.push("");
+      lines.push(fencedJson({
+        highlightCount: result.highlights.length,
+        highlights: result.highlights,
+      }));
+      return;
     case "hover":
       lines.push("### hover");
       lines.push("");
@@ -1785,6 +1864,18 @@ function summaryRowForResult(result) {
         verdict: result.probe.verdict ?? "undecided",
       };
     }
+    case "documentHighlight":
+      return {
+        id: result.probe.id,
+        outcome: result.documentHighlightResponse.error
+          ? "error"
+          : result.highlights.length > 0
+            ? "result"
+            : "no-highlights",
+        count: String(result.highlights.length),
+        files: result.highlights.length > 0 ? result.relativeFile : "-",
+        verdict: result.probe.verdict ?? "undecided",
+      };
     case "hover":
       return {
         id: result.probe.id,
