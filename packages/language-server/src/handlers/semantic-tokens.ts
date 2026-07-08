@@ -16,6 +16,10 @@ import {
   type SemanticTemplateSemanticTokenRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
 export const WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE = "aureliaGapConservative" as const;
@@ -42,6 +46,7 @@ interface RawToken {
 export async function handleSemanticTokensFull(
   ctx: ServerContext,
   params: SemanticTokensParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<SemanticTokens | null> {
   return ctx.trace.spanAsync("lsp.semanticTokens", async () => {
     try {
@@ -50,13 +55,19 @@ export async function handleSemanticTokensFull(
       const doc = ctx.ensureProgramDocument(params.textDocument.uri);
       if (!doc) return null;
 
-      const response = await ctx.semanticRuntime.templateSemanticTokens(doc);
+      const response = await ctx.semanticRuntime.templateSemanticTokens(
+        doc,
+        guard,
+      );
       const tokens = response.value.rows;
       if (tokens.length === 0) return null;
 
       const encoded = encodeTokens(tokens, doc.getText());
       return encoded.length ? { data: encoded } : null;
     } catch (e) {
+      if (logIfSemanticRuntimeRequestAborted(ctx, "semanticTokens", e, params.textDocument.uri)) {
+        return null;
+      }
       const message = e instanceof Error ? e.stack ?? e.message : String(e);
       ctx.logger.error(`[semanticTokens] failed for ${params.textDocument.uri}: ${message}`);
       return null;

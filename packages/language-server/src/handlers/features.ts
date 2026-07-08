@@ -15,6 +15,7 @@ import {
   type LocationLink,
   type WorkspaceEdit,
   type CodeAction,
+  type Range,
   DocumentHighlightKind,
   type DocumentHighlight,
   type TextDocumentPositionParams,
@@ -23,6 +24,7 @@ import {
   type PrepareRenameParams,
   type CodeActionParams,
   type CompletionParams,
+  type CancellationToken,
   MessageType,
 } from "vscode-languageserver/node.js";
 import type { ServerContext } from "../context.js";
@@ -46,13 +48,18 @@ import {
   mapSemanticRuntimeRouteNodeDefinition,
   type LookupTextFn,
 } from "../mapping/lsp-types.js";
-import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
+import { handleSemanticTokensFull } from "./semantic-tokens.js";
 import {
   degradationFromError,
   renderDegradationAsHoverMarkdown,
   renderDegradationAsMessage,
   type Degradation,
 } from "../feature-response.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+  semanticRuntimeRequestGuard,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 // ============================================================================
 // Helpers
@@ -71,14 +78,25 @@ function logDegradation(ctx: ServerContext, feature: string, d: Degradation, uri
 // Completion Handler
 // ============================================================================
 
-export async function handleCompletion(ctx: ServerContext, params: CompletionParams): Promise<CompletionList> {
+export async function handleCompletion(
+  ctx: ServerContext,
+  params: CompletionParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<CompletionList> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return { isIncomplete: false, items: [] };
 
   try {
-    const response = await ctx.semanticRuntime.templateCompletions(doc, params.position);
+    const response = await ctx.semanticRuntime.templateCompletions(
+      doc,
+      params.position,
+      guard,
+    );
     return mapSemanticRuntimeTemplateCompletions(response);
   } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "completion", error, params.textDocument.uri)) {
+      return { isIncomplete: false, items: [] };
+    }
     const response = degradationFromError("completion", error);
     logDegradation(ctx, "completion", response, params.textDocument.uri);
     return createCompletionGapMarker([]);
@@ -89,14 +107,25 @@ export async function handleCompletion(ctx: ServerContext, params: CompletionPar
 // Hover Handler
 // ============================================================================
 
-export async function handleHover(ctx: ServerContext, params: TextDocumentPositionParams): Promise<Hover | null> {
+export async function handleHover(
+  ctx: ServerContext,
+  params: TextDocumentPositionParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<Hover | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
   try {
-    const response = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    const response = await ctx.semanticRuntime.templateCursorInfo(
+      doc,
+      params.position,
+      guard,
+    );
     return mapSemanticRuntimeTemplateHover(response);
   } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "hover", error, params.textDocument.uri)) {
+      return null;
+    }
     const response = degradationFromError("hover", error);
     logDegradation(ctx, "hover", response, params.textDocument.uri);
     return {
@@ -112,13 +141,18 @@ export async function handleHover(ctx: ServerContext, params: TextDocumentPositi
 export async function handleDefinition(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<Definition | LocationLink[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
   try {
-    const response = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    const response = await ctx.semanticRuntime.templateCursorInfo(
+      doc,
+      params.position,
+      guard,
+    );
     const templateDefinition = mapSemanticRuntimeTemplateDefinition(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
@@ -128,7 +162,7 @@ export async function handleDefinition(
     }
 
     try {
-      const routeNodes = await ctx.semanticRuntime.routeNodes();
+      const routeNodes = await ctx.semanticRuntime.routeNodes(guard);
       const routeDefinition = mapSemanticRuntimeRouteNodeDefinition(routeNodes, lookupText, {
         workspaceRoot: ctx.workspaceRoot,
         originDocument: doc,
@@ -138,12 +172,18 @@ export async function handleDefinition(
         return routeDefinition;
       }
     } catch (error) {
+      if (logIfSemanticRuntimeRequestAborted(ctx, "routeDefinition", error, params.textDocument.uri)) {
+        return null;
+      }
       const response = degradationFromError("routeDefinition", error);
       logDegradation(ctx, "routeDefinition", response, params.textDocument.uri);
     }
 
     return null;
   } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "definition", error, params.textDocument.uri)) {
+      return null;
+    }
     const response = degradationFromError("definition", error);
     logDegradation(ctx, "definition", response, params.textDocument.uri);
     // Definition can't render explanation text in standard LSP; log and return null
@@ -155,7 +195,11 @@ export async function handleDefinition(
 // References Handler
 // ============================================================================
 
-export async function handleReferences(ctx: ServerContext, params: ReferenceParams): Promise<Location[] | null> {
+export async function handleReferences(
+  ctx: ServerContext,
+  params: ReferenceParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<Location[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
@@ -165,12 +209,16 @@ export async function handleReferences(ctx: ServerContext, params: ReferencePara
       doc,
       params.position,
       params.context.includeDeclaration,
+      guard,
     );
     return mapSemanticRuntimeTemplateReferences(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
   } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "references", error, params.textDocument.uri)) {
+      return null;
+    }
     const response = degradationFromError("references", error);
     logDegradation(ctx, "references", response, params.textDocument.uri);
     return null;
@@ -184,6 +232,7 @@ export async function handleReferences(ctx: ServerContext, params: ReferencePara
 export async function handleDocumentHighlight(
   ctx: ServerContext,
   params: TextDocumentPositionParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<DocumentHighlight[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
@@ -191,7 +240,12 @@ export async function handleDocumentHighlight(
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
   try {
-    const response = await ctx.semanticRuntime.templateReferences(doc, params.position, true);
+    const response = await ctx.semanticRuntime.templateReferences(
+      doc,
+      params.position,
+      true,
+      guard,
+    );
     const locations = mapSemanticRuntimeTemplateReferences(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
@@ -208,6 +262,9 @@ export async function handleDocumentHighlight(
 
     return highlights.length > 0 ? highlights : null;
   } catch (error) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "documentHighlight", error, params.textDocument.uri)) {
+      return null;
+    }
     const response = degradationFromError("documentHighlight", error);
     logDegradation(ctx, "documentHighlight", response, params.textDocument.uri);
     return null;
@@ -231,14 +288,15 @@ function isTemplateDocument(doc: { readonly languageId: string }): boolean {
 export function handlePrepareRename(
   ctx: ServerContext,
   params: PrepareRenameParams,
-): Promise<{ range: import("vscode-languageserver/node.js").Range; placeholder: string } | null> {
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<{ range: Range; placeholder: string } | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return Promise.resolve(null);
   if (!isTemplateDocument(doc)) return Promise.resolve(null);
 
   return ctx.trace.spanAsync("lsp.prepareRename", async () => {
     try {
-      const response = await ctx.semanticRuntime.templateRename(doc, params.position);
+      const response = await ctx.semanticRuntime.templateRename(doc, params.position, guard);
       if (response.value.status !== "available") {
         return null;
       }
@@ -247,6 +305,9 @@ export function handlePrepareRename(
         originDocument: doc,
       });
     } catch (e) {
+      if (logIfSemanticRuntimeRequestAborted(ctx, "prepareRename", e, params.textDocument.uri)) {
+        return null;
+      }
       if (e instanceof ResponseError) throw e;
       const d = degradationFromError("prepareRename", e);
       logDegradation(ctx, "prepareRename", d, params.textDocument.uri);
@@ -255,7 +316,11 @@ export function handlePrepareRename(
   });
 }
 
-export async function handleRename(ctx: ServerContext, params: RenameParams): Promise<WorkspaceEdit | null> {
+export async function handleRename(
+  ctx: ServerContext,
+  params: RenameParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<WorkspaceEdit | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
@@ -263,7 +328,12 @@ export async function handleRename(ctx: ServerContext, params: RenameParams): Pr
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
   try {
-    const response = await ctx.semanticRuntime.templateRename(doc, params.position, params.newName);
+    const response = await ctx.semanticRuntime.templateRename(
+      doc,
+      params.position,
+      guard,
+      params.newName,
+    );
     if (response.value.status !== "available") {
       throw new ResponseError(0, response.value.displayText || response.summary);
     }
@@ -286,6 +356,9 @@ export async function handleRename(ctx: ServerContext, params: RenameParams): Pr
     }
     return mapping.edit;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "rename", e, params.textDocument.uri)) {
+      return null;
+    }
     if (e instanceof ResponseError) throw e;
     // Boot doc: Degradation for rename → error response, NOT null
     const d = degradationFromError("rename", e);
@@ -304,14 +377,22 @@ function candidateRenameMessage(verifiedEditCount: number, candidateCount: numbe
 // Code Action Handler
 // ============================================================================
 
-export async function handleCodeAction(ctx: ServerContext, params: CodeActionParams): Promise<CodeAction[] | null> {
+export async function handleCodeAction(
+  ctx: ServerContext,
+  params: CodeActionParams,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<CodeAction[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
   try {
-    const response = await ctx.semanticRuntime.templateCodeActions(doc, params.range.start);
+    const response = await ctx.semanticRuntime.templateCodeActions(
+      doc,
+      params.range.start,
+      guard,
+    );
     return mapSemanticRuntimeTemplateCodeActions(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
@@ -321,6 +402,9 @@ export async function handleCodeAction(ctx: ServerContext, params: CodeActionPar
       },
     });
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "codeAction", e, params.textDocument.uri)) {
+      return null;
+    }
     const d = degradationFromError("codeAction", e);
     logDegradation(ctx, "codeAction", d, params.textDocument.uri);
     return null;
@@ -332,34 +416,41 @@ export async function handleCodeAction(ctx: ServerContext, params: CodeActionPar
 // ============================================================================
 
 export function registerFeatureHandlers(ctx: ServerContext): void {
-  ctx.connection.onCompletion((params) => handleCompletion(ctx, params));
-  ctx.connection.onHover((params) => handleHover(ctx, params));
-  ctx.connection.onDefinition((params) => handleDefinition(ctx, params));
-  ctx.connection.onReferences((params) => handleReferences(ctx, params));
-  ctx.connection.onDocumentHighlight((params) => handleDocumentHighlight(ctx, params));
-  ctx.connection.onPrepareRename((params) => handlePrepareRename(ctx, params));
-  ctx.connection.onRenameRequest((params) => handleRename(ctx, params));
-  ctx.connection.onCodeAction((params) => handleCodeAction(ctx, params));
-  ctx.connection.onDocumentSymbol((params) => handleDocumentSymbols(ctx, params));
-  ctx.connection.onWorkspaceSymbol((params) => handleWorkspaceSymbols(ctx, params));
-  ctx.connection.onCodeLens((params) => handleCodeLens(ctx, params));
-  ctx.connection.onSelectionRanges((params) => handleSelectionRanges(ctx, params));
-  ctx.connection.languages.onLinkedEditingRange((params) => handleLinkedEditingRange(ctx, params));
-  ctx.connection.onFoldingRanges((params) => handleFoldingRanges(ctx, params));
+  ctx.connection.onCompletion((params, token) => handleCompletion(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onHover((params, token) => handleHover(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onDefinition((params, token) => handleDefinition(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onReferences((params, token) => handleReferences(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onDocumentHighlight((params, token) => handleDocumentHighlight(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onPrepareRename((params, token) => handlePrepareRename(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onRenameRequest((params, token) => handleRename(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onCodeAction((params, token) => handleCodeAction(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onDocumentSymbol((params, token) => handleDocumentSymbols(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onWorkspaceSymbol((params, token) => handleWorkspaceSymbols(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onCodeLens((params, token) => handleCodeLens(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onSelectionRanges((params, token) => handleSelectionRanges(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.languages.onLinkedEditingRange((params, token) => handleLinkedEditingRange(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onFoldingRanges((params, token) => handleFoldingRanges(ctx, params, requestGuard(ctx, token)));
 
   // Inlay hints — binding mode resolution
-  ctx.connection.languages.inlayHint.on((params) => handleInlayHintsRequest(ctx, params));
+  ctx.connection.languages.inlayHint.on((params, token) => handleInlayHintsRequest(ctx, params, requestGuard(ctx, token)));
 
 
-  ctx.connection.onRequest(SemanticTokensRequest.type, async (params) => {
+  ctx.connection.onRequest(SemanticTokensRequest.type, async (params, token) => {
     try {
-      return await handleSemanticTokensFull(ctx, params) ?? { data: [] };
+      return await handleSemanticTokensFull(ctx, params, requestGuard(ctx, token)) ?? { data: [] };
     } catch (error) {
+      if (logIfSemanticRuntimeRequestAborted(ctx, "semanticTokens", error, params.textDocument.uri)) {
+        return { data: [] };
+      }
       const response = degradationFromError("semanticTokens", error);
       logDegradation(ctx, "semanticTokens", response, params.textDocument.uri);
       return { data: [] };
     }
   });
+}
+
+function requestGuard(ctx: ServerContext, token: CancellationToken): SemanticRuntimeLspRequestGuard {
+  return semanticRuntimeRequestGuard(ctx, token);
 }
 
 export { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";

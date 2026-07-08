@@ -8,6 +8,7 @@ import {
   handleInspectEntity,
   handleRenameFromTs,
 } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 function createMockLogger() {
   return {
@@ -126,9 +127,9 @@ describe("handleGetDiagnostics", () => {
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" });
+    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
 
-    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(expect.objectContaining({}));
+    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(expect.objectContaining({}), testRequestGuard);
     expect(result).toEqual({
       uri: canonicalDocumentUri("file:///test.html").uri,
       fingerprint: "semantic-runtime:hit",
@@ -200,7 +201,7 @@ describe("handleGetDiagnostics", () => {
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" });
+    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
 
     expect(result?.diagnostics.bySurface.lsp[0]).toEqual(expect.objectContaining({
       code: "TS1234",
@@ -248,7 +249,7 @@ describe("handleGetDiagnostics", () => {
       page: null,
     });
 
-    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" });
+    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" }, testRequestGuard);
     const item = result?.diagnostics.bySurface.lsp[0];
 
     expect(item).toEqual(expect.objectContaining({
@@ -339,11 +340,12 @@ describe("handleInspectEntity", () => {
     const result = await handleInspectEntity(ctx as never, {
       uri: "file:///test.html",
       position: { line: 0, character: 3 },
-    });
+    }, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({}),
       { line: 0, character: 3 },
+      testRequestGuard,
     );
     expect(result).toEqual(expect.objectContaining({
       uri: "file:///test.html",
@@ -372,7 +374,7 @@ describe("handleInspectEntity", () => {
     const result = await handleInspectEntity(ctx as never, {
       uri: "file:///test.html",
       position: { line: 0, character: 3 },
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
   });
@@ -436,11 +438,12 @@ describe("handleRenameFromTs", () => {
       uri: tsDocument.uri,
       position: { line: 0, character: 12 },
       newName: "heading",
-    });
+    }, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateRenameFromTypeScript).toHaveBeenCalledWith(
       tsDocument,
       { line: 0, character: 12 },
+      testRequestGuard,
       "heading",
     );
     expect(result).toMatchObject({
@@ -474,7 +477,7 @@ describe("handleRenameFromTs", () => {
       uri: tsDocument.uri,
       position: { line: 0, character: 12 },
       newName: "heading",
-    });
+    }, testRequestGuard);
 
     expect(result).toMatchObject({
       status: "not-applicable",
@@ -528,7 +531,7 @@ describe("handleRenameFromTs", () => {
       uri: tsDocument.uri,
       position: { line: 0, character: 12 },
       newName: "heading",
-    });
+    }, testRequestGuard);
 
     expect(result).toMatchObject({
       status: "blocked",

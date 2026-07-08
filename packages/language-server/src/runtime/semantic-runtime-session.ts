@@ -34,11 +34,39 @@ export interface SemanticRuntimeLspSessionOptions {
   readonly documents: OpenTextDocumentStore;
 }
 
+export interface SemanticRuntimeLspGeneration {
+  readonly workspaceGeneration: number;
+  readonly sourceGeneration: number;
+  readonly fingerprint: string;
+}
+
+export interface SemanticRuntimeLspRequestGuard {
+  readonly generation: SemanticRuntimeLspGeneration;
+  readonly isCancellationRequested: (() => boolean) | null;
+}
+
+export type SemanticRuntimeLspRequestAbortReason = "cancelled" | "stale";
+
+export class SemanticRuntimeLspRequestAbortedError extends Error {
+  constructor(readonly reason: SemanticRuntimeLspRequestAbortReason) {
+    super(`Semantic runtime LSP request ${reason}.`);
+    this.name = "SemanticRuntimeLspRequestAbortedError";
+  }
+}
+
+export function isSemanticRuntimeLspRequestAborted(
+  error: unknown,
+): error is SemanticRuntimeLspRequestAbortedError {
+  return error instanceof SemanticRuntimeLspRequestAbortedError;
+}
+
 export class SemanticRuntimeLspSession {
   private readonly sourceTextProvider: OpenDocumentSourceTextProvider;
   private runtime: Promise<SemanticRuntime> | null = null;
   private workspaceRoot: string | null;
-  private epoch = 0;
+  private workspaceGeneration = 0;
+  private sourceGeneration = 0;
+  private pendingAppWorldClear: Promise<void> | null = null;
 
   constructor(
     options: SemanticRuntimeLspSessionOptions,
@@ -52,21 +80,54 @@ export class SemanticRuntimeLspSession {
       return;
     }
     this.workspaceRoot = workspaceRoot;
-    this.invalidate();
+    this.recordProjectTopologyChanged();
   }
 
-  invalidate(): void {
-    this.epoch += 1;
+  recordProjectTopologyChanged(): SemanticRuntimeLspGeneration {
+    this.workspaceGeneration += 1;
+    this.sourceGeneration += 1;
     this.runtime = null;
+    this.pendingAppWorldClear = null;
+    return this.currentGeneration();
+  }
+
+  async recordSourceTextChanged(): Promise<SemanticRuntimeLspGeneration> {
+    this.sourceGeneration += 1;
+    const runtime = this.runtime;
+    if (runtime != null) {
+      await this.queueAppWorldClear(runtime);
+    }
+    return this.currentGeneration();
+  }
+
+  currentGeneration(): SemanticRuntimeLspGeneration {
+    return {
+      workspaceGeneration: this.workspaceGeneration,
+      sourceGeneration: this.sourceGeneration,
+      fingerprint: `semantic-runtime:${this.workspaceRoot ?? "no-root"}:workspace-${this.workspaceGeneration}:source-${this.sourceGeneration}`,
+    };
+  }
+
+  isCurrentGeneration(generation: SemanticRuntimeLspGeneration): boolean {
+    return generation.workspaceGeneration === this.workspaceGeneration
+      && generation.sourceGeneration === this.sourceGeneration;
+  }
+
+  requestGuard(isCancellationRequested: (() => boolean) | null): SemanticRuntimeLspRequestGuard {
+    return {
+      generation: this.currentGeneration(),
+      isCancellationRequested,
+    };
   }
 
   async templateCompletions(
     document: TextDocument,
     position: Position,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
+    const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCompletions,
       sourceFilePath: filePath,
       cursor: {
@@ -78,18 +139,22 @@ export class SemanticRuntimeLspSession {
       page: { size: 100 },
       inquiryProfile: "lsp-cursor",
       appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>>;
+    }) as SemanticRuntimeAnswer<SemanticTemplateCompletionResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async appDiagnostics(
     document: TextDocument,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
     const rows: SemanticAppDiagnosticsResult["rows"][number][] = [];
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<SemanticAppDiagnosticsResult> | null = null;
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind: SemanticAppQueryKind.AppDiagnostics,
         sourceFile: { filePath },
@@ -101,6 +166,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<SemanticAppDiagnosticsResult>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -124,10 +190,11 @@ export class SemanticRuntimeLspSession {
   async templateCursorInfo(
     document: TextDocument,
     position: Position,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
+    const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCursorInfo,
       sourceFilePath: filePath,
       cursor: {
@@ -141,20 +208,24 @@ export class SemanticRuntimeLspSession {
       analysisDepth: "binding-observation",
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>>;
+    }) as SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async templateReferences(
     document: TextDocument,
     position: Position,
     includeDeclaration: boolean,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateReferencesResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
     const rows: SemanticTemplateReferencesResult["rows"][number][] = [];
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<SemanticTemplateReferencesResult> | null = null;
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateReferences,
         sourceFilePath: filePath,
@@ -172,6 +243,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<SemanticTemplateReferencesResult>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -194,11 +266,12 @@ export class SemanticRuntimeLspSession {
   async templateRename(
     document: TextDocument,
     position: Position,
+    guard: SemanticRuntimeLspRequestGuard,
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
+    const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRename,
       sourceFilePath: filePath,
       cursor: {
@@ -213,17 +286,20 @@ export class SemanticRuntimeLspSession {
       analysisDepth: "binding-observation",
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
+    }) as SemanticRuntimeAnswer<SemanticTemplateRenameResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async templateRenameFromTypeScript(
     document: TextDocument,
     position: Position,
+    guard: SemanticRuntimeLspRequestGuard,
     newName?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
+    const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateRenameFromTypeScript,
       sourceFilePath: filePath,
       cursor: {
@@ -238,16 +314,19 @@ export class SemanticRuntimeLspSession {
       analysisDepth: "binding-observation",
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateRenameResult>>;
+    }) as SemanticRuntimeAnswer<SemanticTemplateRenameResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
   async templateCodeActions(
     document: TextDocument,
     position: Position,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
-    return runtime.answerAppQuery({
+    const answer = await runtime.answerAppQuery({
       kind: SemanticAppQueryKind.TemplateCodeActions,
       sourceFilePath: filePath,
       cursor: {
@@ -261,38 +340,51 @@ export class SemanticRuntimeLspSession {
       analysisDepth: "binding-observation",
       includeAuthoringTemplates: true,
       appRetention: "retain-app",
-    }) as Promise<SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>>;
+    }) as SemanticRuntimeAnswer<SemanticTemplateCodeActionsResult>;
+    this.assertRequestActive(guard);
+    return answer;
   }
 
-  async resourceDefinitions(): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500);
+  async resourceDefinitions(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceDefinitionsResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ResourceDefinitions, 500, {}, guard);
   }
 
-  async resourceVisibility(): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500);
+  async resourceVisibility(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticResourceVisibilityResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ResourceVisibility, 500, {}, guard);
   }
 
-  async runtimeControllers(): Promise<SemanticRuntimeAnswer<SemanticRuntimeControllerResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.RuntimeControllers, 500);
+  async runtimeControllers(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticRuntimeControllerResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.RuntimeControllers, 500, {}, guard);
   }
 
-  async bindingBehaviorApplications(): Promise<SemanticRuntimeAnswer<SemanticBindingBehaviorApplicationResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.BindingBehaviorApplications, 500);
+  async bindingBehaviorApplications(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticBindingBehaviorApplicationResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.BindingBehaviorApplications, 500, {}, guard);
   }
 
-  async valueConverterApplications(): Promise<SemanticRuntimeAnswer<SemanticValueConverterApplicationResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.ValueConverterApplications, 500);
+  async valueConverterApplications(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticValueConverterApplicationResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.ValueConverterApplications, 500, {}, guard);
   }
 
   async templateCompilations(
+    guard: SemanticRuntimeLspRequestGuard,
     sourceFilePath?: string | null,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompilationResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     return this.collectRows(
       runtime,
       SemanticAppQueryKind.TemplateCompilations,
@@ -303,23 +395,28 @@ export class SemanticRuntimeLspSession {
             sourceFile: { filePath: sourceFilePath },
             sourceFilePath,
           },
+      guard,
     );
   }
 
-  async routeNodes(): Promise<SemanticRuntimeAnswer<SemanticRouteNodesResult>> {
-    const runtime = await this.openRuntime();
-    return this.collectRows(runtime, SemanticAppQueryKind.RouteNodes, 500);
+  async routeNodes(
+    guard: SemanticRuntimeLspRequestGuard,
+  ): Promise<SemanticRuntimeAnswer<SemanticRouteNodesResult>> {
+    const runtime = await this.openRuntime(guard);
+    return this.collectRows(runtime, SemanticAppQueryKind.RouteNodes, 500, {}, guard);
   }
 
   async templateInlayHints(
     document: TextDocument,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult> | null = null;
     const rows: SemanticTemplateInlayHintsResult["rows"][number][] = [];
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateInlayHints,
         sourceFile: { filePath },
@@ -330,6 +427,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<SemanticTemplateInlayHintsResult>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -357,13 +455,15 @@ export class SemanticRuntimeLspSession {
 
   async templateSemanticTokens(
     document: TextDocument,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult> | null = null;
     const rows: SemanticTemplateSemanticTokensResult["rows"][number][] = [];
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateSemanticTokens,
         sourceFile: { filePath },
@@ -374,6 +474,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<SemanticTemplateSemanticTokensResult>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -401,13 +502,15 @@ export class SemanticRuntimeLspSession {
 
   async templateFoldingRanges(
     document: TextDocument,
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>> {
-    const runtime = await this.openRuntime();
+    const runtime = await this.openRuntime(guard);
     const filePath = URI.parse(document.uri).fsPath;
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult> | null = null;
     const rows: SemanticTemplateFoldingRangesResult["rows"][number][] = [];
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind: SemanticAppQueryKind.TemplateFoldingRanges,
         sourceFile: { filePath },
@@ -418,6 +521,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<SemanticTemplateFoldingRangesResult>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -443,16 +547,52 @@ export class SemanticRuntimeLspSession {
         };
   }
 
-  private openRuntime(): Promise<SemanticRuntime> {
+  private async openRuntime(guard: SemanticRuntimeLspRequestGuard): Promise<SemanticRuntime> {
+    this.assertRequestActive(guard);
     if (this.workspaceRoot == null) {
       throw new Error("Cannot open semantic-runtime LSP session before workspace root is configured.");
     }
     this.runtime ??= createSemanticRuntime({
       workspaceRoot: this.workspaceRoot,
-      storeKey: `lsp:${this.epoch}:${this.workspaceRoot}`,
+      storeKey: `lsp:${this.workspaceGeneration}:${this.workspaceRoot}`,
       sourceTextProvider: this.sourceTextProvider,
     });
-    return this.runtime;
+    const runtime = this.pendingAppWorldClear == null
+      ? await this.runtime
+      : await this.pendingAppWorldClear.then(() => this.openRuntime(guard));
+    this.assertRequestActive(guard);
+    return runtime;
+  }
+
+  private queueAppWorldClear(runtime: Promise<SemanticRuntime>): Promise<void> {
+    const clear = (async () => {
+      try {
+        const openedRuntime = await runtime;
+        if (this.runtime !== runtime) {
+          return;
+        }
+        openedRuntime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: "preserve" });
+      } catch (error) {
+        if (this.runtime === runtime) {
+          this.runtime = null;
+        }
+        throw error;
+      }
+    })();
+    this.pendingAppWorldClear = clear;
+    void clear.then(
+      () => {
+        if (this.pendingAppWorldClear === clear) {
+          this.pendingAppWorldClear = null;
+        }
+      },
+      () => {
+        if (this.pendingAppWorldClear === clear) {
+          this.pendingAppWorldClear = null;
+        }
+      },
+    );
+    return clear;
   }
 
   private async collectRows<T extends { readonly rows: readonly unknown[] }>(
@@ -460,11 +600,13 @@ export class SemanticRuntimeLspSession {
     kind: SemanticAppQueryKind,
     pageSize: number,
     extraRequest: Record<string, unknown> = {},
+    guard: SemanticRuntimeLspRequestGuard,
   ): Promise<SemanticRuntimeAnswer<T>> {
     const rows: unknown[] = [];
     let cursor: string | null | undefined;
     let answer: SemanticRuntimeAnswer<T> | null = null;
     do {
+      this.assertRequestActive(guard);
       answer = await runtime.answerAppQuery({
         kind,
         ...extraRequest,
@@ -474,6 +616,7 @@ export class SemanticRuntimeLspSession {
         includeAuthoringTemplates: true,
         appRetention: "retain-app",
       }) as SemanticRuntimeAnswer<T>;
+      this.assertRequestActive(guard);
       rows.push(...answer.value.rows);
       cursor = answer.page?.nextCursor;
     } while (cursor != null);
@@ -486,9 +629,18 @@ export class SemanticRuntimeLspSession {
       ...answer,
       value: {
         ...answer.value,
-        rows: rows as T["rows"],
+        rows,
       },
       page: null,
     };
+  }
+
+  private assertRequestActive(guard: SemanticRuntimeLspRequestGuard): void {
+    if (guard.isCancellationRequested?.() === true) {
+      throw new SemanticRuntimeLspRequestAbortedError("cancelled");
+    }
+    if (!this.isCurrentGeneration(guard.generation)) {
+      throw new SemanticRuntimeLspRequestAbortedError("stale");
+    }
   }
 }

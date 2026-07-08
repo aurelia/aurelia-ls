@@ -19,6 +19,10 @@ import type {
   SemanticValueConverterApplicationRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 const CODE_LENS_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -39,6 +43,7 @@ const CODE_LENS_KIND_LABELS = new Map<string, string>([
 export async function handleCodeLens(
   ctx: ServerContext,
   params: CodeLensParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<CodeLens[] | null> {
   try {
     const uri = params.textDocument.uri;
@@ -54,10 +59,10 @@ export async function handleCodeLens(
       behaviorAnswer,
       converterAnswer,
     ] = await Promise.all([
-      ctx.semanticRuntime.resourceDefinitions(),
-      ctx.semanticRuntime.runtimeControllers(),
-      ctx.semanticRuntime.bindingBehaviorApplications(),
-      ctx.semanticRuntime.valueConverterApplications(),
+      ctx.semanticRuntime.resourceDefinitions(guard),
+      ctx.semanticRuntime.runtimeControllers(guard),
+      ctx.semanticRuntime.bindingBehaviorApplications(guard),
+      ctx.semanticRuntime.valueConverterApplications(guard),
     ]);
 
     const controllers = controllerAnswer.value.rows;
@@ -106,6 +111,9 @@ export async function handleCodeLens(
       ? lenses.sort((left, right) => left.range.start.line - right.range.start.line)
       : null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "codeLens", e, params.textDocument.uri)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[codeLens] failed for ${params.textDocument.uri}: ${message}`);
     return null;

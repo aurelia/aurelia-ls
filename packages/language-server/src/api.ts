@@ -13,6 +13,7 @@ export * from "./handlers/workspace-symbols.js";
 export * from "./handlers/selection-ranges.js";
 export * from "./handlers/linked-editing-ranges.js";
 export * from "./handlers/folding-ranges.js";
+export * from "./handlers/request-guard.js";
 export * from "./mapping/lsp-types.js";
 export {
   spanToRange as spanToDocumentRange,

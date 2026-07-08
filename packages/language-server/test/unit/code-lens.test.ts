@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleCodeLens } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
@@ -132,7 +133,7 @@ describe("runtime-backed code lens", () => {
       ],
     });
 
-    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } });
+    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
 
     expect(result?.map((lens) => lens.command?.title)).toEqual([
       "$(symbol-class) element: 2 bindables · used in 2 templates",
@@ -158,7 +159,7 @@ describe("runtime-backed code lens", () => {
       ],
     });
 
-    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } });
+    const result = await handleCodeLens(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
 
     expect(result).toHaveLength(1);
     expect(result?.[0]?.command).toEqual({
@@ -172,7 +173,7 @@ describe("runtime-backed code lens", () => {
 
     const result = await handleCodeLens(ctx as never, {
       textDocument: { uri: pathToFileURL(path.join(workspaceRoot, "src", "app.html")).toString() },
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
     expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();

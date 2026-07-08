@@ -18,6 +18,10 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 interface OffsetRange {
   readonly start: number;
@@ -27,14 +31,22 @@ interface OffsetRange {
 export async function handleLinkedEditingRange(
   ctx: ServerContext,
   params: LinkedEditingRangeParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<LinkedEditingRanges | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
   try {
-    const answer = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    const answer = await ctx.semanticRuntime.templateCursorInfo(
+      doc,
+      params.position,
+      guard,
+    );
     return linkedEditingRangesForCursor(ctx, doc, params.position, answer.value);
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "linkedEditingRange", e, params.textDocument.uri)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[linkedEditingRange] failed for ${params.textDocument.uri}: ${message}`);
     return null;

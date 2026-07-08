@@ -6,7 +6,7 @@
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Position } from "vscode-languageserver/node.js";
+import type { CancellationToken, Position } from "vscode-languageserver/node.js";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
@@ -25,6 +25,11 @@ import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+  semanticRuntimeRequestGuard,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
 type DiagnosticImpact = "blocking" | "degraded" | "informational";
@@ -327,6 +332,7 @@ function sourceSpanForSource(source: SemanticSourceReference | null): SourceSpan
 export async function handleGetDiagnostics(
   ctx: ServerContext,
   params: MaybeUriParam,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<DiagnosticsSnapshotResponse | null> {
   try {
     const uri = uriFromParam(params);
@@ -334,11 +340,14 @@ export async function handleGetDiagnostics(
     const canonical = canonicalDocumentUri(uri);
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
-    const answer = await ctx.semanticRuntime.appDiagnostics(doc);
+    const answer = await ctx.semanticRuntime.appDiagnostics(doc, guard);
     const diagnostics = serializeRuntimeDiagnosticsSnapshot(ctx.workspaceRoot, answer.value);
     const fingerprint = `semantic-runtime:${answer.outcome}`;
     return { uri: canonical.uri, fingerprint, diagnostics };
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "getDiagnostics", e, uriFromParam(params))) {
+      return null;
+    }
     ctx.logger.error(`[getDiagnostics] failed: ${formatError(e)}`);
     return null;
   }
@@ -389,12 +398,15 @@ export type ResourceExplorerResponse = {
   inlineTemplateCount: number;
 };
 
-export async function handleGetResources(ctx: ServerContext): Promise<ResourceExplorerResponse> {
+export async function handleGetResources(
+  ctx: ServerContext,
+  guard: SemanticRuntimeLspRequestGuard,
+): Promise<ResourceExplorerResponse> {
   try {
     const [definitions, visibility, compilations] = await Promise.all([
-      ctx.semanticRuntime.resourceDefinitions(),
-      ctx.semanticRuntime.resourceVisibility(),
-      ctx.semanticRuntime.templateCompilations(),
+      ctx.semanticRuntime.resourceDefinitions(guard),
+      ctx.semanticRuntime.resourceVisibility(guard),
+      ctx.semanticRuntime.templateCompilations(guard),
     ]);
     return buildRuntimeResourceExplorerResponse(
       ctx.workspaceRoot,
@@ -403,6 +415,9 @@ export async function handleGetResources(ctx: ServerContext): Promise<ResourceEx
       compilations.value.rows,
     );
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "getResources", e)) {
+      return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
+    }
     ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
     return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
   }
@@ -625,15 +640,23 @@ export type InspectEntityResponse = {
 export async function handleInspectEntity(
   ctx: ServerContext,
   params: { uri: string; position: Position },
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<InspectEntityResponse> {
   try {
     const uri = params?.uri;
     if (!uri || !params.position) return null;
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
-    const answer = await ctx.semanticRuntime.templateCursorInfo(doc, params.position);
+    const answer = await ctx.semanticRuntime.templateCursorInfo(
+      doc,
+      params.position,
+      guard,
+    );
     return inspectEntityFromCursorInfo(uri, answer.outcome, answer.value);
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "inspectEntity", e, params?.uri)) {
+      return null;
+    }
     ctx.logger.error(`[inspectEntity] failed for ${params?.uri}: ${formatError(e)}`);
     return null;
   }
@@ -775,6 +798,7 @@ export type ScopeResourcesResponse = {
 export async function handleGetScopeResources(
   ctx: ServerContext,
   params: { uri: string },
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<ScopeResourcesResponse> {
   try {
     const uri = params?.uri;
@@ -783,8 +807,8 @@ export async function handleGetScopeResources(
     if (!doc) return null;
     const filePath = URI.parse(uri).fsPath;
     const [compilations, visibility] = await Promise.all([
-      ctx.semanticRuntime.templateCompilations(filePath),
-      ctx.semanticRuntime.resourceVisibility(),
+      ctx.semanticRuntime.templateCompilations(guard, filePath),
+      ctx.semanticRuntime.resourceVisibility(guard),
     ]);
     const compilerWorlds = new Set(compilations.value.rows.map((row) => row.compilerWorld));
     const rows = compilerWorlds.size === 0
@@ -798,6 +822,9 @@ export async function handleGetScopeResources(
       resources,
     };
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "getScopeResources", e, params?.uri)) {
+      return null;
+    }
     ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
     return null;
   }
@@ -882,6 +909,7 @@ export type RenameFromTsResponse = {
 export async function handleRenameFromTs(
   ctx: ServerContext,
   params: RenameFromTsParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<RenameFromTsResponse> {
   try {
     if (!params?.uri || !params.position || !params.newName) {
@@ -896,6 +924,7 @@ export async function handleRenameFromTs(
     const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
       doc,
       params.position,
+      guard,
       params.newName,
     );
     const templateReferenceCount = answer.value.templateReferenceCount;
@@ -959,6 +988,13 @@ export async function handleRenameFromTs(
         candidateCount,
       };
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "renameFromTs", e, params?.uri)) {
+      const reason = e.reason === "cancelled" ? "request-cancelled" : "request-stale";
+      return renameFromTsBlocked(
+        reason,
+        `Aurelia template rename propagation was skipped because the request was ${e.reason}.`,
+      );
+    }
     const msg = e instanceof Error ? e.message : String(e);
     const stack = e instanceof Error ? e.stack : undefined;
     ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
@@ -986,12 +1022,13 @@ function renameFromTsBlocked(
 export async function handleGetRelatedFile(
   ctx: ServerContext,
   params: { uri: string },
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<{ uri: string; kind: "template" | "component" } | null> {
   try {
     const uri = params?.uri;
     if (!uri) return null;
     const filePath = URI.parse(uri).fsPath;
-    const definitions = await ctx.semanticRuntime.resourceDefinitions();
+    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
     const requested = normalizedFilePath(filePath);
     for (const definition of definitions.value.rows) {
       if (definition.resourceKind !== "custom-element") {
@@ -1014,6 +1051,9 @@ export async function handleGetRelatedFile(
     }
     return null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "getRelatedFile", e, params?.uri)) {
+      return null;
+    }
     ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
     return null;
   }
@@ -1027,12 +1067,22 @@ function normalizedFilePath(filePath: string): string {
  * Registers all custom Aurelia request handlers on the connection.
  */
 export function registerCustomHandlers(ctx: ServerContext): void {
-  ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
+  ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam, token: CancellationToken) =>
+    handleGetDiagnostics(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
-  ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
-  ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
-  ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }) => handleGetScopeResources(ctx, params));
-  ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }) => handleGetRelatedFile(ctx, params));
+  ctx.connection.onRequest("aurelia/getResources", (token: CancellationToken) =>
+    handleGetResources(ctx, requestGuard(ctx, token)));
+  ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }, token: CancellationToken) =>
+    handleInspectEntity(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }, token: CancellationToken) =>
+    handleGetScopeResources(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }, token: CancellationToken) =>
+    handleGetRelatedFile(ctx, params, requestGuard(ctx, token)));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
-  ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams) => handleRenameFromTs(ctx, params));
+  ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams, token: CancellationToken) =>
+    handleRenameFromTs(ctx, params, requestGuard(ctx, token)));
+}
+
+function requestGuard(ctx: ServerContext, token: CancellationToken | undefined): SemanticRuntimeLspRequestGuard {
+  return semanticRuntimeRequestGuard(ctx, token);
 }

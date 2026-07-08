@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleSelectionRanges } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const uri = "file:///app/src/app.html";
 const text = '<template><input value.bind="title"></template>';
@@ -97,11 +98,12 @@ describe("runtime-backed selection ranges", () => {
     const result = await handleSelectionRanges(ctx as never, {
       textDocument: { uri },
       positions: [position],
-    });
+    }, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       doc,
       position,
+      testRequestGuard,
     );
     expect(result).toHaveLength(1);
     expect(result?.[0]?.range).toEqual(range(titleStart, titleEnd));
@@ -129,7 +131,7 @@ describe("runtime-backed selection ranges", () => {
     const result = await handleSelectionRanges(ctx as never, {
       textDocument: { uri },
       positions: [doc.positionAt(titleStart + 2)],
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
   });

@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri, handleWorkspaceSymbols } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
@@ -80,7 +81,7 @@ describe("runtime-backed workspace symbols", () => {
       ],
     });
 
-    const result = await handleWorkspaceSymbols(ctx as never, { query: "tile" });
+    const result = await handleWorkspaceSymbols(ctx as never, { query: "tile" }, testRequestGuard);
 
     expect(result).toEqual([
       {
@@ -115,7 +116,7 @@ describe("runtime-backed workspace symbols", () => {
       ],
     });
 
-    const result = await handleWorkspaceSymbols(ctx as never, { query: "missing" });
+    const result = await handleWorkspaceSymbols(ctx as never, { query: "missing" }, testRequestGuard);
 
     expect(result).toBeNull();
   });

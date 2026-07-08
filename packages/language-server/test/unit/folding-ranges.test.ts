@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleFoldingRanges } from "@aurelia-ls/language-server/api";
 import type { SemanticTemplateFoldingRangeRow } from "@aurelia-ls/semantic-runtime";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const uri = "file:///app/src/app.html";
 const text = [
@@ -77,9 +78,9 @@ describe("runtime-backed folding ranges", () => {
 
     const result = await handleFoldingRanges(ctx as never, {
       textDocument: { uri },
-    });
+    }, testRequestGuard);
 
-    expect(ctx.semanticRuntime.templateFoldingRanges).toHaveBeenCalledWith(doc);
+    expect(ctx.semanticRuntime.templateFoldingRanges).toHaveBeenCalledWith(doc, testRequestGuard);
     expect(result).toEqual([
       {
         startLine: doc.positionAt(sectionStart).line,
@@ -97,7 +98,7 @@ describe("runtime-backed folding ranges", () => {
 
     const result = await handleFoldingRanges(ctx as never, {
       textDocument: { uri },
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
   });

@@ -1,5 +1,6 @@
 import { test, expect, describe, vi } from "vitest";
 import { handleInlayHints } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 function createMockContext(rows: unknown[]) {
   return {
@@ -43,7 +44,7 @@ const params = (range = fullRange, uri = "file:///test.html") => ({
 describe("inlay hints: semantic-runtime mapping", () => {
   test("maps runtime binding-mode hint rows", async () => {
     const ctx = createMockContext([makeRow()]);
-    const result = await handleInlayHints(ctx as never, params());
+    const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
 
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);
@@ -54,7 +55,7 @@ describe("inlay hints: semantic-runtime mapping", () => {
 
   test("returns null when runtime has no hints", async () => {
     const ctx = createMockContext([]);
-    const result = await handleInlayHints(ctx as never, params());
+    const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
 
     expect(result).toBeNull();
   });
@@ -64,7 +65,7 @@ describe("inlay hints: semantic-runtime mapping", () => {
       makeRow("twoWay", null),
       makeRow("toView", { path: "src/app.html" }),
     ]);
-    const result = await handleInlayHints(ctx as never, params());
+    const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
 
     expect(result).toBeNull();
   });
@@ -77,7 +78,7 @@ describe("inlay hints: semantic-runtime mapping", () => {
     const result = await handleInlayHints(ctx as never, params({
       start: { line: 2, character: 0 },
       end: { line: 2, character: 99 },
-    }));
+    }), testRequestGuard);
 
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);
@@ -89,7 +90,7 @@ describe("inlay hints: semantic-runtime mapping", () => {
       ...createMockContext([makeRow()]),
       ensureProgramDocument: vi.fn(() => null),
     };
-    const result = await handleInlayHints(ctx as never, params());
+    const result = await handleInlayHints(ctx as never, params(), testRequestGuard);
 
     expect(result).toBeNull();
     expect(ctx.semanticRuntime.templateInlayHints).not.toHaveBeenCalled();

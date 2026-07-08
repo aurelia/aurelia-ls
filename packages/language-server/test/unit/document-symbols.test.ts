@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { SymbolKind } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleDocumentSymbols } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const workspaceRoot = path.resolve("test-workspace");
 const resourcePath = path.join(workspaceRoot, "src", "resources.ts");
@@ -102,7 +103,7 @@ describe("runtime-backed document symbols", () => {
       ],
     });
 
-    const result = await handleDocumentSymbols(ctx as never, { textDocument: { uri: resourceUri } });
+    const result = await handleDocumentSymbols(ctx as never, { textDocument: { uri: resourceUri } }, testRequestGuard);
 
     expect(result).toHaveLength(2);
     expect(result?.[0]).toMatchObject({
@@ -138,7 +139,7 @@ describe("runtime-backed document symbols", () => {
 
     const result = await handleDocumentSymbols(ctx as never, {
       textDocument: { uri: pathToFileURL(path.join(workspaceRoot, "src", "app.html")).toString() },
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
     expect(ctx.semanticRuntime.resourceDefinitions).not.toHaveBeenCalled();

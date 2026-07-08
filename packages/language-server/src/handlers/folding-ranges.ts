@@ -10,6 +10,10 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 interface OffsetRange {
   readonly start: number;
@@ -19,17 +23,24 @@ interface OffsetRange {
 export async function handleFoldingRanges(
   ctx: ServerContext,
   params: FoldingRangeParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<FoldingRange[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
 
   try {
-    const answer = await ctx.semanticRuntime.templateFoldingRanges(doc);
+    const answer = await ctx.semanticRuntime.templateFoldingRanges(
+      doc,
+      guard,
+    );
     const ranges = answer.value.rows
       .map((row) => foldingRangeForRow(ctx, doc, row))
       .filter((range): range is FoldingRange => range != null);
     return ranges.length > 0 ? ranges : null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "foldingRange", e, params.textDocument.uri)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[foldingRange] failed for ${params.textDocument.uri}: ${message}`);
     return null;

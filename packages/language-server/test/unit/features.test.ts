@@ -12,6 +12,7 @@ import {
   handleReferences,
   handleRename,
 } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const testText = "<template>\n  <my-el></my-el>\n</template>";
 const renameText = "<template>${title}</template>";
@@ -403,8 +404,8 @@ describe("handleRename", () => {
       typeScriptReferenceCount: 0,
     });
 
-    await expect(handleRename(ctx as never, params)).rejects.toThrow(ResponseError);
-    await expect(handleRename(ctx as never, params)).rejects.toMatchObject({
+    await expect(handleRename(ctx as never, params, testRequestGuard)).rejects.toThrow(ResponseError);
+    await expect(handleRename(ctx as never, params, testRequestGuard)).rejects.toMatchObject({
       message: "No source-backed template member is selected at this cursor.",
     });
   });
@@ -454,7 +455,7 @@ describe("handleRename", () => {
       typeScriptReferenceCount: 1,
     });
 
-    const result = await handleRename(ctx as never, params);
+    const result = await handleRename(ctx as never, params, testRequestGuard);
     expect(result).not.toBeNull();
     const uris = Object.keys(result!.changes ?? {});
     expect(uris.sort()).toEqual(["file:///app/src/my-app.html", definitionLspUri].sort());
@@ -493,11 +494,12 @@ describe("handlePrepareRename", () => {
       typeScriptReferenceCount: 0,
     });
 
-    const result = await handlePrepareRename(ctx as never, params);
+    const result = await handlePrepareRename(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateRename).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
+      testRequestGuard,
     );
     expect(result).toEqual({
       range: {
@@ -519,12 +521,13 @@ describe("handleReferences", () => {
   test("maps semantic-runtime template references to locations", async () => {
     const ctx = createMockReferencesContext();
 
-    const result = await handleReferences(ctx as never, params);
+    const result = await handleReferences(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
       true,
+      testRequestGuard,
     );
     expect(result).toHaveLength(2);
     expect(result?.[0]?.uri).toBe("file:///app/src/my-app.html");
@@ -543,12 +546,13 @@ describe("handleDocumentHighlight", () => {
   test("maps same-document semantic-runtime references to document highlights", async () => {
     const ctx = createMockReferencesContext();
 
-    const result = await handleDocumentHighlight(ctx as never, params);
+    const result = await handleDocumentHighlight(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
       true,
+      testRequestGuard,
     );
     expect(result).toEqual([
       {
@@ -575,11 +579,12 @@ describe("handleCodeAction", () => {
   test("maps semantic-runtime template code actions to LSP quickfixes", async () => {
     const ctx = createMockCodeActionContext();
 
-    const result = await handleCodeAction(ctx as never, params);
+    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateCodeActions).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.range.start,
+      testRequestGuard,
     );
     expect(result).toHaveLength(1);
     expect(result?.[0]).toEqual(expect.objectContaining({
@@ -604,7 +609,7 @@ describe("handleCodeAction", () => {
   test("returns null when semantic-runtime has no applicable code actions", async () => {
     const ctx = createMockCodeActionContext({ actions: [] });
 
-    await expect(handleCodeAction(ctx as never, params)).resolves.toBeNull();
+    await expect(handleCodeAction(ctx as never, params, testRequestGuard)).resolves.toBeNull();
   });
 
   test("does not offer a code action when any edit row cannot be mapped", async () => {
@@ -641,7 +646,7 @@ describe("handleCodeAction", () => {
       }],
     });
 
-    const result = await handleCodeAction(ctx as never, params);
+    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
 
     expect(result).toBeNull();
     expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("skipped unsafe code action"));
@@ -674,7 +679,7 @@ describe("handleCodeAction", () => {
       }],
     });
 
-    const result = await handleCodeAction(ctx as never, params);
+    const result = await handleCodeAction(ctx as never, params, testRequestGuard);
 
     expect(result).toBeNull();
     expect(ctx.logger.warn).toHaveBeenCalledWith(expect.stringContaining("expected \"class\""));
@@ -695,7 +700,7 @@ describe("handleCompletion", () => {
       ],
     });
 
-    const result = await handleCompletion(ctx as never, params);
+    const result = await handleCompletion(ctx as never, params, testRequestGuard);
     expect(result.isIncomplete).toBe(false);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual(
@@ -715,7 +720,7 @@ describe("handleCompletion", () => {
       isIncomplete: true,
     });
 
-    const result = await handleCompletion(ctx as never, params);
+    const result = await handleCompletion(ctx as never, params, testRequestGuard);
     expect(result.isIncomplete).toBe(true);
     expect(result.items.some((item) => item.label === "summary-panel")).toBe(true);
     const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
@@ -731,7 +736,7 @@ describe("handleCompletion", () => {
       isIncomplete: true,
     });
 
-    const result = await handleCompletion(ctx as never, params);
+    const result = await handleCompletion(ctx as never, params, testRequestGuard);
     expect(result.isIncomplete).toBe(true);
     const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
     expect(marker).toBeDefined();
@@ -741,7 +746,7 @@ describe("handleCompletion", () => {
   test("returns empty CompletionList when document is unavailable", async () => {
     const ctx = createMockCompletionContext({ completions: [] });
     ctx.ensureProgramDocument = vi.fn(() => null);
-    const result = await handleCompletion(ctx as never, params);
+    const result = await handleCompletion(ctx as never, params, testRequestGuard);
     expect(result).toEqual({ isIncomplete: false, items: [] });
   });
 });
@@ -755,11 +760,12 @@ describe("handleHover", () => {
   test("maps semantic-runtime cursor info to hover markdown", async () => {
     const ctx = createMockHoverContext();
 
-    const result = await handleHover(ctx as never, params);
+    const result = await handleHover(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
+      testRequestGuard,
     );
     const contents = result?.contents as { value?: string };
     expect(contents.value).toContain("message: string");
@@ -776,12 +782,13 @@ describe("handleDefinition", () => {
   test("maps semantic-runtime cursor info to location links", async () => {
     const ctx = createMockDefinitionContext();
 
-    const result = await handleDefinition(ctx as never, params);
+    const result = await handleDefinition(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.routeNodes).not.toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
+      testRequestGuard,
     );
     expect(Array.isArray(result)).toBe(true);
     const [link] = result as Array<{ targetUri: string; targetRange: { start: { line: number; character: number } } }>;
@@ -821,7 +828,7 @@ describe("handleDefinition", () => {
       { selectedMemberSource: null },
     );
 
-    const result = await handleDefinition(ctx as never, params);
+    const result = await handleDefinition(ctx as never, params, testRequestGuard);
 
     expect(ctx.semanticRuntime.routeNodes).toHaveBeenCalled();
     expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalled();

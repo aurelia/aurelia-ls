@@ -23,7 +23,8 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "measure:incrementality": "node scripts/measure-incrementality.mjs"
   },
   "dependencies": {
     "@aurelia-ls/semantic-runtime": "workspace:*",

@@ -14,13 +14,28 @@ import { URI } from "vscode-uri";
 import path from "node:path";
 import type { ServerContext } from "../context.js";
 import { mapSemanticRuntimeAppDiagnostics } from "../mapping/lsp-types.js";
+import type {
+  SemanticRuntimeLspGeneration,
+  SemanticRuntimeLspRequestGuard,
+} from "../runtime/semantic-runtime-session.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
+import { logIfSemanticRuntimeRequestAborted } from "./request-guard.js";
 
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
 const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
 
-/** Tracks pending debounced refresh operations per document URI */
-const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingRefreshesByContext = new WeakMap<ServerContext, Map<string, ReturnType<typeof setTimeout>>>();
+
+interface DiagnosticRefreshWave {
+  readonly reason: "open" | "change";
+  readonly guard: SemanticRuntimeLspRequestGuard;
+}
+
+interface DiagnosticRefreshOptions {
+  readonly wave?: DiagnosticRefreshWave;
+  readonly sourceChanged?: boolean;
+  readonly notifyWorkspace?: boolean;
+}
 
 function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
@@ -43,20 +58,37 @@ function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
 }
 
 async function reloadProjectConfiguration(ctx: ServerContext, reason: string): Promise<void> {
-  ctx.semanticRuntime.invalidate();
+  const generation = ctx.semanticRuntime.recordProjectTopologyChanged();
   ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
-  await notifyWorkspaceChanged(ctx, [reason, "diagnostics", "types", "resources"]);
-  await refreshAllOpenDocuments(ctx, "change");
+  await notifyWorkspaceChanged(ctx, ["diagnostics", "types", "resources", "templates"], reason, generation);
+  await refreshAllOpenDocuments(ctx, "change", { notifyWorkspace: false });
 }
 
-async function refreshAllOpenDocuments(
+export async function refreshAllOpenDocuments(
   ctx: ServerContext,
   reason: "open" | "change",
-  options?: { skipSync?: boolean }
+  options: DiagnosticRefreshOptions = {},
 ): Promise<void> {
-  const openDocs = ctx.documents.all();
-  for (const doc of openDocs) {
-    await refreshDocument(ctx, doc, reason, options);
+  try {
+    const wave = options.wave ?? await beginDiagnosticRefreshWave(ctx, reason, options.sourceChanged === true);
+    if (options.notifyWorkspace !== false) {
+      await notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], reason, wave.guard.generation);
+    }
+    const openDocs = ctx.documents.all();
+    for (const doc of openDocs) {
+      if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
+        ctx.logger.log("refreshAllOpenDocuments stopped because the refresh wave is stale");
+        return;
+      }
+      await refreshDocument(ctx, doc, reason, {
+        wave,
+        notifyWorkspace: false,
+        sourceChanged: false,
+      });
+    }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.stack ?? e.message : String(e);
+    ctx.logger.error(`refreshAllOpenDocuments failed: ${message}`);
   }
 }
 
@@ -64,25 +96,43 @@ export async function refreshDocument(
   ctx: ServerContext,
   doc: TextDocument,
   reason: "open" | "change",
-  _options?: { skipSync?: boolean }
+  options: DiagnosticRefreshOptions = {},
 ): Promise<void> {
   try {
-    ctx.semanticRuntime.invalidate();
-
-    const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc);
-    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(diagnostics, doc, ctx.workspaceRoot, ctx.lookupText);
+    const wave = options.wave ?? await beginDiagnosticRefreshWave(
+      ctx,
+      reason,
+      options.sourceChanged ?? true,
+    );
+    const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc, wave.guard);
+    if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
+      ctx.logger.log(`refreshDocument skipped stale diagnostics for ${doc.uri}`);
+      return;
+    }
+    const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(
+      diagnostics,
+      doc,
+      ctx.workspaceRoot,
+      (uri) => ctx.lookupText(uri),
+    );
+    if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
+      ctx.logger.log(`refreshDocument skipped stale diagnostics for ${doc.uri}`);
+      return;
+    }
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
-    await ctx.connection.sendNotification("aurelia/workspaceChanged", {
-      fingerprint: semanticRuntimeFingerprint(ctx),
-      domains: ["diagnostics", "templates"],
-      reason,
-    });
+    if (options.notifyWorkspace !== false) {
+      await notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], reason, wave.guard.generation);
+    }
     await ctx.connection.sendNotification("aurelia/analysisReady", {
       uri: doc.uri,
       diags: lspDiagnostics.length,
+      fingerprint: wave.guard.generation.fingerprint,
     });
   } catch (e: unknown) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "refreshDocument", e, doc.uri)) {
+      return;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`refreshDocument failed: ${message}`);
   }
@@ -127,7 +177,8 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.documents.onDidOpen((e) => {
     ctx.logger.log(`didOpen ${e.document.uri}`);
-    void refreshDocument(ctx, e.document, "open");
+    recordSourceTextChanged(ctx, "document open");
+    void refreshDocument(ctx, e.document, "open", { sourceChanged: false });
   });
 
   ctx.connection.onDidChangeConfiguration(() => {
@@ -148,17 +199,19 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     // and clear incremental discovery cache.
     if (hasSourceFileStructuralChange(e.changes)) {
       ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
-      ctx.semanticRuntime.invalidate();
-      void notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics"]);
-      void refreshAllOpenDocuments(ctx, "change");
+      const generation = ctx.semanticRuntime.recordProjectTopologyChanged();
+      void notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics", "templates"], "watched files", generation);
+      void refreshAllOpenDocuments(ctx, "change", { notifyWorkspace: false });
     }
   });
 
   ctx.documents.onDidChangeContent((e) => {
     const uri = e.document.uri;
     ctx.logger.log(`didChange ${uri} (debouncing)`);
+    recordSourceTextChanged(ctx, "document content change");
 
     // Cancel any pending refresh for this document
+    const pendingRefreshes = pendingRefreshesForContext(ctx);
     const existing = pendingRefreshes.get(uri);
     if (existing) {
       clearTimeout(existing);
@@ -169,7 +222,7 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     const timeout = setTimeout(() => {
       pendingRefreshes.delete(uri);
       ctx.logger.log(`didChange ${uri} (processing after debounce)`);
-      void refreshDocument(ctx, e.document, "change");
+      void refreshDocument(ctx, e.document, "change", { sourceChanged: false });
     }, DOCUMENT_CHANGE_DEBOUNCE_MS);
 
     pendingRefreshes.set(uri, timeout);
@@ -179,22 +232,50 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     ctx.logger.log(`didClose ${e.document.uri}`);
 
     // Cancel any pending refresh for this document
+    const pendingRefreshes = pendingRefreshesForContext(ctx);
     const pending = pendingRefreshes.get(e.document.uri);
     if (pending) {
       clearTimeout(pending);
       pendingRefreshes.delete(e.document.uri);
     }
 
-    ctx.semanticRuntime.invalidate();
+    recordSourceTextChanged(ctx, "document close");
     void ctx.connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
+    void notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], "close").catch(() => {});
   });
 }
 
-async function notifyWorkspaceChanged(ctx: ServerContext, domains: readonly string[]): Promise<void> {
-  const fingerprint = semanticRuntimeFingerprint(ctx);
+function recordSourceTextChanged(ctx: ServerContext, reason: string): void {
+  void ctx.semanticRuntime.recordSourceTextChanged().catch((error: unknown) => {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error);
+    ctx.logger.error(`${reason} source refresh failed: ${message}`);
+  });
+}
+
+async function beginDiagnosticRefreshWave(
+  ctx: ServerContext,
+  reason: "open" | "change",
+  sourceChanged: boolean,
+): Promise<DiagnosticRefreshWave> {
+  if (sourceChanged) {
+    await ctx.semanticRuntime.recordSourceTextChanged();
+  }
+  return {
+    reason,
+    guard: ctx.semanticRuntime.requestGuard(null),
+  };
+}
+
+async function notifyWorkspaceChanged(
+  ctx: ServerContext,
+  domains: readonly string[],
+  reason?: string,
+  generation: SemanticRuntimeLspGeneration = ctx.semanticRuntime.currentGeneration(),
+): Promise<void> {
   await ctx.connection.sendNotification("aurelia/workspaceChanged", {
-    fingerprint,
+    fingerprint: generation.fingerprint,
     domains,
+    ...(reason == null ? {} : { reason }),
   });
   if (domains.includes("diagnostics") || domains.includes("types")) {
     void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
@@ -204,6 +285,12 @@ async function notifyWorkspaceChanged(ctx: ServerContext, domains: readonly stri
   }
 }
 
-function semanticRuntimeFingerprint(ctx: ServerContext): string {
-  return `semantic-runtime:${ctx.workspaceRoot ?? "no-root"}:${ctx.documents.all().length}`;
+function pendingRefreshesForContext(ctx: ServerContext): Map<string, ReturnType<typeof setTimeout>> {
+  const existing = pendingRefreshesByContext.get(ctx);
+  if (existing != null) {
+    return existing;
+  }
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  pendingRefreshesByContext.set(ctx, pending);
+  return pending;
 }

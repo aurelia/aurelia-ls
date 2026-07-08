@@ -8,6 +8,7 @@ import {
   type ResourceExplorerResponse,
   type ScopeResourcesResponse,
 } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 /**
  * Boundary: semantic-runtime resource rows -> VS Code resource explorer DTOs.
@@ -189,7 +190,7 @@ describe("runtime-backed resource explorer", () => {
       ],
     });
 
-    const result: ResourceExplorerResponse = await handleGetResources(ctx as never);
+    const result: ResourceExplorerResponse = await handleGetResources(ctx as never, testRequestGuard);
 
     expect(result.templateCount).toBe(2);
     expect(result.inlineTemplateCount).toBe(1);
@@ -226,7 +227,7 @@ describe("runtime-backed resource explorer", () => {
       ],
     });
 
-    const result = await handleGetResources(ctx as never);
+    const result = await handleGetResources(ctx as never, testRequestGuard);
 
     expect(result.resources).toEqual([
       expect.objectContaining({
@@ -257,7 +258,7 @@ describe("runtime-backed resource explorer", () => {
       ],
     });
 
-    const result = await handleGetResources(ctx as never);
+    const result = await handleGetResources(ctx as never, testRequestGuard);
 
     expect(result.resources[0]).toEqual(expect.objectContaining({
       name: "plugin-card",
@@ -277,7 +278,7 @@ describe("runtime-backed resource explorer", () => {
       ],
     });
 
-    const result = await handleGetResources(ctx as never);
+    const result = await handleGetResources(ctx as never, testRequestGuard);
 
     expect(result.resources).toHaveLength(1);
     expect(result.resources[0].kind).toBe("template-controller");
@@ -296,10 +297,10 @@ describe("runtime-backed scope resources", () => {
       ],
     });
 
-    const result: ScopeResourcesResponse = await handleGetScopeResources(ctx as never, { uri: componentUri });
+    const result: ScopeResourcesResponse = await handleGetScopeResources(ctx as never, { uri: componentUri }, testRequestGuard);
 
-    const calls = ctx.semanticRuntime.templateCompilations.mock.calls as unknown as [string][];
-    const calledPath = calls[0]?.[0] ?? "";
+    const calls = ctx.semanticRuntime.templateCompilations.mock.calls as unknown as [unknown, string][];
+    const calledPath = calls[0]?.[1] ?? "";
     expect(path.normalize(calledPath).toLowerCase()).toBe(path.normalize(componentPath).toLowerCase());
     expect(result?.scopeId).toBe("app-root selected");
     expect(result?.resources.map((item) => item.name)).toEqual(["in-scope"]);
@@ -326,7 +327,7 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() });
+    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }, testRequestGuard);
 
     expect(result).toEqual({
       uri: pathToFileURL(templateFile).toString(),
@@ -353,7 +354,7 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(templateFile).toString() });
+    const result = await handleGetRelatedFile(ctx as never, { uri: pathToFileURL(templateFile).toString() }, testRequestGuard);
 
     expect(result).toEqual({
       uri: pathToFileURL(componentFile).toString(),
@@ -379,7 +380,7 @@ describe("runtime-backed related file lookup", () => {
       ],
     });
 
-    await expect(handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }))
+    await expect(handleGetRelatedFile(ctx as never, { uri: pathToFileURL(componentFile).toString() }, testRequestGuard))
       .resolves.toBeNull();
   });
 });

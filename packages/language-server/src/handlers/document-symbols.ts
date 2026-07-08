@@ -18,6 +18,10 @@ import type {
   SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 const DOCUMENT_SYMBOL_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -38,6 +42,7 @@ const RESOURCE_SYMBOL_KIND: Readonly<Record<string, SymbolKind>> = {
 export async function handleDocumentSymbols(
   ctx: ServerContext,
   params: DocumentSymbolParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<DocumentSymbol[] | null> {
   try {
     const uri = params.textDocument.uri;
@@ -47,7 +52,7 @@ export async function handleDocumentSymbols(
     if (!doc) return null;
 
     const requested = normalizedFilePath(URI.parse(uri).fsPath);
-    const definitions = await ctx.semanticRuntime.resourceDefinitions();
+    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
     const symbols: DocumentSymbol[] = [];
 
     for (const definition of definitions.value.rows) {
@@ -59,6 +64,9 @@ export async function handleDocumentSymbols(
       ? symbols.sort((left, right) => compareRanges(left.range, right.range))
       : null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "documentSymbol", e, params.textDocument.uri)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[documentSymbol] failed for ${params.textDocument.uri}: ${message}`);
     return null;

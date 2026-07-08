@@ -12,31 +12,42 @@
  * - `effectiveMode === 'default'` → no hint (unresolved, nothing useful to show)
  */
 import {
-  InlayHint,
   InlayHintKind,
+  type InlayHint,
   type InlayHintParams,
 } from "vscode-languageserver/node.js";
 import type {
   SemanticTemplateInlayHintRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 export async function handleInlayHints(
   ctx: ServerContext,
   params: InlayHintParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<InlayHint[] | null> {
   try {
     const uri = params.textDocument.uri;
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
 
-    const answer = await ctx.semanticRuntime.templateInlayHints(doc);
+    const answer = await ctx.semanticRuntime.templateInlayHints(
+      doc,
+      guard,
+    );
     const hints = answer.value.rows
       .map((row) => mapSemanticRuntimeTemplateInlayHint(row, doc, params))
       .filter((hint): hint is InlayHint => hint != null);
 
     return hints.length > 0 ? hints : null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "inlayHints", e, params.textDocument.uri)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[inlayHints] failed for ${params.textDocument.uri}: ${message}`);
     return null;

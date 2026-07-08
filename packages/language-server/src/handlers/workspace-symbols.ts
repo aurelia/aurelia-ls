@@ -18,6 +18,10 @@ import type {
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
+import {
+  logIfSemanticRuntimeRequestAborted,
+} from "./request-guard.js";
+import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
 
 const WORKSPACE_SYMBOL_RESOURCE_KINDS = new Set<string>([
   "custom-element",
@@ -40,10 +44,11 @@ const MAX_WORKSPACE_SYMBOLS = 100;
 export async function handleWorkspaceSymbols(
   ctx: ServerContext,
   params: WorkspaceSymbolParams,
+  guard: SemanticRuntimeLspRequestGuard,
 ): Promise<SymbolInformation[] | null> {
   try {
     const query = params.query.trim().toLowerCase();
-    const definitions = await ctx.semanticRuntime.resourceDefinitions();
+    const definitions = await ctx.semanticRuntime.resourceDefinitions(guard);
     const symbols: SymbolInformation[] = [];
 
     for (const definition of definitions.value.rows) {
@@ -60,6 +65,9 @@ export async function handleWorkspaceSymbols(
         )
       : null;
   } catch (e) {
+    if (logIfSemanticRuntimeRequestAborted(ctx, "workspaceSymbol", e)) {
+      return null;
+    }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`[workspaceSymbol] failed: ${message}`);
     return null;

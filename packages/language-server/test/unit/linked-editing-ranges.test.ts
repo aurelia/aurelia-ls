@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleLinkedEditingRange } from "@aurelia-ls/language-server/api";
+import { testRequestGuard } from "./test-request-guard.js";
 
 const uri = "file:///app/src/app.html";
 const text = "<template><my-card value.bind=\"title\"></my-card><input /></template>";
@@ -89,9 +90,9 @@ describe("runtime-backed linked editing ranges", () => {
     const result = await handleLinkedEditingRange(ctx as never, {
       textDocument: { uri },
       position,
-    });
+    }, testRequestGuard);
 
-    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(doc, position);
+    expect(ctx.semanticRuntime.templateCursorInfo).toHaveBeenCalledWith(doc, position, testRequestGuard);
     expect(result).toEqual({
       ranges: [
         range(openTagStart, openTagEnd),
@@ -107,7 +108,7 @@ describe("runtime-backed linked editing ranges", () => {
     const result = await handleLinkedEditingRange(ctx as never, {
       textDocument: { uri },
       position: doc.positionAt(text.indexOf("value.bind")),
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
   });
@@ -122,7 +123,7 @@ describe("runtime-backed linked editing ranges", () => {
     const result = await handleLinkedEditingRange(ctx as never, {
       textDocument: { uri },
       position: doc.positionAt(inputStart + 2),
-    });
+    }, testRequestGuard);
 
     expect(result).toBeNull();
   });

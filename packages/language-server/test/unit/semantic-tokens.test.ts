@@ -8,6 +8,7 @@ import {
   type ServerContext,
 } from "@aurelia-ls/language-server/api";
 import type { SemanticTemplateSemanticTokenRow } from "@aurelia-ls/semantic-runtime";
+import { testRequestGuard } from "./test-request-guard.js";
 
 function createContext(text: string, tokens: SemanticTemplateSemanticTokenRow[]): ServerContext {
   const uri = "file:///test.html";
@@ -61,7 +62,7 @@ describe("semantic tokens handler", () => {
     ];
 
     const ctx = createContext(text, tokens);
-    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } });
+    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, testRequestGuard);
 
     expect(result?.data).toEqual([
       0, 1, 7, 0, 0,
@@ -84,7 +85,7 @@ describe("semantic tokens handler", () => {
     ];
 
     const ctx = createContext(text, tokens);
-    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } });
+    const result = await handleSemanticTokensFull(ctx, { textDocument: { uri: "file:///test.html" } }, testRequestGuard);
 
     // type index 3 = aureliaController; modifier bits 5+6 => 32 + 64 = 96
     expect(result?.data).toEqual([0, 5, 6, 3, 96]);
