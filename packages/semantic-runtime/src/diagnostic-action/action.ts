@@ -182,6 +182,114 @@ export enum DiagnosticActionTargetSourceCoverage {
   NotApplicable = 'not-applicable',
 }
 
+export type DiagnosticRepairActionability =
+  | 'guided'
+  | 'manual'
+  | 'none';
+
+export type DiagnosticRepairEditPlanState =
+  | 'available'
+  | 'not-available';
+
+export type DiagnosticRepairApplicationKind =
+  | 'none'
+  | 'single-edit'
+  | 'fix-all';
+
+type DiagnosticRepairSuggestionLike = {
+  readonly suggestionKind?: string | null;
+  readonly actionKind?: string | null;
+  readonly actionTarget?: {
+    readonly targetKind?: string | null;
+    readonly source?: unknown;
+  } | null;
+} | null | undefined;
+
+export interface DiagnosticRepairAffordance {
+  readonly actionKind: DiagnosticActionKind | `${DiagnosticActionKind}`;
+  readonly planKind: DiagnosticActionPlanKind | `${DiagnosticActionPlanKind}`;
+  readonly changeDomain: DiagnosticActionChangeDomain | `${DiagnosticActionChangeDomain}`;
+  readonly readiness: DiagnosticActionPlanReadiness | `${DiagnosticActionPlanReadiness}`;
+  readonly targetSourceCoverage: DiagnosticActionTargetSourceCoverage | `${DiagnosticActionTargetSourceCoverage}`;
+  readonly actionability: DiagnosticRepairActionability;
+  readonly editPlanState: DiagnosticRepairEditPlanState;
+  readonly applicationKind: DiagnosticRepairApplicationKind;
+}
+
+export function diagnosticRepairAffordanceForSuggestion(
+  suggestion: DiagnosticRepairSuggestionLike,
+  options: {
+    readonly openReasonKinds?: readonly string[];
+    readonly editPlanState?: DiagnosticRepairEditPlanState;
+  } = {},
+): DiagnosticRepairAffordance {
+  const actionKind = diagnosticActionKindForDiagnosticSuggestion(suggestion?.suggestionKind ?? null);
+  const planKind = diagnosticActionPlanKindForAction(
+    actionKind,
+    suggestion?.actionKind ?? null,
+    suggestion?.actionTarget?.targetKind ?? null,
+  );
+  const targetSourceCoverage = diagnosticActionTargetSourceCoverageForSuggestion(suggestion);
+  const changeDomain = diagnosticActionChangeDomainForPlan(planKind);
+  let readiness = diagnosticActionPlanReadinessForCluster(
+    planKind,
+    targetSourceCoverage,
+    options.openReasonKinds ?? [],
+  );
+  const editPlanState = options.editPlanState ?? 'not-available';
+  if (
+    editPlanState === 'available'
+    && readiness === DiagnosticActionPlanReadiness.SourceEditPolicyOpen
+  ) {
+    readiness = DiagnosticActionPlanReadiness.ReadyToPlan;
+  }
+  return {
+    actionKind,
+    planKind,
+    changeDomain,
+    readiness,
+    targetSourceCoverage,
+    actionability: diagnosticRepairActionabilityForAffordance(
+      changeDomain,
+      readiness,
+    ),
+    editPlanState,
+    applicationKind: diagnosticRepairApplicationKindForEditPlanState(editPlanState),
+  };
+}
+
+export function diagnosticActionTargetSourceCoverageForSuggestion(
+  suggestion: DiagnosticRepairSuggestionLike,
+): DiagnosticActionTargetSourceCoverage {
+  if (suggestion == null) {
+    return DiagnosticActionTargetSourceCoverage.NotApplicable;
+  }
+  return suggestion.actionTarget?.source == null
+    ? DiagnosticActionTargetSourceCoverage.None
+    : DiagnosticActionTargetSourceCoverage.All;
+}
+
+function diagnosticRepairActionabilityForAffordance(
+  changeDomain: DiagnosticActionChangeDomain | `${DiagnosticActionChangeDomain}`,
+  readiness: DiagnosticActionPlanReadiness | `${DiagnosticActionPlanReadiness}`,
+): DiagnosticRepairActionability {
+  if (
+    changeDomain === DiagnosticActionChangeDomain.Inspection
+    || changeDomain === DiagnosticActionChangeDomain.SemanticRuntimeSubstrate
+    || readiness === DiagnosticActionPlanReadiness.InspectionRequired
+    || readiness === DiagnosticActionPlanReadiness.SubstrateWorkRequired
+  ) {
+    return 'manual';
+  }
+  return 'guided';
+}
+
+function diagnosticRepairApplicationKindForEditPlanState(
+  editPlanState: DiagnosticRepairEditPlanState,
+): DiagnosticRepairApplicationKind {
+  return editPlanState === 'available' ? 'single-edit' : 'none';
+}
+
 export function diagnosticActionKindForDiagnosticSuggestion(
   suggestionKind: string | null | undefined,
 ): DiagnosticActionKind {

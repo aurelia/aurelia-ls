@@ -3,6 +3,30 @@ import type { KernelStore } from '../kernel/store.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
+  diagnosticRepairAffordanceForSuggestion,
+} from '../diagnostic-action/action.js';
+import {
+  ConfigurationStepKind,
+  type ConfigurationStep,
+} from '../configuration/configuration-sequence.js';
+import {
+  FrameworkCapabilityAdmissionState,
+  FrameworkCapabilityAvailabilityState,
+  type FrameworkCapabilityDemand,
+} from '../framework/capability-demand.js';
+import {
+  aureliaEntrypointRegistrationExpressionText,
+} from '../source-plan/aurelia-entrypoint-source-plan.js';
+import {
+  aureliaFrameworkRegistrationAdmissionSource,
+  type AureliaFrameworkRegistrationAdmissionSource,
+} from '../source-plan/aurelia-framework-registration-admission-source.js';
+import {
+  planAureliaRegisterChainSourceOperation,
+  planTypeScriptImportSourceOperations,
+  type TypeScriptSourceOperationEdit,
+} from '../source-plan/typescript-source-operation.js';
+import {
   readSemanticTemplateCursorInfo,
   readSemanticTemplateCompletions,
   readSemanticTemplateDiagnostics,
@@ -481,7 +505,7 @@ export class SemanticAppTemplateQueries {
     const actions = uniqueTemplateCodeActionRows(
       diagnostics
         .filter((diagnostic) => diagnosticContainsCursor(diagnostic, cursor))
-        .map((diagnostic) => declareMemberCodeActionForDiagnostic(this.store, this.emission, diagnostic))
+        .map((diagnostic) => templateCodeActionForDiagnostic(this.store, this.emission, diagnostic))
         .filter((row): row is SemanticTemplateCodeActionRow => row != null),
     );
 
@@ -1023,28 +1047,32 @@ function diagnosticContainsCursor(
     && cursor.offset <= source.end;
 }
 
-function declareMemberCodeActionForDiagnostic(
+function templateCodeActionForDiagnostic(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   diagnostic: SemanticTemplateDiagnosticRow,
 ): SemanticTemplateCodeActionRow | null {
+  return declareViewModelMemberCodeActionForDiagnostic(store, emission, diagnostic)
+    ?? registerFrameworkCapabilityCodeActionForDiagnostic(store, emission, diagnostic);
+}
+
+function declareViewModelMemberCodeActionForDiagnostic(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  diagnostic: SemanticTemplateDiagnosticRow,
+): SemanticTemplateCodeActionRow | null {
+  if (!diagnosticHasViewModelMemberDeclarationPlan(diagnostic)) {
+    return null;
+  }
   const suggestion = diagnostic.suggestion;
-  if (suggestion?.actionKind !== 'declare-member') {
-    return null;
-  }
-  if (
-    suggestion.suggestionKind !== 'declare-explicit-member'
-    && suggestion.suggestionKind !== 'declare-assignable-member'
-  ) {
-    return null;
-  }
 
   const memberName = suggestion.targetMemberName ?? suggestion.actionTarget?.memberName ?? diagnostic.selectedMemberName;
   if (memberName == null || !isValidRenameIdentifier(memberName)) {
     return null;
   }
 
-  const resource = templateResourceForDiagnosticSource(store, emission, diagnostic.source);
+  const actionSource = exactSourceReference(suggestion.actionTarget?.source ?? null);
+  const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
   if (resource == null) {
     return null;
   }
@@ -1061,9 +1089,189 @@ function declareMemberCodeActionForDiagnostic(
     actionKind: suggestion.actionKind,
     diagnosticSource: exactSourceReference(diagnostic.source),
     actionTarget: suggestion.actionTarget,
+    repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
     edits: [edit],
-    isPreferred: suggestion.suggestionKind === 'declare-explicit-member',
+    isPreferred: true,
   };
+}
+
+function registerFrameworkCapabilityCodeActionForDiagnostic(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  diagnostic: SemanticTemplateDiagnosticRow,
+): SemanticTemplateCodeActionRow | null {
+  if (!diagnosticHasFrameworkCapabilityRegistrationPlan(diagnostic)) {
+    return null;
+  }
+  const actionSource = exactSourceReference(diagnostic.suggestion.actionTarget?.source ?? diagnostic.source);
+  const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
+  if (resource == null) {
+    return null;
+  }
+  const demand = frameworkCapabilityDemandForDiagnostic(store, emission, diagnostic, actionSource);
+  if (
+    demand == null
+    || demand.admissionState !== FrameworkCapabilityAdmissionState.NotAdmitted
+    || demand.availabilityState !== FrameworkCapabilityAvailabilityState.EvidenceFound
+  ) {
+    return null;
+  }
+
+  const admission = aureliaFrameworkRegistrationAdmissionSource({
+    capability: demand.requiredCapability,
+    requiredRegistrationKinds: demand.requiredRegistrationKinds,
+    preferredModuleName: demand.recommendedModuleName,
+  });
+  if (admission == null) {
+    return null;
+  }
+  const edits = frameworkRegistrationAdmissionEdits(store, emission, resource, admission);
+  if (edits.length === 0) {
+    return null;
+  }
+  const registrationLabel = admission.registrationExpressions
+    .map((expression) => aureliaEntrypointRegistrationExpressionText(expression).trim())
+    .filter((expression) => expression.length > 0)
+    .join(', ');
+  const suggestion = diagnostic.suggestion;
+  return {
+    title: `Register ${registrationLabel} for ${demand.requiredCapability}`,
+    kind: 'quickfix',
+    diagnosticKind: diagnostic.diagnosticKind,
+    suggestionKind: suggestion.suggestionKind,
+    actionKind: suggestion.actionKind,
+    diagnosticSource: exactSourceReference(diagnostic.source),
+    actionTarget: suggestion.actionTarget,
+    repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
+    edits,
+    isPreferred: true,
+  };
+}
+
+function diagnosticHasFrameworkCapabilityRegistrationPlan(
+  diagnostic: SemanticTemplateDiagnosticRow,
+): diagnostic is SemanticTemplateDiagnosticRow & {
+  readonly suggestion: NonNullable<SemanticTemplateDiagnosticRow['suggestion']>;
+} {
+  const suggestion = diagnostic.suggestion;
+  return diagnostic.diagnosticKind === 'framework-capability-not-registered'
+    && suggestion?.suggestionKind === 'register-framework-capability'
+    && suggestion.actionKind === 'register-framework-capability'
+    && suggestion.actionTarget?.targetKind === 'framework-capability';
+}
+
+function frameworkCapabilityDemandForDiagnostic(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  diagnostic: SemanticTemplateDiagnosticRow,
+  actionSource: SemanticSourceReference | null,
+): FrameworkCapabilityDemand | null {
+  const requiredCapability = diagnostic.suggestion?.targetMemberName ?? diagnostic.missingInput;
+  if (requiredCapability == null) {
+    return null;
+  }
+  return emission.capabilityDemands.readDemands().find((demand) => {
+    const demandSource = exactSourceReference(describeAddress(store, demand.sourceAddressHandle));
+    return demand.requiredCapability === requiredCapability
+      && sourceReferencesMatchExactSpan(demandSource, actionSource);
+  }) ?? null;
+}
+
+function frameworkRegistrationAdmissionEdits(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  resource: TemplateResourceEmission,
+  admission: AureliaFrameworkRegistrationAdmissionSource,
+): readonly SemanticTemplateCodeActionEditRow[] {
+  const appStep = appRootStepForTemplateResource(emission, resource, ConfigurationStepKind.AureliaApp);
+  const appSource = exactSourceReference(describeAddress(store, appStep?.sourceAddressHandle ?? null));
+  if (appSource?.path == null || appSource.start == null || appSource.end == null) {
+    return [];
+  }
+  const sourceFile = emission.typeSystem.readProgramSourceFileByPath(appSource.path);
+  if (sourceFile == null) {
+    return [];
+  }
+  const importEdits = planTypeScriptImportSourceOperations(sourceFile, admission.entrypointImports);
+  const registerEdit = planAureliaRegisterChainSourceOperation(sourceFile, {
+    appCallStart: appSource.start,
+    appCallEnd: appSource.end,
+    registrationExpressions: admission.registrationExpressions,
+  });
+  if (registerEdit == null) {
+    return [];
+  }
+  return [
+    ...importEdits,
+    registerEdit,
+  ].map(frameworkRegistrationAdmissionCodeActionEdit);
+}
+
+function frameworkRegistrationAdmissionCodeActionEdit(
+  edit: TypeScriptSourceOperationEdit,
+): SemanticTemplateCodeActionEditRow {
+  return {
+    editKind: SemanticTemplateCodeActionEditKind.RegisterFrameworkCapability,
+    source: {
+      kind: edit.editKind,
+      label: `${edit.sourceFilePath}@${edit.start}..${edit.end}`,
+      path: edit.sourceFilePath,
+      start: edit.start,
+      end: edit.end,
+    },
+    oldText: edit.oldText,
+    newText: edit.newText,
+  };
+}
+
+function appRootStepForTemplateResource(
+  emission: AureliaAppWorldProjectEmission,
+  resource: TemplateResourceEmission,
+  stepKind: ConfigurationStepKind,
+): ConfigurationStep | null {
+  const appRoot = resource.compilation.compilerWorld.world.appRoot;
+  if (appRoot?.productHandle == null && appRoot?.identityHandle == null) {
+    return null;
+  }
+  const configuration = emission.configuration.readConfiguration();
+  const sequenceProductHandles = new Set<ProductHandle>();
+  for (const sequence of configuration.sequences) {
+    if (
+      (appRoot.productHandle != null && sequence.appRoot?.productHandle === appRoot.productHandle)
+      || (appRoot.identityHandle != null && sequence.appRoot?.identityHandle === appRoot.identityHandle)
+    ) {
+      sequenceProductHandles.add(sequence.productHandle);
+    }
+  }
+  return configuration.steps.find((step) =>
+    step.stepKind === stepKind
+    && step.sequence?.productHandle != null
+    && sequenceProductHandles.has(step.sequence.productHandle)
+  ) ?? null;
+}
+
+function diagnosticHasViewModelMemberDeclarationPlan(
+  diagnostic: SemanticTemplateDiagnosticRow,
+): diagnostic is SemanticTemplateDiagnosticRow & {
+  readonly suggestion: NonNullable<SemanticTemplateDiagnosticRow['suggestion']>;
+} {
+  const suggestion = diagnostic.suggestion;
+  if (
+    diagnostic.diagnosticKind !== 'missing-expression-member'
+    || suggestion?.suggestionKind !== 'declare-explicit-member'
+    || suggestion.actionKind !== 'declare-member'
+    || suggestion.actionTarget?.targetKind !== 'expression'
+    || diagnostic.ownerTypeDisplay != null
+    || diagnostic.ownerTypeShapeKind != null
+    || diagnostic.ownerTypeOrigin != null
+  ) {
+    return false;
+  }
+
+  const diagnosticSource = exactSourceReference(diagnostic.source);
+  const actionSource = exactSourceReference(suggestion.actionTarget.source);
+  return sourceReferencesMatchExactSpan(diagnosticSource, actionSource)
+    && suggestion.actionTarget.memberName === (suggestion.targetMemberName ?? diagnostic.selectedMemberName);
 }
 
 function templateResourceForDiagnosticSource(

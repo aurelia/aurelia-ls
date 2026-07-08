@@ -148,6 +148,20 @@ describe("handleGetDiagnostics", () => {
             }),
           ],
         },
+        raw: [
+          expect.objectContaining({
+            code: "missing-expression-member",
+            message: "Cannot find member title.",
+            severity: "warning",
+            impact: "degraded",
+            actionability: "manual",
+            category: "template-syntax",
+            source: "semantic-runtime:template",
+            uri: expect.stringContaining("src/app.html"),
+            span: { start: 4, end: 9 },
+            surfaces: ["lsp", "vscode-panel"],
+          }),
+        ],
         suppressed: [],
       },
     });

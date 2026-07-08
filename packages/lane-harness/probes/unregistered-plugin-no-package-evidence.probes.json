@@ -1,0 +1,16 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/unregistered-plugin-no-package-evidence",
+  "lanes": {
+    "codeAction": [
+      {
+        "id": "router-resource-no-package-evidence",
+        "file": "src/unregistered-plugin-no-package-evidence-app.html",
+        "anchor": "<au-viewport>",
+        "at": "au-viewport",
+        "verdict": "correct",
+        "reason": "Without local router package/import evidence, the diagnostic should remain guided repair intent and TemplateCodeActions should not invent an import for a package the project may not have.",
+        "note": "NEW 2026-07-08. Negative canary for framework-capability registration source operations: package/import evidence gates edit-backed quick fixes."
+      }
+    ]
+  }
+}

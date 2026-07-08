@@ -8,15 +8,11 @@ import {
   DiagnosticActionKind,
   DiagnosticActionPlanKind,
   DiagnosticActionPlanReadiness,
-  DiagnosticActionTargetSourceCoverage,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
   readFixtureVerificationSnapshot,
   SemanticAppQueryKind,
-  diagnosticActionChangeDomainForPlan,
-  diagnosticActionKindForDiagnosticSuggestion,
-  diagnosticActionPlanKindForAction,
-  diagnosticActionPlanReadinessForCluster,
+  diagnosticRepairAffordanceForSuggestion,
   verifyFixtureEffects,
 } from '../out/index.js';
 
@@ -778,22 +774,14 @@ function effectFilter(field, value) {
 }
 
 function readDiagnosticActionProbe() {
-  const actionKind = diagnosticActionKindForDiagnosticSuggestion('register-framework-capability');
-  const planKind = diagnosticActionPlanKindForAction(
-    actionKind,
-    'register-framework-capability',
-    'framework-capability',
-  );
-  return {
-    actionKind,
-    planKind,
-    changeDomain: diagnosticActionChangeDomainForPlan(planKind),
-    readiness: diagnosticActionPlanReadinessForCluster(
-      planKind,
-      DiagnosticActionTargetSourceCoverage.All,
-      [],
-    ),
-  };
+  return diagnosticRepairAffordanceForSuggestion({
+    suggestionKind: 'register-framework-capability',
+    actionKind: 'register-framework-capability',
+    actionTarget: {
+      targetKind: 'framework-capability',
+      source: {},
+    },
+  });
 }
 
 async function verifyFixture(fixtureRoot, storeKey, expectedEffects) {

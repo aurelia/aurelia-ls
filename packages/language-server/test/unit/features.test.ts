@@ -243,7 +243,13 @@ function createMockReferencesContext() {
   const declarationStart = definitionText.indexOf("message");
   const document = {
     uri: "file:///app/src/my-app.html",
+    languageId: "html",
     offsetAt: vi.fn(() => messageStart),
+    positionAt: vi.fn((offset: number) => {
+      const prefix = testText.slice(0, offset);
+      const lines = prefix.split("\n");
+      return { line: lines.length - 1, character: lines.at(-1)?.length ?? 0 };
+    }),
     getText: vi.fn(() => testText),
   };
   return {
@@ -309,7 +315,9 @@ function createMockReferencesContext() {
 function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
   const document = {
     uri: "file:///app/src/my-app.html",
+    languageId: "html",
     offsetAt: vi.fn(() => codeActionStart + 1),
+    positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => codeActionText),
   };
   const actions = input.actions ?? [
@@ -327,6 +335,16 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
         end: codeActionStart + "titel".length,
       },
       actionTarget: null,
+      repair: {
+        actionKind: "declare-missing-member",
+        planKind: "source-member-declaration",
+        changeDomain: "app-source",
+        readiness: "ready-to-plan",
+        targetSourceCoverage: "all",
+        actionability: "guided",
+        editPlanState: "available",
+        applicationKind: "single-edit",
+      },
       edits: [
         {
           editKind: "declare-view-model-member",
@@ -530,7 +548,7 @@ describe("handleDocumentHighlight", () => {
     expect(ctx.semanticRuntime.templateReferences).toHaveBeenCalledWith(
       expect.objectContaining({ uri: "file:///app/src/my-app.html" }),
       params.position,
-      false,
+      true,
     );
     expect(result).toEqual([
       {
@@ -568,6 +586,15 @@ describe("handleCodeAction", () => {
       title: "Declare member 'titel' on MyApp",
       kind: "quickfix",
       isPreferred: true,
+      data: expect.objectContaining({
+        semanticRuntime: expect.objectContaining({
+          repairAffordance: expect.objectContaining({
+            actionability: "guided",
+            editPlanState: "available",
+            applicationKind: "single-edit",
+          }),
+        }),
+      }),
     }));
     expect(result?.[0]?.edit?.changes?.[definitionLspUri]).toEqual([
       expect.objectContaining({ newText: "\n  titel!: unknown;" }),

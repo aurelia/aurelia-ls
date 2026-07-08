@@ -315,6 +315,7 @@ export async function handleCodeAction(ctx: ServerContext, params: CodeActionPar
     return mapSemanticRuntimeTemplateCodeActions(response, lookupText, {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
+      diagnostics: params.context.diagnostics,
       onMappingFailure: (row, failures) => {
         ctx.logger.warn(`[codeAction] skipped unsafe code action "${row.title}": ${failures.join(" ")}`);
       },

@@ -18,6 +18,9 @@ import type {
   SemanticTemplateCompilationRow,
   SemanticTemplateCursorInfoResult,
 } from "@aurelia-ls/semantic-runtime";
+import {
+  diagnosticRepairAffordanceForSuggestion,
+} from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
@@ -25,7 +28,7 @@ import { mapSemanticRuntimeTemplateRenameEdit } from "../mapping/lsp-types.js";
 
 type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
 type DiagnosticImpact = "blocking" | "degraded" | "informational";
-type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+type DiagnosticActionability = "guided" | "manual" | "none";
 type DiagnosticCategory =
   | "expression"
   | "template-syntax"
@@ -163,7 +166,7 @@ function toRuntimeSnapshotItem(
     message: row.summary,
     severity: runtimeDiagnosticSeverity(row.severity),
     impact: runtimeDiagnosticImpact(row.severity),
-    actionability: row.suggestion == null ? "manual" : "guided",
+    actionability: diagnosticRepairAffordanceForSuggestion(row.suggestion).actionability,
     category: runtimeDiagnosticCategory(row),
     status,
     source: `semantic-runtime:${row.diagnosticDomain}`,
@@ -179,6 +182,8 @@ function toRuntimeSnapshotItem(
       missingInput: row.missingInput ?? null,
       missingInputs: row.missingInputs ?? [],
       subject: row.subject ?? null,
+      suggestion: row.suggestion ?? null,
+      repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
     },
     related: runtimeDiagnosticRelatedInformation(workspaceRoot, row.relatedInformation ?? []),
     surfaces: ["lsp", "vscode-panel"],

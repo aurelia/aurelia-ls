@@ -531,7 +531,9 @@ resources. Authored sites remain inert or unresolved when their framework capabi
 diagnostic suggestion targets the framework capability and includes manifest/import availability evidence when present.
 When no local manifest/import evidence exists, the suggestion says so instead of implying the package is already
 available. Diagnostic-action classification treats these rows as app-source framework-capability registration pressure
-with source-edit policy still open, because the template demand site is not itself the bootstrap edit location.
+with source-edit policy open until a later planner proves the bootstrap edit location. `TemplateCodeActions` can now
+promote supported rows to exact source operations when local package/import evidence exists and the owning template
+world can be routed back to an app-root `.app(...)` configuration chain.
 `FrameworkCapabilityDemands` exposes the underlying authored demand rows directly, including admission state,
 package/import availability evidence, source-file scoping, related issue lanes, and compact actionability posture.
 Use it to inspect registered, missing, unknown, and chain-unproven capability demand facts without changing which rows
@@ -590,11 +592,16 @@ the IDE/LSP reference projection for template expression reads and intentionally
 or framework declaration spans when a source-backed member cannot be proven.
 `TemplateCodeActions` is the conservative edit-planning projection for runtime-owned template diagnostics at a cursor.
 It reads the same diagnostic rows as `TemplateDiagnostics`, but only turns a suggestion into an edit when semantic-runtime
-can prove the authored target and exact insertion span. The first supported edit family is `declare-view-model-member`
-for missing root-scope members: it finds the custom element class that owns the selected template and inserts a
-definite-assignment `unknown` member through the TypeScript Program AST. Other diagnostic suggestions remain structured
-repair intent until a future planner can prove their source operation; clients should not treat every suggestion row as
-an autofix.
+can prove the authored target and exact insertion span. Supported edit families include `declare-view-model-member`
+for missing root-scope members, and `register-framework-capability` for closed framework capability demands whose
+owning compiler world resolves to an app-root `.app(...)` chain with local package/import evidence. Framework
+registration edits are planned through `source-plan`: imports are updated with TypeScript AST spans, and
+`.register(...)` is inserted before the proven app-root call. Other diagnostic suggestions remain structured repair
+intent until a future planner can prove their source operation; clients should not treat every suggestion row as an
+automatic fix. Code-action rows carry a `repair` affordance with `editPlanState: "available"` and
+`applicationKind: "single-edit"`; diagnostic payloads expose the same affordance without that edit-backed state. The
+split is intentional: a diagnostic may be `guided` while one returned quick fix carries a concrete single-edit plan,
+because the edit planner has crossed the stricter source operation boundary.
 `TemplateInlayHints` is the IDE-shaped template hint projection. Rows are source-file filterable and currently expose
 implicit binding-mode resolution: authored default `.bind` command intent, the resolved runtime binding mode, a
 display-friendly mode label, and exact authored insertion source. The row's primary `source` is the attribute-name span
@@ -622,7 +629,7 @@ distinct target member names, and member-level hints with evidence counts plus o
 hints also carry their source: `selected-member` when the TypeChecker already projected the
 member, `assignment-target` when a binding assignment target supplies the value type, or `binding-target` when a
 value-site target type can honestly be inferred. Missing coverage is still useful signal; do not fill it from text
-interpolation or a weak/null target observer just to make an autofix look complete. Pressure scripts must summarize
+interpolation or a weak/null target observer just to make an edit plan look complete. Pressure scripts must summarize
 those dimensions without printing app-specific member names or paths, but the API keeps them available for future
 code-action planning, such as proposing an interface shape from repeated weak-owner member reads or deciding which
 member hints still need value-type inference. Keep repair/edit planning outside diagnostic row projection: diagnostics
@@ -643,7 +650,7 @@ Clusters also publish a planning classification: `planKind`, likely `changeDomai
 semantic repair intents, not edits. A weak owner cluster can now say "strengthen this app-source owner type" and carry
 the observed member/type surface, while a router or evaluator seam can stay in the runtime-policy or substrate lane. The
 readiness value keeps source edit policy, missing target source, runtime intent, and substrate work distinct so a future
-code-action layer does not mistake a high-count cluster for an immediately safe autofix.
+code-action layer does not mistake a high-count cluster for an immediately safe edit plan.
 Source-bearing open seams publish a `runtime-boundary` action target when the owning seam has an authored address. That
 does not mean the edit is known; it means the future planner has a precise source locus for collecting user/product
 intent, such as deciding whether a dynamic router `href` is deliberately external, should become a static navigation

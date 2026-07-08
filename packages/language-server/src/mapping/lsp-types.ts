@@ -37,6 +37,9 @@ import type {
   SemanticTemplateReferencesResult,
   SemanticTemplateRenameResult,
 } from "@aurelia-ls/semantic-runtime";
+import {
+  diagnosticRepairAffordanceForSuggestion,
+} from "@aurelia-ls/semantic-runtime";
 import { canonicalDocumentUri, type DocumentUri } from "../utils/document-uri.js";
 
 export interface SourceSpan {
@@ -54,7 +57,7 @@ export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
 
 type DiagnosticImpact = "blocking" | "degraded" | "informational";
-type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+type DiagnosticActionability = "guided" | "manual" | "none";
 type DiagnosticCategory =
   | "expression"
   | "template-syntax"
@@ -117,7 +120,7 @@ function semanticRuntimeDiagnosticImpact(
 function semanticRuntimeDiagnosticActionability(
   row: SemanticAppDiagnosticRow,
 ): DiagnosticActionability {
-  return row.suggestion == null ? "manual" : "guided";
+  return diagnosticRepairAffordanceForSuggestion(row.suggestion).actionability;
 }
 
 function semanticRuntimeDiagnosticCategory(row: SemanticAppDiagnosticRow): DiagnosticCategory {
@@ -345,6 +348,7 @@ function semanticRuntimeDiagnosticData(
     source: row.source,
     subject: row.subject ?? null,
     suggestion: row.suggestion,
+    repairAffordance: diagnosticRepairAffordanceForSuggestion(row.suggestion),
   };
   return {
     semanticRuntime: runtime,
@@ -919,6 +923,7 @@ export function mapSemanticRuntimeTemplateCodeActions(
   options: {
     readonly workspaceRoot: string | null;
     readonly originDocument: TextDocument;
+    readonly diagnostics?: readonly Diagnostic[];
     readonly onMappingFailure?: (
       row: SemanticTemplateCodeActionsResult["rows"][number],
       failures: readonly string[],
@@ -936,11 +941,13 @@ export function mapSemanticRuntimeTemplateCodeActions(
       options.onMappingFailure?.(row, mapping.failures);
       continue;
     }
+    const diagnostics = semanticRuntimeTemplateCodeActionDiagnostics(row, options.diagnostics ?? [], options.originDocument);
     actions.push({
       title: row.title,
       kind: row.kind,
       edit: mapping.edit,
       isPreferred: row.isPreferred,
+      ...(diagnostics.length === 0 ? {} : { diagnostics }),
       data: {
         semanticRuntime: {
           queryKind: "template-code-actions",
@@ -948,9 +955,45 @@ export function mapSemanticRuntimeTemplateCodeActions(
           suggestionKind: row.suggestionKind,
           actionKind: row.actionKind,
           actionTarget: row.actionTarget,
+          repairAffordance: row.repair,
         },
       },
     });
   }
   return actions.length === 0 ? null : actions;
+}
+
+function semanticRuntimeTemplateCodeActionDiagnostics(
+  row: SemanticTemplateCodeActionsResult["rows"][number],
+  diagnostics: readonly Diagnostic[],
+  originDocument: TextDocument,
+): Diagnostic[] {
+  const range = row.diagnosticSource == null
+    ? null
+    : semanticRuntimeRangeForSource(row.diagnosticSource, originDocument);
+  return diagnostics.filter((diagnostic) => {
+    const runtime = semanticRuntimeDiagnosticDataPayload(diagnostic.data);
+    if (runtime?.diagnosticKind !== row.diagnosticKind) {
+      return false;
+    }
+    return range == null || rangesEqual(diagnostic.range, range);
+  });
+}
+
+function semanticRuntimeDiagnosticDataPayload(data: unknown): Record<string, unknown> | null {
+  if (data == null || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+  const root = data as Record<string, unknown>;
+  const runtime = root["semanticRuntime"];
+  return runtime != null && typeof runtime === "object" && !Array.isArray(runtime)
+    ? runtime as Record<string, unknown>
+    : null;
+}
+
+function rangesEqual(left: Range, right: Range): boolean {
+  return left.start.line === right.start.line
+    && left.start.character === right.start.character
+    && left.end.line === right.end.line
+    && left.end.character === right.end.character;
 }

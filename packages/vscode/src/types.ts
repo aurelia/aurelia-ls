@@ -1,4 +1,4 @@
-export type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
+export type DiagnosticActionability = "guided" | "manual" | "none";
 export type DiagnosticCategory =
   | "expression"
   | "template-syntax"

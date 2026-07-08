@@ -1,6 +1,7 @@
 export * from './aurelia-configuration-admission-kind.js';
 export * from './aurelia-configuration-admission-source.js';
 export * from './aurelia-entrypoint-source-plan.js';
+export * from './aurelia-framework-registration-admission-source.js';
 export * from './package-tooling.js';
 export * from './route-source-pattern.js';
 export * from './source-field-schema.js';
@@ -10,4 +11,13 @@ export * from './source-pattern-modules.js';
 export * from './source-plan.js';
 export * from './source-template.js';
 export * from './typescript-import-source.js';
+export * from './typescript-source-operation.js';
 export * from './typescript-source-text.js';
+
+export {
+  FrameworkRegistrationCapability,
+  FrameworkRegistrationRole,
+} from '../registration/framework-registration-manifest.js';
+export {
+  FrameworkRegistrationKind,
+} from '../registration/registration-reference.js';

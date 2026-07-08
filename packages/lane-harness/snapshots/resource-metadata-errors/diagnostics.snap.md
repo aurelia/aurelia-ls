@@ -34,6 +34,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -71,6 +81,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -108,6 +128,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -145,6 +175,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -182,6 +222,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -219,6 +269,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -256,6 +316,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -293,6 +363,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "typescript-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -332,6 +412,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0507"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -371,6 +461,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-controller:AUR0508"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -408,6 +508,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -445,6 +555,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -482,6 +602,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -519,6 +649,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -556,6 +696,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -593,6 +743,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -630,6 +790,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -669,6 +839,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "template-compiler:AUR0717"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -706,6 +886,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -743,6 +933,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -780,6 +980,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -817,6 +1027,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -854,6 +1074,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -891,6 +1121,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -928,6 +1168,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -965,6 +1215,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1002,6 +1262,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInput": null,
         "missingInputs": [],
         "relatedQueryKind": "resource-issues",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "not-applicable"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1061,6 +1331,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1118,6 +1398,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1175,6 +1465,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1232,6 +1532,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1289,6 +1599,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1346,6 +1666,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1403,6 +1733,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1460,6 +1800,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "typescript-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1519,6 +1869,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-controller:AUR0507"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1578,6 +1938,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-controller:AUR0508"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1635,6 +2005,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1692,6 +2072,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1749,6 +2139,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1806,6 +2206,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1863,6 +2273,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1920,6 +2340,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1977,6 +2407,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2036,6 +2476,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "template-compiler:AUR0717"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2093,6 +2543,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2150,6 +2610,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2207,6 +2677,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2264,6 +2744,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2321,6 +2811,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2378,6 +2878,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2435,6 +2945,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2492,6 +3012,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2549,6 +3079,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInput": null,
               "missingInputs": [],
               "relatedQueryKind": "resource-issues",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "not-applicable"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2609,6 +3149,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2653,6 +3203,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2697,6 +3257,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2741,6 +3311,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2785,6 +3365,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2829,6 +3419,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2873,6 +3473,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2917,6 +3527,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "typescript-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -2961,6 +3581,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3005,6 +3635,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3049,6 +3689,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3095,6 +3745,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "template-compiler:AUR0717"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3139,6 +3799,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3183,6 +3853,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3227,6 +3907,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3271,6 +3961,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3315,6 +4015,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3361,6 +4071,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-controller:AUR0507"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3407,6 +4127,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-controller:AUR0508"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3451,6 +4181,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3495,6 +4235,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3539,6 +4289,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3583,6 +4343,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3627,6 +4397,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3671,6 +4451,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3715,6 +4505,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3759,6 +4559,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInput": null,
           "missingInputs": [],
           "relatedQueryKind": "resource-issues",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "not-applicable"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3813,6 +4623,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -3857,6 +4677,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -3901,6 +4731,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -3945,6 +4785,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -3989,6 +4839,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4033,6 +4893,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4077,6 +4947,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4121,6 +5001,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "typescript-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4167,6 +5057,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-controller:AUR0507"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4213,6 +5113,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-controller:AUR0508"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4257,6 +5167,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4301,6 +5221,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4345,6 +5275,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4389,6 +5329,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4433,6 +5383,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4477,6 +5437,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4521,6 +5491,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4567,6 +5547,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "template-compiler:AUR0717"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4611,6 +5601,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4655,6 +5655,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4699,6 +5709,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4743,6 +5763,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4787,6 +5817,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4831,6 +5871,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4875,6 +5925,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4919,6 +5979,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4963,6 +6033,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInput": null,
             "missingInputs": [],
             "relatedQueryKind": "resource-issues",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "not-applicable"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,

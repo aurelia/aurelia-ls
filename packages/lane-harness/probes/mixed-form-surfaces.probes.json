@@ -69,6 +69,17 @@
         "note": "NEW 2026-07-07. Diagnostics lane pressure for an unknown repeat-local member (`option.label`). Expected evidence class: weak owner/member policy with no false concrete-member claim. FLIPPED wrong->correct 2026-07-07: semantic-runtime now preserves a shared `template-member-access` subject for the overlay row and the semantic weak-owner row. AppDiagnostics returns rawRowCount=2 and a presentation group with primary TS18046 plus contextual weak-owner evidence; LSP publishes one diagnostic with relatedInformation. This follows LSP/VS Code diagnostic related-information semantics and TypeScript's `unknown` narrowing model: the actionable repair is to type/narrow the repeat source (`options`/`option`), not to edit the `label` token as an independent issue."
       }
     ],
+    "codeAction": [
+      {
+        "id": "weakMetadata-source-owner-type-no-viewmodel-edit",
+        "file": "src/app.html",
+        "anchor": "weakMetadata.source",
+        "at": "source",
+        "verdict": "correct",
+        "reason": "The diagnostic target is the owner type for `weakMetadata`, not the SupportDeskApp class; until an owner-type strengthening planner exists, codeAction must return no edit.",
+        "note": "Regression canary for the pre-fix wrong action that inserted `source!: unknown;` into SupportDeskApp. The structured diagnostic repair affordance may be guided, but TemplateCodeActions is edit-backed only."
+      }
+    ],
     "hover": [
       {
         "id": "bindable-member-label-silent-partial",

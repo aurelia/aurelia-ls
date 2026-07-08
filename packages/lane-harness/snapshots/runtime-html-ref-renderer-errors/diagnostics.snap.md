@@ -36,6 +36,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0750"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -75,6 +85,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0762"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -114,6 +134,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0763"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -153,6 +183,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "runtime-renderer:AUR0751"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "rewrite-template-syntax",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "template-syntax-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -214,6 +254,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-renderer:AUR0750"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -273,6 +323,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-renderer:AUR0762"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -332,6 +392,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-renderer:AUR0763"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -391,6 +461,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "runtime-renderer:AUR0751"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "rewrite-template-syntax",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "template-syntax-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -453,6 +533,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-renderer:AUR0763"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -499,6 +589,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-renderer:AUR0751"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -545,6 +645,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-renderer:AUR0750"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -591,6 +701,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "runtime-renderer:AUR0762"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "rewrite-template-syntax",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "template-syntax-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -647,6 +767,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-renderer:AUR0750"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -693,6 +823,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-renderer:AUR0762"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -739,6 +879,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-renderer:AUR0763"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -785,6 +935,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "runtime-renderer:AUR0751"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "rewrite-template-syntax",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "template-syntax-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,

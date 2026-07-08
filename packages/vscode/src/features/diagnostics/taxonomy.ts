@@ -17,7 +17,6 @@ const DIAGNOSTIC_IMPACTS = new Set<DiagnosticImpact>([
 ]);
 
 const DIAGNOSTIC_ACTIONABILITIES = new Set<DiagnosticActionability>([
-  "autofix",
   "guided",
   "manual",
   "none",

@@ -15,7 +15,7 @@ const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 const OPEN_SETTLE_TIMEOUT_MS = 750;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
-const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics"]);
+const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
 
 // Keep in sync with COMPLETION_GAP_MARKER_LABEL in packages/language-server/src/mapping/lsp-types.ts.
 const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
@@ -426,7 +426,7 @@ function requireValue(args, index, flag) {
 function usage() {
   return [
     "Usage:",
-    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight|diagnostics> [--probe <id>] [--update]",
+    "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture <fixture-name> --lane <rename|references|hover|completions|definition|documentHighlight|diagnostics|codeAction> [--probe <id>] [--update]",
     "",
     "Example:",
     "  pnpm --filter @aurelia-ls/lane-harness lane -- --fixture app-pattern-routed-catalog-storefront --lane rename --update",
@@ -538,6 +538,8 @@ async function runLaneProbe(client, fixtureRoot, lane, probe, readFixtureText) {
       return runDocumentHighlightProbe(client, fixtureRoot, probe, readFixtureText);
     case "diagnostics":
       return runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText);
+    case "codeAction":
+      return runCodeActionProbe(client, fixtureRoot, probe, readFixtureText);
     default:
       throw new HarnessError(`Unsupported lane: ${lane}`);
   }
@@ -801,6 +803,98 @@ async function runDiagnosticsProbe(client, fixtureRoot, probe, readFixtureText) 
     customSummary,
     alignment: summarizeDiagnosticsAlignment(publishSummary, customSummary),
   };
+}
+
+async function runCodeActionProbe(client, fixtureRoot, probe, readFixtureText) {
+  const relativeFile = normalizeRelativePath(probe.file);
+  const sourceText = await readFixtureText(relativeFile);
+  const anchor = resolveAnchorPosition(sourceText, probe);
+  const absoluteFile = resolveFixturePath(fixtureRoot, relativeFile);
+  const uri = pathToFileURL(absoluteFile).href;
+  const range = { start: anchor.position, end: anchor.position };
+  const publishNotifications = await client.waitForNotifications(
+    "textDocument/publishDiagnostics",
+    1,
+    (notification) => notification.params?.uri === uri,
+    DIAGNOSTICS_TIMEOUT_MS,
+  );
+  const codeActionDiagnostics = codeActionContextDiagnostics(
+    publishNotifications.at(-1)?.params?.diagnostics,
+    range,
+  );
+
+  const codeActionResponse = await client.request("textDocument/codeAction", {
+    textDocument: { uri },
+    range,
+    context: {
+      diagnostics: codeActionDiagnostics,
+      only: ["quickfix"],
+    },
+  });
+
+  const actions = codeActionResponse.error
+    ? []
+    : Array.isArray(codeActionResponse.result)
+      ? codeActionResponse.result
+      : [];
+  const expectedOldTexts = codeActionExpectedOldTexts(probe);
+  const actionResults = [];
+  for (let index = 0; index < actions.length; index += 1) {
+    const action = actions[index];
+    actionResults.push({
+      index,
+      title: String(action?.title ?? ""),
+      kind: action?.kind ?? null,
+      isPreferred: action?.isPreferred ?? null,
+      disabled: normalizeSnapshotValue(action?.disabled ?? null),
+      command: normalizeSnapshotValue(action?.command ?? null),
+      diagnosticCount: Array.isArray(action?.diagnostics) ? action.diagnostics.length : 0,
+      data: normalizeSnapshotValue(action?.data ?? null),
+      apply: await applyWorkspaceEdit({
+        workspaceEdit: action?.edit ?? null,
+        fixtureRoot,
+        readFixtureText,
+        expectedOldTexts,
+      }),
+    });
+  }
+
+  return {
+    lane: "codeAction",
+    probe,
+    relativeFile,
+    anchor,
+    range,
+    codeActionResponse,
+    codeActionDiagnostics,
+    expectedOldTexts,
+    actions: actionResults,
+  };
+}
+
+function codeActionContextDiagnostics(diagnostics, range) {
+  if (!Array.isArray(diagnostics)) {
+    return [];
+  }
+  return diagnostics.filter((diagnostic) =>
+    isRange(diagnostic?.range) && rangesIntersect(diagnostic.range, range)
+  );
+}
+
+function rangesIntersect(left, right) {
+  return comparePositions(left.end, right.start) >= 0
+    && comparePositions(right.end, left.start) >= 0;
+}
+
+function comparePositions(left, right) {
+  return left.line - right.line || left.character - right.character;
+}
+
+function codeActionExpectedOldTexts(probe) {
+  if (Array.isArray(probe.expectedOldTexts)) {
+    return [...new Set(probe.expectedOldTexts.map((value) => String(value)))];
+  }
+  return [""];
 }
 
 function summarizeDocumentHighlights(result, sourceText) {
@@ -1127,6 +1221,7 @@ function summarizeDiagnosticData(data) {
     missingInput: semanticRuntime.missingInput ?? root.missingInput ?? null,
     missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? root.missingInputs ?? []),
     subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? root.subject ?? null),
+    repairAffordance: normalizeSnapshotValue(semanticRuntime.repairAffordance ?? root.repairAffordance ?? null),
     taxonomy: {
       schema: taxonomyRoot.schema ?? null,
       impact: taxonomyRoot.impact ?? null,
@@ -1843,6 +1938,64 @@ function renderLaneSnapshotSections(lines, result) {
       lines.push("");
       lines.push(fencedJson(result.alignment));
       return;
+    case "codeAction":
+      lines.push("### codeAction");
+      lines.push("");
+      lines.push(fencedJson(summarizeCodeActionResponse(result.codeActionResponse)));
+      lines.push("");
+      lines.push("### Context diagnostics");
+      lines.push("");
+      lines.push(fencedJson({
+        diagnosticCount: result.codeActionDiagnostics.length,
+        diagnostics: result.codeActionDiagnostics.map((diagnostic) => ({
+          code: normalizeSnapshotValue(diagnostic?.code ?? null),
+          message: normalizeSnapshotString(String(diagnostic?.message ?? "")),
+          source: diagnostic?.source ?? null,
+          range: isRange(diagnostic?.range) ? normalizeRangeForSnapshot(diagnostic.range) : normalizeSnapshotValue(diagnostic?.range ?? null),
+          data: summarizeDiagnosticData(diagnostic?.data),
+        })),
+      }));
+      lines.push("");
+      lines.push("### Actions");
+      lines.push("");
+      lines.push(fencedJson({
+        actionCount: result.actions.length,
+        actions: result.actions.map((action) => {
+          const { apply, ...summary } = action;
+          return summary;
+        }),
+      }));
+      lines.push("");
+      lines.push("### In-memory apply");
+      lines.push("");
+      lines.push(fencedJson({
+        expectedOldTexts: result.expectedOldTexts,
+        actions: result.actions.map((action) => ({
+          index: action.index,
+          title: action.title,
+          ...applySummary(action.apply),
+        })),
+      }));
+      lines.push("");
+      lines.push("### Applied diffs");
+      lines.push("");
+      if (result.actions.some((action) => action.apply.diffs)) {
+        for (const action of result.actions) {
+          lines.push(`#### ${action.index}: ${action.title || "(untitled action)"}`);
+          lines.push("");
+          if (action.apply.diffs) {
+            lines.push("```diff");
+            lines.push(action.apply.diffs.trimEnd());
+            lines.push("```");
+          } else {
+            lines.push("_No in-memory diff._");
+          }
+          lines.push("");
+        }
+      } else {
+        lines.push("_No in-memory diff._");
+      }
+      return;
     default:
       throw new HarnessError(`Unsupported result lane: ${result.lane}`);
   }
@@ -1901,6 +2054,39 @@ function summarizeHoverResponse(response) {
       markdownCharacters: markdown.value.length,
       range: normalizeSnapshotValue(response.result.range ?? null),
     },
+  };
+}
+
+function summarizeCodeActionResponse(response) {
+  if (response.error) {
+    return {
+      outcome: "error",
+      error: normalizeSnapshotValue(response.error),
+    };
+  }
+  if (response.result == null) {
+    return {
+      outcome: "result",
+      result: null,
+    };
+  }
+  if (!Array.isArray(response.result)) {
+    return {
+      outcome: "result",
+      result: normalizeSnapshotValue(response.result),
+    };
+  }
+  return {
+    outcome: "result",
+    actionCount: response.result.length,
+    actions: response.result.map((action) => ({
+      title: String(action?.title ?? ""),
+      kind: action?.kind ?? null,
+      isPreferred: action?.isPreferred ?? null,
+      hasEdit: action?.edit != null,
+      hasCommand: action?.command != null,
+      diagnosticCount: Array.isArray(action?.diagnostics) ? action.diagnostics.length : 0,
+    })),
   };
 }
 
@@ -2331,6 +2517,23 @@ function summaryRowForResult(result) {
         files: result.relativeFile,
         verdict: result.probe.verdict ?? "undecided",
       };
+    case "codeAction": {
+      const files = [...new Set(result.actions.flatMap((action) => action.apply.filesTouched))].sort();
+      const anomalous = result.actions.filter((action) => action.apply.anomalies.length > 0).length;
+      return {
+        id: result.probe.id,
+        outcome: result.codeActionResponse.error
+          ? "error"
+          : anomalous > 0
+            ? `apply-anomaly:${anomalous}`
+            : result.actions.length > 0
+              ? "result"
+              : "no-actions",
+        count: String(result.actions.length),
+        files: files.length > 0 ? files.join(",") : "-",
+        verdict: result.probe.verdict ?? "undecided",
+      };
+    }
     default:
       throw new HarnessError(`Unsupported result lane: ${result.lane}`);
   }

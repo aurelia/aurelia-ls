@@ -36,6 +36,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member-owner-type:index-signature-only"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "declare-missing-member",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "source-member-declaration",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
+        },
         "subject": {
           "source": {
             "end": 497,
@@ -87,6 +97,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "expression-member:selected-member-missing"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "all"
+        },
         "subject": {
           "source": {
             "end": 527,
@@ -101,7 +121,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": null
         },
         "taxonomy": {
-          "actionability": "guided",
+          "actionability": "manual",
           "category": "template-syntax",
           "confidence": null,
           "impact": "informational",
@@ -160,6 +180,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "expression-member-owner-type:index-signature-only"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "declare-missing-member",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "source-member-declaration",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
+              },
               "subject": {
                 "source": {
                   "end": 497,
@@ -224,7 +254,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "maxRawSeverity": "info",
         "primary": {
           "diagnostic": {
-            "actionability": "guided",
+            "actionability": "manual",
             "anomaly": null,
             "category": "template-syntax",
             "code": "missing-expression-member",
@@ -239,6 +269,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "expression-member:selected-member-missing"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "all"
+              },
               "subject": {
                 "source": {
                   "end": 527,
@@ -321,6 +361,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "expression-member-owner-type:index-signature-only"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "declare-missing-member",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "source-member-declaration",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
+          },
           "subject": {
             "source": {
               "end": 497,
@@ -364,7 +414,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
       },
       {
-        "actionability": "guided",
+        "actionability": "manual",
         "anomaly": null,
         "category": "template-syntax",
         "code": "missing-expression-member",
@@ -379,6 +429,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "expression-member:selected-member-missing"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
           "subject": {
             "source": {
               "end": 527,
@@ -447,6 +507,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "expression-member-owner-type:index-signature-only"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "declare-missing-member",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "source-member-declaration",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
+            },
             "subject": {
               "source": {
                 "end": 497,
@@ -490,7 +560,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
         },
         {
-          "actionability": "guided",
+          "actionability": "manual",
           "anomaly": null,
           "category": "template-syntax",
           "code": "missing-expression-member",
@@ -505,6 +575,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "expression-member:selected-member-missing"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "all"
+            },
             "subject": {
               "source": {
                 "end": 527,
@@ -598,6 +678,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "typescript:TS18046"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "inspect-type-surface",
+          "actionability": "manual",
+          "applicationKind": "none",
+          "changeDomain": "inspection",
+          "editPlanState": "not-available",
+          "planKind": "manual-inspection",
+          "readiness": "inspection-required",
+          "targetSourceCoverage": "all"
+        },
         "subject": {
           "source": {
             "end": 133,
@@ -612,7 +702,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": null
         },
         "taxonomy": {
-          "actionability": "guided",
+          "actionability": "manual",
           "category": "template-syntax",
           "confidence": null,
           "impact": "blocking",
@@ -674,7 +764,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "guided",
+            "actionability": "manual",
             "anomaly": null,
             "category": "template-syntax",
             "code": "template-expression-typescript-diagnostic",
@@ -689,6 +779,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "typescript:TS18046"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "inspect-type-surface",
+                "actionability": "manual",
+                "applicationKind": "none",
+                "changeDomain": "inspection",
+                "editPlanState": "not-available",
+                "planKind": "manual-inspection",
+                "readiness": "inspection-required",
+                "targetSourceCoverage": "all"
+              },
               "subject": {
                 "source": {
                   "end": 133,
@@ -740,7 +840,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "related": [
           {
             "diagnostic": {
-              "actionability": "guided",
+              "actionability": "manual",
               "anomaly": null,
               "category": "template-syntax",
               "code": "weak-expression-member-owner",
@@ -755,6 +855,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                   "expression-member-owner-type:no-members"
                 ],
                 "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "applicationKind": "none",
+                  "changeDomain": "inspection",
+                  "editPlanState": "not-available",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
                 "subject": {
                   "source": {
                     "end": 133,
@@ -820,7 +930,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "diagnosticCount": 2,
     "diagnostics": [
       {
-        "actionability": "guided",
+        "actionability": "manual",
         "anomaly": null,
         "category": "template-syntax",
         "code": "template-expression-typescript-diagnostic",
@@ -835,6 +945,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "typescript:TS18046"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
           "subject": {
             "source": {
               "end": 133,
@@ -878,7 +998,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html"
       },
       {
-        "actionability": "guided",
+        "actionability": "manual",
         "anomaly": null,
         "category": "template-syntax",
         "code": "weak-expression-member-owner",
@@ -893,6 +1013,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "expression-member-owner-type:no-members"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
           "subject": {
             "source": {
               "end": 133,
@@ -946,7 +1076,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "diagnosticCount": 1,
       "diagnostics": [
         {
-          "actionability": "guided",
+          "actionability": "manual",
           "anomaly": null,
           "category": "template-syntax",
           "code": "template-expression-typescript-diagnostic",
@@ -961,6 +1091,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "typescript:TS18046"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "inspect-type-surface",
+              "actionability": "manual",
+              "applicationKind": "none",
+              "changeDomain": "inspection",
+              "editPlanState": "not-available",
+              "planKind": "manual-inspection",
+              "readiness": "inspection-required",
+              "targetSourceCoverage": "all"
+            },
             "subject": {
               "source": {
                 "end": 133,

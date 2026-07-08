@@ -11,6 +11,7 @@ import type {
   DiagnosticActionPlanReadiness,
   DiagnosticActionRuntimeBoundaryKind,
   DiagnosticActionRuntimeIntentKind,
+  DiagnosticRepairAffordance,
 } from '../diagnostic-action/action.js';
 import type {
   SemanticProjectAnalysisKind,
@@ -3704,6 +3705,7 @@ export interface SemanticTemplateRenameResult {
 
 export enum SemanticTemplateCodeActionEditKind {
   DeclareViewModelMember = 'declare-view-model-member',
+  RegisterFrameworkCapability = 'register-framework-capability',
 }
 
 export interface SemanticTemplateCodeActionEditRow {
@@ -3721,6 +3723,7 @@ export interface SemanticTemplateCodeActionRow {
   readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
   readonly diagnosticSource: SemanticSourceReference | null;
   readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
+  readonly repair: DiagnosticRepairAffordance;
   readonly edits: readonly SemanticTemplateCodeActionEditRow[];
   readonly isPreferred: boolean;
 }

@@ -2,7 +2,7 @@
 
 LSP-boundary lane tests (Tier 2 of the IDE testing shape). Boots the real language server
 (`packages/language-server/out/main.js`) over stdio against a fixture workspace, drives standard
-LSP requests (rename, references, hover, completions, definition, documentHighlight, diagnostics), applies the results to
+LSP requests (rename, references, hover, completions, definition, documentHighlight, diagnostics, codeAction), applies the results to
 in-memory copies of the fixture, and snapshots before/after.
 
 **Authority for vision, doctrine, decisions, and Slice 1 scope: `.temp/ide-lane-harness-vision-2026-07-03.md`.**
@@ -33,3 +33,4 @@ Supported lanes in detection mode:
 - `definition`
 - `documentHighlight`
 - `diagnostics`
+- `codeAction`

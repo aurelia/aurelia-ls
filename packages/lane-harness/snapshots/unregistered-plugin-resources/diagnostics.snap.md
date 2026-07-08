@@ -36,6 +36,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "router.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -75,6 +85,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "router.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -114,6 +134,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "ui-virtualization.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -153,6 +183,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "validation-html.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -192,6 +232,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "validation-html.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -231,6 +281,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "i18n.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -270,6 +330,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "validation-html.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -309,6 +379,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "state.default-resources"
         ],
         "relatedQueryKind": "template-diagnostics",
+        "repairAffordance": {
+          "actionKind": "register-framework-capability",
+          "actionability": "guided",
+          "applicationKind": "none",
+          "changeDomain": "app-source",
+          "editPlanState": "not-available",
+          "planKind": "framework-capability-registration",
+          "readiness": "source-edit-policy-open",
+          "targetSourceCoverage": "all"
+        },
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -370,6 +450,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "router.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -429,6 +519,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "router.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -488,6 +588,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "ui-virtualization.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -547,6 +657,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "validation-html.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -606,6 +726,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "validation-html.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -665,6 +795,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "i18n.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -724,6 +864,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "validation-html.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -783,6 +933,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "state.default-resources"
               ],
               "relatedQueryKind": "template-diagnostics",
+              "repairAffordance": {
+                "actionKind": "register-framework-capability",
+                "actionability": "guided",
+                "applicationKind": "none",
+                "changeDomain": "app-source",
+                "editPlanState": "not-available",
+                "planKind": "framework-capability-registration",
+                "readiness": "source-edit-policy-open",
+                "targetSourceCoverage": "all"
+              },
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -845,6 +1005,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "validation-html.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -891,6 +1061,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "validation-html.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -937,6 +1117,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "i18n.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -983,6 +1173,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "validation-html.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1029,6 +1229,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "state.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1075,6 +1285,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "router.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1121,6 +1341,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "ui-virtualization.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1167,6 +1397,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "router.default-resources"
           ],
           "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "register-framework-capability",
+            "actionability": "guided",
+            "applicationKind": "none",
+            "changeDomain": "app-source",
+            "editPlanState": "not-available",
+            "planKind": "framework-capability-registration",
+            "readiness": "source-edit-policy-open",
+            "targetSourceCoverage": "all"
+          },
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1223,6 +1463,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "router.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1269,6 +1519,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "router.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1315,6 +1575,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "ui-virtualization.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1361,6 +1631,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "validation-html.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1407,6 +1687,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "validation-html.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1453,6 +1743,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "i18n.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1499,6 +1799,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "validation-html.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1545,6 +1855,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "state.default-resources"
             ],
             "relatedQueryKind": "template-diagnostics",
+            "repairAffordance": {
+              "actionKind": "register-framework-capability",
+              "actionability": "guided",
+              "applicationKind": "none",
+              "changeDomain": "app-source",
+              "editPlanState": "not-available",
+              "planKind": "framework-capability-registration",
+              "readiness": "source-edit-policy-open",
+              "targetSourceCoverage": "all"
+            },
             "subject": null,
             "taxonomy": {
               "actionability": null,
