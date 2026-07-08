@@ -10,6 +10,10 @@ import type {
 } from '../kernel/store.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
+  FieldProvenance,
+  compactFieldProvenance,
+} from '../kernel/provenance.js';
+import {
   EvaluationRead,
   readStaticStringValue,
 } from '../evaluation/expression-reader.js';
@@ -24,6 +28,7 @@ import {
   BindableBindingMode,
   BindableContributionKind,
   BindableDefinition,
+  type BindableDefinitionField,
   BindableDefinitionContribution,
   BindableSetterDefinition,
   BindableSetterKind,
@@ -52,8 +57,9 @@ import {
   ConvergenceOpen,
 } from './resource-convergence-support.js';
 import {
+  sourceSpanEvidenceForNode,
   sourceSpanAddressForNode,
-  type SourceSpanAddressSet,
+  type SourceSpanEvidenceSet,
 } from './resource-source-address.js';
 
 export interface BindableRead {
@@ -97,7 +103,7 @@ class ClassBindableDecoratorFrame {
     }
     const read = this.context.expressionReader.evaluateExpression(argument);
     const value = read.value;
-    const source = sourceSpanAddressForNode(this.store, this.context, argument, this.local, SourceSpanRole.Name);
+    const source = sourceSpanEvidenceForNode(this.store, this.context, argument, this.local, SourceSpanRole.Name);
     if (value?.kind === EvaluationValueKind.Null) {
       return this.publishInvalidConfiguration(
         ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutConfiguration,
@@ -111,7 +117,7 @@ class ClassBindableDecoratorFrame {
       return this.publishMissingPropertyNameConfiguration(argument, SourceSpanRole.Value);
     }
     if (value?.kind === EvaluationValueKind.String) {
-      return bindableEntry(value.value, null, this.contributionKind, this.provenanceHandle, source);
+      return bindableEntry(this.store, this.context, this.local, value.value, null, this.contributionKind, source);
     }
     if (value?.kind === EvaluationValueKind.Object) {
       return this.readObjectConfiguration(value, argument, source);
@@ -132,12 +138,12 @@ class ClassBindableDecoratorFrame {
   private readObjectConfiguration(
     value: EvaluationObjectValue,
     argument: ts.Expression,
-    source: SourceSpanAddressSet | null,
+    source: SourceSpanEvidenceSet | null,
   ): BindableEntryRead {
     const nameProperty = value.properties.get('name') ?? null;
     const name = nameProperty == null ? null : readStaticStringValue(nameProperty.value);
     if (name != null && name.length > 0) {
-      const entry = bindableEntry(name, value, this.contributionKind, this.provenanceHandle, source);
+      const entry = bindableEntry(this.store, this.context, this.local, name, value, this.contributionKind, source);
       return value.mayHaveUnknownProperties
         ? {
           ...entry,
@@ -327,7 +333,7 @@ function readMemberBindableDecorator(
   provenanceHandle: ProvenanceHandle,
   contributionKind: BindableContributionKind,
 ): BindableEntryRead | null {
-  const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, local, SourceSpanRole.Name);
+  const source = sourceSpanEvidenceForNode(store, context, memberNameNode(member) ?? member, local, SourceSpanRole.Name);
   const expression = decorator.expression;
   if (propertyName == null && isBindableDecorator(decorator)) {
     return publishBindableIssueEntry(
@@ -347,7 +353,7 @@ function readMemberBindableDecorator(
     return null;
   }
   if (ts.isIdentifier(expression) && expression.text === 'bindable') {
-    return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
+    return bindableEntry(store, context, local, propertyName, null, contributionKind, source);
   }
   const call = decoratorCallNamed(decorator, 'bindable');
   if (call == null) {
@@ -355,12 +361,12 @@ function readMemberBindableDecorator(
   }
   const argument = call.arguments[0] ?? null;
   if (argument == null) {
-    return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
+    return bindableEntry(store, context, local, propertyName, null, contributionKind, source);
   }
   const read = context.expressionReader.evaluateExpression(argument);
   const value = read.value;
   if (value?.kind === EvaluationValueKind.Object) {
-    const entry = bindableEntry(propertyName, value, contributionKind, provenanceHandle, source);
+    const entry = bindableEntry(store, context, local, propertyName, value, contributionKind, source);
     return value.mayHaveUnknownProperties
       ? {
         ...entry,
@@ -373,14 +379,16 @@ function readMemberBindableDecorator(
       : entry;
   }
   if (value != null && !memberBindableConfigurationMayHaveRuntimeProperties(value.kind)) {
-    return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
+    return bindableEntry(store, context, local, propertyName, null, contributionKind, source);
   }
   {
     const fallback = bindableEntry(
+      store,
+      context,
+      local,
       propertyName,
       null,
       contributionKind,
-      provenanceHandle,
       source,
       readCheckerBindableSetter(context, argument),
     );
@@ -445,15 +453,15 @@ function readBindableListValue(
   }
   if (value.kind === EvaluationValueKind.Array) {
     const entries = value.elements.map((element, index) => {
-      const source = sourceSpanAddressForNode(store, context, element.expression, `${local}:array:${index}`, SourceSpanRole.Name);
+      const source = sourceSpanEvidenceForNode(store, context, element.expression, `${local}:array:${index}`, SourceSpanRole.Name);
       if (element.value.kind === EvaluationValueKind.String) {
-        return bindableEntry(element.value.value, null, contributionKind, provenanceHandle, source);
+        return bindableEntry(store, context, `${local}:array:${index}`, element.value.value, null, contributionKind, source);
       }
       if (element.value.kind === EvaluationValueKind.Object) {
         const name = readObjectString(element.value, 'name');
         const entry = name == null
           ? bindableReadOpen('Bindable array entry did not expose a static name.', element.expression)
-          : bindableEntry(name, element.value, contributionKind, provenanceHandle, source);
+          : bindableEntry(store, context, `${local}:array:${index}`, name, element.value, contributionKind, source);
         return name != null && element.value.mayHaveUnknownProperties
           ? {
             ...entry,
@@ -478,13 +486,13 @@ function readBindableListValue(
   if (value.kind === EvaluationValueKind.Object) {
     const entries: BindableEntryRead[] = [];
     for (const property of value.properties.values()) {
-      const source = sourceSpanAddressForNode(store, context, property.node, `${local}:object:${property.name}`, SourceSpanRole.Name);
+      const source = sourceSpanEvidenceForNode(store, context, property.node, `${local}:object:${property.name}`, SourceSpanRole.Name);
       if (property.value.kind === EvaluationValueKind.Boolean && property.value.value === true) {
-        entries.push(bindableEntry(property.name, null, contributionKind, provenanceHandle, source));
+        entries.push(bindableEntry(store, context, `${local}:object:${property.name}`, property.name, null, contributionKind, source));
         continue;
       }
       if (property.value.kind === EvaluationValueKind.Object) {
-        entries.push(bindableEntry(property.name, property.value, contributionKind, provenanceHandle, source));
+        entries.push(bindableEntry(store, context, `${local}:object:${property.name}`, property.name, property.value, contributionKind, source));
         if (property.value.mayHaveUnknownProperties) {
           entries.push({
             bindable: null,
@@ -523,11 +531,13 @@ function bindableReadOpen(
 }
 
 function bindableEntry(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
   propertyName: string,
   partial: EvaluationObjectValue | null,
   contributionKind: BindableContributionKind,
-  provenanceHandle: ProvenanceHandle,
-  source: SourceSpanAddressSet | null,
+  source: SourceSpanEvidenceSet | null,
   setterOverride: BindableSetterDefinition | null = null,
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? bindableAttributeNameForProperty(propertyName);
@@ -535,6 +545,9 @@ function bindableEntry(
   const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? defaultBindableMode(partial);
   const name = readObjectString(partial, 'name') ?? propertyName;
   const setter = setterOverride ?? readBindableSetter(partial);
+  const nameSource = readObjectStringFieldSource(store, context, `${local}:name`, partial, 'name') ?? source;
+  const attributeSource = readObjectStringFieldSource(store, context, `${local}:attribute`, partial, 'attribute');
+  const fieldProvenance = bindableFieldProvenance(source, nameSource, attributeSource);
   return {
     bindable: new BindableDefinition(
       attribute,
@@ -543,6 +556,9 @@ function bindableEntry(
       name,
       setter,
       source?.addressHandle ?? null,
+      fieldProvenance,
+      nameSource?.addressHandle ?? null,
+      attributeSource?.addressHandle ?? null,
     ),
     contribution: new BindableDefinitionContribution(
       contributionKind,
@@ -553,11 +569,91 @@ function bindableEntry(
       name,
       setter,
       source?.addressHandle ?? null,
+      fieldProvenance,
+      nameSource?.addressHandle ?? null,
+      attributeSource?.addressHandle ?? null,
     ),
     open: null,
-    records: source?.records ?? [],
+    records: bindableSourceRecords(source, nameSource, attributeSource),
     issues: [],
   };
+}
+
+function readObjectStringFieldSource(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  value: EvaluationObjectValue | null,
+  propertyName: string,
+): SourceSpanEvidenceSet | null {
+  const property = value?.properties.get(propertyName) ?? null;
+  if (property == null || property.value.kind !== EvaluationValueKind.String) {
+    return null;
+  }
+  const sourceNode = stringLiteralValueNode(property.value, property.node);
+  return sourceNode == null
+    ? null
+    : sourceSpanEvidenceForNode(store, context, sourceNode, local, SourceSpanRole.Name);
+}
+
+function stringLiteralValueNode(
+  value: EvaluationValue,
+  owningNode: ts.Node | null,
+): ts.Node | null {
+  if (
+    value.kind !== EvaluationValueKind.String
+    || value.node == null
+    || !ts.isStringLiteralLike(value.node)
+  ) {
+    return null;
+  }
+  return owningNode == null || nodeContains(owningNode, value.node)
+    ? value.node
+    : null;
+}
+
+function nodeContains(
+  parent: ts.Node,
+  node: ts.Node,
+): boolean {
+  let current: ts.Node | undefined = node;
+  while (current != null) {
+    if (current === parent) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function bindableSourceRecords(
+  ...sources: readonly (SourceSpanEvidenceSet | null)[]
+): readonly KernelStoreRecord[] {
+  const seen = new Set<string>();
+  const records: KernelStoreRecord[] = [];
+  for (const source of sources) {
+    if (source == null || seen.has(source.addressHandle)) {
+      continue;
+    }
+    seen.add(source.addressHandle);
+    records.push(...source.records);
+  }
+  return records;
+}
+
+function bindableFieldProvenance(
+  source: SourceSpanEvidenceSet | null,
+  nameSource: SourceSpanEvidenceSet | null,
+  attributeSource: SourceSpanEvidenceSet | null,
+): readonly FieldProvenance<BindableDefinitionField>[] {
+  return compactFieldProvenance<BindableDefinitionField>([
+    nameSource == null || nameSource.provenanceHandle === source?.provenanceHandle
+      ? null
+      : new FieldProvenance('name', nameSource.provenanceHandle),
+    attributeSource == null
+      ? null
+      : new FieldProvenance('attribute', attributeSource.provenanceHandle),
+  ]);
 }
 
 function defaultBindableMode(

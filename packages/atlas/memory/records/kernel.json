@@ -479,6 +479,71 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "decision:authored-source-span-evidence-publication",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "provenance",
+        "source-address",
+        "invalidation",
+        "ide"
+      ],
+      "summary": "Authored source-token facts should publish source address, evidence, and provenance together.",
+      "rationale": "The bindable alias canary showed that carrying only SourceSpanAddressHandle fields is enough for editor spans but not enough for the kernel provenance and future invalidation story. Field-specific source facts need a single witness unit: the authored source span address, evidence that observes that span, and provenance that points at that evidence. Otherwise IDE surfaces and kernel fieldProvenance can drift into parallel islands.",
+      "guidance": [
+        "Use a shared address/evidence/provenance source-span helper when an authored token becomes a durable product fact, edit target, or fieldProvenance witness.",
+        "Keep address-only helpers for consumers that only need a span and do not publish product field provenance.",
+        "Do not mechanically add fieldProvenance entries that repeat the owning source provenance; fieldProvenance should identify distinct field witnesses or intentional field presence.",
+        "Treat this as a bridge rule for the grand incremental compiler: source addresses locate authored facts, evidence/provenance explain why the fact exists, and epoch/session invalidation remains a separate freshness policy until dependency coverage is complete."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
+          "symbolName": "sourceSpanEvidenceForNode",
+          "summary": "Resource-layer helper that publishes address, evidence, and provenance records for authored TypeScript source spans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/provenance.ts",
+          "symbolName": "FieldProvenance",
+          "summary": "Embedded field-specific provenance entries on semantic product records."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/provenance.ts",
+          "symbolName": "readFieldProvenance",
+          "summary": "Shared lookup helper for field-specific provenance entries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "bindableFieldProvenance",
+          "summary": "First migrated canary: bindable alias field provenance points at the same witness as attributeSourceAddressHandle."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
+          "symbolName": "sourceSpanEvidenceForNode"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/provenance.ts",
+          "symbolName": "readFieldProvenance"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "bindableFieldProvenance"
+        }
+      ],
+      "createdAt": "2026-07-08",
+      "updatedAt": "2026-07-08"
     }
   ]
 }

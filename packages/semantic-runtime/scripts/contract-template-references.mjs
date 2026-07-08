@@ -7,6 +7,8 @@ import {
   readSemanticAppQueryCatalog,
   SemanticAppQueryKind,
 } from '../out/index.js';
+import { readFieldProvenance } from '../out/kernel/provenance.js';
+import { ResourceProductDetails } from '../out/resources/product-details.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-completion-member-metadata');
@@ -23,6 +25,15 @@ const storefrontDefinitionText = fs.readFileSync(storefrontDefinitionPath, 'utf8
 const mixedFormRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
 const mixedFormTemplatePath = path.join(mixedFormRoot, 'src/components/loose-picklist.html');
 const mixedFormTemplateText = fs.readFileSync(mixedFormTemplatePath, 'utf8');
+const aliasedBindableRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');
+const aliasedBindableAppTemplatePath = path.join(aliasedBindableRoot, 'src/app.html');
+const aliasedBindableProductTemplatePath = path.join(aliasedBindableRoot, 'src/product-card.html');
+const aliasedBindableProductDefinitionPath = path.join(aliasedBindableRoot, 'src/product-card.ts');
+const aliasedBindableDisplayHintDefinitionPath = path.join(aliasedBindableRoot, 'src/display-hint.ts');
+const aliasedBindableAppTemplateText = fs.readFileSync(aliasedBindableAppTemplatePath, 'utf8');
+const aliasedBindableProductTemplateText = fs.readFileSync(aliasedBindableProductTemplatePath, 'utf8');
+const aliasedBindableProductDefinitionText = fs.readFileSync(aliasedBindableProductDefinitionPath, 'utf8');
+const aliasedBindableDisplayHintDefinitionText = fs.readFileSync(aliasedBindableDisplayHintDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateReferences });
 assert.equal(catalog.value.rows.length, 1, 'TemplateReferences should be in the public app-query catalog.');
@@ -112,6 +123,10 @@ const mixedFormRuntime = await createSemanticRuntime({
   workspaceRoot: mixedFormRoot,
   storeKey: 'contract:template-references:open-member-self-row',
 });
+const aliasedBindableRuntime = await createSemanticRuntime({
+  workspaceRoot: aliasedBindableRoot,
+  storeKey: 'contract:template-references:aliased-bindables',
+});
 const openMemberReferences = await mixedFormRuntime.answerAppQuery({
   kind: SemanticAppQueryKind.TemplateReferences,
   sourceFilePath: mixedFormTemplatePath,
@@ -147,7 +162,116 @@ assert.ok(
   'The cursor occurrence should not also appear in candidateRows.',
 );
 
-console.log(`Template references contract passed (${withDeclaration.value.rows.length + resourceReferences.value.rows.length + openMemberReferences.value.rows.length} row(s)).`);
+const labelTextPropertyReferences = await aliasedBindableRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: aliasedBindableProductTemplatePath,
+  cursor: cursorInsideSource(aliasedBindableProductTemplateText, aliasedBindableProductTemplatePath, '${labelText}', 'labelText', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(labelTextPropertyReferences.outcome, /^(hit|partial)$/u, labelTextPropertyReferences.summary);
+assert.equal(labelTextPropertyReferences.value.selectedMemberName, 'labelText');
+const productLabelTextDeclarationStart = aliasedBindableProductDefinitionText.indexOf('labelText');
+const productLabelTextTemplateStart = aliasedBindableProductTemplateText.indexOf('labelText');
+const productDisplayLabelUsageStart = aliasedBindableAppTemplateText.indexOf('display-label.bind');
+assert.notEqual(productLabelTextDeclarationStart, -1, 'Expected product labelText declaration.');
+assert.notEqual(productLabelTextTemplateStart, -1, 'Expected product labelText template usage.');
+assert.notEqual(productDisplayLabelUsageStart, -1, 'Expected product display-label usage.');
+expectReference(labelTextPropertyReferences.value.rows, 'declaration', 'src/product-card.ts', productLabelTextDeclarationStart, productLabelTextDeclarationStart + 'labelText'.length, aliasedBindableRoot);
+expectReference(labelTextPropertyReferences.value.rows, 'template-usage', 'src/product-card.html', productLabelTextTemplateStart, productLabelTextTemplateStart + 'labelText'.length, aliasedBindableRoot);
+const productAliasPropertyReference = expectReference(
+  labelTextPropertyReferences.value.rows,
+  'bindable-attribute',
+  'src/app.html',
+  productDisplayLabelUsageStart,
+  productDisplayLabelUsageStart + 'display-label'.length,
+  aliasedBindableRoot,
+);
+assert.equal(productAliasPropertyReference.bindableAttributeSourceKind, 'explicit-alias');
+assert.equal(productAliasPropertyReference.targetSource?.path?.replace(/\\/g, '/'), 'src/product-card.ts');
+assert.equal(productAliasPropertyReference.targetSource?.start, productLabelTextDeclarationStart);
+assert.equal(productAliasPropertyReference.targetSource?.end, productLabelTextDeclarationStart + 'labelText'.length);
+
+const labelTextTypeScriptPropertyReferences = await aliasedBindableRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: aliasedBindableProductDefinitionPath,
+  cursor: cursorInsideSource(aliasedBindableProductDefinitionText, aliasedBindableProductDefinitionPath, 'labelText =', 'labelText', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(labelTextTypeScriptPropertyReferences.outcome, /^(hit|partial)$/u, labelTextTypeScriptPropertyReferences.summary);
+assert.equal(labelTextTypeScriptPropertyReferences.value.selectedMemberName, 'labelText');
+expectReference(labelTextTypeScriptPropertyReferences.value.rows, 'declaration', 'src/product-card.ts', productLabelTextDeclarationStart, productLabelTextDeclarationStart + 'labelText'.length, aliasedBindableRoot);
+expectReference(labelTextTypeScriptPropertyReferences.value.rows, 'template-usage', 'src/product-card.html', productLabelTextTemplateStart, productLabelTextTemplateStart + 'labelText'.length, aliasedBindableRoot);
+const productAliasTypeScriptReference = expectReference(
+  labelTextTypeScriptPropertyReferences.value.rows,
+  'bindable-attribute',
+  'src/app.html',
+  productDisplayLabelUsageStart,
+  productDisplayLabelUsageStart + 'display-label'.length,
+  aliasedBindableRoot,
+);
+assert.equal(productAliasTypeScriptReference.bindableAttributeSourceKind, 'explicit-alias');
+
+const productAliasReferences = await aliasedBindableRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: aliasedBindableAppTemplatePath,
+  cursor: cursorInsideSource(aliasedBindableAppTemplateText, aliasedBindableAppTemplatePath, 'display-label.bind="aliasLabel"', 'display-label', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(productAliasReferences.outcome, /^(hit|partial)$/u, productAliasReferences.summary);
+assert.equal(productAliasReferences.value.selectedMemberName, 'display-label');
+const productAliasDeclarationStart = aliasedBindableProductDefinitionText.indexOf("'display-label'") + 1;
+assert.notEqual(productAliasDeclarationStart, 0, 'Expected product display-label alias declaration.');
+expectReference(productAliasReferences.value.rows, 'declaration', 'src/product-card.ts', productAliasDeclarationStart, productAliasDeclarationStart + 'display-label'.length, aliasedBindableRoot);
+expectReference(productAliasReferences.value.rows, 'bindable-attribute', 'src/app.html', productDisplayLabelUsageStart, productDisplayLabelUsageStart + 'display-label'.length, aliasedBindableRoot);
+assert.equal(productAliasReferences.value.rows.length, 2, 'Alias references should stay on the alias surface.');
+
+const inlineAliasReferences = await aliasedBindableRuntime.answerAppQuery({
+  kind: SemanticAppQueryKind.TemplateReferences,
+  sourceFilePath: aliasedBindableAppTemplatePath,
+  cursor: cursorInsideSource(aliasedBindableAppTemplateText, aliasedBindableAppTemplatePath, 'display-hint="display-label.bind: aliasLabel', 'display-label', 1),
+  includeDeclaration: true,
+  detail: 'handles',
+  page: { size: 20 },
+  analysisDepth: 'binding-observation',
+  includeAuthoringTemplates: true,
+  appRetention: 'retain-app',
+});
+assert.match(inlineAliasReferences.outcome, /^(hit|partial)$/u, inlineAliasReferences.summary);
+assert.equal(inlineAliasReferences.value.selectedMemberName, 'display-label');
+const displayHintAliasDeclarationStart = aliasedBindableDisplayHintDefinitionText.indexOf("'display-label'") + 1;
+const inlineDisplayLabelUsageStart = aliasedBindableAppTemplateText.indexOf('display-label.bind: aliasLabel');
+assert.notEqual(displayHintAliasDeclarationStart, 0, 'Expected display-hint display-label alias declaration.');
+assert.notEqual(inlineDisplayLabelUsageStart, -1, 'Expected inline display-label usage.');
+expectReference(inlineAliasReferences.value.rows, 'declaration', 'src/display-hint.ts', displayHintAliasDeclarationStart, displayHintAliasDeclarationStart + 'display-label'.length, aliasedBindableRoot);
+expectReference(inlineAliasReferences.value.rows, 'bindable-attribute', 'src/app.html', inlineDisplayLabelUsageStart, inlineDisplayLabelUsageStart + 'display-label'.length, aliasedBindableRoot);
+assert.equal(inlineAliasReferences.value.rows.length, 2, 'Inline alias references should stay on the segment alias surface.');
+expectBindableAliasFieldProvenance(aliasedBindableRuntime, 'product-card', 'labelText');
+expectBindableAliasFieldProvenance(aliasedBindableRuntime, 'display-hint', 'labelText');
+
+console.log(`Template references contract passed (${
+  withDeclaration.value.rows.length
+  + resourceReferences.value.rows.length
+  + openMemberReferences.value.rows.length
+  + labelTextPropertyReferences.value.rows.length
+  + labelTextTypeScriptPropertyReferences.value.rows.length
+  + productAliasReferences.value.rows.length
+  + inlineAliasReferences.value.rows.length
+} row(s)).`);
 
 async function askReferences(includeDeclaration) {
   const answer = await runtime.answerAppQuery({
@@ -182,6 +306,42 @@ function cursorInsideSource(text, filePath, marker, needle, delta = 0) {
     character: lines[lines.length - 1].length,
     offset,
   };
+}
+
+function expectReference(rows, referenceKind, filePath, start, end, root = fixtureRoot) {
+  const expectedPath = path.isAbsolute(filePath) ? filePath : path.join(root, filePath);
+  const found = rows.find((row) =>
+    row.referenceKind === referenceKind
+    && row.source?.path != null
+    && samePath(path.isAbsolute(row.source.path) ? row.source.path : path.join(root, row.source.path), expectedPath)
+    && row.source?.start === start
+    && row.source?.end === end
+  );
+  assert.ok(found, `Expected ${referenceKind} reference ${filePath}@${start}..${end}.`);
+  return found;
+}
+
+function expectBindableAliasFieldProvenance(runtime, resourceName, bindableName) {
+  const store = runtime.workspace.store;
+  const definition = store.productDetails.readBySlot(ResourceProductDetails.Definition)
+    .map((entry) => entry.detail)
+    .find((candidate) => candidate.name === resourceName);
+  assert.ok(definition, `Expected resource definition detail for ${resourceName}.`);
+  const bindable = definition.bindables.find((candidate) => candidate.name === bindableName);
+  assert.ok(bindable, `Expected bindable ${bindableName} on ${resourceName}.`);
+  assert.ok(bindable.attributeSourceAddressHandle, `Expected explicit alias source for ${resourceName}.${bindableName}.`);
+  const provenanceHandle = readFieldProvenance(bindable.fieldProvenance, 'attribute');
+  assert.ok(provenanceHandle, `Expected attribute field provenance for ${resourceName}.${bindableName}.`);
+  const provenance = store.readProvenance(provenanceHandle);
+  assert.ok(provenance, `Expected provenance record ${provenanceHandle}.`);
+  assert.equal(provenance.evidenceHandles.length, 1, `Expected one direct evidence handle for ${resourceName}.${bindableName} alias.`);
+  const evidence = store.readEvidence(provenance.evidenceHandles[0]);
+  assert.ok(evidence, `Expected evidence record ${provenance.evidenceHandles[0]}.`);
+  assert.equal(
+    evidence.addressHandle,
+    bindable.attributeSourceAddressHandle,
+    `Expected alias field provenance evidence to point at ${resourceName}.${bindableName} attribute source.`,
+  );
 }
 
 function samePath(left, right) {

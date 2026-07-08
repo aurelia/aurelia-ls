@@ -2419,10 +2419,14 @@ function cursorBindableRow(
     mode: bindable.definition.mode,
     ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),
+    nameSource: describeAddress(store, bindable.reference.nameSourceAddressHandle),
+    attributeSource: describeAddress(store, bindable.reference.attributeSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
         sourceAddressHandle: bindable.reference.sourceAddressHandle,
+        nameSourceAddressHandle: bindable.reference.nameSourceAddressHandle,
+        attributeSourceAddressHandle: bindable.reference.attributeSourceAddressHandle,
       },
     } : {}),
   };

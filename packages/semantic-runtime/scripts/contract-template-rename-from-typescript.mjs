@@ -15,6 +15,13 @@ const viewModelPath = path.join(fixtureRoot, 'src/app.ts');
 const originalTemplateText = fs.readFileSync(templatePath, 'utf8');
 const viewModelText = fs.readFileSync(viewModelPath, 'utf8');
 const templateText = originalTemplateText.replace('${}', '${title} ${title}');
+const aliasedBindableRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');
+const aliasedBindableAppTemplatePath = path.join(aliasedBindableRoot, 'src/app.html');
+const aliasedBindableProductTemplatePath = path.join(aliasedBindableRoot, 'src/product-card.html');
+const aliasedBindableProductDefinitionPath = path.join(aliasedBindableRoot, 'src/product-card.ts');
+const aliasedBindableAppTemplateText = fs.readFileSync(aliasedBindableAppTemplatePath, 'utf8');
+const aliasedBindableProductTemplateText = fs.readFileSync(aliasedBindableProductTemplatePath, 'utf8');
+const aliasedBindableProductDefinitionText = fs.readFileSync(aliasedBindableProductDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateRenameFromTypeScript });
 assert.equal(catalog.value.rows.length, 1, 'TemplateRenameFromTypeScript should be in the public app-query catalog.');
@@ -33,6 +40,10 @@ const runtime = await createSemanticRuntime({
       return samePath(fileName, templatePath) ? true : undefined;
     },
   },
+});
+const aliasedBindableRuntime = await createSemanticRuntime({
+  workspaceRoot: aliasedBindableRoot,
+  storeKey: 'contract:template-rename-from-typescript:aliased-bindables',
 });
 
 const firstTitleStart = templateText.indexOf('title');
@@ -64,13 +75,68 @@ assertTemplateRenameEdits(fromDeclaration, 'declaration cursor');
 const fromTsUsage = await askRenameFromTypeScript('heading', tsUsageStart + 1);
 assertTemplateRenameEdits(fromTsUsage, 'TS usage cursor');
 
-console.log(`Template rename-from-TypeScript contract passed (${fromDeclaration.value.edits.length} template edit row(s)).`);
+const titleDeclarationStart = aliasedBindableProductDefinitionText.indexOf('title');
+const titleTemplateStart = aliasedBindableProductTemplateText.indexOf('title');
+const titleAttributeStart = aliasedBindableAppTemplateText.indexOf('title.bind');
+const labelTextDeclarationStart = aliasedBindableProductDefinitionText.indexOf('labelText');
+const labelTextTemplateStart = aliasedBindableProductTemplateText.indexOf('labelText');
+const displayLabelAttributeStart = aliasedBindableAppTemplateText.indexOf('display-label.bind');
+assert.notEqual(titleDeclarationStart, -1, 'Expected title declaration.');
+assert.notEqual(titleTemplateStart, -1, 'Expected title template usage.');
+assert.notEqual(titleAttributeStart, -1, 'Expected default-derived title attribute usage.');
+assert.notEqual(labelTextDeclarationStart, -1, 'Expected labelText declaration.');
+assert.notEqual(labelTextTemplateStart, -1, 'Expected labelText template usage.');
+assert.notEqual(displayLabelAttributeStart, -1, 'Expected explicit display-label alias usage.');
+
+const defaultBindablePropagation = await askAliasedBindableRenameFromTypeScript('headline', titleDeclarationStart + 1);
+assert.equal(defaultBindablePropagation.outcome, 'hit');
+assert.equal(defaultBindablePropagation.value.status, 'available');
+assert.equal(defaultBindablePropagation.value.templateReferenceCount, 2);
+assert.equal(defaultBindablePropagation.value.edits.length, 2);
+expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/app.html', titleAttributeStart, titleAttributeStart + 'title'.length, 'headline');
+expectAliasedEdit(defaultBindablePropagation.value.edits, 'src/product-card.html', titleTemplateStart, titleTemplateStart + 'title'.length, 'headline');
+
+const explicitAliasPropagation = await askAliasedBindableRenameFromTypeScript('headlineText', labelTextDeclarationStart + 1);
+assert.equal(explicitAliasPropagation.outcome, 'hit');
+assert.equal(explicitAliasPropagation.value.status, 'available');
+assert.equal(explicitAliasPropagation.value.templateReferenceCount, 2);
+assert.equal(explicitAliasPropagation.value.edits.length, 1, 'TS-origin property rename should not rewrite explicit bindable aliases.');
+expectAliasedEdit(explicitAliasPropagation.value.edits, 'src/product-card.html', labelTextTemplateStart, labelTextTemplateStart + 'labelText'.length, 'headlineText');
+assert.equal(
+  explicitAliasPropagation.value.edits.some((edit) =>
+    edit.source?.path?.replace(/\\/g, '/') === 'src/app.html'
+    && edit.oldText === 'display-label'
+  ),
+  false,
+  'TS-origin property rename must not edit explicit alias spelling.',
+);
+
+console.log(`Template rename-from-TypeScript contract passed (${
+  fromDeclaration.value.edits.length
+  + defaultBindablePropagation.value.edits.length
+  + explicitAliasPropagation.value.edits.length
+} template edit row(s)).`);
 
 async function askRenameFromTypeScript(newName, offset) {
   const answer = await runtime.answerAppQuery({
     kind: SemanticAppQueryKind.TemplateRenameFromTypeScript,
     sourceFilePath: viewModelPath,
     cursor: cursorAtOffset(viewModelPath, viewModelText, offset),
+    ...(newName == null ? {} : { newName }),
+    analysisDepth: 'binding-observation',
+    diagnosticProjection: 'type-projection',
+    includeAuthoringTemplates: true,
+    appRetention: 'retain-app',
+  });
+  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  return answer;
+}
+
+async function askAliasedBindableRenameFromTypeScript(newName, offset) {
+  const answer = await aliasedBindableRuntime.answerAppQuery({
+    kind: SemanticAppQueryKind.TemplateRenameFromTypeScript,
+    sourceFilePath: aliasedBindableProductDefinitionPath,
+    cursor: cursorAtOffset(aliasedBindableProductDefinitionPath, aliasedBindableProductDefinitionText, offset),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
     diagnosticProjection: 'type-projection',
@@ -90,6 +156,18 @@ function assertTemplateRenameEdits(answer, label) {
   assert.ok(answer.value.edits.every((edit) => edit.editKind === 'template-usage'), `${label}: expected only template-usage edits.`);
   expectEdit(answer.value.edits, 'src/app.html', firstTitleStart, firstTitleStart + 'title'.length, 'heading');
   expectEdit(answer.value.edits, 'src/app.html', secondTitleStart, secondTitleStart + 'title'.length, 'heading');
+}
+
+function expectAliasedEdit(edits, filePath, start, end, newText) {
+  const expectedPath = path.isAbsolute(filePath) ? filePath : path.join(aliasedBindableRoot, filePath);
+  const found = edits.find((edit) =>
+    edit.source?.path != null
+    && samePath(path.isAbsolute(edit.source.path) ? edit.source.path : path.join(aliasedBindableRoot, edit.source.path), expectedPath)
+    && edit.source?.start === start
+    && edit.source?.end === end
+    && edit.newText === newText
+  );
+  assert.ok(found, `Expected aliased-bindable template edit ${filePath}@${start}..${end} -> ${newText}.`);
 }
 
 function cursorAtOffset(filePath, text, offset) {

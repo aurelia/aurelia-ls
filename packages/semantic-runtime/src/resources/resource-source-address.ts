@@ -8,7 +8,11 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  EvidenceHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type {
   KernelStore,
@@ -32,6 +36,15 @@ export class SourceSpanAddressSet {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly addressHandle: AddressHandle,
+  ) {}
+}
+
+export class SourceSpanEvidenceSet {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly addressHandle: AddressHandle,
+    readonly evidenceHandle: EvidenceHandle,
+    readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
 
@@ -140,6 +153,57 @@ export function sourceSpanAddressForNode(
       ),
     ],
     addressHandle,
+  );
+}
+
+export function sourceSpanEvidenceForNode(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node | null,
+  local: string,
+  role: SourceSpanRole,
+  evidenceRoles: readonly EvidenceRole[] = [EvidenceRole.Declaration],
+  summary = 'Authored resource metadata source span.',
+): SourceSpanEvidenceSet | null {
+  if (node == null) {
+    return null;
+  }
+  const sourceFile = node.getSourceFile();
+  const sourceFileAddressHandle = sourceFileAddressHandleForNode(context, node);
+  if (sourceFileAddressHandle == null) {
+    return null;
+  }
+  const span = sourceSpanRangeForNode(sourceFile, node);
+  if (span == null) {
+    return null;
+  }
+  const addressHandle = store.handles.address(`${local}:source`);
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  return new SourceSpanEvidenceSet(
+    [
+      new SourceSpanAddress(
+        addressHandle,
+        sourceFileAddressHandle,
+        span.start,
+        span.end,
+        role,
+      ),
+      new EvidenceRecord(
+        evidenceHandle,
+        EvidenceKind.SourceObservation,
+        evidenceRoles,
+        summary,
+        addressHandle,
+      ),
+      new ProvenanceRecord(
+        provenanceHandle,
+        [evidenceHandle],
+      ),
+    ],
+    addressHandle,
+    evidenceHandle,
+    provenanceHandle,
   );
 }
 

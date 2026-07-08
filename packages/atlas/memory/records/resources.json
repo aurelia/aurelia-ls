@@ -651,6 +651,102 @@
       ],
       "createdAt": "2026-07-07",
       "updatedAt": "2026-07-07"
+    },
+    {
+      "id": "decision:bindable-property-identity-vs-attribute-alias",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "template",
+        "ide",
+        "references",
+        "rename"
+      ],
+      "summary": "Bindable property identity and public attribute aliases are separate rename/reference surfaces.",
+      "rationale": "Aurelia bindable metadata has two author-facing names with different semantics: the runtime property name identifies the view-model field, while the optional attribute value is the public template spelling. References from a property must include explicit alias usages because they read/write the property, but property rename must not rewrite authored alias contracts. Alias rename is a separate template-attribute operation over the attribute literal and matching template usage tokens.",
+      "guidance": [
+        "Preserve field-specific bindable provenance: sourceAddressHandle is the declaration/carrier, nameSourceAddressHandle is the runtime property token, and attributeSourceAddressHandle is an explicitly authored public attribute alias token.",
+        "Publish authored bindable name/attribute token spans through the shared address/evidence/provenance helper so source handles and fieldProvenance point at the same witness rather than split-brain source records.",
+        "Property references may enumerate explicit-alias usage rows, but property rename skips rows marked explicit-alias; default-derived bindable attribute usages still derive new template spelling from bindableAttributeNameForProperty(newName).",
+        "TypeScript-origin property references include explicit alias usage rows because those template reads/writes flow through the property; TypeScript-origin rename propagation skips explicit aliases for the same public-contract reason as template-origin property rename.",
+        "Alias references and alias rename use the bindable attribute source as the target source and do not include TypeScript reference edits.",
+        "Inline custom-attribute multi-binding aliases spend MultiBindingSegment.targetSourceAddressHandle for the segment target token; do not fall back to the enclosing custom-attribute value or primary/default bindable."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-definition.ts",
+          "symbolName": "BindableDefinition",
+          "summary": "Carries declaration, property-name, and explicit attribute-alias source handles."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "summary": "Reads field-specific name and attribute literal sources while converging bindables."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
+          "symbolName": "sourceSpanEvidenceForNode",
+          "summary": "Publishes authored TypeScript source spans as address, evidence, and provenance records together."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/provenance.ts",
+          "symbolName": "readFieldProvenance",
+          "summary": "Shared field-provenance reader used by contracts and future provenance consumers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
+          "summary": "Reference and rename dispatch distinguishes bindable property and explicit alias surfaces."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "summary": "Cursor selection prefers the active multi-binding segment bindable for segment target tokens."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-template-references.mjs",
+          "summary": "Contract covers property references including explicit aliases and alias references for top-level and inline multi-binding forms."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-template-rename.mjs",
+          "summary": "Contract covers property rename skipping explicit aliases and explicit alias rename editing alias declarations/usages."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-template-rename-from-typescript.mjs",
+          "summary": "Contract covers TS-origin property rename editing default-derived bindable attributes while skipping explicit aliases."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-definition.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/provenance.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-rename.mjs"
+        }
+      ],
+      "createdAt": "2026-07-08",
+      "updatedAt": "2026-07-08"
     }
   ]
 }

@@ -13,7 +13,7 @@ const SERVER_PATH = path.resolve(REPO_ROOT, "packages/language-server/out/main.j
 const REQUEST_TIMEOUT_MS = 30000;
 const STARTUP_TIMEOUT_MS = 10000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
-const OPEN_SETTLE_TIMEOUT_MS = 750;
+const OPEN_SETTLE_TIMEOUT_MS = 5000;
 const DIAGNOSTICS_TIMEOUT_MS = 30000;
 const SUPPORTED_LANES = new Set(["rename", "references", "hover", "completions", "definition", "documentHighlight", "diagnostics", "codeAction"]);
 
@@ -331,7 +331,7 @@ async function main() {
     const openUris = new Set(probes.map((probe) => pathToFileURL(resolveFixturePath(fixtureRoot, probe.file)).href));
     await client.waitForNotifications(
       "aurelia/analysisReady",
-      1,
+      openUris.size,
       (notification) => openUris.has(notification.params?.uri),
       OPEN_SETTLE_TIMEOUT_MS,
     );

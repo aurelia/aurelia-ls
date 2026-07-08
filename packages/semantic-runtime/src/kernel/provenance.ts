@@ -21,7 +21,7 @@ export class ProvenanceRecord {
  * mechanically assigning the same provenance handle to every field.
  */
 export class FieldProvenance<TField extends string = string> {
-  /** String discriminator for serialized field-provenance records. */
+  /** String discriminator for embedded field-provenance entries. */
   readonly kind = 'field-provenance' as const;
 
   constructor(
@@ -30,6 +30,16 @@ export class FieldProvenance<TField extends string = string> {
     /** Provenance handle explaining this specific field value. */
     readonly provenanceHandle: ProvenanceHandle,
   ) {}
+}
+
+/** Read provenance for one field without requiring every model to implement the lookup itself. */
+export function readFieldProvenance<TField extends string>(
+  /** Field provenance entries from the owning semantic object. */
+  provenance: readonly FieldProvenance<TField>[],
+  /** Field to look up. */
+  field: TField,
+): ProvenanceHandle | null {
+  return provenance.find((entry) => entry.field === field)?.provenanceHandle ?? null;
 }
 
 /** Drop absent field-provenance slots while preserving the exact field type. */

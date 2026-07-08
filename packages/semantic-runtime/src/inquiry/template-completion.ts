@@ -81,6 +81,7 @@ import {
   type TemplateBindableReference,
 } from '../template/compiler-world-reference.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
+import type { MultiBindingSegment } from '../template/binding-command-execution.js';
 import type {
   TemplateExpressionParse,
   TemplateValueSite,
@@ -463,6 +464,7 @@ class TemplateCompletionCursorContextBuilder {
       : cursorFocusedExpressionResult(this.store, expressionParse, offset);
     const syntax = this.syntaxForCursorAttribute(htmlAttribute);
     const classification = this.classificationForCursorSyntax(syntax);
+    const multiBindingSegment = this.multiBindingSegmentForTargetOffset(offset);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
     const bindingScope = bindingScopeForCursor(
@@ -473,7 +475,7 @@ class TemplateCompletionCursorContextBuilder {
       expressionParse,
     );
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
-    const selectedBindable = selectedBindableForCursor(classification, valueSite);
+    const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment);
     const selectedScopeSlot = selectedScopeSlotForCursor(
       this.store,
       siteKind,
@@ -530,6 +532,14 @@ class TemplateCompletionCursorContextBuilder {
       this.input.resource.compilation.html.nodes,
       offset,
       (node) => sourceSpanFor(this.store, node.sourceAddressHandle),
+    );
+  }
+
+  private multiBindingSegmentForTargetOffset(offset: number): MultiBindingSegment | null {
+    return smallestContaining(
+      this.input.resource.compilation.bindingCommandLowering.multiBindingSegments,
+      offset,
+      (segment) => sourceSpanFor(this.store, segment.targetSourceAddressHandle),
     );
   }
 
@@ -2532,8 +2542,10 @@ function selectedDefinitionForCursor(
 function selectedBindableForCursor(
   classification: AttributeClassification | null,
   valueSite: TemplateValueSite | null,
+  multiBindingSegment: MultiBindingSegment | null,
 ): TemplateBindableReference | null {
-  return valueSite?.bindable
+  return multiBindingSegment?.bindable
+    ?? valueSite?.bindable
     ?? classification?.bindable
     ?? null;
 }

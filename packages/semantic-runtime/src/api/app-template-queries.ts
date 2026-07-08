@@ -1,6 +1,6 @@
 import ts from 'typescript';
 import type { KernelStore } from '../kernel/store.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
   diagnosticRepairAffordanceForSuggestion,
@@ -69,6 +69,7 @@ import {
   SemanticTemplateInlayHintKind,
   type SemanticTemplateInlayHintRow,
   type SemanticTemplateInlayHintsResult,
+  SemanticTemplateBindableAttributeSourceKind,
   SemanticTemplateReferenceKind,
   type SemanticTemplateReferenceRow,
   type SemanticTemplateReferencesResult,
@@ -115,6 +116,7 @@ import {
 } from '../template/runtime-binding-mode-behavior.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
+import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
 import {
   ResourceDefinitionKind,
   resourceKindsShareRegistrationIdentity,
@@ -352,10 +354,7 @@ export class SemanticAppTemplateQueries {
           templateRenameEditKindForReferenceRow(row, context.renameSurface),
           row.source,
           row.name,
-          context.renameSurface === TemplateRenameSurface.Bindable
-            && row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
-            ? bindableAttributeNameForProperty(newName)
-            : newName,
+          templateRenameNewText(row, context.renameSurface, newName),
         )
       );
     const edits = [...uniqueTemplateRenameEditRows([...provenTypeScriptEdits, ...templateEdits])]
@@ -442,14 +441,16 @@ export class SemanticAppTemplateQueries {
       );
     }
 
-    const edits = context.templateUsageRows.map((row) =>
-      templateRenameEditRow(
-        SemanticTemplateRenameEditKind.TemplateUsage,
-        row.source,
-        row.name,
-        newName,
-      )
-    );
+    const edits = context.templateUsageRows
+      .filter(referenceRowNeedsTypeScriptRenamePropagationEdit)
+      .map((row) =>
+        templateRenameEditRow(
+          templateRenameFromTypeScriptEditKindForReferenceRow(row),
+          row.source,
+          row.name,
+          templateRenameFromTypeScriptNewText(row, newName),
+        )
+      );
     const uniqueEdits = [...uniqueTemplateRenameEditRows(edits)]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
@@ -649,7 +650,13 @@ export class SemanticAppTemplateQueries {
       declarationSource: selectedMember.source,
       declarationSourceAddressHandle: selectedMember.handles?.sourceAddressHandle ?? null,
       renameSurface: TemplateRenameSurface.Member,
-      includeBindableAttributeRows: true,
+      bindableAttributeTarget: {
+        surface: TemplateRenameSurface.BindableProperty,
+        propertyName: selectedMemberName,
+        propertyTargetSource: targetSource,
+        aliasName: null,
+        aliasTargetSource: null,
+      },
     }, handles);
   }
 
@@ -663,6 +670,7 @@ export class SemanticAppTemplateQueries {
       // the TypeScript reference context so template usages of a view-model member are reachable from
       // the declaration side too. Reference providers merge client-side, so answering here is safe.
       this.templateReferenceContext(query, detail, handles),
+      this.templateBindableAliasReferenceContext(query, detail, handles),
       this.templateBindableReferenceContext(query, detail, handles),
       this.templateResourceReferenceContext(query, handles),
       this.templateReferenceContextFromTypeScript(query, handles),
@@ -761,7 +769,7 @@ export class SemanticAppTemplateQueries {
     );
     const selectedBindable = cursorInfo.value.selectedBindable;
     const selectedMemberName = selectedBindable?.name ?? null;
-    const targetSource = exactSourceReference(selectedBindable?.source ?? null);
+    const targetSource = exactSourceReference(selectedBindable?.nameSource ?? selectedBindable?.source ?? null);
     if (selectedBindable == null || selectedMemberName == null || targetSource == null) {
       return null;
     }
@@ -769,11 +777,70 @@ export class SemanticAppTemplateQueries {
     return this.templateReferenceContextForTarget({
       selectedMemberName,
       targetSource,
-      declarationSource: selectedBindable.source,
-      declarationSourceAddressHandle: selectedBindable.handles?.sourceAddressHandle ?? null,
-      renameSurface: TemplateRenameSurface.Bindable,
-      includeBindableAttributeRows: true,
+      declarationSource: selectedBindable.nameSource ?? selectedBindable.source,
+      declarationSourceAddressHandle: selectedBindable.handles?.nameSourceAddressHandle
+        ?? selectedBindable.handles?.sourceAddressHandle
+        ?? null,
+      renameSurface: TemplateRenameSurface.BindableProperty,
+      bindableAttributeTarget: {
+        surface: TemplateRenameSurface.BindableProperty,
+        propertyName: selectedMemberName,
+        propertyTargetSource: targetSource,
+        aliasName: null,
+        aliasTargetSource: null,
+      },
     }, handles);
+  }
+
+  private templateBindableAliasReferenceContext(
+    query: SemanticAppQuery,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+    handles: boolean,
+  ): TemplateReferenceContext | null {
+    const cursorInfo = readSemanticTemplateCursorInfo(
+      this.store,
+      this.workspaceRootDir,
+      this.projectRootDir,
+      this.emission,
+      query.cursor,
+      detail,
+      query.diagnosticProjection,
+    );
+    const selectedBindable = cursorInfo.value.selectedBindable;
+    const aliasName = selectedBindable?.attribute ?? null;
+    const aliasTargetSource = exactSourceReference(selectedBindable?.attributeSource ?? null);
+    if (selectedBindable == null || aliasName == null || aliasTargetSource == null) {
+      return null;
+    }
+
+    const templateUsageRows = bindableAttributeReferenceRows(
+      this.store,
+      [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
+      {
+        surface: TemplateRenameSurface.BindableAttributeAlias,
+        propertyName: selectedBindable.name,
+        propertyTargetSource: exactSourceReference(selectedBindable.nameSource ?? selectedBindable.source ?? null),
+        aliasName,
+        aliasTargetSource,
+      },
+      handles,
+    );
+    return templateReferenceContextFromRows({
+      selectedMemberName: aliasName,
+      targetSource: aliasTargetSource,
+      renameSurface: TemplateRenameSurface.BindableAttributeAlias,
+      includeTypeScriptReferences: false,
+      hasAuthoredDeclarationSource: true,
+      declarationRow: templateReferenceDeclarationRow(
+        selectedBindable.attributeSource,
+        aliasName,
+        aliasTargetSource,
+        selectedBindable.handles?.attributeSourceAddressHandle ?? null,
+        handles,
+      ),
+      templateUsageRows,
+      candidateRows: [],
+    });
   }
 
   private templateResourceReferenceContext(
@@ -842,12 +909,11 @@ export class SemanticAppTemplateQueries {
       target.observedTargetSources ?? [target.targetSource],
       handles,
     );
-    const bindableAttributeRows = target.includeBindableAttributeRows
+    const bindableAttributeRows = target.bindableAttributeTarget != null
       ? bindableAttributeReferenceRows(
           this.store,
           [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
-          target.selectedMemberName,
-          target.targetSource,
+          target.bindableAttributeTarget,
           handles,
         )
       : [];
@@ -964,11 +1030,23 @@ export class SemanticAppTemplateQueries {
       effectiveTargetSources,
       handles,
     );
+    const bindableAttributeRows = bindableAttributeReferenceRows(
+      this.store,
+      [...this.emission.templates.resources, ...this.emission.templates.authoringResources],
+      {
+        surface: TemplateRenameSurface.BindableProperty,
+        propertyName: selectedMemberName,
+        propertyTargetSource: targetSource,
+        aliasName: null,
+        aliasTargetSource: null,
+      },
+      handles,
+    );
     return {
       selectedMemberName,
       targetSource,
       activeSource,
-      templateUsageRows: observed.templateUsageRows,
+      templateUsageRows: uniqueSortedTemplateReferenceRows([...observed.templateUsageRows, ...bindableAttributeRows]),
       candidateRows: observed.candidateRows,
     };
   }
@@ -976,7 +1054,8 @@ export class SemanticAppTemplateQueries {
 
 const enum TemplateRenameSurface {
   Member = 'member',
-  Bindable = 'bindable',
+  BindableProperty = 'bindable-property',
+  BindableAttributeAlias = 'bindable-attribute-alias',
   ResourceElement = 'resource-element',
   ResourceAttribute = 'resource-attribute',
   UnsupportedResource = 'unsupported-resource',
@@ -1002,7 +1081,15 @@ interface TemplateReferenceTarget {
   readonly declarationSourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'];
   readonly renameSurface: TemplateRenameSurface;
   readonly observedTargetSources?: readonly SemanticSourceReference[];
-  readonly includeBindableAttributeRows: boolean;
+  readonly bindableAttributeTarget?: BindableAttributeReferenceTarget | null;
+}
+
+interface BindableAttributeReferenceTarget {
+  readonly surface: TemplateRenameSurface.BindableProperty | TemplateRenameSurface.BindableAttributeAlias;
+  readonly propertyName: string;
+  readonly propertyTargetSource: SemanticSourceReference | null;
+  readonly aliasName: string | null;
+  readonly aliasTargetSource: SemanticSourceReference | null;
 }
 
 interface ResourceReferenceTarget {
@@ -1513,25 +1600,41 @@ function referenceRowNeedsTemplateRenameEdit(
   row: SemanticTemplateReferenceRow,
   surface: TemplateRenameSurface,
 ): boolean {
+  if (
+    row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+    && isBindablePropertyRenameSurface(surface)
+    && row.bindableAttributeSourceKind === SemanticTemplateBindableAttributeSourceKind.ExplicitAlias
+  ) {
+    return false;
+  }
   return referenceRowSupportsRename(row)
     && (
       row.referenceKind !== SemanticTemplateReferenceKind.Declaration
       || surface === TemplateRenameSurface.ResourceElement
       || surface === TemplateRenameSurface.ResourceAttribute
+      || surface === TemplateRenameSurface.BindableAttributeAlias
       || !sourceReferenceLooksTypeScript(row.targetSource)
     );
 }
 
 function isValidRenameName(value: string, surface: TemplateRenameSurface): boolean {
-  return isResourceRenameSurface(surface)
+  return isResourceRenameSurface(surface) || surface === TemplateRenameSurface.BindableAttributeAlias
     ? isValidTemplateAddressableResourceName(value)
     : isValidRenameIdentifier(value);
 }
 
 function invalidRenameNameMessage(value: string, surface: TemplateRenameSurface): string {
+  if (surface === TemplateRenameSurface.BindableAttributeAlias) {
+    return `Rename target '${value}' is not a valid Aurelia bindable attribute alias. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template attribute names from lowercased HTML.`;
+  }
   return isResourceRenameSurface(surface)
     ? `Rename target '${value}' is not a valid Aurelia template resource name. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template element and attribute names from lowercased HTML.`
     : `Rename target '${value}' is not a valid TypeScript identifier.`;
+}
+
+function isBindablePropertyRenameSurface(surface: TemplateRenameSurface): boolean {
+  return surface === TemplateRenameSurface.Member
+    || surface === TemplateRenameSurface.BindableProperty;
 }
 
 function isResourceRenameSurface(surface: TemplateRenameSurface): boolean {
@@ -1817,6 +1920,44 @@ function templateRenameEditRow(
   };
 }
 
+function templateRenameNewText(
+  row: SemanticTemplateReferenceRow,
+  surface: TemplateRenameSurface,
+  newName: string,
+): string {
+  return row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+    && isBindablePropertyRenameSurface(surface)
+    ? bindableAttributeNameForProperty(newName)
+    : newName;
+}
+
+function referenceRowNeedsTypeScriptRenamePropagationEdit(
+  row: SemanticTemplateReferenceRow,
+): boolean {
+  return referenceRowSupportsRename(row)
+    && !(
+      row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+      && row.bindableAttributeSourceKind === SemanticTemplateBindableAttributeSourceKind.ExplicitAlias
+    );
+}
+
+function templateRenameFromTypeScriptEditKindForReferenceRow(
+  row: SemanticTemplateReferenceRow,
+): SemanticTemplateRenameEditKind {
+  return row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+    ? SemanticTemplateRenameEditKind.BindableAttribute
+    : SemanticTemplateRenameEditKind.TemplateUsage;
+}
+
+function templateRenameFromTypeScriptNewText(
+  row: SemanticTemplateReferenceRow,
+  newName: string,
+): string {
+  return row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
+    ? bindableAttributeNameForProperty(newName)
+    : newName;
+}
+
 function templateRenameEditKindForReferenceRow(
   row: SemanticTemplateReferenceRow,
   surface: TemplateRenameSurface,
@@ -1831,9 +1972,12 @@ function templateRenameEditKindForReferenceRow(
     && (
       surface === TemplateRenameSurface.ResourceElement
       || surface === TemplateRenameSurface.ResourceAttribute
+      || surface === TemplateRenameSurface.BindableAttributeAlias
     )
   ) {
-    return SemanticTemplateRenameEditKind.ResourceNameDeclaration;
+    return surface === TemplateRenameSurface.BindableAttributeAlias
+      ? SemanticTemplateRenameEditKind.BindableAttributeAliasDeclaration
+      : SemanticTemplateRenameEditKind.ResourceNameDeclaration;
   }
   if (row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute) {
     return SemanticTemplateRenameEditKind.BindableAttribute;
@@ -1921,8 +2065,7 @@ function templateReferenceDeclarationRow(
 function bindableAttributeReferenceRows(
   store: KernelStore,
   resources: readonly TemplateResourceEmission[],
-  selectedMemberName: string,
-  targetSource: SemanticSourceReference,
+  target: BindableAttributeReferenceTarget,
   handles: boolean,
 ): readonly SemanticTemplateReferenceRow[] {
   const rows: SemanticTemplateReferenceRow[] = [];
@@ -1931,42 +2074,32 @@ function bindableAttributeReferenceRows(
     const attributeByProduct = new Map(resource.compilation.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
     for (const classification of resource.compilation.attributeClassification.classifications) {
       const bindable = classification.bindable?.reference ?? null;
-      if (bindable == null) {
-        continue;
-      }
-      const defaultAttribute = bindableAttributeNameForProperty(bindable.name);
-      if (bindable.attribute !== defaultAttribute) {
-        continue;
-      }
-      const bindableSource = exactSourceReference(describeAddress(store, bindable.sourceAddressHandle));
-      if (!sourceReferencesMatchExactSpan(bindableSource, targetSource)) {
+      if (bindable == null || !bindableReferenceMatchesTarget(store, bindable, target)) {
         continue;
       }
       const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
       const token = syntax == null
         ? null
         : bindableAttributeTokenSource(store, syntax, attributeByProduct, bindable.attribute);
-      if (token == null) {
+      const row = token == null
+        ? null
+        : bindableAttributeReferenceRow(resource, bindable, target, token, handles);
+      if (row != null) {
+        rows.push(row);
+      }
+    }
+    for (const segment of resource.compilation.bindingCommandLowering.multiBindingSegments) {
+      const bindable = segment.bindable?.reference ?? null;
+      if (bindable == null || !bindableReferenceMatchesTarget(store, bindable, target)) {
         continue;
       }
-      rows.push({
-        referenceKind: SemanticTemplateReferenceKind.BindableAttribute,
-        name: token.text,
-        definitionName: resource.compilation.definition.name,
-        bindingKind: null,
-        dependencyKind: null,
-        source: token.source,
-        targetSource,
-        ...(handles ? {
-          handles: {
-            observedDependencyProductHandle: null,
-            expressionProductHandle: null,
-            bindingProductHandle: null,
-            sourceAddressHandle: token.sourceAddressHandle,
-            targetSourceAddressHandle: bindable.sourceAddressHandle,
-          },
-        } : {}),
-      });
+      const token = multiBindingSegmentTargetTokenSource(store, segment, bindable.attribute);
+      const row = token == null
+        ? null
+        : bindableAttributeReferenceRow(resource, bindable, target, token, handles);
+      if (row != null) {
+        rows.push(row);
+      }
     }
   }
   return [...uniqueTemplateReferenceRows(rows)]
@@ -1974,6 +2107,71 @@ function bindableAttributeReferenceRows(
       (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
       || (left.source?.start ?? -1) - (right.source?.start ?? -1)
     );
+}
+
+function bindableReferenceMatchesTarget(
+  store: KernelStore,
+  bindable: BindableDefinitionReference,
+  target: BindableAttributeReferenceTarget,
+): boolean {
+  if (target.surface === TemplateRenameSurface.BindableAttributeAlias) {
+    const aliasSource = exactSourceReference(describeAddress(store, bindable.attributeSourceAddressHandle));
+    return target.aliasName != null
+      && bindable.attribute.toLowerCase() === target.aliasName.toLowerCase()
+      && sourceReferencesMatchExactSpan(aliasSource, target.aliasTargetSource);
+  }
+
+  const propertySource = exactSourceReference(describeAddress(store, bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle));
+  return bindable.name === target.propertyName
+    && sourceReferencesMatchExactSpan(propertySource, target.propertyTargetSource);
+}
+
+function bindableAttributeReferenceRow(
+  resource: TemplateResourceEmission,
+  bindable: BindableDefinitionReference,
+  target: BindableAttributeReferenceTarget,
+  token: { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: AddressHandle | null },
+  handles: boolean,
+): SemanticTemplateReferenceRow | null {
+  const targetSource = target.surface === TemplateRenameSurface.BindableAttributeAlias
+    ? target.aliasTargetSource
+    : target.propertyTargetSource;
+  const targetSourceAddressHandle = target.surface === TemplateRenameSurface.BindableAttributeAlias
+    ? bindable.attributeSourceAddressHandle
+    : bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle;
+  if (targetSource == null) {
+    return null;
+  }
+  return {
+    referenceKind: SemanticTemplateReferenceKind.BindableAttribute,
+    name: token.text,
+    definitionName: resource.compilation.definition.name,
+    bindingKind: null,
+    dependencyKind: null,
+    bindableAttributeSourceKind: bindableAttributeSourceKind(bindable),
+    source: token.source,
+    targetSource,
+    ...(handles ? {
+      handles: {
+        observedDependencyProductHandle: null,
+        expressionProductHandle: null,
+        bindingProductHandle: null,
+        sourceAddressHandle: token.sourceAddressHandle,
+        targetSourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function bindableAttributeSourceKind(
+  bindable: BindableDefinitionReference,
+): SemanticTemplateBindableAttributeSourceKind {
+  if (bindable.isImplicitDefault) {
+    return SemanticTemplateBindableAttributeSourceKind.ImplicitDefault;
+  }
+  return bindable.attributeSourceAddressHandle == null
+    ? SemanticTemplateBindableAttributeSourceKind.DefaultDerived
+    : SemanticTemplateBindableAttributeSourceKind.ExplicitAlias;
 }
 
 function resourceReferenceRows(
@@ -2191,6 +2389,28 @@ function bindableAttributeTokenSource(
     return null;
   }
   return attributeSyntaxTargetTokenSource(store, syntax, attributeByProduct);
+}
+
+function multiBindingSegmentTargetTokenSource(
+  store: KernelStore,
+  segment: TemplateResourceEmission['compilation']['bindingCommandLowering']['multiBindingSegments'][number],
+  attributeName: string,
+): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: AddressHandle | null } | null {
+  const source = exactSourceReference(describeAddress(store, segment.targetSourceAddressHandle));
+  if (source == null) {
+    return null;
+  }
+  const rawNameLower = segment.rawName.toLowerCase();
+  const attributeLower = attributeName.toLowerCase();
+  const targetStart = rawNameLower.indexOf(attributeLower);
+  const text = targetStart < 0
+    ? attributeName
+    : segment.rawName.slice(targetStart, targetStart + attributeName.length);
+  return {
+    source,
+    text,
+    sourceAddressHandle: segment.targetSourceAddressHandle,
+  };
 }
 
 function attributeSyntaxTargetTokenSource(

@@ -1708,6 +1708,8 @@ export interface SemanticResourceDefinitionBindableRow {
   readonly valueTypeHasMembers: boolean | null;
   readonly valueTypeIsWeak: boolean | null;
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+  readonly attributeSource: SemanticSourceReference | null;
 }
 
 export interface SemanticResourceDefinitionWatchRow {
@@ -3407,9 +3409,13 @@ export interface SemanticTemplateCursorBindableRow {
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly ownerDefinitionProductHandle: ProductHandle | null;
   readonly source: SemanticSourceReference | null;
+  readonly nameSource: SemanticSourceReference | null;
+  readonly attributeSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly ownerDefinitionProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly attributeSourceAddressHandle: AddressHandle | null;
   };
 }
 
@@ -3618,12 +3624,22 @@ export enum SemanticTemplateReferenceKind {
   TypeScriptUsage = 'typescript-usage',
 }
 
+export enum SemanticTemplateBindableAttributeSourceKind {
+  /** Usage follows the framework default mapping from property name to attribute name. */
+  DefaultDerived = 'default-derived',
+  /** Usage targets an explicitly authored bindable `attribute` alias. */
+  ExplicitAlias = 'explicit-alias',
+  /** Usage targets a runtime-synthesized default custom-attribute bindable. */
+  ImplicitDefault = 'implicit-default',
+}
+
 export interface SemanticTemplateReferenceRow {
   readonly referenceKind: SemanticTemplateReferenceKind | `${SemanticTemplateReferenceKind}`;
   readonly name: string;
   readonly definitionName: string | null;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}` | null;
+  readonly bindableAttributeSourceKind?: SemanticTemplateBindableAttributeSourceKind | `${SemanticTemplateBindableAttributeSourceKind}` | null;
   /** Exact source span for the returned reference/declaration. */
   readonly source: SemanticSourceReference | null;
   /** Declaration/member source that all returned template usages resolve to. */
@@ -3671,6 +3687,7 @@ export enum SemanticTemplateRenameEditKind {
   TemplateLocalDeclaration = 'template-local-declaration',
   TemplateLocalUsage = 'template-local-usage',
   BindableAttribute = 'bindable-attribute',
+  BindableAttributeAliasDeclaration = 'bindable-attribute-alias-declaration',
   ResourceNameDeclaration = 'resource-name-declaration',
   ResourceElementTag = 'resource-element-tag',
   ResourceAttributeTarget = 'resource-attribute-target',

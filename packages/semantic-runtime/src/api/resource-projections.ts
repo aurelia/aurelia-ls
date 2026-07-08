@@ -239,6 +239,8 @@ function bindableRows(
       setterKind: bindable.set.kind,
       ...projectBindableTypeSurface(store, target, bindable),
       source: describeAddress(store, bindable.sourceAddressHandle),
+      nameSource: describeAddress(store, bindable.nameSourceAddressHandle),
+      attributeSource: describeAddress(store, bindable.attributeSourceAddressHandle),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }

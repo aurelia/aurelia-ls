@@ -48,6 +48,10 @@ export class BindableDefinition {
     /** Source address for the bindable declaration or metadata entry, when known. */
     readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BindableDefinitionField>[] = [],
+    /** Source address for the runtime property name token, when known. */
+    readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
+    /** Source address for an explicitly authored public attribute alias token, when known. */
+    readonly attributeSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -64,6 +68,10 @@ export class BindableDefinitionReference {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Whether this bindable was synthesized from a custom attribute default property. */
     readonly isImplicitDefault: boolean = false,
+    /** Source address for the runtime property name token, when known. */
+    readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
+    /** Source address for an explicitly authored public attribute alias token, when known. */
+    readonly attributeSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -87,5 +95,9 @@ export class BindableDefinitionContribution {
     /** Source address for this contribution, when known. */
     readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BindableDefinitionField>[] = [],
+    /** Source address for the runtime property name token, when known. */
+    readonly nameSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
+    /** Source address for an explicitly authored public attribute alias token, when known. */
+    readonly attributeSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }

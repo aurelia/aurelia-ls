@@ -1141,6 +1141,8 @@ function bindableReferences(
       bindable.attribute,
       bindable.sourceAddressHandle ?? sourceAddressHandle,
       isImplicitDefault,
+      bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle ?? sourceAddressHandle,
+      bindable.attributeSourceAddressHandle,
     ),
   ));
 }
@@ -1167,6 +1169,8 @@ function attributeBindablesInfo(definition: CustomAttributeDefinition): Template
         implicit.attribute,
         definition.sourceAddressHandle,
         true,
+        definition.sourceAddressHandle,
+        null,
       ),
     );
     attrs.push(primary);

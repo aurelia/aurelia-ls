@@ -40,6 +40,15 @@ const templateControllerDecoratorDefinitionText = templateControllerDefinitionTe
     /@customAttribute\(\{\r?\n  name: 'view-factory-template',\r?\n  isTemplateController: true,\r?\n\}\)/u,
     "@templateController({\n  name: 'view-factory-template',\n})",
   );
+const aliasedBindableRoot = path.join(packageRoot, 'fixtures/pressure/aliased-bindable-surfaces');
+const aliasedBindableAppTemplatePath = path.join(aliasedBindableRoot, 'src/app.html');
+const aliasedBindableProductTemplatePath = path.join(aliasedBindableRoot, 'src/product-card.html');
+const aliasedBindableProductDefinitionPath = path.join(aliasedBindableRoot, 'src/product-card.ts');
+const aliasedBindableDisplayHintDefinitionPath = path.join(aliasedBindableRoot, 'src/display-hint.ts');
+const aliasedBindableAppTemplateText = fs.readFileSync(aliasedBindableAppTemplatePath, 'utf8');
+const aliasedBindableProductTemplateText = fs.readFileSync(aliasedBindableProductTemplatePath, 'utf8');
+const aliasedBindableProductDefinitionText = fs.readFileSync(aliasedBindableProductDefinitionPath, 'utf8');
+const aliasedBindableDisplayHintDefinitionText = fs.readFileSync(aliasedBindableDisplayHintDefinitionPath, 'utf8');
 
 const catalog = readSemanticAppQueryCatalog({ queryKind: SemanticAppQueryKind.TemplateRename });
 assert.equal(catalog.value.rows.length, 1, 'TemplateRename should be in the public app-query catalog.');
@@ -123,6 +132,10 @@ const templateControllerDecoratorRuntime = await createSemanticRuntime({
       return undefined;
     },
   },
+});
+const aliasedBindableRuntime = await createSemanticRuntime({
+  workspaceRoot: aliasedBindableRoot,
+  storeKey: 'contract:template-rename:aliased-bindables',
 });
 
 const resourceDeclarationMarker = "name: 'item-card'";
@@ -226,7 +239,76 @@ assert.equal(templateControllerRename.value.templateReferenceCount, 1);
 expectEdit(templateControllerRename.value.edits, 'resource-name-declaration', 'src/runtime-html-view-factory-provider-errors-app.ts', templateControllerDeclarationStart, templateControllerDeclarationStart + 'view-factory-template'.length, 'view-factory-panel', templateControllerFixtureRoot);
 expectEdit(templateControllerRename.value.edits, 'resource-attribute-target', 'src/runtime-html-view-factory-provider-errors-app.html', templateControllerUsageStart, templateControllerUsageStart + 'view-factory-template'.length, 'view-factory-panel', templateControllerFixtureRoot);
 
-console.log(`Template rename contract passed (${rename.value.edits.length + resourceRename.value.edits.length + attributeRename.value.edits.length + templateControllerRename.value.edits.length} edit row(s)).`);
+const productLabelTextDeclarationStart = aliasedBindableProductDefinitionText.indexOf('labelText');
+const productLabelTextTemplateStart = aliasedBindableProductTemplateText.indexOf('labelText');
+const productAliasDeclarationStart = aliasedBindableProductDefinitionText.indexOf("'display-label'") + 1;
+const productAliasUsageStart = aliasedBindableAppTemplateText.indexOf('display-label.bind');
+const displayHintAliasDeclarationStart = aliasedBindableDisplayHintDefinitionText.indexOf("'display-label'") + 1;
+const inlineAliasUsageStart = aliasedBindableAppTemplateText.indexOf('display-label.bind: aliasLabel');
+assert.notEqual(productLabelTextDeclarationStart, -1, 'Expected product labelText declaration.');
+assert.notEqual(productLabelTextTemplateStart, -1, 'Expected product labelText template usage.');
+assert.notEqual(productAliasDeclarationStart, 0, 'Expected product display-label alias declaration.');
+assert.notEqual(productAliasUsageStart, -1, 'Expected product display-label usage.');
+assert.notEqual(displayHintAliasDeclarationStart, 0, 'Expected display-hint display-label alias declaration.');
+assert.notEqual(inlineAliasUsageStart, -1, 'Expected inline display-label usage.');
+
+const aliasedPropertyRename = await askAliasedBindableRename(
+  aliasedBindableProductTemplatePath,
+  aliasedBindableProductTemplateText,
+  '${labelText}',
+  'labelText',
+  'headlineText',
+);
+assert.equal(aliasedPropertyRename.outcome, 'hit');
+assert.equal(aliasedPropertyRename.value.status, 'available');
+expectEdit(aliasedPropertyRename.value.edits, 'typescript-reference', 'src/product-card.ts', productLabelTextDeclarationStart, productLabelTextDeclarationStart + 'labelText'.length, 'headlineText', aliasedBindableRoot);
+expectEdit(aliasedPropertyRename.value.edits, 'template-usage', 'src/product-card.html', productLabelTextTemplateStart, productLabelTextTemplateStart + 'labelText'.length, 'headlineText', aliasedBindableRoot);
+assert.equal(
+  aliasedPropertyRename.value.edits.some((edit) =>
+    edit.source?.path?.replace(/\\/g, '/') === 'src/app.html'
+    && edit.oldText === 'display-label'
+  ),
+  false,
+  'Property rename should not edit explicitly authored bindable aliases.',
+);
+
+const productAliasRename = await askAliasedBindableRename(
+  aliasedBindableAppTemplatePath,
+  aliasedBindableAppTemplateText,
+  'display-label.bind="aliasLabel"',
+  'display-label',
+  'headline-label',
+);
+assert.equal(productAliasRename.outcome, 'hit');
+assert.equal(productAliasRename.value.status, 'available');
+assert.equal(productAliasRename.value.typeScriptReferenceCount, 0);
+expectEdit(productAliasRename.value.edits, 'bindable-attribute-alias-declaration', 'src/product-card.ts', productAliasDeclarationStart, productAliasDeclarationStart + 'display-label'.length, 'headline-label', aliasedBindableRoot);
+expectEdit(productAliasRename.value.edits, 'bindable-attribute', 'src/app.html', productAliasUsageStart, productAliasUsageStart + 'display-label'.length, 'headline-label', aliasedBindableRoot);
+assert.equal(productAliasRename.value.edits.length, 2, 'Top-level alias rename should edit only the alias declaration and matching usage.');
+
+const inlineAliasRename = await askAliasedBindableRename(
+  aliasedBindableAppTemplatePath,
+  aliasedBindableAppTemplateText,
+  'display-hint="display-label.bind: aliasLabel',
+  'display-label',
+  'hint-label',
+);
+assert.equal(inlineAliasRename.outcome, 'hit');
+assert.equal(inlineAliasRename.value.status, 'available');
+assert.equal(inlineAliasRename.value.typeScriptReferenceCount, 0);
+expectEdit(inlineAliasRename.value.edits, 'bindable-attribute-alias-declaration', 'src/display-hint.ts', displayHintAliasDeclarationStart, displayHintAliasDeclarationStart + 'display-label'.length, 'hint-label', aliasedBindableRoot);
+expectEdit(inlineAliasRename.value.edits, 'bindable-attribute', 'src/app.html', inlineAliasUsageStart, inlineAliasUsageStart + 'display-label'.length, 'hint-label', aliasedBindableRoot);
+assert.equal(inlineAliasRename.value.edits.length, 2, 'Inline alias rename should edit only the alias declaration and matching segment target.');
+
+console.log(`Template rename contract passed (${
+  rename.value.edits.length
+  + resourceRename.value.edits.length
+  + attributeRename.value.edits.length
+  + templateControllerRename.value.edits.length
+  + aliasedPropertyRename.value.edits.length
+  + productAliasRename.value.edits.length
+  + inlineAliasRename.value.edits.length
+} edit row(s)).`);
 
 async function askRename(newName) {
   const answer = await runtime.answerAppQuery({
@@ -293,6 +375,21 @@ async function askTemplateControllerResourceRename(runtime, newName) {
     kind: SemanticAppQueryKind.TemplateRename,
     sourceFilePath: templateControllerTemplatePath,
     cursor: cursorInside(templateControllerTemplateText, templateControllerTemplatePath, '<div view-factory-template>', 'view-factory-template', 1),
+    ...(newName == null ? {} : { newName }),
+    analysisDepth: 'binding-observation',
+    diagnosticProjection: 'type-projection',
+    includeAuthoringTemplates: true,
+    appRetention: 'retain-app',
+  });
+  assert.match(answer.outcome, /^(hit|miss|partial)$/u, answer.summary);
+  return answer;
+}
+
+async function askAliasedBindableRename(filePath, text, marker, needle, newName) {
+  const answer = await aliasedBindableRuntime.answerAppQuery({
+    kind: SemanticAppQueryKind.TemplateRename,
+    sourceFilePath: filePath,
+    cursor: cursorInside(text, filePath, marker, needle, 1),
     ...(newName == null ? {} : { newName }),
     analysisDepth: 'binding-observation',
     diagnosticProjection: 'type-projection',
