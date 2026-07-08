@@ -1,0 +1,6 @@
+<article class="product-card ${selected ? 'selected' : ''}">
+  <h3>${labelText}</h3>
+  <p if.bind="item">${item.description}</p>
+  <small if.bind="item">${item.sku}</small>
+  <span>${stockText}</span>
+</article>

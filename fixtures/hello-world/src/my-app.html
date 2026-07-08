@@ -1,10 +1,40 @@
 <template>
-  <h1>${greeting}</h1>
-  <p class="info">Count: ${count}</p>
-  <p class="warn">TS diag demo: ${missingProp}</p>
-  <button click.trigger="increment()">Increment</button>
-  <ul>
-    <li repeat.for="item of items">${item.name}</li>
-  </ul>
-  <input value.bind="message" placeholder="Edit message" />
+  <main class="playground">
+    <header>
+      <h1>${heading}</h1>
+      <label>
+        Search
+        <input value.bind="state.searchText" placeholder="Filter products">
+      </label>
+      <label>
+        <input type="checkbox" checked.bind="state.onlyInStock">
+        Only in stock
+      </label>
+      <button click.trigger="clearSearch()">Clear</button>
+    </header>
+
+    <let preview.bind="selectedItem"></let>
+
+    <section
+      class="preview ${preview.tone}"
+      display-hint="display-label.bind: preview.name; tone.bind: preview.tone">
+      <h2>${preview.name}</h2>
+      <p>${preview.description}</p>
+      <p>${preview.quantity | stockLabel}</p>
+      <stock-badge item.bind="preview"></stock-badge>
+    </section>
+
+    <ul class="product-list">
+      <li repeat.for="item of visibleItems">
+        <product-card
+          item.bind="item"
+          display-label.bind="item.name"
+          selected.bind="item.sku === state.selectedSku"
+          click.trigger="selectItem(item)">
+        </product-card>
+      </li>
+    </ul>
+
+    <p if.bind="visibleItems.length === 0">No products match ${state.searchText}.</p>
+  </main>
 </template>
