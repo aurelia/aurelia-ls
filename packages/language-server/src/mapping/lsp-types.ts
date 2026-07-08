@@ -194,11 +194,29 @@ function semanticRuntimeDiagnostic(
     range,
     message: row.summary,
     severity: semanticRuntimeSeverityToLsp(row.severity),
-    code: row.frameworkErrorCode ?? row.diagnosticKind,
+    code: semanticRuntimeDiagnosticCode(row),
     source: row.diagnosticDomain === "typescript" ? "typescript" : "aurelia",
     data: semanticRuntimeDiagnosticData(row),
     ...(allRelatedInformation.length === 0 ? {} : { relatedInformation: allRelatedInformation }),
   };
+}
+
+export function semanticRuntimeDiagnosticCode(row: SemanticAppDiagnosticRow): string {
+  return row.frameworkErrorCode ?? semanticRuntimeTypeScriptDiagnosticCode(row) ?? row.diagnosticKind;
+}
+
+function semanticRuntimeTypeScriptDiagnosticCode(row: SemanticAppDiagnosticRow): string | null {
+  if (row.diagnosticAuthority !== "typescript") return null;
+  const candidates = [
+    row.missingInput,
+    ...(row.missingInputs ?? []),
+  ];
+  for (const candidate of candidates) {
+    if (candidate == null) continue;
+    const match = /^typescript:TS(\d+)$/.exec(candidate);
+    if (match) return `TS${match[1]}`;
+  }
+  return null;
 }
 
 function semanticRuntimeDiagnosticRelatedInformation(

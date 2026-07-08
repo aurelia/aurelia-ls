@@ -666,7 +666,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "diagnostics": [
     {
       "anomaly": null,
-      "code": "template-expression-typescript-diagnostic",
+      "code": "TS18046",
       "data": {
         "diagnosticAuthority": "typescript",
         "diagnosticDomain": "template",
@@ -767,7 +767,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "actionability": "manual",
             "anomaly": null,
             "category": "template-syntax",
-            "code": "template-expression-typescript-diagnostic",
+            "code": "TS18046",
             "data": {
               "diagnosticAuthority": "typescript",
               "diagnosticDomain": "template",
@@ -814,7 +814,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "impact": "blocking",
             "issues": [
               {
-                "code": "template-expression-typescript-diagnostic",
+                "code": "TS18046",
                 "kind": "template-expression-typescript-diagnostic",
                 "message": "TS18046: 'option' is of type 'unknown'."
               }
@@ -933,7 +933,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "actionability": "manual",
         "anomaly": null,
         "category": "template-syntax",
-        "code": "template-expression-typescript-diagnostic",
+        "code": "TS18046",
         "data": {
           "diagnosticAuthority": "typescript",
           "diagnosticDomain": "template",
@@ -980,7 +980,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "impact": "blocking",
         "issues": [
           {
-            "code": "template-expression-typescript-diagnostic",
+            "code": "TS18046",
             "kind": "template-expression-typescript-diagnostic",
             "message": "TS18046: 'option' is of type 'unknown'."
           }
@@ -1079,7 +1079,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "actionability": "manual",
           "anomaly": null,
           "category": "template-syntax",
-          "code": "template-expression-typescript-diagnostic",
+          "code": "TS18046",
           "data": {
             "diagnosticAuthority": "typescript",
             "diagnosticDomain": "template",
@@ -1126,7 +1126,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "impact": "blocking",
           "issues": [
             {
-              "code": "template-expression-typescript-diagnostic",
+              "code": "TS18046",
               "kind": "template-expression-typescript-diagnostic",
               "message": "TS18046: 'option' is of type 'unknown'."
             }

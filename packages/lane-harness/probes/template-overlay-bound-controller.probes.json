@@ -1,0 +1,21 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-overlay-bound-controller",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "overlay-bound-controller-host-template",
+        "file": "src/template-overlay-bound-controller-app.html",
+        "verdict": "correct",
+        "reason": "Publishes zero diagnostics with matching LSP/custom empty results in the host template; parent-local converter and child-bound values do not leak false positives.",
+        "note": "NEW 2026-07-08. Diagnostics lane negative canary for parent-to-child bound-controller values, including a parent-local value converter before the child boundary. VERDICT 2026-07-08: correct. No diagnostics in the host template."
+      },
+      {
+        "id": "overlay-bound-controller-child-template",
+        "file": "src/callback-panel.html",
+        "verdict": "correct",
+        "reason": "Publishes zero diagnostics with matching LSP/custom empty results; child-template overlay typing preserves `OverlayAction` locals and callable `onAction(action)`.",
+        "note": "NEW 2026-07-08. Diagnostics lane canary for child-template overlay typing from parent-bound values. VERDICT 2026-07-08: correct. `actions` yields `OverlayAction` locals and `onAction(action)` stays callable as a boolean-returning handler."
+      }
+    ]
+  }
+}

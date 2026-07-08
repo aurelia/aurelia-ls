@@ -1,0 +1,21 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/template-overlay-state-binding-scope",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "overlay-state-binding-host-template",
+        "file": "src/app.html",
+        "verdict": "correct",
+        "reason": "Publishes zero diagnostics with matching LSP/custom empty results; `& state` source-scope replay does not create false positives in the host template.",
+        "note": "NEW 2026-07-08. Diagnostics lane negative canary for `& state` source-scope replay. VERDICT 2026-07-08: correct. State-bound expressions and repeat child `$parent` ancestry type-check without overlay-local fallback noise."
+      },
+      {
+        "id": "overlay-state-binding-child-template",
+        "file": "src/task-list.html",
+        "verdict": "correct",
+        "reason": "Publishes zero diagnostics with matching LSP/custom empty results; the child `tasks` bindable keeps its `TaskItem` element surface.",
+        "note": "NEW 2026-07-08. Diagnostics lane negative canary for the child template reached through a state-bound parent bindable. VERDICT 2026-07-08: correct. The child `tasks` bindable preserves `TaskItem` element typing."
+      }
+    ]
+  }
+}

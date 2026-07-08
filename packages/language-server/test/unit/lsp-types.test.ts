@@ -132,6 +132,52 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
       },
     });
   });
+
+  test("uses TypeScript codes for template overlay diagnostics without losing runtime identity", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      1,
+      "alpha\nbeta\ngamma",
+    );
+    const mapped = mapSemanticRuntimeAppDiagnostics({
+      value: {
+        rows: [{
+          projectKey: "app",
+          diagnosticDomain: "template",
+          diagnosticKind: "template-expression-typescript-diagnostic",
+          diagnosticAuthority: "typescript",
+          frameworkErrorCode: null,
+          severity: "error",
+          summary: "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+          missingInput: "typescript:TS2345",
+          missingInputs: ["typescript:TS2345"],
+          source: {
+            kind: "source-span-address",
+            label: "src/component.html@6..10",
+            path: "src/component.html",
+            start: 6,
+            end: 10,
+            role: "expression",
+          },
+          sourceRole: "template",
+          relatedQueryKind: "template-diagnostics",
+        }],
+      },
+    } as never, doc);
+
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]?.source).toBe("aurelia");
+    expect(mapped[0]?.code).toBe("TS2345");
+    expect(mapped[0]?.data).toMatchObject({
+      semanticRuntime: {
+        diagnosticDomain: "template",
+        diagnosticKind: "template-expression-typescript-diagnostic",
+        diagnosticAuthority: "typescript",
+        missingInput: "typescript:TS2345",
+      },
+    });
+  });
 });
 
 describe("createCompletionGapMarker", () => {

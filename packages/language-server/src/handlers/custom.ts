@@ -24,7 +24,7 @@ import {
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticRuntimeTemplateRenameEdit } from "../mapping/lsp-types.js";
+import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
 
 type DiagnosticSeverity = "error" | "warning" | "info" | "hint";
 type DiagnosticImpact = "blocking" | "degraded" | "informational";
@@ -161,8 +161,9 @@ function toRuntimeSnapshotItem(
 ): DiagnosticsSnapshotItem {
   const file = filePathForSource(workspaceRoot, row.source);
   const span = sourceSpanForSource(row.source);
+  const code = semanticRuntimeDiagnosticCode(row);
   return {
-    code: row.frameworkErrorCode ?? row.diagnosticKind,
+    code,
     message: row.summary,
     severity: runtimeDiagnosticSeverity(row.severity),
     impact: runtimeDiagnosticImpact(row.severity),
@@ -191,7 +192,7 @@ function toRuntimeSnapshotItem(
       {
         kind: row.diagnosticKind,
         message: row.summary,
-        code: row.frameworkErrorCode ?? row.diagnosticKind,
+        code,
         rawCode: row.frameworkRawErrorAuthority ?? undefined,
       },
     ],

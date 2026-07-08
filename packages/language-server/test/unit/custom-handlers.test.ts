@@ -210,6 +210,63 @@ describe("handleGetDiagnostics", () => {
       span: undefined,
     }));
   });
+
+  test("uses TypeScript display codes for template overlay diagnostics in the report envelope", async () => {
+    const ctx = createMockContext();
+    ctx.semanticRuntime.appDiagnostics.mockResolvedValue({
+      schemaVersion: "0.1",
+      outcome: "hit",
+      closure: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        typeScript: null,
+        rows: [
+          {
+            projectKey: "app",
+            diagnosticDomain: "template",
+            diagnosticKind: "template-expression-typescript-diagnostic",
+            diagnosticAuthority: "typescript",
+            frameworkErrorCode: null,
+            severity: "error",
+            summary: "TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+            missingInput: "typescript:TS2345",
+            missingInputs: ["typescript:TS2345"],
+            source: {
+              kind: "source-span-address",
+              label: "src/app.html@4..9",
+              path: "src/app.html",
+              start: 4,
+              end: 9,
+              role: "range",
+            },
+            relatedQueryKind: "template-diagnostics",
+          },
+        ],
+      },
+      page: null,
+    });
+
+    const result = await handleGetDiagnostics(ctx as never, { uri: "file:///test.html" });
+    const item = result?.diagnostics.bySurface.lsp[0];
+
+    expect(item).toEqual(expect.objectContaining({
+      code: "TS2345",
+      source: "semantic-runtime:template",
+      uri: expect.stringContaining("src/app.html"),
+      span: { start: 4, end: 9 },
+    }));
+    expect(item?.issues?.[0]).toEqual(expect.objectContaining({
+      kind: "template-expression-typescript-diagnostic",
+      code: "TS2345",
+    }));
+    expect(item?.data).toEqual(expect.objectContaining({
+      semanticRuntime: true,
+      diagnosticKind: "template-expression-typescript-diagnostic",
+      diagnosticAuthority: "typescript",
+      missingInput: "typescript:TS2345",
+    }));
+  });
 });
 
 describe("handleInspectEntity", () => {
