@@ -125,11 +125,20 @@ export class LspFacade {
     newName: string,
   ): Promise<RenameFromTsResponse> {
     try {
-      return await this.sendRequest<RenameFromTsResponse>("aurelia/renameFromTs", { uri, position, newName });
+      const response = await this.sendRequest<RenameFromTsResponse | null>("aurelia/renameFromTs", { uri, position, newName });
+      return response ?? {
+        status: "blocked",
+        reason: "empty-response",
+        message: "Aurelia template rename propagation returned no status.",
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.#logger.warn("renameFromTs.request.failed", { message });
-      return null;
+      return {
+        status: "blocked",
+        reason: "request-failed",
+        message: `Aurelia template rename propagation request failed: ${message}`,
+      };
     }
   }
 

@@ -18,6 +18,7 @@
  */
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { DisposableStore } from "../../core/disposables.js";
+import type { RenameFromTsResponse } from "../../types.js";
 
 export const TsRenameFeature: FeatureModule = {
   id: "rename.tsPropagate",
@@ -56,22 +57,28 @@ export const TsRenameFeature: FeatureModule = {
         }
 
         // Step 2: Ask Aurelia LS for template edits
-        const aureliaChanges = await ctx.lsp.renameFromTs(
+        const aureliaRename = await ctx.lsp.renameFromTs(
           document.uri.toString(),
           { line: position.line, character: position.character },
           newName,
         );
 
-        // No template edits — return TS-only edits
-        if (!aureliaChanges?.changes) {
-          log.debug("[TsRename] no template edits, TS-only rename");
+        if (aureliaRename.status === "blocked" || aureliaRename.status === "refused") {
+          const message = renamePropagationFailureMessage(aureliaRename);
+          log.warn(`[TsRename] ${message}`);
+          throw new Error(message);
+        }
+
+        if (aureliaRename.status === "not-applicable") {
+          notifyUnverifiedCandidates(ctx, aureliaRename);
+          log.debug(`[TsRename] no template edits, TS-only rename: ${aureliaRename.reason}`);
           return tsEdit;
         }
 
         // Step 3: Merge TS + template edits
         const merged = tsEdit ?? new vscode.WorkspaceEdit();
         let templateEditCount = 0;
-        for (const [uri, edits] of Object.entries(aureliaChanges.changes)) {
+        for (const [uri, edits] of Object.entries(aureliaRename.changes)) {
           const fileUri = vscode.Uri.parse(uri);
           for (const edit of edits) {
             merged.replace(
@@ -86,6 +93,7 @@ export const TsRenameFeature: FeatureModule = {
           }
         }
 
+        notifyUnverifiedCandidates(ctx, aureliaRename);
         log.debug(`[TsRename] merged: ${merged.entries().length} files, ${templateEditCount} template edits`);
         return merged;
       },
@@ -126,3 +134,18 @@ export const TsRenameFeature: FeatureModule = {
     return store;
   },
 };
+
+function renamePropagationFailureMessage(response: Extract<RenameFromTsResponse, { status: "blocked" | "refused" }>): string {
+  return response.message || `Aurelia template rename propagation ${response.status}: ${response.reason}`;
+}
+
+function notifyUnverifiedCandidates(ctx: Parameters<FeatureModule["activate"]>[0], response: RenameFromTsResponse): void {
+  const candidateCount = typeof response.candidateCount === "number" ? response.candidateCount : 0;
+  if (candidateCount <= 0) {
+    return;
+  }
+  const candidateNoun = candidateCount === 1 ? "usage" : "usages";
+  ctx.vscode.window.showInformationMessage(
+    `Aurelia rename left ${candidateCount} same-name template ${candidateNoun} unchanged because they could not be verified.`,
+  );
+}

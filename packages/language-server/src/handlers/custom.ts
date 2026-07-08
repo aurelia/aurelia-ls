@@ -852,29 +852,75 @@ export type RenameFromTsParams = {
 };
 
 export type RenameFromTsResponse = {
+  status: "success";
   /** Template-side edits only (TS edits come from the built-in TS rename). */
   changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
-} | null;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "not-applicable";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "refused";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "blocked";
+  reason: string;
+  message: string;
+  failures?: readonly string[];
+  templateReferenceCount?: number;
+  candidateCount?: number;
+};
 
 export async function handleRenameFromTs(
   ctx: ServerContext,
   params: RenameFromTsParams,
 ): Promise<RenameFromTsResponse> {
   try {
-    if (!params?.uri || !params.position || !params.newName) return null;
+    if (!params?.uri || !params.position || !params.newName) {
+      return renameFromTsBlocked("invalid-request", "Aurelia template rename propagation requires a URI, position, and new name.");
+    }
 
     const canonical = canonicalDocumentUri(params.uri);
     const doc = ctx.ensureProgramDocument(params.uri);
-    if (!doc) return null;
+    if (!doc) {
+      return renameFromTsBlocked("document-unavailable", "Aurelia template rename propagation could not read the TypeScript document.");
+    }
     const answer = await ctx.semanticRuntime.templateRenameFromTypeScript(
       doc,
       params.position,
       params.newName,
     );
     const templateReferenceCount = answer.value.templateReferenceCount;
-    if (answer.value.status !== "available" || answer.value.edits.length === 0) {
+    const candidateCount = answer.value.candidateRows.length;
+    if (answer.value.status !== "available") {
+      const reason = answer.value.reason ?? answer.value.status;
+      const message = answer.value.displayText || answer.summary;
+      ctx.logger.info(`[renameFromTs] template propagation refused for ${canonical.path}: ${reason}`);
+      return {
+        status: answer.value.status === "invalid-name" ? "refused" : "not-applicable",
+        reason,
+        message,
+        templateReferenceCount,
+        candidateCount,
+      };
+    }
+    if (answer.value.edits.length === 0) {
       ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
-      return null;
+      return {
+        status: "not-applicable",
+        reason: candidateCount > 0 ? "unverified-candidates-only" : "no-template-edits",
+        message: answer.value.displayText || answer.summary,
+        templateReferenceCount,
+        candidateCount,
+      };
     }
     const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupText(uri), {
       workspaceRoot: ctx.workspaceRoot,
@@ -882,7 +928,13 @@ export async function handleRenameFromTs(
     });
     if (mapping.edit?.changes == null) {
       ctx.logger.warn(`[renameFromTs] template edit mapping was blocked: ${mapping.failures.join(" ")}`);
-      return null;
+      return renameFromTsBlocked(
+        "mapping-failed",
+        `Aurelia template rename propagation was blocked: ${mapping.failures.join(" ")}`,
+        mapping.failures,
+        templateReferenceCount,
+        candidateCount,
+      );
     }
 
     const changes = mapping.edit.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
@@ -891,13 +943,44 @@ export async function handleRenameFromTs(
     if (fileCount > 0) {
       ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s), ${templateReferenceCount} runtime reference(s)`);
     }
-    return fileCount ? { changes } : null;
+    return fileCount
+      ? {
+        status: "success",
+        changes,
+        message: answer.value.displayText || answer.summary,
+        templateReferenceCount,
+        candidateCount,
+      }
+      : {
+        status: "not-applicable",
+        reason: "no-template-edits",
+        message: answer.value.displayText || answer.summary,
+        templateReferenceCount,
+        candidateCount,
+      };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const stack = e instanceof Error ? e.stack : undefined;
     ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
-    return null;
+    return renameFromTsBlocked("server-error", `Aurelia template rename propagation failed: ${msg}`);
   }
+}
+
+function renameFromTsBlocked(
+  reason: string,
+  message: string,
+  failures?: readonly string[],
+  templateReferenceCount?: number,
+  candidateCount?: number,
+): RenameFromTsResponse {
+  return {
+    status: "blocked",
+    reason,
+    message,
+    ...(failures == null ? {} : { failures }),
+    ...(templateReferenceCount == null ? {} : { templateReferenceCount }),
+    ...(candidateCount == null ? {} : { candidateCount }),
+  };
 }
 
 export async function handleGetRelatedFile(

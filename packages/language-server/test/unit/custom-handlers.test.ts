@@ -80,6 +80,7 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
           targetSource: null,
           activeSource: null,
           edits: [],
+          candidateRows: [],
           templateReferenceCount: 0,
           typeScriptReferenceCount: 0,
         },
@@ -424,6 +425,7 @@ describe("handleRenameFromTs", () => {
             newText: "heading",
           },
         ],
+        candidateRows: [],
         templateReferenceCount: 1,
         typeScriptReferenceCount: 0,
       },
@@ -441,7 +443,15 @@ describe("handleRenameFromTs", () => {
       { line: 0, character: 12 },
       "heading",
     );
-    const [templateUri, edits] = Object.entries(result?.changes ?? {})[0] ?? [];
+    expect(result).toMatchObject({
+      status: "success",
+      templateReferenceCount: 1,
+      candidateCount: 0,
+    });
+    if (result.status !== "success") {
+      throw new Error("Expected successful rename propagation.");
+    }
+    const [templateUri, edits] = Object.entries(result.changes)[0] ?? [];
     expect(templateUri).toContain("src/app.html");
     expect(edits).toEqual([
       {
@@ -454,7 +464,7 @@ describe("handleRenameFromTs", () => {
     ]);
   });
 
-  test("returns null when runtime has no template propagation edits", async () => {
+  test("returns not-applicable when runtime has no template propagation edits", async () => {
     const tsDocument = TextDocument.create("file:///test/workspace/src/app.ts", "typescript", 1, "class App { title = ''; }");
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
@@ -466,7 +476,67 @@ describe("handleRenameFromTs", () => {
       newName: "heading",
     });
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      status: "not-applicable",
+      reason: "no-template-edits",
+      templateReferenceCount: 0,
+      candidateCount: 0,
+    });
+  });
+
+  test("returns blocked when template propagation edits fail old-text validation", async () => {
+    const tsDocument = TextDocument.create("file:///test/workspace/src/app.ts", "typescript", 1, "class App { title = ''; }");
+    const ctx = createMockContext({
+      ensureProgramDocument: vi.fn(() => tsDocument),
+      lookupText: vi.fn(() => "<p>${stale}</p>"),
+    });
+    ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
+      schemaVersion: "0.1",
+      outcome: "hit",
+      closure: "complete",
+      summary: "mock",
+      value: {
+        displayText: "mock",
+        status: "available",
+        reason: null,
+        selectedMemberName: "title",
+        placeholder: "title",
+        targetSource: null,
+        activeSource: null,
+        edits: [
+          {
+            editKind: "template-usage",
+            source: {
+              kind: "source-span-address",
+              label: "src/app.html@5..10",
+              path: "src/app.html",
+              start: 5,
+              end: 10,
+            },
+            oldText: "title",
+            newText: "heading",
+          },
+        ],
+        candidateRows: [],
+        templateReferenceCount: 1,
+        typeScriptReferenceCount: 0,
+      },
+      page: null,
+    });
+
+    const result = await handleRenameFromTs(ctx as never, {
+      uri: tsDocument.uri,
+      position: { line: 0, character: 12 },
+      newName: "heading",
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      reason: "mapping-failed",
+      templateReferenceCount: 1,
+      candidateCount: 0,
+    });
+    expect(result.status === "blocked" ? result.failures?.[0] : "").toContain("expected \"title\"");
   });
 });
 

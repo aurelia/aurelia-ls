@@ -78,6 +78,7 @@
         "Use Atlas `ts.type` rename, references, code-fixes, refactors, organize-imports, and file-rename-edits as pressure and implementation precedent, not as a semantic-runtime API dependency.",
         "Cross-language edits must join Aurelia semantic references: template bindings, resource names, bindables, route parameters, translation keys, value converters, binding behaviors, and source-level configuration can all participate in edit reachability.",
         "Edit ranges must use exact authored source references. A broad carrier span is a blocker for edit application, not a range to patch.",
+        "Custom edit-affordance transports must distinguish not-applicable/no-op, refused, and blocked mapping-failure states. Never encode blocked cross-language edit propagation as `null` or an empty edit set; clients may treat that as safe TS-only work and silently lose template/resource edits.",
         "Grow this toward a Roslyn-like workspace operation model: previewable, multi-file, transactional, explainable, and able to separate read-only navigation, edit preview, and edit application.",
         "Route edit-plan answers through QueryClaimGraph or an adjacent inquiry-owned lifetime so source/project epoch invalidation, retained previews, and answer-local TypeChecker products stay explicit.",
         "If implementing the first slice, prefer a read-only edit-plan or rename-feasibility projection that reports missing semantic reference families over a small mutating MCP tool."
@@ -106,6 +107,16 @@
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph",
           "summary": "Answer-boundary lifetime and invalidation substrate for future edit-preview answers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/language-server/src/handlers/custom.ts",
+          "summary": "Custom TS-origin rename propagation response boundary; preserves success, not-applicable, refused, and blocked states for the VS Code client."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/vscode/src/features/rename/ts-rename-feature.ts",
+          "summary": "VS Code TS rename provider that delegates TypeScript edits and merges or blocks Aurelia template propagation based on the custom response status."
         },
         {
           "kind": "lens",
@@ -140,10 +151,20 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
           "symbolName": "QueryClaimGraph"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/language-server/src/handlers/custom.ts",
+          "summary": "Custom LSP request boundary still exists."
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/vscode/src/features/rename/ts-rename-feature.ts",
+          "summary": "VS Code TS-origin rename propagation provider still exists."
         }
       ],
       "createdAt": "2026-05-22",
-      "updatedAt": "2026-05-22"
+      "updatedAt": "2026-07-08"
     },
     {
       "id": "reuse:app-builder-generated-fixture-contracts",

@@ -53,6 +53,12 @@ class StubWorkspaceEdit {
   }
 }
 
+type RenameResponse =
+  | { status: "success"; changes: Record<string, { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }[]>; message: string; templateReferenceCount: number; candidateCount: number }
+  | { status: "not-applicable"; reason: string; message: string; templateReferenceCount: number; candidateCount: number }
+  | { status: "refused"; reason: string; message: string; templateReferenceCount: number; candidateCount: number }
+  | { status: "blocked"; reason: string; message: string; failures?: readonly string[]; templateReferenceCount?: number; candidateCount?: number };
+
 type StubDocument = {
   languageId: string;
   uri: StubUri;
@@ -60,8 +66,9 @@ type StubDocument = {
   getText(range: StubRange): string;
 };
 
-function createContext(options: { renameResponse?: unknown } = {}) {
+function createContext(options: { renameResponse?: RenameResponse } = {}) {
   const providers: StubProvider[] = [];
+  const infoMessages: string[] = [];
   const tsEdit = new StubWorkspaceEdit();
   tsEdit.replace(
     new StubUri("file:///app.ts"),
@@ -70,7 +77,13 @@ function createContext(options: { renameResponse?: unknown } = {}) {
   );
 
   const executeCommand = vi.fn(async () => tsEdit);
-  const renameFromTs = vi.fn(async () => options.renameResponse ?? null);
+  const renameFromTs = vi.fn(async () => options.renameResponse ?? {
+    status: "not-applicable",
+    reason: "no-template-edits",
+    message: "No template edits.",
+    templateReferenceCount: 0,
+    candidateCount: 0,
+  });
   const registerRenameProvider = vi.fn((_selector: unknown, provider: StubProvider): StubDisposable => {
     providers.push(provider);
     return { dispose: vi.fn() };
@@ -84,6 +97,12 @@ function createContext(options: { renameResponse?: unknown } = {}) {
         parse: (value: string) => new StubUri(value),
       },
       WorkspaceEdit: StubWorkspaceEdit,
+      window: {
+        showInformationMessage: vi.fn((message: string) => {
+          infoMessages.push(message);
+          return message;
+        }),
+      },
       commands: {
         executeCommand,
       },
@@ -100,7 +119,7 @@ function createContext(options: { renameResponse?: unknown } = {}) {
     },
   } as unknown as ClientContext;
 
-  return { ctx, providers, executeCommand, renameFromTs, tsEdit };
+  return { ctx, providers, executeCommand, renameFromTs, tsEdit, infoMessages };
 }
 
 function createDocument(): StubDocument {
@@ -128,6 +147,7 @@ describe("TsRenameFeature", () => {
   test("delegates TypeScript rename and merges runtime template edits", async () => {
     const harness = createContext({
       renameResponse: {
+        status: "success",
         changes: {
           "file:///app.html": [
             {
@@ -139,6 +159,9 @@ describe("TsRenameFeature", () => {
             },
           ],
         },
+        message: "1 template edit.",
+        templateReferenceCount: 1,
+        candidateCount: 0,
       },
     });
     TsRenameFeature.activate(harness.ctx);
@@ -171,5 +194,73 @@ describe("TsRenameFeature", () => {
       },
       newText: "heading",
     });
+  });
+
+  test("returns TypeScript-only edits when template propagation is not applicable", async () => {
+    const harness = createContext({
+      renameResponse: {
+        status: "not-applicable",
+        reason: "no-template-edits",
+        message: "No template edits.",
+        templateReferenceCount: 0,
+        candidateCount: 0,
+      },
+    });
+    TsRenameFeature.activate(harness.ctx);
+    const document = createDocument();
+
+    const edit = await harness.providers[0]?.provideRenameEdits(
+      document,
+      new StubPosition(2, 11),
+      "heading",
+    );
+
+    expect(edit).toBe(harness.tsEdit);
+    expect(edit?.replacements).toHaveLength(1);
+  });
+
+  test("warns when template propagation leaves unverified candidates unchanged", async () => {
+    const harness = createContext({
+      renameResponse: {
+        status: "not-applicable",
+        reason: "unverified-candidates-only",
+        message: "Only unverified candidates were found.",
+        templateReferenceCount: 0,
+        candidateCount: 2,
+      },
+    });
+    TsRenameFeature.activate(harness.ctx);
+    const document = createDocument();
+
+    await harness.providers[0]?.provideRenameEdits(
+      document,
+      new StubPosition(2, 11),
+      "heading",
+    );
+
+    expect(harness.infoMessages).toEqual([
+      "Aurelia rename left 2 same-name template usages unchanged because they could not be verified.",
+    ]);
+  });
+
+  test("blocks the combined rename when template propagation mapping is blocked", async () => {
+    const harness = createContext({
+      renameResponse: {
+        status: "blocked",
+        reason: "mapping-failed",
+        message: "Aurelia template rename propagation was blocked: stale edit.",
+        failures: ["stale edit"],
+        templateReferenceCount: 1,
+        candidateCount: 0,
+      },
+    });
+    TsRenameFeature.activate(harness.ctx);
+    const document = createDocument();
+
+    await expect(harness.providers[0]?.provideRenameEdits(
+      document,
+      new StubPosition(2, 11),
+      "heading",
+    )).rejects.toThrow("Aurelia template rename propagation was blocked: stale edit.");
   });
 });

@@ -204,5 +204,28 @@ export type RelatedFileResponse = {
 } | null;
 
 export type RenameFromTsResponse = {
+  status: "success";
   changes: Record<string, { range: ProtocolRange; newText: string }[]>;
-} | null;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "not-applicable";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "refused";
+  reason: string;
+  message: string;
+  templateReferenceCount: number;
+  candidateCount: number;
+} | {
+  status: "blocked";
+  reason: string;
+  message: string;
+  failures?: readonly string[];
+  templateReferenceCount?: number;
+  candidateCount?: number;
+};
