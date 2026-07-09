@@ -1718,6 +1718,474 @@
       ]
     },
     {
+      "id": "resource-registration-lab",
+      "fixture": "fixtures/pressure/resource-registration-lab",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-registration-model",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resource-lab-app.html",
+      "requirement": "Resource registration rows preserve framework registration identity, author-facing taxonomy, declaration carrier forms, aliases, and exact public-name sources across custom elements, custom attributes, template controllers, value converters, and binding behaviors.",
+      "cases": [
+        {
+          "id": "definition-carrier-forms-and-taxonomy",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "resourceKind": "custom-element",
+                    "name": "decorator-card",
+                    "targetName": "DecoratorCard",
+                    "declarationModes.0": "decorator",
+                    "aliases.0": "decorator-card-annotation",
+                    "aliases.1": "decorator-card-alias",
+                    "key": "au:resource:custom-element:decorator-card"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-card'", "token": "decorator-card" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-element",
+                    "name": "static-panel",
+                    "targetName": "StaticPanel",
+                    "declarationModes.0": "static-property",
+                    "aliases.0": "static-panel-alias",
+                    "key": "au:resource:custom-element:static-panel"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'static-panel'", "token": "static-panel" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-element",
+                    "name": "defined-badge",
+                    "targetName": "DefinedBadge",
+                    "declarationModes.0": "definition-object",
+                    "aliases.0": "defined-badge-alias",
+                    "key": "au:resource:custom-element:defined-badge"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'defined-badge'", "token": "defined-badge" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-element",
+                    "name": "convention-panel",
+                    "targetName": "ConventionPanel",
+                    "declarationModes.0": "convention",
+                    "key": "au:resource:custom-element:convention-panel",
+                    "nameSource": null
+                  },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/convention-panel.ts", "marker": "class ConventionPanel", "token": "ConventionPanel" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-attribute",
+                    "name": "decorator-tooltip",
+                    "targetName": "DecoratorTooltip",
+                    "declarationModes.0": "decorator",
+                    "aliases.0": "decorator-tip",
+                    "key": "au:resource:custom-attribute:decorator-tooltip",
+                    "isTemplateController": false
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-tooltip'", "token": "decorator-tooltip" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-attribute",
+                    "name": "static-flag",
+                    "targetName": "StaticFlag",
+                    "declarationModes.0": "static-property",
+                    "aliases.0": "flagged",
+                    "key": "au:resource:custom-attribute:static-flag",
+                    "isTemplateController": false
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'static-flag'", "token": "static-flag" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "custom-attribute",
+                    "name": "defined-accent",
+                    "targetName": "DefinedAccent",
+                    "declarationModes.0": "definition-object",
+                    "aliases.0": "accented",
+                    "key": "au:resource:custom-attribute:defined-accent",
+                    "isTemplateController": false
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'defined-accent'", "token": "defined-accent" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "template-controller",
+                    "name": "surface-gate",
+                    "targetName": "SurfaceGate",
+                    "declarationModes.0": "decorator",
+                    "aliases.0": "surface-door",
+                    "key": "au:resource:custom-attribute:surface-gate",
+                    "isTemplateController": true
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'surface-gate'", "token": "surface-gate" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "value-converter",
+                    "name": "formatName",
+                    "targetName": "FormatNameValueConverter",
+                    "declarationModes.0": "decorator",
+                    "aliases.0": "fmtName",
+                    "key": "au:resource:value-converter:formatName"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'formatName'", "token": "formatName" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "value-converter",
+                    "name": "staticStatus",
+                    "targetName": "StaticStatusValueConverter",
+                    "declarationModes.0": "static-property",
+                    "aliases.0": "statusText",
+                    "key": "au:resource:value-converter:staticStatus"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'staticStatus'", "token": "staticStatus" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "value-converter",
+                    "name": "definedCode",
+                    "targetName": "DefinedCodeValueConverter",
+                    "declarationModes.0": "definition-object",
+                    "aliases.0": "codeText",
+                    "key": "au:resource:value-converter:definedCode"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'definedCode'", "token": "definedCode" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "binding-behavior",
+                    "name": "trackEdit",
+                    "targetName": "TrackEditBindingBehavior",
+                    "declarationModes.0": "decorator",
+                    "aliases.0": "track",
+                    "key": "au:resource:binding-behavior:trackEdit"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'trackEdit'", "token": "trackEdit" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "binding-behavior",
+                    "name": "staticAudit",
+                    "targetName": "StaticAuditBindingBehavior",
+                    "declarationModes.0": "static-property",
+                    "aliases.0": "audit",
+                    "key": "au:resource:binding-behavior:staticAudit"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'staticAudit'", "token": "staticAudit" }
+                },
+                {
+                  "fields": {
+                    "resourceKind": "binding-behavior",
+                    "name": "definedMask",
+                    "targetName": "DefinedMaskBindingBehavior",
+                    "declarationModes.0": "definition-object",
+                    "aliases.0": "mask",
+                    "key": "au:resource:binding-behavior:definedMask"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'definedMask'", "token": "definedMask" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-alias-references",
+          "cursor": { "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-card" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-card'", "token": "decorator-card" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</decorator-card>", "token": "decorator-card" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</decorator-card-alias>", "token": "decorator-card-alias" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-attribute-alias-references",
+          "cursor": { "marker": "decorator-tooltip=\"message.bind: title\"", "token": "decorator-tooltip" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-tooltip" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-tooltip'", "token": "decorator-tooltip" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "decorator-tooltip=\"message.bind: title\"", "token": "decorator-tooltip" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "decorator-tip=\"message.bind: title\"", "token": "decorator-tip" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "template-controller-registration-identity-references",
+          "cursor": { "marker": "surface-gate.bind=\"isActive\"", "token": "surface-gate" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "template-controller",
+                "value.selectedDefinition.name": "surface-gate"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "surface-gate" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'surface-gate'", "token": "surface-gate" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "surface-gate.bind=\"isActive\"", "token": "surface-gate" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "surface-door.bind=\"isActive\"", "token": "surface-door" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "convention-resource-rename-refusal",
+          "cursor": { "marker": "<convention-panel>", "token": "convention-panel" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "convention-panel",
+                "value.selectedDefinition.nameSource": null
+              }
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "renamed-panel" } },
+              "outcomes": [ "miss" ],
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "resource-name-has-no-authored-source",
+                "value.selectedMemberName": "convention-panel"
+              }
+            }
+          ]
+        },
+        {
+          "id": "primary-resource-rename-does-not-collapse-alias-usages",
+          "cursor": { "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "renamed-card" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-element-tag" },
+                  "source": { "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" },
+                  "absent": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-element-tag" },
+                  "source": { "marker": "</decorator-card-alias>", "token": "decorator-card-alias" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-template-resource-dispatch",
+          "cursor": { "marker": "<local-chip public-label.bind=\"title\">", "token": "local-chip" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "element-name",
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-chip"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "local-chip" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<local-chip public-label.bind=\"title\">", "token": "local-chip" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "as-element-resource-dispatch",
+          "cursor": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "decorator-card"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "decorator-card" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-card'", "token": "decorator-card" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-converter-expression-resource-dispatch",
+          "cursor": { "marker": "${title | formatName}", "token": "formatName" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "expression-value-converter",
+                "value.selectedDefinition.resourceKind": "value-converter",
+                "value.selectedDefinition.name": "formatName"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "formatName" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'formatName'", "token": "formatName" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "${title | formatName}", "token": "formatName" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-expression-resource-dispatch",
+          "cursor": { "marker": "title & trackEdit", "token": "trackEdit" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "expression-binding-behavior",
+                "value.selectedDefinition.resourceKind": "binding-behavior",
+                "value.selectedDefinition.name": "trackEdit"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "trackEdit" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'trackEdit'", "token": "trackEdit" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "title & track\"", "token": "track" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-registration-duplicates",
+      "fixture": "fixtures/pressure/resource-registration-duplicates",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-registration-diagnostics",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/resource-registration-duplicates-app.html",
+      "requirement": "Runtime resource registration collisions publish framework-owned resource issue rows with AUR0153-AUR0156 codes and source spans on the duplicate registration carrier.",
+      "cases": [
+        {
+          "id": "duplicate-runtime-resource-issues",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "phase": "resource-registration",
+                    "issueKind": "custom-element-already-registered",
+                    "frameworkErrorCode": "AUR0153"
+                  },
+                  "source": {
+                    "sourceFile": "src/resources.ts",
+                    "marker": "@customElement({\n  name: 'duplicate-card',\n  template: '<template><span>two</span></template>',\n})",
+                    "token": "@customElement({\n  name: 'duplicate-card',\n  template: '<template><span>two</span></template>',\n})"
+                  }
+                },
+                {
+                  "fields": {
+                    "phase": "resource-registration",
+                    "issueKind": "custom-attribute-already-registered",
+                    "frameworkErrorCode": "AUR0154"
+                  },
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@customAttribute('duplicate-flag')\nexport class DuplicateFlagTwo", "token": "@customAttribute('duplicate-flag')" }
+                },
+                {
+                  "fields": {
+                    "phase": "resource-registration",
+                    "issueKind": "value-converter-already-registered",
+                    "frameworkErrorCode": "AUR0155"
+                  },
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@valueConverter('duplicateFormat')\nexport class DuplicateFormatTwoValueConverter", "token": "@valueConverter('duplicateFormat')" }
+                },
+                {
+                  "fields": {
+                    "phase": "resource-registration",
+                    "issueKind": "binding-behavior-already-registered",
+                    "frameworkErrorCode": "AUR0156"
+                  },
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@bindingBehavior('duplicateTrack')\nexport class DuplicateTrackTwoBindingBehavior", "token": "@bindingBehavior('duplicateTrack')" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "diagnostic-source-and-vocabulary",
       "fixture": "fixtures/pressure/guidance-truth-canaries",
       "aureliaDomain": "template-expression-typing",

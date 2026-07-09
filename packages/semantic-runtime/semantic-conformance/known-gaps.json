@@ -43,6 +43,41 @@
       "failureBucket": "template-overlay-let-binding-context-parent-alias",
       "firstObserved": "2026-07-09",
       "rationale": "Cursor info, references, and rename resolve nested $parent.hostTitle to the <let to-binding-context> binding-context slot, matching Aurelia Scope.getContext semantics, but the TypeScript overlay still reports TS2339 at that same token."
+    },
+    {
+      "assertionId": "resource-registration-lab/primary-resource-rename-does-not-collapse-alias-usages",
+      "status": "known-gap",
+      "failureBucket": "resource-alias-rename-policy",
+      "firstObserved": "2026-07-09",
+      "rationale": "References correctly enumerate alias usages as usages of the same resource, but primary resource rename currently rewrites alias-tag usages to the new primary name; aliases are independent public registration names and should need an explicit alias operation or remain untouched."
+    },
+    {
+      "assertionId": "resource-registration-lab/local-template-resource-dispatch",
+      "status": "known-gap",
+      "failureBucket": "local-template-resource-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "The framework treats <template as-custom-element> as a local custom element with bindables, but cursor info, references, and rename do not surface the local resource at its usage tag."
+    },
+    {
+      "assertionId": "resource-registration-lab/as-element-resource-dispatch",
+      "status": "known-gap",
+      "failureBucket": "as-element-resource-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "The framework compiles as-element values through custom-element resource lookup, but cursor info, references, and rename do not dispatch the attribute value as a resource usage."
+    },
+    {
+      "assertionId": "resource-registration-lab/value-converter-expression-resource-dispatch",
+      "status": "known-gap",
+      "failureBucket": "expression-resource-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "Value converter tokens are classified and semantic-tokenized, and resource definitions preserve the converter declaration, but cursor info, references, and rename do not join expression converter usages to that resource definition."
+    },
+    {
+      "assertionId": "resource-registration-lab/binding-behavior-expression-resource-dispatch",
+      "status": "known-gap",
+      "failureBucket": "expression-resource-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "Binding behavior tokens are classified and semantic-tokenized, and resource definitions preserve the behavior declaration, but cursor info, references, and rename do not join expression behavior usages to that resource definition."
     }
   ]
 }
