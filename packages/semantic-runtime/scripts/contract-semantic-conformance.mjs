@@ -45,6 +45,7 @@ const AURELIA_DOMAINS = new Set([
   'plugin-capability-admission',
   'resource-registration',
   'router-composition',
+  'runtime-composition',
   'runtime-api-boundary',
   'template-binding-syntax',
   'template-controller-scope',

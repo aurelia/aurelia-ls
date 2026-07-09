@@ -1,0 +1,25 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-instruction-errors",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "router-load-missing-route",
+        "file": "src/router-instruction-errors-app.html",
+        "verdict": "wrong",
+        "reason": "The owning router diagnostic reaches the editor with the correct AUR3401 code, domain, related query, and authored `missing-route` span, but its repair affordance is generic manual inspection instead of preserving the router-specific `fix-router-instruction` intent already present in TemplateDiagnostics.",
+        "note": "NEW 2026-07-09. Projection canary for router diagnostic repair/actionability data loss. This is not a row-routing or span failure; it is the AppDiagnostics/LSP repair channel dropping existing guidance."
+      }
+    ],
+    "codeAction": [
+      {
+        "id": "router-load-missing-route-no-edit-action",
+        "file": "src/router-instruction-errors-app.html",
+        "anchor": "load=\"missing-route\"",
+        "at": "missing-route",
+        "verdict": "correct",
+        "reason": "Router instruction diagnostics have guided repair intent but no conservative source-operation planner yet, so the code-action lane should return no edit-backed quick fix rather than inventing a route edit.",
+        "note": "NEW 2026-07-09. Positive boundary canary: repair guidance belongs on diagnostics until a route repair planner can produce validated edits."
+      }
+    ]
+  }
+}

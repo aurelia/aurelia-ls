@@ -113,6 +113,20 @@
       "failureBucket": "router-viewport-usedby-resolved-component-name-data-loss",
       "firstObserved": "2026-07-09",
       "rationale": "Aurelia resolves the routeable to a CustomElementDefinition before calling ViewportAgent._handles, so used-by should compare against the resolved custom-element name; semantic-runtime currently compares used-by against routeConfig.component.localName and emits false no-available-viewport-agent issues for CE-name filters."
+    },
+    {
+      "assertionId": "router-diagnostic-repair-projection/instruction-no-fallback-suggestion-survives-app-aggregation",
+      "status": "known-gap",
+      "failureBucket": "router-diagnostic-repair-projection-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "TemplateDiagnostics projects the AUR3401 router issue with missingInput and a fix-router-instruction suggestion, but the owning AppDiagnostics router row preserves only domain/code/source and drops the repair intent before IDE/custom diagnostic repair affordances are assembled."
+    },
+    {
+      "assertionId": "router-diagnostic-repair-projection/viewport-resolution-suggestion-survives-app-aggregation",
+      "status": "known-gap",
+      "failureBucket": "router-diagnostic-repair-projection-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "TemplateDiagnostics projects the AUR3174 router issue with missingInput and a fix-router-instruction suggestion, but the owning AppDiagnostics router row preserves only domain/code/source and drops the repair intent before IDE/custom diagnostic repair affordances are assembled."
     }
   ]
 }

@@ -45,7 +45,8 @@ Aurelia domain vocabulary:
 - `template-expression-typing`: template expression member/type behavior, overlays, completions, and weak/open answers;
 - `bindable-contracts`: bindable properties, public attribute names, aliases, and bindable diagnostics;
 - `resource-registration`: custom elements/attributes, value converters, binding behaviors, and resource identity;
-- `router-composition`: router resources, `load`, viewports, `au-compose`, and dynamic composition surfaces;
+- `router-composition`: router resources, `load`, `href`, route configs, route recognizer state, and viewports;
+- `runtime-composition`: runtime-html dynamic composition surfaces such as `au-compose`;
 - `plugin-capability-admission`: framework capability detection, missing plugin registrations, and plugin-owned resources;
 - `runtime-api-boundary`: semantic-runtime API/catalog assertions that are not themselves Aurelia framework semantics.
 
@@ -74,8 +75,9 @@ Current matrix scale, as of 2026-07-09:
 - custom-element resource references and rename edit plans;
 - router resource cursor/completion/diagnostic/refusal surfaces, router instruction cursor/completion/diagnostic
   projection, router topology, route recognizer, route-resource instruction closure, route config declaration/routeable
-  identity forms, routeable string resolution, router diagnostics, active-link state, static redirect controls, and
-  `au-compose` runtime composition;
+  identity forms, routeable string resolution, router diagnostics, active-link state, and static redirect controls;
+- `au-compose` runtime composition rows for component/model/template resolution, recursive resource analysis context,
+  activation handoff evidence, and static framework-error diagnostics;
 - template-controller scope behavior over repeat locals, nested repeats, `<let>`, `with`, promise branches,
   switch/case, portal, app-owned template controllers, completions, diagnostics, references, and rename edit plans;
 - template diagnostics, compiler diagnostics, plugin capability diagnostics, and overlay diagnostic provenance;
@@ -83,8 +85,8 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 218 active assertions pass with 14 known gaps. The router-composition subdomain has 55 active
-passes and 3 known gaps; the template-controller-scope subdomain has 40 active passes and 3 known gaps.
+Current default output: 223 active assertions pass with 18 known gaps. The router-composition subdomain has 63 assertion
+rows, including the current router known-gap witnesses; the runtime-composition subdomain has 4 assertion rows.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the

@@ -1086,7 +1086,7 @@
         },
         {
           "id": "compose-element",
-          "aureliaDomain": "router-composition",
+          "aureliaDomain": "runtime-composition",
           "expectations": [
             {
               "name": "semantic tokens",
@@ -1099,7 +1099,7 @@
         },
         {
           "id": "compose-component-bindable",
-          "aureliaDomain": "router-composition",
+          "aureliaDomain": "runtime-composition",
           "expectations": [
             {
               "name": "semantic tokens",
@@ -5086,9 +5086,97 @@
       ]
     },
     {
+      "id": "router-diagnostic-repair-projection",
+      "fixture": "fixtures/pressure/router-instruction-errors",
+      "aureliaDomain": "router-composition",
+      "capability": "router-diagnostic-repair-projection",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "known-gap-witness",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-instruction-errors-app.html",
+      "requirement": "Template-origin router diagnostics preserve the same repair intent through TemplateDiagnostics and owning AppDiagnostics rows without inventing edit-backed actions.",
+      "cases": [
+        {
+          "id": "instruction-no-fallback-suggestion-survives-app-aggregation",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3401", "missingInput": "router:instruction-no-fallback", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "instruction-no-fallback", "frameworkErrorCode": "AUR3401", "missingInput": "router:instruction-no-fallback", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-resolution-suggestion-survives-app-aggregation",
+          "fixture": "fixtures/pressure/router-viewport-resolution-errors",
+          "sourceFile": "src/router-viewport-resolution-errors-app.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3174", "missingInput": "router:no-available-viewport-agent", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"side-only\"", "token": "side-only" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "no-available-viewport-agent", "frameworkErrorCode": "AUR3174", "missingInput": "router:no-available-viewport-agent", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"side-only\"", "token": "side-only" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-diagnostic-repair-code-action-boundary",
+      "fixture": "fixtures/pressure/router-instruction-errors",
+      "aureliaDomain": "router-composition",
+      "capability": "router-diagnostic-repair-code-actions",
+      "domainAxis": "edit-plan",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-instruction-errors-app.html",
+      "requirement": "Router diagnostics may expose guided repair intent, but TemplateCodeActions remains edit-backed only until a route repair source planner can prove validated edits.",
+      "cases": [
+        {
+          "id": "instruction-no-fallback-has-no-edit-backed-code-action",
+          "cursor": { "marker": "load=\"missing-route\"", "token": "missing-route" },
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "route-expression-syntax-has-no-edit-backed-code-action",
+          "cursor": { "marker": "load=\"(\"", "token": "(" },
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": { "kind": "template-code-actions", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 0 }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "au-compose-runtime-composition",
       "fixture": "fixtures/pressure/au-compose-dynamic-composition",
-      "aureliaDomain": "router-composition",
+      "aureliaDomain": "runtime-composition",
       "capability": "runtime-composition",
       "domainAxis": "type-system",
       "coverageIntent": "regression-contract",
