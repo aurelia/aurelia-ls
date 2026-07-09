@@ -360,6 +360,7 @@
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
     "bundle:minify": "node esbuild.mjs --minify",
+    "test:extension-host": "pnpm -w build && pnpm run bundle && node scripts/run-extension-host-tests.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
@@ -369,6 +370,8 @@
   },
   "devDependencies": {
     "@types/vscode": "1.91.0",
-    "esbuild": "^0.24.0"
+    "@vscode/test-electron": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "mocha": "^11.7.6"
   }
 }

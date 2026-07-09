@@ -2414,6 +2414,7 @@ function cursorBindableRow(
   return {
     name: bindable.reference.name,
     attribute: bindable.reference.attribute,
+    callback: bindable.definition.callback,
     mode: bindable.definition.mode,
     ownerDefinitionProductHandle: bindable.reference.ownerDefinitionProductHandle,
     source: describeAddress(store, bindable.reference.sourceAddressHandle),

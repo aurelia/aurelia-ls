@@ -60,6 +60,7 @@
     "test:ide": "pnpm -w build && node scripts/run-vitest.mjs packages/language-server/test packages/semantic-workspace/test",
     "test:language-server:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/language-server/test",
     "test:vscode": "pnpm -w build && node scripts/run-vitest.mjs packages/vscode",
+    "test:vscode:extension-host": "pnpm --filter aurelia-2 test:extension-host",
     "test:vscode:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/vscode",
     "test:vite-plugin": "pnpm -w build && node scripts/run-vitest.mjs packages/vite-plugin",
     "test:vite-plugin:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/vite-plugin",

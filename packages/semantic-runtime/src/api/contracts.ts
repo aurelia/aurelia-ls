@@ -3406,6 +3406,7 @@ export interface SemanticTemplateCursorDefinitionRow {
 export interface SemanticTemplateCursorBindableRow {
   readonly name: string;
   readonly attribute: string;
+  readonly callback: string;
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly ownerDefinitionProductHandle: ProductHandle | null;
   readonly source: SemanticSourceReference | null;

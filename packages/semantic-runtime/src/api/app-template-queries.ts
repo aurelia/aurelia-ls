@@ -348,6 +348,7 @@ export class SemanticAppTemplateQueries {
     }
 
     const provenTypeScriptEdits = typeScriptEdits ?? [];
+    const bindableConventionCallbackEdits = bindableConventionCallbackRenameEdits(this.emission, context, newName);
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
     const templateEdits = context.rows
       .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface))
@@ -359,7 +360,8 @@ export class SemanticAppTemplateQueries {
           templateRenameNewText(row, context.renameSurface, newName),
         )
       );
-    const edits = [...uniqueTemplateRenameEditRows([...provenTypeScriptEdits, ...templateEdits])]
+    const typeScriptLikeEdits = [...provenTypeScriptEdits, ...bindableConventionCallbackEdits];
+    const edits = [...uniqueTemplateRenameEditRows([...typeScriptLikeEdits, ...templateEdits])]
       .sort((left, right) =>
         (left.source?.path ?? '').localeCompare(right.source?.path ?? '')
         || (left.source?.start ?? -1) - (right.source?.start ?? -1)
@@ -380,7 +382,7 @@ export class SemanticAppTemplateQueries {
         edits,
         candidateRows: context.candidateRows,
         templateReferenceCount: context.templateUsageRows.length,
-        typeScriptReferenceCount: provenTypeScriptEdits.length,
+        typeScriptReferenceCount: typeScriptLikeEdits.length,
       },
       null,
       [],
@@ -748,6 +750,7 @@ export class SemanticAppTemplateQueries {
       renameSurface: TemplateRenameSurface.Member,
       includeTypeScriptReferences: false,
       hasAuthoredDeclarationSource: false,
+      bindableCallbackName: null,
       forceOpen: true,
       templateUsageRows: [activeRow],
       candidateRows,
@@ -791,6 +794,7 @@ export class SemanticAppTemplateQueries {
         aliasName: null,
         aliasTargetSource: null,
       },
+      bindableCallbackName: selectedBindable.callback,
     }, handles);
   }
 
@@ -929,6 +933,7 @@ export class SemanticAppTemplateQueries {
       renameSurface: target.renameSurface,
       includeTypeScriptReferences: true,
       hasAuthoredDeclarationSource: true,
+      bindableCallbackName: target.bindableCallbackName ?? null,
       declarationRow: templateReferenceDeclarationRow(
         target.declarationSource,
         target.selectedMemberName,
@@ -1069,6 +1074,7 @@ interface TemplateReferenceContext {
   readonly renameSurface: TemplateRenameSurface;
   readonly includeTypeScriptReferences: boolean;
   readonly hasAuthoredDeclarationSource: boolean;
+  readonly bindableCallbackName: string | null;
   readonly forceOpen: boolean;
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
   /** Same-name template usages with unproven provenance; never mixed into proven rows. */
@@ -1084,6 +1090,7 @@ interface TemplateReferenceTarget {
   readonly renameSurface: TemplateRenameSurface;
   readonly observedTargetSources?: readonly SemanticSourceReference[];
   readonly bindableAttributeTarget?: BindableAttributeReferenceTarget | null;
+  readonly bindableCallbackName?: string | null;
 }
 
 interface BindableAttributeReferenceTarget {
@@ -1754,6 +1761,70 @@ function typeScriptReferenceRenameEdits(
   )));
 }
 
+function bindableConventionCallbackRenameEdits(
+  emission: AureliaAppWorldProjectEmission,
+  context: TemplateReferenceContext,
+  newName: string,
+): readonly SemanticTemplateRenameEditRow[] {
+  const callbackName = context.bindableCallbackName;
+  if (
+    callbackName == null
+    || context.renameSurface !== TemplateRenameSurface.BindableProperty
+    || callbackName !== `${context.selectedMemberName}Changed`
+  ) {
+    return [];
+  }
+  const callbackIdentifier = bindableConventionCallbackIdentifier(emission, context.targetSource, callbackName);
+  if (callbackIdentifier == null) {
+    return [];
+  }
+  return [
+    templateRenameEditRow(
+      SemanticTemplateRenameEditKind.TypeScriptReference,
+      sourceReferenceForTsNode(callbackIdentifier),
+      callbackName,
+      `${newName}Changed`,
+    ),
+  ];
+}
+
+function bindableConventionCallbackIdentifier(
+  emission: AureliaAppWorldProjectEmission,
+  bindableTargetSource: SemanticSourceReference,
+  callbackName: string,
+): ts.Identifier | null {
+  if (bindableTargetSource.path == null || bindableTargetSource.start == null || bindableTargetSource.end == null) {
+    return null;
+  }
+  const sourceFile = emission.typeSystem.readProgramSourceFileByPath(bindableTargetSource.path);
+  if (sourceFile == null) {
+    return null;
+  }
+  const bindableIdentifier = identifierAtExactSpan(sourceFile, bindableTargetSource.start, bindableTargetSource.end);
+  const ownerClass = bindableIdentifier == null ? null : nearestClassLikeDeclaration(bindableIdentifier);
+  if (ownerClass == null) {
+    return null;
+  }
+  for (const member of ownerClass.members) {
+    const name = declarationNameNode(member as ts.Declaration);
+    if (name != null && ts.isIdentifier(name) && name.text === callbackName) {
+      return name;
+    }
+  }
+  return null;
+}
+
+function nearestClassLikeDeclaration(node: ts.Node): ts.ClassDeclaration | ts.ClassExpression | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current != null) {
+    if (ts.isClassDeclaration(current) || ts.isClassExpression(current)) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 /** Non-declaration TypeScript usages of the selected symbol as reference rows. */
 function typeScriptUsageReferenceRows(
   emission: AureliaAppWorldProjectEmission,
@@ -1999,6 +2070,7 @@ function templateReferenceContextFromRows(input: {
   readonly renameSurface: TemplateRenameSurface;
   readonly includeTypeScriptReferences: boolean;
   readonly hasAuthoredDeclarationSource: boolean;
+  readonly bindableCallbackName?: string | null;
   readonly forceOpen?: boolean;
   readonly declarationRow: SemanticTemplateReferenceRow;
   readonly templateUsageRows: readonly SemanticTemplateReferenceRow[];
@@ -2010,6 +2082,7 @@ function templateReferenceContextFromRows(input: {
     renameSurface: input.renameSurface,
     includeTypeScriptReferences: input.includeTypeScriptReferences,
     hasAuthoredDeclarationSource: input.hasAuthoredDeclarationSource,
+    bindableCallbackName: input.bindableCallbackName ?? null,
     forceOpen: input.forceOpen ?? false,
     templateUsageRows: input.templateUsageRows,
     candidateRows: input.candidateRows,
