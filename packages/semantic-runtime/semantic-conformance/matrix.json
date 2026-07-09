@@ -4280,6 +4280,169 @@
       ]
     },
     {
+      "id": "router-instruction-closure-surfaces",
+      "fixture": "fixtures/pressure/router-dynamic-pattern",
+      "aureliaDomain": "router-composition",
+      "capability": "router-instruction-surface-projection",
+      "domainAxis": "query-contract",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/routes/products-route.html",
+      "requirement": "Router instruction values preserve route-world closure through cursor facts, completions, diagnostic projections, and honest gaps where the route substrate knows more than the current IDE-facing surface exposes.",
+      "cases": [
+        {
+          "id": "route-value-cursor-preserves-primary-value-site",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "product-detail" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.valueSite.siteKind": "custom-attribute-value",
+                "value.valueSite.rawValue": "product-detail",
+                "value.valueSite.bindableName": "route",
+                "value.selectedDefinition.name": "load",
+                "value.selectedBindable.name": "route",
+                "value.diagnostics.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "route-primary-value-completions-use-route-world",
+          "cursor": { "marker": "load=\"route: ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "attribute-value" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route", "name": "product-detail", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route", "name": "products", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route", "name": ":productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-params-expression-cursor-preserves-params-bindable",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "productId" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "expression",
+                "value.valueSite.siteKind": "binding-command-value",
+                "value.valueSite.rawValue": "{ productId: 'espresso' }",
+                "value.valueSite.bindingCommandName": "bind",
+                "value.valueSite.bindableName": "params",
+                "value.selectedDefinition.name": "load",
+                "value.selectedBindable.name": "params"
+              }
+            }
+          ]
+        },
+        {
+          "id": "route-params-key-completions-use-selected-route-parameters",
+          "cursor": { "marker": "params.bind: { ", "position": "after-marker" },
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "instruction-error-cursor-carries-router-diagnostic",
+          "fixture": "fixtures/pressure/router-instruction-errors",
+          "sourceFile": "src/router-instruction-errors-app.html",
+          "cursor": { "marker": "load=\"missing-route\"", "token": "missing-route" },
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.valueSite.rawValue": "missing-route",
+                "value.diagnostics.length": 1
+              },
+              "rows": [
+                {
+                  "rowPath": "value.diagnostics",
+                  "fields": {
+                    "diagnosticKind": "router-framework-error",
+                    "frameworkErrorCode": "AUR3401",
+                    "missingInput": "router:instruction-no-fallback",
+                    "suggestion.suggestionKind": "fix-router-instruction",
+                    "suggestion.actionKind": "rewrite-expression"
+                  },
+                  "source": { "marker": "load=\"missing-route\"", "token": "missing-route" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "instruction-error-template-and-app-diagnostics-align",
+          "fixture": "fixtures/pressure/router-instruction-errors",
+          "sourceFile": "src/router-instruction-errors-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3401" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } },
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3400" }, "source": { "marker": "load.bind=\"42\"", "token": "42" } },
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3500" }, "source": { "marker": "load=\"(\"", "token": "(" } },
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3501" }, "source": { "marker": "load=\"known)\"", "token": "known)" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "instruction-no-fallback", "frameworkErrorCode": "AUR3401", "relatedQueryKind": "router-issues" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } },
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "invalid-instruction", "frameworkErrorCode": "AUR3400", "relatedQueryKind": "router-issues" }, "source": { "marker": "load.bind=\"42\"", "token": "42" } },
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "route-expression-unexpected-segment", "frameworkErrorCode": "AUR3500", "relatedQueryKind": "router-issues" }, "source": { "marker": "load=\"(\"", "token": "(" } },
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "route-expression-not-done", "frameworkErrorCode": "AUR3501", "relatedQueryKind": "router-issues" }, "source": { "marker": "load=\"known)\"", "token": "known)" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-error-completions-offer-configured-routes",
+          "fixture": "fixtures/pressure/router-instruction-errors",
+          "sourceFile": "src/router-instruction-errors-app.html",
+          "cursor": { "marker": "load=\"", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "attribute-value" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route", "name": "known", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route", "name": "old-route", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "name": "missing-route" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "router-resource-instruction-closure",
       "fixture": "fixtures/pressure/router-dynamic-pattern",
       "aureliaDomain": "router-composition",

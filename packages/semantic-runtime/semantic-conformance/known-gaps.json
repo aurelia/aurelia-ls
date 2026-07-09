@@ -78,6 +78,13 @@
       "failureBucket": "expression-resource-dispatch",
       "firstObserved": "2026-07-09",
       "rationale": "Binding behavior tokens are classified and semantic-tokenized, and resource definitions preserve the behavior declaration, but cursor info, references, and rename do not join expression behavior usages to that resource definition."
+    },
+    {
+      "assertionId": "router-instruction-closure-surfaces/route-params-key-completions-use-selected-route-parameters",
+      "status": "known-gap",
+      "failureBucket": "router-instruction-param-completion-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "The route instruction and route-pattern substrate can close load=\"route: product-detail\" to the product-detail route and its productId parameter, but template completions inside params.bind fall back to binding-scope members instead of projecting route-parameter key candidates."
     }
   ]
 }
