@@ -8,6 +8,7 @@ import {
 } from '../template/html-ir.js';
 import {
   describeAddress,
+  semanticExactSourceReference,
   semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
 } from './source-reference.js';
@@ -53,12 +54,12 @@ function templateElementFoldingRangeRow(
   element: HtmlElement,
   handles: boolean,
 ): SemanticTemplateFoldingRangeRow | null {
-  const source = exactSourceReference(describeAddress(store, element.sourceAddressHandle));
+  const source = semanticExactSourceReference(describeAddress(store, element.sourceAddressHandle));
   if (source?.start == null || source.end == null) {
     return null;
   }
 
-  const templateSource = exactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
+  const templateSource = semanticExactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
   const markup = resource.compilation.unit.templateSource.markup;
   if (markup == null || !sourceHasMultilineMarkup(source, templateSource, markup)) {
     return null;
@@ -97,25 +98,13 @@ function sourceHasMultilineMarkup(
   return /[\r\n]/u.test(markup.slice(localStart, localEnd));
 }
 
-function exactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.start != null && source.end != null) {
-    return source;
-  }
-  return exactSourceReference(source.anchor ?? null);
-}
-
 function uniqueTemplateFoldingRangeRows(
   rows: readonly SemanticTemplateFoldingRangeRow[],
 ): readonly SemanticTemplateFoldingRangeRow[] {
   const seen = new Set<string>();
   const unique: SemanticTemplateFoldingRangeRow[] = [];
   for (const row of rows) {
-    const source = exactSourceReference(row.source);
+    const source = semanticExactSourceReference(row.source);
     if (source?.start == null || source.end == null) {
       continue;
     }

@@ -73,7 +73,19 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 11,
+            "kind": "source-span-address",
+            "label": "src/guidance-truth-canary-app.html@6..11",
+            "path": "src/guidance-truth-canary-app.html",
+            "role": "name",
+            "start": 6
+          },
+          "span": null,
+          "subjectKind": "template-expression",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -190,7 +202,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "line": 1
             }
           },
-          "source": "changes",
+          "source": "documentChanges",
           "status": "ok"
         }
       ]
@@ -275,7 +287,19 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 52,
+            "kind": "source-span-address",
+            "label": "src/guidance-truth-canary-app.html@41..52",
+            "path": "src/guidance-truth-canary-app.html",
+            "role": "template-member-call",
+            "start": 41
+          },
+          "span": null,
+          "subjectKind": "template-member-call",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -367,53 +391,8 @@ _No in-memory diff._
 
 ```json
 {
-  "diagnosticCount": 2,
+  "diagnosticCount": 1,
   "diagnostics": [
-    {
-      "code": "binding-source-assignment-strictness",
-      "data": {
-        "diagnosticAuthority": "semantic-runtime-product",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "binding-source-assignment-strictness",
-        "frameworkErrorCode": null,
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "binding-source-assignment:owner-member-not-projected",
-        "missingInputs": [
-          "binding-source-assignment:owner-member-not-projected"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "declare-missing-member",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-scope-slot-typing",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "degraded",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Owner type 'GuidanceTruthCanaryApp' did not project member '$ghostLocal'; Aurelia astAssign can still write to runtime objects.",
-      "range": {
-        "end": {
-          "character": 33,
-          "line": 3
-        },
-        "start": {
-          "character": 22,
-          "line": 3
-        }
-      },
-      "source": "aurelia"
-    },
     {
       "code": "missing-expression-member",
       "data": {
@@ -437,7 +416,19 @@ _No in-memory diff._
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
-        "subject": null,
+        "subject": {
+          "source": {
+            "end": 170,
+            "kind": "source-span-address",
+            "label": "src/guidance-truth-canary-app.html@159..170",
+            "path": "src/guidance-truth-canary-app.html",
+            "role": "name",
+            "start": 159
+          },
+          "span": null,
+          "subjectKind": "template-expression",
+          "uri": null
+        },
         "taxonomy": {
           "actionability": "guided",
           "category": "template-syntax",
@@ -554,7 +545,7 @@ _No in-memory diff._
               "line": 1
             }
           },
-          "source": "changes",
+          "source": "documentChanges",
           "status": "ok"
         }
       ]

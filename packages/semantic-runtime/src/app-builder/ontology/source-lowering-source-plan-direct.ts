@@ -135,7 +135,7 @@ import {
   appBuilderSelectNumericControlConstraints,
 } from './source-lowering-numeric-constraints.js';
 import type {
-  AppBuilderEffectContractId as AppBuilderEffectContractIdValue,
+  AppBuilderEffectContractId,
 } from './effect.js';
 import {
   appBuilderUniqueEffectContractIds,
@@ -1952,7 +1952,7 @@ interface DirectSourcePlanTargetFrame {
   readonly preflight: AppBuilderSourceLoweringPreflight | null;
   readonly preflightRow: AppBuilderSourceLoweringPreflightRow | null;
   readonly sourceLoweringTargetRefs: readonly AppBuilderOntologyRowRef[];
-  readonly effectContractIds: readonly AppBuilderEffectContractIdValue[];
+  readonly effectContractIds: readonly AppBuilderEffectContractId[];
   readonly issues: readonly AppBuilderSourceLoweringSourcePlanIssue[];
 }
 

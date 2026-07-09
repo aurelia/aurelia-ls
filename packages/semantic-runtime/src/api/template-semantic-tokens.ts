@@ -33,6 +33,7 @@ import {
 } from '../template/instruction-ir.js';
 import {
   describeAddress,
+  semanticExactSourceReference,
   semanticSourceReferenceMatchesFilePath,
   sourceReferenceForParserSpan,
   type SemanticSourceReference,
@@ -202,7 +203,7 @@ function expressionSemanticTokenRows(
     ...resource.compilation.bindingCommandLowering.expressionParses,
   ];
   for (const parse of parses) {
-    const parseSource = exactSourceReference(describeAddress(store, parse.sourceAddressHandle));
+    const parseSource = semanticExactSourceReference(describeAddress(store, parse.sourceAddressHandle));
     const root = expressionRoot(parse.result);
     if (root == null) {
       continue;
@@ -448,8 +449,8 @@ function elementTagNameSource(
   element: HtmlElement,
   closing: boolean,
 ): SemanticSourceReference | null {
-  const source = exactSourceReference(describeAddress(store, element.sourceAddressHandle));
-  const templateSource = exactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
+  const source = semanticExactSourceReference(describeAddress(store, element.sourceAddressHandle));
+  const templateSource = semanticExactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
   const markup = resource.compilation.unit.templateSource.markup;
   if (source?.start == null || source.end == null || markup == null) {
     return null;
@@ -512,7 +513,7 @@ function commandSourceForSyntax(
   if (syntax.command == null || syntax.command.length === 0) {
     return null;
   }
-  const nameSource = exactSourceReference(describeAddress(store, attribute.nameAddressHandle));
+  const nameSource = semanticExactSourceReference(describeAddress(store, attribute.nameAddressHandle));
   if (nameSource?.start == null) {
     return null;
   }
@@ -528,7 +529,7 @@ function targetSourceForSyntax(
   attribute: HtmlAttribute,
   syntax: AttributeSyntax,
 ): SemanticSourceReference | null {
-  const nameSource = exactSourceReference(describeAddress(store, attribute.nameAddressHandle));
+  const nameSource = semanticExactSourceReference(describeAddress(store, attribute.nameAddressHandle));
   if (nameSource?.start == null || syntax.target.length === 0) {
     return null;
   }
@@ -674,25 +675,13 @@ function tokenRow(
   };
 }
 
-function exactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.start != null && source.end != null) {
-    return source;
-  }
-  return exactSourceReference(source.anchor ?? null);
-}
-
 function uniqueSemanticTokenRows(
   rows: readonly SemanticTemplateSemanticTokenRow[],
 ): readonly SemanticTemplateSemanticTokenRow[] {
   const seen = new Set<string>();
   const unique: SemanticTemplateSemanticTokenRow[] = [];
   for (const row of rows) {
-    const source = exactSourceReference(row.source);
+    const source = semanticExactSourceReference(row.source);
     if (source == null || source.start == null || source.end == null) {
       continue;
     }

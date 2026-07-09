@@ -15,7 +15,10 @@ import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionBindableRow,
   SemanticResourceDefinitionRow,
-  SemanticSourceReference,
+} from "@aurelia-ls/semantic-runtime";
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import {
@@ -86,7 +89,7 @@ function documentSymbolForResource(
   if (!sourceMatches(workspaceRoot, requested, source)) {
     return null;
   }
-  const classRange = rangeForSource(doc, exactSource(source));
+  const classRange = rangeForSource(doc, semanticExactSourceReference(source));
   const className = definition.targetName ?? definition.name;
   const selectionRange = rangeForClassName(doc, className, classRange) ?? classRange;
   if (classRange == null || selectionRange == null) {
@@ -114,7 +117,7 @@ function bindableSymbols(
     if (!sourceMatches(workspaceRoot, requested, bindable.source)) {
       continue;
     }
-    const source = exactSource(bindable.source);
+    const source = semanticExactSourceReference(bindable.source);
     const range = rangeForSource(doc, source);
     if (range == null) continue;
     symbols.push({
@@ -218,12 +221,6 @@ function sourceReferencePath(source: SemanticSourceReference | null): string | n
     return null;
   }
   return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function exactSource(source: SemanticSourceReference | null): SemanticSourceReference | null {
-  if (source == null) return null;
-  if (source.start != null && source.end != null) return source;
-  return exactSource(source.anchor ?? null);
 }
 
 function normalizedFilePath(filePath: string): string {

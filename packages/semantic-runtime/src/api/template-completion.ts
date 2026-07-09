@@ -135,6 +135,7 @@ import {
 } from './contracts.js';
 import {
   describeAddress,
+  semanticSourceReferenceContainsOffset,
   semanticSourceReferenceMatchesFilePath,
   sourceReferenceForParserSpan,
 } from './source-reference.js';
@@ -359,7 +360,7 @@ function templateOverlayTypeCursorDiagnostics(
       return [];
     }
     const source = sourceReferenceForOverlayDiagnostic(store, diagnostic);
-    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
       return [];
     }
     const agreementKey = templateOverlayDiagnosticAgreementKey(diagnostic, source);
@@ -402,7 +403,7 @@ function runtimeObservedDependencyRootCursorDiagnostics(
     return [];
   }
   return runtimeObservedDependencyRootDiagnosticCandidates(store, emission, selection)
-    .filter((candidate) => sourceReferenceContainsOffset(candidate.source, cursorOffset))
+    .filter((candidate) => semanticSourceReferenceContainsOffset(candidate.source, cursorOffset))
     .map((candidate) => candidate.diagnostic);
 }
 
@@ -416,7 +417,7 @@ function templateCompilerIssueCursorDiagnostics(
   }
   return templateCompilerIssues(selection.resource).flatMap((issue) => {
     const source = describeAddress(store, issue.sourceAddressHandle);
-    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
       return [];
     }
     return [templateCompilerErrorDiagnostic(
@@ -442,7 +443,7 @@ function frameworkCapabilityDemandCursorDiagnostics(
       return [];
     }
     const source = describeAddress(store, demand.sourceAddressHandle);
-    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
       return [];
     }
     return [frameworkCapabilityDemandDiagnostic(demand, source)];
@@ -459,7 +460,7 @@ function routerIssueCursorDiagnostics(
   }
   return routerIssues(emission).flatMap((issue) => {
     const source = sourceReferenceForRouterIssue(store, issue);
-    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
       return [];
     }
     return [routerIssueDiagnostic(issue, source)];
@@ -549,20 +550,6 @@ function cursorDiagnosticKey(
     diagnosticRowMissingInputKey(diagnostic),
     diagnostic.selectedMemberName ?? 'none',
   ].join(':');
-}
-
-function sourceReferenceContainsOffset(
-  source: NonNullable<SemanticTemplateCursorDiagnosticRow['source']>,
-  offset: number,
-): boolean {
-  const start = source.start;
-  const end = source.end;
-  return typeof start === 'number'
-    && typeof end === 'number'
-    && Number.isInteger(start)
-    && Number.isInteger(end)
-    && start <= offset
-    && offset <= end;
 }
 
 export function readSemanticTemplateDiagnostics(
@@ -1007,12 +994,20 @@ function templateOverlayDiagnosticSubject(
   diagnostic: TypeSystemOverlayDiagnostic,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticDiagnosticSubject | null {
+  return templateExpressionDiagnosticSubject(resource, diagnostic.semanticProductHandle, source);
+}
+
+function templateExpressionDiagnosticSubject(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  semanticProductHandle: ProductHandle | null,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticDiagnosticSubject | null {
   if (source.path == null || source.start == null || source.end == null) {
     return null;
   }
   const access = memberAccessSpanForDiagnosticRange(
     resource,
-    diagnostic.semanticProductHandle,
+    semanticProductHandle,
     source.start,
     source.end,
   );
@@ -1322,6 +1317,7 @@ function bindingDataFlowDiagnosticRowsForSelection(
       return [];
     }
     const diagnostics = bindingDataFlowDiagnostics(store, dataFlow, source);
+    const subject = templateExpressionDiagnosticSubject(selection.resource, dataFlow.expressionProductHandle, source);
     return diagnostics.flatMap((diagnostic) => {
       const key = templateDiagnosticRowKey(diagnostic, source);
       if (context.seenRows.has(key)) {
@@ -1329,13 +1325,14 @@ function bindingDataFlowDiagnosticRowsForSelection(
       }
       context.seenRows.add(key);
       return [{
-      ...diagnostic,
-      siteKind: TemplateCompletionSiteKind.Expression,
-      valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
-      template: {
-        compilationLane: selection.lane,
-        source: describeAddress(store, selection.sourceAddressHandle),
-      },
+        ...diagnostic,
+        siteKind: TemplateCompletionSiteKind.Expression,
+        valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
+        subject,
+        template: {
+          compilationLane: selection.lane,
+          source: describeAddress(store, selection.sourceAddressHandle),
+        },
       }];
     });
   });
@@ -1363,6 +1360,7 @@ function runtimeObservedDependencyRootDiagnosticRowsForSelection(
       ...diagnostic,
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: valueSiteKindForObservedDependency(store, candidate.dependency),
+      subject: templateExpressionDiagnosticSubject(selection.resource, candidate.dependency.expressionProductHandle, source),
       template: {
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),

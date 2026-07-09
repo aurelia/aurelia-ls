@@ -1,5 +1,10 @@
 import { describe, test, expect, vi } from "vitest";
-import { refreshAllOpenDocuments, refreshDocument, registerLifecycleHandlers } from "@aurelia-ls/language-server/api";
+import {
+  refreshAllOpenDocuments,
+  refreshDocument,
+  registerLifecycleHandlers,
+  SemanticRuntimeLspRequestAbortedError,
+} from "@aurelia-ls/language-server/api";
 
 function createGeneration(sourceGeneration = 0) {
   return {
@@ -19,6 +24,7 @@ function createMockContext(overrides: Record<string, unknown> = {}) {
       sendRequest: vi.fn(async () => undefined),
     },
     documents: {
+      get: vi.fn(() => null),
       all: vi.fn(() => []),
     },
     workspace: {
@@ -129,6 +135,41 @@ describe("refreshDocument", () => {
       expect.stringContaining("skipped stale diagnostics"),
     );
   });
+
+  test("retries a stale diagnostics request once for a still-open document", async () => {
+    const first = createGeneration(1);
+    const second = createGeneration(2);
+    const doc = createMockDoc();
+    let generation = first;
+    const ctx = createMockContext({
+      documents: {
+        get: vi.fn(() => doc),
+        all: vi.fn(() => [doc]),
+      },
+      semanticRuntime: {
+        recordProjectTopologyChanged: vi.fn(() => second),
+        recordSourceTextChanged: vi.fn(async () => first),
+        currentGeneration: vi.fn(() => generation),
+        requestGuard: vi.fn(() => ({ generation, isCancellationRequested: null })),
+        isCurrentGeneration: vi.fn((candidate) => candidate.sourceGeneration === generation.sourceGeneration),
+        appDiagnostics: vi.fn(async () => {
+          if (generation === first) {
+            generation = second;
+            throw new SemanticRuntimeLspRequestAbortedError("stale");
+          }
+          return { value: { rows: [] } };
+        }),
+      },
+    });
+
+    await refreshDocument(ctx as never, doc as never, "open", { sourceChanged: false });
+
+    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledTimes(2);
+    expect(ctx.connection.sendDiagnostics).toHaveBeenCalledTimes(1);
+    expect(ctx.logger.log).toHaveBeenCalledWith(
+      expect.stringContaining("retrying stale request"),
+    );
+  });
 });
 
 describe("refreshAllOpenDocuments", () => {
@@ -191,6 +232,48 @@ describe("registerLifecycleHandlers — onDidClose", () => {
   });
 });
 
+describe("registerLifecycleHandlers — onDidChangeWatchedFiles", () => {
+  test("records source changes and refreshes open documents for closed analyzed source edits", async () => {
+    let watchedHandler: ((e: { changes: Array<{ uri: string; type: number }> }) => void) | undefined;
+    const openDoc = createMockDoc("file:///app/src/my-app.html");
+    const documents = {
+      get: vi.fn(() => openDoc),
+      all: vi.fn(() => [openDoc]),
+      onDidOpen: vi.fn(),
+      onDidChangeContent: vi.fn(),
+      onDidClose: vi.fn(),
+    };
+    const connection = {
+      onInitialize: vi.fn(),
+      onDidChangeConfiguration: vi.fn(),
+      onDidChangeWatchedFiles: vi.fn((fn: (e: { changes: Array<{ uri: string; type: number }> }) => void) => {
+        watchedHandler = fn;
+      }),
+      sendDiagnostics: vi.fn(),
+      sendNotification: vi.fn(),
+      sendRequest: vi.fn(async () => undefined),
+    };
+    const ctx = createMockContext({ documents, connection });
+
+    registerLifecycleHandlers(ctx as never);
+    expect(watchedHandler).toBeDefined();
+
+    watchedHandler!({ changes: [{ uri: "file:///app/src/attributes/display-hint.ts", type: 2 }] });
+    await settleAsyncWork();
+
+    expect(ctx.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(1);
+    expect(ctx.semanticRuntime.recordProjectTopologyChanged).not.toHaveBeenCalled();
+    expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(openDoc, expect.anything());
+    expect(connection.sendNotification).toHaveBeenCalledWith(
+      "aurelia/workspaceChanged",
+      expect.objectContaining({
+        domains: ["resources", "types", "diagnostics", "templates"],
+        reason: "watched files",
+      }),
+    );
+  });
+});
+
 describe("registerLifecycleHandlers — onDidChangeContent", () => {
   test("records source text changes immediately before the diagnostic debounce fires", () => {
     vi.useFakeTimers();
@@ -226,4 +309,53 @@ describe("registerLifecycleHandlers — onDidChangeContent", () => {
       vi.useRealTimers();
     }
   });
+
+  test("refreshes all open documents after a script source edit debounce", async () => {
+    vi.useFakeTimers();
+    try {
+      let changeHandler: ((e: { document: ReturnType<typeof createMockDoc> }) => void) | undefined;
+      const scriptDoc = createMockDoc("file:///app/src/attributes/display-hint.ts");
+      const htmlDoc = createMockDoc("file:///app/src/my-app.html");
+      const documents = {
+        get: vi.fn((uri: string) => uri === scriptDoc.uri ? scriptDoc : htmlDoc),
+        all: vi.fn(() => [htmlDoc, scriptDoc]),
+        onDidOpen: vi.fn(),
+        onDidChangeContent: vi.fn((fn: (e: { document: ReturnType<typeof createMockDoc> }) => void) => {
+          changeHandler = fn;
+        }),
+        onDidClose: vi.fn(),
+      };
+      const connection = {
+        onInitialize: vi.fn(),
+        onDidChangeConfiguration: vi.fn(),
+        onDidChangeWatchedFiles: vi.fn(),
+        sendDiagnostics: vi.fn(),
+        sendNotification: vi.fn(),
+        sendRequest: vi.fn(async () => undefined),
+      };
+      const ctx = createMockContext({ documents, connection });
+
+      registerLifecycleHandlers(ctx as never);
+      expect(changeHandler).toBeDefined();
+
+      changeHandler!({ document: scriptDoc });
+
+      expect(ctx.semanticRuntime.recordSourceTextChanged).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(300);
+      await settleAsyncWork();
+
+      expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(htmlDoc, expect.anything());
+      expect(ctx.semanticRuntime.appDiagnostics).toHaveBeenCalledWith(scriptDoc, expect.anything());
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
 });
+
+async function settleAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}

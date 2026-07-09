@@ -1,7 +1,6 @@
 import type { BindingBehaviorExpression } from '../expression/ast.js';
-import type { BindingScope } from '../configuration/scope.js';
-import { BindingScope as RuntimeBindingScope } from '../configuration/scope.js';
 import {
+  BindingScope,
   BindingScopeCreator,
 } from '../configuration/scope.js';
 import {
@@ -101,7 +100,7 @@ export class StateBindingScopeProjector {
         `Configured store "${stateStoreDisplayName(configuredStore.name)}" does not carry a projected initial-state type.`,
       );
     }
-    const emission = this.scopeMaterializer.prepare(RuntimeBindingScope.fromStateBindingScope({
+    const emission = this.scopeMaterializer.prepare(BindingScope.fromStateBindingScope({
       localKey: [
         localKey,
         localKeyPart(stateStoreDisplayName(configuredStore.name)),

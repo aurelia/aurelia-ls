@@ -14,10 +14,15 @@ import { URI } from "vscode-uri";
 import path from "node:path";
 import type { ServerContext } from "../context.js";
 import { mapSemanticRuntimeAppDiagnostics } from "../mapping/lsp-types.js";
-import type {
-  SemanticRuntimeLspGeneration,
-  SemanticRuntimeLspRequestGuard,
+import {
+  isSemanticRuntimeLspRequestAborted,
+  type SemanticRuntimeLspGeneration,
+  type SemanticRuntimeLspRequestGuard,
 } from "../runtime/semantic-runtime-session.js";
+import {
+  isAnalyzedSourceDocumentUri,
+  isScriptDocumentUri,
+} from "../utils/document-kind.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 import { logIfSemanticRuntimeRequestAborted } from "./request-guard.js";
 
@@ -35,13 +40,21 @@ interface DiagnosticRefreshOptions {
   readonly wave?: DiagnosticRefreshWave;
   readonly sourceChanged?: boolean;
   readonly notifyWorkspace?: boolean;
+  readonly staleRetryCount?: number;
 }
 
 function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
     if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
-    const fsPath = URI.parse(change.uri).fsPath;
-    if (fsPath.endsWith(".ts") || fsPath.endsWith(".js")) return true;
+    if (isScriptDocumentUri(URI.parse(change.uri).fsPath)) return true;
+  }
+  return false;
+}
+
+function hasAnalyzedSourceContentChange(changes: readonly FileEvent[]): boolean {
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Changed) continue;
+    if (isAnalyzedSourceDocumentUri(URI.parse(change.uri).fsPath)) return true;
   }
   return false;
 }
@@ -62,6 +75,23 @@ async function reloadProjectConfiguration(ctx: ServerContext, reason: string): P
   ctx.logger.info(`[workspace] semantic-runtime invalidated (${reason})`);
   await notifyWorkspaceChanged(ctx, ["diagnostics", "types", "resources", "templates"], reason, generation);
   await refreshAllOpenDocuments(ctx, "change", { notifyWorkspace: false });
+}
+
+async function refreshWorkspaceSourceTextChanged(ctx: ServerContext, reason: string): Promise<void> {
+  const generation = await ctx.semanticRuntime.recordSourceTextChanged();
+  ctx.logger.log(`[workspace] semantic-runtime source text changed (${reason})`);
+  await notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics", "templates"], reason, generation);
+  await refreshAllOpenDocuments(ctx, "change", { notifyWorkspace: false });
+}
+
+async function refreshWorkspaceAfterRecordedSourceTextChanged(
+  ctx: ServerContext,
+  reason: string,
+  refreshReason: "open" | "change",
+): Promise<void> {
+  const generation = ctx.semanticRuntime.currentGeneration();
+  await notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics", "templates"], reason, generation);
+  await refreshAllOpenDocuments(ctx, refreshReason, { notifyWorkspace: false });
 }
 
 export async function refreshAllOpenDocuments(
@@ -106,7 +136,7 @@ export async function refreshDocument(
     );
     const diagnostics = await ctx.semanticRuntime.appDiagnostics(doc, wave.guard);
     if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
-      ctx.logger.log(`refreshDocument skipped stale diagnostics for ${doc.uri}`);
+      await retryStaleRefresh(ctx, doc, reason, options, "diagnostics");
       return;
     }
     const lspDiagnostics = mapSemanticRuntimeAppDiagnostics(
@@ -116,7 +146,7 @@ export async function refreshDocument(
       (uri) => ctx.lookupText(uri),
     );
     if (!ctx.semanticRuntime.isCurrentGeneration(wave.guard.generation)) {
-      ctx.logger.log(`refreshDocument skipped stale diagnostics for ${doc.uri}`);
+      await retryStaleRefresh(ctx, doc, reason, options, "mapping");
       return;
     }
     await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
@@ -130,12 +160,41 @@ export async function refreshDocument(
       fingerprint: wave.guard.generation.fingerprint,
     });
   } catch (e: unknown) {
+    if (isSemanticRuntimeLspRequestAborted(e) && e.reason === "stale") {
+      await retryStaleRefresh(ctx, doc, reason, options, "request");
+      return;
+    }
     if (logIfSemanticRuntimeRequestAborted(ctx, "refreshDocument", e, doc.uri)) {
       return;
     }
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`refreshDocument failed: ${message}`);
   }
+}
+
+async function retryStaleRefresh(
+  ctx: ServerContext,
+  doc: TextDocument,
+  reason: "open" | "change",
+  options: DiagnosticRefreshOptions,
+  phase: string,
+): Promise<void> {
+  const retryCount = options.staleRetryCount ?? 0;
+  if (retryCount >= 1) {
+    ctx.logger.log(`refreshDocument skipped stale ${phase} for ${doc.uri}`);
+    return;
+  }
+  const currentDoc = ctx.documents.get(doc.uri);
+  if (currentDoc == null) {
+    ctx.logger.log(`refreshDocument skipped stale ${phase} for closed document ${doc.uri}`);
+    return;
+  }
+  ctx.logger.log(`refreshDocument retrying stale ${phase} for ${doc.uri}`);
+  await refreshDocument(ctx, currentDoc, reason, {
+    notifyWorkspace: options.notifyWorkspace,
+    sourceChanged: false,
+    staleRetryCount: retryCount + 1,
+  });
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
@@ -178,7 +237,11 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
   ctx.documents.onDidOpen((e) => {
     ctx.logger.log(`didOpen ${e.document.uri}`);
     recordSourceTextChanged(ctx, "document open");
-    void refreshDocument(ctx, e.document, "open", { sourceChanged: false });
+    if (isScriptDocumentUri(e.document.uri)) {
+      void refreshWorkspaceAfterRecordedSourceTextChanged(ctx, "open", "open");
+    } else {
+      void refreshDocument(ctx, e.document, "open", { sourceChanged: false });
+    }
   });
 
   ctx.connection.onDidChangeConfiguration(() => {
@@ -202,6 +265,12 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
       const generation = ctx.semanticRuntime.recordProjectTopologyChanged();
       void notifyWorkspaceChanged(ctx, ["resources", "types", "diagnostics", "templates"], "watched files", generation);
       void refreshAllOpenDocuments(ctx, "change", { notifyWorkspace: false });
+      return;
+    }
+
+    if (hasAnalyzedSourceContentChange(e.changes)) {
+      ctx.logger.log("didChangeWatchedFiles: analyzed source content changed");
+      void refreshWorkspaceSourceTextChanged(ctx, "watched files");
     }
   });
 
@@ -222,7 +291,11 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
     const timeout = setTimeout(() => {
       pendingRefreshes.delete(uri);
       ctx.logger.log(`didChange ${uri} (processing after debounce)`);
-      void refreshDocument(ctx, e.document, "change", { sourceChanged: false });
+      if (isScriptDocumentUri(uri)) {
+        void refreshWorkspaceAfterRecordedSourceTextChanged(ctx, "change", "change");
+      } else {
+        void refreshDocument(ctx, e.document, "change", { sourceChanged: false });
+      }
     }, DOCUMENT_CHANGE_DEBOUNCE_MS);
 
     pendingRefreshes.set(uri, timeout);
@@ -241,7 +314,11 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
     recordSourceTextChanged(ctx, "document close");
     void ctx.connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
-    void notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], "close").catch(() => {});
+    if (isScriptDocumentUri(e.document.uri)) {
+      void refreshWorkspaceAfterRecordedSourceTextChanged(ctx, "close", "change");
+    } else {
+      void notifyWorkspaceChanged(ctx, ["diagnostics", "templates"], "close").catch(() => {});
+    }
   });
 }
 

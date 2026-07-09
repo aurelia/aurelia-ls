@@ -158,8 +158,9 @@ export class AureliaLanguageClient {
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
-      // Watch TS/JS files for creation/deletion so the resource explorer
-      // picks up new or removed resources without requiring a manual refresh.
+      // Watch authored source files that can change Aurelia app facts even when
+      // they are not open LSP documents.
+      this.#vscode.workspace.createFileSystemWatcher("**/*.html"),
       this.#vscode.workspace.createFileSystemWatcher("**/*.ts"),
       this.#vscode.workspace.createFileSystemWatcher("**/*.js"),
     ];
@@ -168,6 +169,8 @@ export class AureliaLanguageClient {
       documentSelector: [
         { scheme: "file", language: "html" },
         { scheme: "untitled", language: "html" },
+        { scheme: "file", language: "typescript" },
+        { scheme: "file", language: "javascript" },
       ],
       synchronize: { fileEvents },
       middleware: createMiddleware(this.#vscode, this.#logger, this.#diagnosticsUx, this.#inlineUx, this),

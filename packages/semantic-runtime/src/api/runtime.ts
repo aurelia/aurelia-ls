@@ -49,7 +49,7 @@ import {
 } from './unresolved-modules.js';
 import {
   answerAppWorldFreeQuery,
-  answerRuntimeStaticAppQuery as answerRuntimeStaticAppQueryValue,
+  answerRuntimeStaticAppQuery,
 } from './app-world-free-queries.js';
 import {
   readSemanticAppOverview,
@@ -249,6 +249,7 @@ import {
 import {
   compilerWorldLabel,
   describeAddress,
+  semanticExactSourceReference,
   semanticSourceReferenceMatchesFilePath,
   type SemanticSourceReference,
 } from './source-reference.js';
@@ -814,7 +815,7 @@ export class SemanticRuntime {
       },
       () => withSemanticAppQueryContinuations(
         request,
-        answerRuntimeStaticAppQueryValue(request),
+        answerRuntimeStaticAppQuery(request),
         catalogRow,
       ),
     );
@@ -1057,7 +1058,7 @@ export class SemanticRuntime {
           },
           () => withSemanticAppQueryContinuations(
             childQuery,
-            answerRuntimeStaticAppQueryValue(childQuery),
+            answerRuntimeStaticAppQuery(childQuery),
             catalogRow,
           ),
         ),
@@ -2222,18 +2223,6 @@ function runtimeCountSemanticRoleRows(
   return counts;
 }
 
-function exactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.path != null && source.start != null && source.end != null) {
-    return source;
-  }
-  return exactSourceReference(source.anchor ?? null);
-}
-
 function semanticOpenSeamFilterDisplayText(
   filter: SemanticOpenSeamQueryFilter,
 ): string {
@@ -2285,7 +2274,7 @@ function semanticSourceReferenceRangeDisplay(
   source: SemanticSourceReference | null,
   sourceRange: SemanticSourceRange | null,
 ): string {
-  const exact = exactSourceReference(source);
+  const exact = semanticExactSourceReference(source);
   if (exact?.path != null && sourceRange != null) {
     return `${exact.path}:${sourceRange.start.line + 1}:${sourceRange.start.character + 1}`;
   }
@@ -3189,7 +3178,7 @@ export class SemanticApp {
   private applicationFileRolesForSourceReference(
     source: SemanticSourceReference | null,
   ): readonly ApplicationFileRole[] {
-    const exact = exactSourceReference(source);
+    const exact = semanticExactSourceReference(source);
     if (exact?.path == null) {
       return [];
     }
@@ -3214,7 +3203,7 @@ export class SemanticApp {
   private staticEvaluationOriginsForSourceReference(
     source: SemanticSourceReference | null,
   ): SemanticOpenSeamSiteRow['staticEvaluationOrigins'] {
-    const exact = exactSourceReference(source);
+    const exact = semanticExactSourceReference(source);
     if (exact?.path == null) {
       return [];
     }
@@ -3250,7 +3239,7 @@ export class SemanticApp {
     source: SemanticSourceReference | null,
     sourceTextCache: AuthoredSourceTextCache,
   ): SemanticSourceRange | null {
-    const exact = exactSourceReference(source);
+    const exact = semanticExactSourceReference(source);
     if (exact?.path == null || exact.start == null || exact.end == null) {
       return null;
     }

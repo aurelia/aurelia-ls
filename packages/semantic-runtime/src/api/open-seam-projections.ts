@@ -11,7 +11,10 @@ import type {
   SemanticOpenSeamSummaryRow,
   SemanticSourceRange,
 } from './contracts.js';
-import type { SemanticSourceReference } from './source-reference.js';
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
+} from './source-reference.js';
 import {
   semanticOpenSeamAttemptForKind,
   semanticOpenSeamBoundaryForKind,
@@ -261,18 +264,6 @@ function semanticOpenSeamSiteSource(
   row: SemanticOpenSeamRow,
 ): SemanticSourceReference | null {
   return semanticOpenSeamRowSources(row)[0] ?? row.source;
-}
-
-function semanticExactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.path != null && source.start != null && source.end != null) {
-    return source;
-  }
-  return semanticExactSourceReference(source.anchor ?? null);
 }
 
 function normalizeOpenSeamSummary(summary: string): string {

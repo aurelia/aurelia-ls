@@ -13,8 +13,11 @@ import {
 } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
-  SemanticSourceReference,
   SemanticTemplateCursorInfoResult,
+} from "@aurelia-ls/semantic-runtime";
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
@@ -22,6 +25,7 @@ import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
 interface OffsetRange {
   readonly start: number;
@@ -35,6 +39,7 @@ export async function handleLinkedEditingRange(
 ): Promise<LinkedEditingRanges | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   try {
     const answer = await ctx.semanticRuntime.templateCursorInfo(
@@ -62,7 +67,7 @@ function linkedEditingRangesForCursor(
   const tagName = value.html.tagName;
   if (tagName == null || tagName.length === 0) return null;
 
-  const source = exactSource(value.html.source);
+  const source = semanticExactSourceReference(value.html.source);
   if (source?.start == null || source.end == null) return null;
   if (!sourceMatchesDocument(ctx.workspaceRoot, source, doc.uri)) return null;
 
@@ -179,12 +184,6 @@ function sourceMatchesDocument(
 function sourceReferencePath(source: SemanticSourceReference | null): string | null {
   if (source == null) return null;
   return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function exactSource(source: SemanticSourceReference | null): SemanticSourceReference | null {
-  if (source == null) return null;
-  if (source.start != null && source.end != null) return source;
-  return exactSource(source.anchor ?? null);
 }
 
 function containsOffset(range: OffsetRange, offset: number): boolean {

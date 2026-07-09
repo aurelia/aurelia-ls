@@ -35,7 +35,9 @@ import {
 import {
   compilerWorldLabel,
   describeAddress,
+  semanticExactSourceReference,
   semanticSourceReferenceMatchesFilePath,
+  semanticSourceReferenceContainsFileOffset,
   sourceReferenceForParserSpan,
   sourceReferenceForTsNode,
 } from './source-reference.js';
@@ -639,7 +641,7 @@ export class SemanticAppTemplateQueries {
     );
     const selectedMember = cursorInfo.value.selectedMember;
     const selectedMemberName = cursorInfo.value.selectedMemberName ?? selectedMember?.name ?? null;
-    const targetSource = exactSourceReference(selectedMember?.source ?? null);
+    const targetSource = semanticExactSourceReference(selectedMember?.source ?? null);
     if (selectedMember == null || selectedMemberName == null || targetSource == null) {
       return null;
     }
@@ -723,7 +725,7 @@ export class SemanticAppTemplateQueries {
     if (activeObservedRow == null) {
       return null;
     }
-    const activeSource = exactSourceReference(activeObservedRow.memberTokenSource ?? null);
+    const activeSource = semanticExactSourceReference(activeObservedRow.memberTokenSource ?? null);
     if (activeSource == null) {
       return null;
     }
@@ -769,7 +771,7 @@ export class SemanticAppTemplateQueries {
     );
     const selectedBindable = cursorInfo.value.selectedBindable;
     const selectedMemberName = selectedBindable?.name ?? null;
-    const targetSource = exactSourceReference(selectedBindable?.nameSource ?? selectedBindable?.source ?? null);
+    const targetSource = semanticExactSourceReference(selectedBindable?.nameSource ?? selectedBindable?.source ?? null);
     if (selectedBindable == null || selectedMemberName == null || targetSource == null) {
       return null;
     }
@@ -808,7 +810,7 @@ export class SemanticAppTemplateQueries {
     );
     const selectedBindable = cursorInfo.value.selectedBindable;
     const aliasName = selectedBindable?.attribute ?? null;
-    const aliasTargetSource = exactSourceReference(selectedBindable?.attributeSource ?? null);
+    const aliasTargetSource = semanticExactSourceReference(selectedBindable?.attributeSource ?? null);
     if (selectedBindable == null || aliasName == null || aliasTargetSource == null) {
       return null;
     }
@@ -819,7 +821,7 @@ export class SemanticAppTemplateQueries {
       {
         surface: TemplateRenameSurface.BindableAttributeAlias,
         propertyName: selectedBindable.name,
-        propertyTargetSource: exactSourceReference(selectedBindable.nameSource ?? selectedBindable.source ?? null),
+        propertyTargetSource: semanticExactSourceReference(selectedBindable.nameSource ?? selectedBindable.source ?? null),
         aliasName,
         aliasTargetSource,
       },
@@ -859,7 +861,7 @@ export class SemanticAppTemplateQueries {
     const selectedDefinition = cursorInfo.value.selectedDefinition;
     const selectedName = selectedDefinition?.name ?? selectedDefinition?.targetName ?? null;
     const declarationSource = selectedDefinition?.nameSource ?? selectedDefinition?.source ?? null;
-    const targetSource = exactSourceReference(declarationSource);
+    const targetSource = semanticExactSourceReference(declarationSource);
     if (selectedDefinition == null || selectedName == null || targetSource == null) {
       return null;
     }
@@ -1014,7 +1016,7 @@ export class SemanticAppTemplateQueries {
     if (targetSymbol == null) {
       return null;
     }
-    const activeSource = exactSourceReference(sourceReferenceForTsNode(activeIdentifier));
+    const activeSource = semanticExactSourceReference(sourceReferenceForTsNode(activeIdentifier));
     const targetSources = declarationSourcesForSymbol(targetSymbol);
     const effectiveTargetSources = targetSources.length === 0 && activeSource != null
       ? [activeSource]
@@ -1123,15 +1125,7 @@ function diagnosticContainsCursor(
   diagnostic: SemanticTemplateDiagnosticRow,
   cursor: NonNullable<SemanticAppQuery['cursor']>,
 ): boolean {
-  if (cursor.offset == null) {
-    return false;
-  }
-  const source = exactSourceReference(diagnostic.source);
-  return source?.start != null
-    && source.end != null
-    && semanticSourceReferenceMatchesFilePath(source, cursor.filePath)
-    && cursor.offset >= source.start
-    && cursor.offset <= source.end;
+  return semanticSourceReferenceContainsFileOffset(diagnostic.source, cursor.filePath, cursor.offset);
 }
 
 function templateCodeActionForDiagnostic(
@@ -1158,7 +1152,7 @@ function declareViewModelMemberCodeActionForDiagnostic(
     return null;
   }
 
-  const actionSource = exactSourceReference(suggestion.actionTarget?.source ?? null);
+  const actionSource = semanticExactSourceReference(suggestion.actionTarget?.source ?? null);
   const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
   if (resource == null) {
     return null;
@@ -1174,7 +1168,7 @@ function declareViewModelMemberCodeActionForDiagnostic(
     diagnosticKind: diagnostic.diagnosticKind,
     suggestionKind: suggestion.suggestionKind,
     actionKind: suggestion.actionKind,
-    diagnosticSource: exactSourceReference(diagnostic.source),
+    diagnosticSource: semanticExactSourceReference(diagnostic.source),
     actionTarget: suggestion.actionTarget,
     repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
     edits: [edit],
@@ -1190,7 +1184,7 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
   if (!diagnosticHasFrameworkCapabilityRegistrationPlan(diagnostic)) {
     return null;
   }
-  const actionSource = exactSourceReference(diagnostic.suggestion.actionTarget?.source ?? diagnostic.source);
+  const actionSource = semanticExactSourceReference(diagnostic.suggestion.actionTarget?.source ?? diagnostic.source);
   const resource = templateResourceForDiagnosticSource(store, emission, actionSource);
   if (resource == null) {
     return null;
@@ -1227,7 +1221,7 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
     diagnosticKind: diagnostic.diagnosticKind,
     suggestionKind: suggestion.suggestionKind,
     actionKind: suggestion.actionKind,
-    diagnosticSource: exactSourceReference(diagnostic.source),
+    diagnosticSource: semanticExactSourceReference(diagnostic.source),
     actionTarget: suggestion.actionTarget,
     repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
     edits,
@@ -1258,7 +1252,7 @@ function frameworkCapabilityDemandForDiagnostic(
     return null;
   }
   return emission.capabilityDemands.readDemands().find((demand) => {
-    const demandSource = exactSourceReference(describeAddress(store, demand.sourceAddressHandle));
+    const demandSource = semanticExactSourceReference(describeAddress(store, demand.sourceAddressHandle));
     return demand.requiredCapability === requiredCapability
       && sourceReferencesMatchExactSpan(demandSource, actionSource);
   }) ?? null;
@@ -1271,7 +1265,7 @@ function frameworkRegistrationAdmissionEdits(
   admission: AureliaFrameworkRegistrationAdmissionSource,
 ): readonly SemanticTemplateCodeActionEditRow[] {
   const appStep = appRootStepForTemplateResource(emission, resource, ConfigurationStepKind.AureliaApp);
-  const appSource = exactSourceReference(describeAddress(store, appStep?.sourceAddressHandle ?? null));
+  const appSource = semanticExactSourceReference(describeAddress(store, appStep?.sourceAddressHandle ?? null));
   if (appSource?.path == null || appSource.start == null || appSource.end == null) {
     return [];
   }
@@ -1355,8 +1349,8 @@ function diagnosticHasViewModelMemberDeclarationPlan(
     return false;
   }
 
-  const diagnosticSource = exactSourceReference(diagnostic.source);
-  const actionSource = exactSourceReference(suggestion.actionTarget.source);
+  const diagnosticSource = semanticExactSourceReference(diagnostic.source);
+  const actionSource = semanticExactSourceReference(suggestion.actionTarget.source);
   return sourceReferencesMatchExactSpan(diagnosticSource, actionSource)
     && suggestion.actionTarget.memberName === (suggestion.targetMemberName ?? diagnostic.selectedMemberName);
 }
@@ -1366,12 +1360,12 @@ function templateResourceForDiagnosticSource(
   emission: AureliaAppWorldProjectEmission,
   diagnosticSource: SemanticSourceReference | null,
 ): TemplateResourceEmission | null {
-  const source = exactSourceReference(diagnosticSource);
+  const source = semanticExactSourceReference(diagnosticSource);
   if (source?.path == null || source.start == null || source.end == null) {
     return null;
   }
   for (const resource of [...emission.templates.resources, ...emission.templates.authoringResources]) {
-    const templateSource = exactSourceReference(
+    const templateSource = semanticExactSourceReference(
       describeAddress(
         store,
         resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
@@ -1403,7 +1397,7 @@ function declareViewModelMemberEdit(
   if (className == null) {
     return null;
   }
-  const definitionSource = exactSourceReference(describeAddress(store, definition.sourceAddressHandle));
+  const definitionSource = semanticExactSourceReference(describeAddress(store, definition.sourceAddressHandle));
   if (definitionSource?.path == null) {
     return null;
   }
@@ -1568,25 +1562,13 @@ function activeRenameSource(
     if (!referenceRowSupportsRename(row)) {
       continue;
     }
-    const source = exactSourceReference(row.source);
-    if (sourceReferenceContainsCursor(source, cursor)) {
+    const source = semanticExactSourceReference(row.source);
+    if (source != null && semanticSourceReferenceContainsFileOffset(source, cursor?.filePath, cursor?.offset)) {
       // Usage rows carry authored member-name token sources, so prepareRename ranges are token-granular.
       return source;
     }
   }
   return null;
-}
-
-function sourceReferenceContainsCursor(
-  source: SemanticSourceReference | null,
-  cursor: SemanticAppQuery['cursor'],
-): source is SemanticSourceReference {
-  return cursor?.offset != null
-    && source?.start != null
-    && source.end != null
-    && semanticSourceReferenceMatchesFilePath(source, cursor.filePath)
-    && cursor.offset >= source.start
-    && cursor.offset <= source.end;
 }
 
 function referenceRowSupportsRename(row: SemanticTemplateReferenceRow): boolean {
@@ -1787,7 +1769,7 @@ function typeScriptUsageReferenceRows(
       definitionName: null,
       bindingKind: null,
       dependencyKind: null,
-      source: exactSourceReference(site.source),
+      source: semanticExactSourceReference(site.source),
       targetSource,
     }));
 }
@@ -1811,7 +1793,7 @@ function declarationSourcesForSymbol(
 ): readonly SemanticSourceReference[] {
   return (symbol.declarations ?? [])
     .map((declaration) => declarationNameNode(declaration) ?? declaration)
-    .map((node) => exactSourceReference(sourceReferenceForTsNode(node)))
+    .map((node) => semanticExactSourceReference(sourceReferenceForTsNode(node)))
     .filter((source): source is SemanticSourceReference => source != null);
 }
 
@@ -1914,7 +1896,7 @@ function templateRenameEditRow(
 ): SemanticTemplateRenameEditRow {
   return {
     editKind,
-    source: exactSourceReference(source),
+    source: semanticExactSourceReference(source),
     oldText,
     newText,
   };
@@ -2048,7 +2030,7 @@ function templateReferenceDeclarationRow(
     definitionName: null,
     bindingKind: null,
     dependencyKind: null,
-    source: exactSourceReference(source),
+    source: semanticExactSourceReference(source),
     targetSource,
     ...(handles ? {
       handles: {
@@ -2115,13 +2097,13 @@ function bindableReferenceMatchesTarget(
   target: BindableAttributeReferenceTarget,
 ): boolean {
   if (target.surface === TemplateRenameSurface.BindableAttributeAlias) {
-    const aliasSource = exactSourceReference(describeAddress(store, bindable.attributeSourceAddressHandle));
+    const aliasSource = semanticExactSourceReference(describeAddress(store, bindable.attributeSourceAddressHandle));
     return target.aliasName != null
       && bindable.attribute.toLowerCase() === target.aliasName.toLowerCase()
       && sourceReferencesMatchExactSpan(aliasSource, target.aliasTargetSource);
   }
 
-  const propertySource = exactSourceReference(describeAddress(store, bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle));
+  const propertySource = semanticExactSourceReference(describeAddress(store, bindable.nameSourceAddressHandle ?? bindable.sourceAddressHandle));
   return bindable.name === target.propertyName
     && sourceReferencesMatchExactSpan(propertySource, target.propertyTargetSource);
 }
@@ -2304,7 +2286,7 @@ function visibleResourceMatchesTarget(
     : 'nameSourceAddressHandle' in resource.definition
       ? resource.definition.nameSourceAddressHandle ?? resource.definition.sourceAddressHandle
       : resource.definition.sourceAddressHandle;
-  const definitionSource = exactSourceReference(describeAddress(store, definitionSourceAddressHandle));
+  const definitionSource = semanticExactSourceReference(describeAddress(store, definitionSourceAddressHandle));
   return sourceReferencesMatchExactSpan(definitionSource, target.targetSource)
     && [resource.name, ...resource.aliases].some((name) => name.toLowerCase() === target.selectedName.toLowerCase());
 }
@@ -2326,8 +2308,8 @@ function elementTagNameSource(
   element: HtmlElement,
   closing: boolean,
 ): SemanticSourceReference | null {
-  const source = exactSourceReference(describeAddress(store, element.sourceAddressHandle));
-  const templateSource = exactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
+  const source = semanticExactSourceReference(describeAddress(store, element.sourceAddressHandle));
+  const templateSource = semanticExactSourceReference(describeAddress(store, resource.compilation.unit.templateSource.sourceAddressHandle));
   const markup = resource.compilation.unit.templateSource.markup;
   if (source?.path == null || source.start == null || source.end == null || markup == null) {
     return null;
@@ -2396,7 +2378,7 @@ function multiBindingSegmentTargetTokenSource(
   segment: TemplateResourceEmission['compilation']['bindingCommandLowering']['multiBindingSegments'][number],
   attributeName: string,
 ): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: AddressHandle | null } | null {
-  const source = exactSourceReference(describeAddress(store, segment.targetSourceAddressHandle));
+  const source = semanticExactSourceReference(describeAddress(store, segment.targetSourceAddressHandle));
   if (source == null) {
     return null;
   }
@@ -2422,7 +2404,7 @@ function attributeSyntaxTargetTokenSource(
     ? null
     : attributeByProduct.get(syntax.attribute.productHandle) ?? null;
   const nameSourceAddressHandle = attribute?.nameAddressHandle ?? syntax.sourceAddressHandle;
-  const nameSource = exactSourceReference(describeAddress(store, nameSourceAddressHandle));
+  const nameSource = semanticExactSourceReference(describeAddress(store, nameSourceAddressHandle));
   if (nameSource?.path == null || nameSource.start == null) {
     return null;
   }
@@ -2469,7 +2451,7 @@ function templateReferenceRowForObservedDependency(
 ): SemanticTemplateReferenceRow {
   // Prefer the authored member-name token over the whole expression span so references highlight
   // and rename edit exactly the token (`searchText`, not `state.items.searchText`).
-  const tokenSource = exactSourceReference(row.memberTokenSource ?? null);
+  const tokenSource = semanticExactSourceReference(row.memberTokenSource ?? null);
   return {
     referenceKind: SemanticTemplateReferenceKind.TemplateUsage,
     name: tokenSource != null
@@ -2478,7 +2460,7 @@ function templateReferenceRowForObservedDependency(
     definitionName: row.definitionName,
     bindingKind: row.bindingKind,
     dependencyKind: row.dependencyKind,
-    source: tokenSource ?? exactSourceReference(row.source),
+    source: tokenSource ?? semanticExactSourceReference(row.source),
     targetSource,
     ...(handles ? {
       handles: {
@@ -2550,7 +2532,7 @@ function unprovenObservedMemberRowContainsCursor(
   return row.source != null
     && row.observedMemberSourceRoute !== 'member-declaration'
     && row.memberName === selectedMemberName
-    && sourceReferenceContainsCursor(exactSourceReference(row.memberTokenSource ?? null), cursor);
+    && semanticSourceReferenceContainsFileOffset(row.memberTokenSource ?? null, cursor.filePath, cursor.offset);
 }
 
 function uniqueTemplateReferenceRows(
@@ -2596,8 +2578,8 @@ function sourceReferencesMatchExactSpan(
   left: SemanticSourceReference | null,
   right: SemanticSourceReference | null,
 ): boolean {
-  const leftExact = exactSourceReference(left);
-  const rightExact = exactSourceReference(right);
+  const leftExact = semanticExactSourceReference(left);
+  const rightExact = semanticExactSourceReference(right);
   return leftExact?.path != null
     && rightExact?.path != null
     && semanticSourceReferenceMatchesFilePath(leftExact, rightExact.path)
@@ -2618,18 +2600,6 @@ function sourceReferenceLooksTypeScript(
     || path.endsWith('.cts')
     || path.endsWith('.mjs')
     || path.endsWith('.cjs');
-}
-
-function exactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.start != null && source.end != null) {
-    return source;
-  }
-  return exactSourceReference(source.anchor ?? null);
 }
 
 function uniqueTemplateInlayHintRows(

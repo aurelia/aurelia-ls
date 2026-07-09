@@ -67,7 +67,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "schema": "diagnostics-taxonomy/1"
         }
       },
-      "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+      "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
       "range": {
         "end": {
           "character": 25,
@@ -207,7 +207,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "schema": "diagnostics-taxonomy/1"
         }
       },
-      "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+      "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
       "range": {
         "end": {
           "character": 32,
@@ -479,10 +479,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               {
                 "code": "missing-expression-member",
                 "kind": "missing-expression-member",
-                "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+                "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
               }
             ],
-            "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+            "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
             "related": [],
             "severity": "warning",
             "source": "semantic-runtime:template",
@@ -731,10 +731,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               {
                 "code": "missing-expression-member",
                 "kind": "missing-expression-member",
-                "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+                "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
               }
             ],
-            "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+            "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
             "related": [],
             "severity": "warning",
             "source": "semantic-runtime:template",
@@ -1226,10 +1226,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           {
             "code": "missing-expression-member",
             "kind": "missing-expression-member",
-            "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+            "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
           }
         ],
-        "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+        "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
         "related": [],
         "severity": "warning",
         "source": "semantic-runtime:template",
@@ -1498,10 +1498,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           {
             "code": "missing-expression-member",
             "kind": "missing-expression-member",
-            "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+            "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
           }
         ],
-        "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+        "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
         "related": [],
         "severity": "warning",
         "source": "semantic-runtime:template",
@@ -1576,10 +1576,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             {
               "code": "missing-expression-member",
               "kind": "missing-expression-member",
-              "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+              "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
             }
           ],
-          "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+          "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
           "related": [],
           "severity": "warning",
           "source": "semantic-runtime:template",
@@ -1712,10 +1712,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             {
               "code": "missing-expression-member",
               "kind": "missing-expression-member",
-              "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it."
+              "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it."
             }
           ],
-          "message": "The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
+          "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
           "related": [],
           "severity": "warning",
           "source": "semantic-runtime:template",

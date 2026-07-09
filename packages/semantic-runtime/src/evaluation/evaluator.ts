@@ -40,8 +40,8 @@ import {
   ModuleEnvironmentRecord,
 } from './environment.js';
 import {
-  evaluateKnownConstructor as evaluateStaticConstructor,
-  evaluateKnownIntrinsic as evaluateStaticIntrinsic,
+  evaluateKnownConstructor,
+  evaluateKnownIntrinsic,
   type StaticIntrinsicEvaluationHost,
 } from './intrinsics.js';
 import { evaluateAureliaExpressionGlobalAccess } from './global-intrinsics.js';
@@ -1256,7 +1256,7 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue | null {
-    return evaluateStaticIntrinsic(call, environment, moduleKey, depth, this.intrinsicHost());
+    return evaluateKnownIntrinsic(call, environment, moduleKey, depth, this.intrinsicHost());
   }
 
   private evaluateNewExpression(
@@ -1270,7 +1270,7 @@ export class StaticEvaluator {
     if (hostValue != null) {
       return hostValue;
     }
-    const intrinsic = evaluateStaticConstructor(expression, environment, moduleKey, depth, host);
+    const intrinsic = evaluateKnownConstructor(expression, environment, moduleKey, depth, host);
     if (intrinsic != null) {
       return intrinsic;
     }

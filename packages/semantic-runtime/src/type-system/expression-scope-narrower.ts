@@ -40,7 +40,7 @@ import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-sour
 import { readOrProjectCheckerTypeMembers } from './checker-type-member-surface.js';
 import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import { checkerRawTypeAssignable } from './checker-type-assignability.js';
-import { checkerUnionTypeOrNever as checkerUnionType } from './checker-type-union.js';
+import { checkerUnionTypeOrNever } from './checker-type-union.js';
 import { checkerPropertySymbol, checkerSymbolValueType } from './checker-node-helpers.js';
 import { checkerConstructReturnTypeUnion } from './checker-signature-parameters.js';
 
@@ -509,7 +509,7 @@ export class CheckerExpressionScopeNarrower {
     }
     return this.projectType(
       carrier,
-      checkerUnionType(carrier.checker, selected),
+      checkerUnionTypeOrNever(carrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -593,7 +593,7 @@ export class CheckerExpressionScopeNarrower {
 
     return this.projectType(
       ownerCarrier,
-      checkerUnionType(ownerCarrier.checker, selected),
+      checkerUnionTypeOrNever(ownerCarrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -713,14 +713,14 @@ export class CheckerExpressionScopeNarrower {
       return null;
     }
 
-    const includeType = checkerUnionType(sourceCarrier.checker, includeCarriers.map((carrier) => carrier.type));
+    const includeType = checkerUnionTypeOrNever(sourceCarrier.checker, includeCarriers.map((carrier) => carrier.type));
     const selected = equalityIncludedTypes(sourceCarrier.checker, sourceCarrier.type, includeType);
     if (selected.length === 0) {
       return null;
     }
     return this.projectType(
       sourceCarrier,
-      checkerUnionType(sourceCarrier.checker, selected),
+      checkerUnionTypeOrNever(sourceCarrier.checker, selected),
       localKey,
       sourceAddressHandle,
     );
@@ -742,11 +742,11 @@ export class CheckerExpressionScopeNarrower {
     if (sourceParts.length === 1 && !sourceCarrier.type.isUnion()) {
       return source;
     }
-    const excludeType = checkerUnionType(sourceCarrier.checker, excludeCarriers.map((carrier) => carrier.type));
+    const excludeType = checkerUnionTypeOrNever(sourceCarrier.checker, excludeCarriers.map((carrier) => carrier.type));
     const retained = sourceParts.filter((part) => !typeOverlaps(sourceCarrier.checker, part, excludeType));
     return this.projectType(
       sourceCarrier,
-      checkerUnionType(sourceCarrier.checker, retained),
+      checkerUnionTypeOrNever(sourceCarrier.checker, retained),
       localKey,
       sourceAddressHandle,
     );

@@ -24,6 +24,7 @@ import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
 export async function handleInlayHints(
   ctx: ServerContext,
@@ -34,6 +35,7 @@ export async function handleInlayHints(
     const uri = params.textDocument.uri;
     const doc = ctx.ensureProgramDocument(uri);
     if (!doc) return null;
+    if (!isTemplateDocument(doc)) return null;
 
     const answer = await ctx.semanticRuntime.templateInlayHints(
       doc,

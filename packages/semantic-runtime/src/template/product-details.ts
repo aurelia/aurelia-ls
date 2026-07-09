@@ -60,18 +60,18 @@ import type {
 } from './runtime-binding.js';
 import type { RuntimeWatcher } from './runtime-watcher.js';
 import type {
-  RuntimeBindingIssue as RuntimeBindingIssueProduct,
+  RuntimeBindingIssue,
 } from './runtime-binding-issue.js';
 import type {
-  RuntimeBindingBehaviorApplication as RuntimeBindingBehaviorApplicationProduct,
-  RuntimeBindingBehaviorIssue as RuntimeBindingBehaviorIssueProduct,
+  RuntimeBindingBehaviorApplication,
+  RuntimeBindingBehaviorIssue,
 } from './runtime-binding-behavior.js';
 import type {
-  RuntimeValueConverterApplication as RuntimeValueConverterApplicationProduct,
-  RuntimeValueConverterIssue as RuntimeValueConverterIssueProduct,
+  RuntimeValueConverterApplication,
+  RuntimeValueConverterIssue,
 } from './runtime-value-converter.js';
 import type {
-  RuntimeBindingScopeIssue as RuntimeBindingScopeIssueProduct,
+  RuntimeBindingScopeIssue,
 } from './runtime-binding-scope-issue.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type {
@@ -301,27 +301,27 @@ export const TemplateProductDetails = {
     'binding.runtime-watcher',
     'Controller-owned ComputedWatcher or ExpressionWatcher detail created from resource watch metadata.',
   ),
-  RuntimeBindingIssue: defineProductDetailSlot<RuntimeBindingIssueProduct>(
+  RuntimeBindingIssue: defineProductDetailSlot<RuntimeBindingIssue>(
     KernelVocabulary.Binding.RuntimeBindingIssue.key,
     'binding.runtime-binding-issue',
     'Framework-runtime issue discovered while a modeled runtime binding executes its own lifecycle.',
   ),
-  RuntimeBindingBehaviorApplication: defineProductDetailSlot<RuntimeBindingBehaviorApplicationProduct>(
+  RuntimeBindingBehaviorApplication: defineProductDetailSlot<RuntimeBindingBehaviorApplication>(
     KernelVocabulary.Binding.BehaviorApplication.key,
     'binding.behavior-application',
     'Runtime binding-behavior application detail over a rendered binding and bind-time target facts.',
   ),
-  RuntimeBindingBehaviorIssue: defineProductDetailSlot<RuntimeBindingBehaviorIssueProduct>(
+  RuntimeBindingBehaviorIssue: defineProductDetailSlot<RuntimeBindingBehaviorIssue>(
     KernelVocabulary.Binding.BehaviorIssue.key,
     'binding.behavior-issue',
     'Framework-runtime issue discovered while applying a binding behavior.',
   ),
-  RuntimeValueConverterApplication: defineProductDetailSlot<RuntimeValueConverterApplicationProduct>(
+  RuntimeValueConverterApplication: defineProductDetailSlot<RuntimeValueConverterApplication>(
     KernelVocabulary.Binding.ValueConverterApplication.key,
     'binding.value-converter-application',
     'Runtime value-converter application detail over a rendered binding expression.',
   ),
-  RuntimeValueConverterIssue: defineProductDetailSlot<RuntimeValueConverterIssueProduct>(
+  RuntimeValueConverterIssue: defineProductDetailSlot<RuntimeValueConverterIssue>(
     KernelVocabulary.Binding.ValueConverterIssue.key,
     'binding.value-converter-issue',
     'Framework-runtime issue discovered while invoking a value converter.',
@@ -331,7 +331,7 @@ export const TemplateProductDetails = {
     'binding.scope-effect',
     'Runtime binding scope-effect detail consumed by template scope construction.',
   ),
-  RuntimeBindingScopeIssue: defineProductDetailSlot<RuntimeBindingScopeIssueProduct>(
+  RuntimeBindingScopeIssue: defineProductDetailSlot<RuntimeBindingScopeIssue>(
     KernelVocabulary.Binding.ScopeIssue.key,
     'binding.scope-issue',
     'Framework-runtime issue discovered while spending a runtime binding scope effect.',

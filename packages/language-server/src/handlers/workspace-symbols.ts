@@ -14,7 +14,10 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
-  SemanticSourceReference,
+} from "@aurelia-ls/semantic-runtime";
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
@@ -86,7 +89,7 @@ function workspaceSymbolForResource(
     return null;
   }
 
-  const source = exactSource(definition.targetSource ?? definition.source);
+  const source = semanticExactSourceReference(definition.targetSource ?? definition.source);
   if (source == null) return null;
 
   const uri = sourceReferenceUri(ctx.workspaceRoot, source);
@@ -157,12 +160,6 @@ function sourceReferenceUri(
 function sourceReferencePath(source: SemanticSourceReference | null): string | null {
   if (source == null) return null;
   return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function exactSource(source: SemanticSourceReference | null): SemanticSourceReference | null {
-  if (source == null) return null;
-  if (source.start != null && source.end != null) return source;
-  return exactSource(source.anchor ?? null);
 }
 
 function guessLanguage(uri: string): string {

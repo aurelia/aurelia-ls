@@ -13,8 +13,11 @@ import {
 } from "vscode-languageserver/node.js";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
-  SemanticSourceReference,
   SemanticTemplateCursorInfoResult,
+} from "@aurelia-ls/semantic-runtime";
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri, toFileUri } from "../utils/document-uri.js";
@@ -22,6 +25,7 @@ import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
 interface OffsetRange {
   readonly start: number;
@@ -35,6 +39,7 @@ export async function handleSelectionRanges(
 ): Promise<SelectionRange[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   try {
     const ranges: SelectionRange[] = [];
@@ -141,7 +146,7 @@ function offsetRangeForSource(
   doc: TextDocument,
   source: SemanticSourceReference | null,
 ): OffsetRange | null {
-  const exact = exactSource(source);
+  const exact = semanticExactSourceReference(source);
   if (exact?.start == null || exact.end == null) return null;
   if (!sourceMatchesDocument(ctx.workspaceRoot, exact, doc.uri)) return null;
 
@@ -172,12 +177,6 @@ function sourceMatchesDocument(
 function sourceReferencePath(source: SemanticSourceReference | null): string | null {
   if (source == null) return null;
   return source.path ?? sourceReferencePath(source.anchor ?? null);
-}
-
-function exactSource(source: SemanticSourceReference | null): SemanticSourceReference | null {
-  if (source == null) return null;
-  if (source.start != null && source.end != null) return source;
-  return exactSource(source.anchor ?? null);
 }
 
 function identifierRangeAtOffset(

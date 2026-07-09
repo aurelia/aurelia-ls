@@ -13,7 +13,10 @@ import {
 } from './contracts.js';
 import { answer } from './answer-helpers.js';
 import type { SemanticApplicationTopologyResult } from './app-topology.js';
-import type { SemanticSourceReference } from './source-reference.js';
+import {
+  semanticExactSourceReference,
+  type SemanticSourceReference,
+} from './source-reference.js';
 import { semanticTypeScriptEnvironmentDisplayText } from './typescript-environment.js';
 
 export function readSemanticAppOverview(
@@ -243,7 +246,7 @@ function overviewOpenSeamReasonDisplay(
 function overviewOpenSeamSourceDisplay(
   row: SemanticOpenSeamSitesResult['rows'][number],
 ): string {
-  const exact = overviewExactSourceReference(row.source);
+  const exact = semanticExactSourceReference(row.source);
   if (exact?.path != null && row.sourceRange != null) {
     return `${exact.path}:${row.sourceRange.start.line + 1}:${row.sourceRange.start.character + 1}`;
   }
@@ -260,18 +263,6 @@ function overviewSourceDisplay(
     return source.start == null ? source.path : `${source.path}@${source.start}`;
   }
   return source.anchor == null ? source.label : overviewSourceDisplay(source.anchor);
-}
-
-function overviewExactSourceReference(
-  source: SemanticSourceReference | null,
-): SemanticSourceReference | null {
-  if (source == null) {
-    return null;
-  }
-  if (source.path != null && source.start != null && source.end != null) {
-    return source;
-  }
-  return overviewExactSourceReference(source.anchor ?? null);
 }
 
 function bindingProjectionDepthText(app: SemanticAppSummary): string {

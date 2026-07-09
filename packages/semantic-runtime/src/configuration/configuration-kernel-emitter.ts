@@ -47,7 +47,7 @@ import {
   ConfigurationClaimSet,
   ConfigurationKernelPublication,
   ConfigurationProductHandles,
-  ConfigurationSourceRecordSet as SourceRecordSet,
+  ConfigurationSourceRecordSet,
 } from './configuration-publication.js';
 import {
   AureliaAppFrame,
@@ -228,7 +228,7 @@ export class ConfigurationKernelEmitter {
     local: string,
     appFrame: AureliaAppFrame | null,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
   ): ConfigurationSequenceProductEmission {
     const handles = this.publication.configurationProductHandles(`configuration-sequence:${local}`);
     const sequenceClaims = this.publication.recordsForSequenceClaims(
@@ -252,7 +252,7 @@ export class ConfigurationKernelEmitter {
     local: string,
     observation: ConfigurationSequenceObservation,
     appFrame: AureliaAppFrame | null,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     sequenceClaims: ConfigurationClaimSet,
     sequence: ConfigurationSequence,
@@ -292,7 +292,7 @@ export class ConfigurationKernelEmitter {
     identityHandle: IdentityHandle,
     appFrame: AureliaAppFrame | null,
     stepReferences: readonly ConfigurationStepReferenceSeed[],
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
   ): ConfigurationSequence {
     return new ConfigurationSequence(
       productHandle,
@@ -310,7 +310,7 @@ export class ConfigurationKernelEmitter {
     local: string,
     observation: ConfigurationSequenceObservation,
     appFrame: AureliaAppFrame | null,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
     claimHandles: readonly ClaimHandle[],

@@ -108,7 +108,7 @@ import type { ConfigurationRecognitionContext } from './configuration-recognitio
 import {
   ConfigurationKernelPublication,
   ConfigurationProductHandles,
-  ConfigurationSourceRecordSet as SourceRecordSet,
+  ConfigurationSourceRecordSet,
 } from './configuration-publication.js';
 import {
   ConfigurationSequenceReference,
@@ -380,7 +380,7 @@ export class ConfigurationStepMaterializer {
     appTaskEmissions: readonly AppTaskEmission[],
     producedProductHandles: readonly ProductHandle[],
     registrationProductHandles: readonly ProductHandle[],
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
   ): ConfigurationStep {
     return new ConfigurationStep(
       referenceSeed.productHandle,
@@ -403,7 +403,7 @@ export class ConfigurationStepMaterializer {
     observation: ConfigurationStepObservation,
     sequenceReference: ConfigurationSequenceReference,
     referenceSeed: ConfigurationStepReferenceSeed,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     claimHandles: readonly ClaimHandle[],
     openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
@@ -461,7 +461,7 @@ export class ConfigurationStepMaterializer {
 
   private appTaskForObservation(
     observation: AppTaskObservation,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     key: RegistrationKeyEmission | null,
     callback: ConfigurationCallbackEmission | null,
@@ -484,7 +484,7 @@ export class ConfigurationStepMaterializer {
   private recordsForAppTaskProduct(
     local: string,
     observation: AppTaskObservation,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
@@ -527,7 +527,7 @@ export class ConfigurationStepMaterializer {
     context: ConfigurationRecognitionContext,
     observation: ConfigurationOptionContributionObservation,
     local: string,
-  ): SourceRecordSet {
+  ): ConfigurationSourceRecordSet {
     return this.publication.recordsForSource(
       context,
       observation.sourceNode,
@@ -541,7 +541,7 @@ export class ConfigurationStepMaterializer {
 
   private optionContributionForObservation(
     observation: ConfigurationOptionContributionObservation,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     value: ConfigurationOptionValueEmission,
   ): ConfigurationOptionContribution {
@@ -562,7 +562,7 @@ export class ConfigurationStepMaterializer {
   private recordsForOptionContributionProduct(
     local: string,
     observation: ConfigurationOptionContributionObservation,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     handles: ConfigurationProductHandles,
     openSeamHandles: readonly OpenSeamHandle[],
   ): readonly KernelStoreRecord[] {
@@ -725,7 +725,7 @@ export class ConfigurationStepMaterializer {
   private registrationKeyIdentityRecord(
     identityHandle: IdentityHandle,
     keySeed: DiKeyIdentitySeed,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
   ): KernelStoreRecord {
     return diKeyIdentityRecord(
       identityHandle,
@@ -772,7 +772,7 @@ export class ConfigurationStepMaterializer {
   private callbackIdentityRecords(
     context: ConfigurationRecognitionContext,
     observation: ConfigurationCallbackObservation,
-    source: SourceRecordSet,
+    source: ConfigurationSourceRecordSet,
     identityHandle: IdentityHandle | null,
   ): readonly KernelStoreRecord[] {
     return identityHandle == null ? [] : [

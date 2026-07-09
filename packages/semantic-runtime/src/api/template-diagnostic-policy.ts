@@ -48,8 +48,8 @@ import {
 import { checkerTypeShapeNullishUnionHasValueProperty } from '../type-system/checker-type-shape-access.js';
 import {
   RuntimeAstFrameworkErrorCode,
-  RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodes,
-  type RuntimeHtmlAstFrameworkErrorCode,
+  RuntimeHtmlAstFrameworkErrorCode,
+
 } from '../type-system/framework-error-code.js';
 import {
   RuntimeHtmlObservationFrameworkErrorCode,
@@ -410,11 +410,11 @@ function runtimeAstFrameworkErrorCodeForDataFlow(
     case CheckerExpressionTypeOpenKind.HostContextNotFound:
       return RuntimeAstFrameworkErrorCode.AstHostNotFound;
     case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstConverterNotFound;
+      return RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound;
     case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorNotFound;
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound;
     case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
-      return RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorDuplicated;
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated;
     case CheckerExpressionTypeOpenKind.NullishMemberAccess:
       return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishMemberAccess : null;
     case CheckerExpressionTypeOpenKind.NullishKeyedAccess:
@@ -1071,21 +1071,21 @@ function expressionRuntimeEvaluationSuggestion(
         actionTarget: suggestionActionTarget('runtime-boundary', source, '$host', null),
         summary: 'Use $host only in a template scope that supplies the Aurelia host context, such as an au-slot boundary.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstConverterNotFound:
+    case RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound:
       return {
         suggestionKind: 'register-resource',
         actionKind: 'register-resource',
         actionTarget: suggestionActionTarget('resource', source, selectedMemberName, 'value-converter'),
         summary: 'Register or import a value converter with this name into the compiler resource scope.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorNotFound:
+    case RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound:
       return {
         suggestionKind: 'register-resource',
         actionKind: 'register-resource',
         actionTarget: suggestionActionTarget('resource', source, selectedMemberName, 'binding-behavior'),
         summary: 'Register or import a binding behavior with this name into the compiler resource scope.',
       };
-    case RuntimeHtmlAstFrameworkErrorCodes.AstBehaviorDuplicated:
+    case RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated:
       return {
         suggestionKind: 'remove-duplicate-binding-behavior',
         actionKind: 'rewrite-expression',
@@ -1553,7 +1553,7 @@ function missingMemberDiagnostic(
     diagnosticAuthority: 'semantic-authoring-policy',
     frameworkErrorCode: null,
     severity: declareMember ? 'warning' : 'information',
-    summary: 'The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.',
+    summary: `Member "${selectedMemberName}" is not projected on the owner type, so semantic tooling cannot validate or navigate it.`,
     missingInput: 'expression-member:selected-member-missing',
     missingInputs: ['expression-member:selected-member-missing'],
     source,

@@ -24,7 +24,7 @@ import {
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
+import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode, workspaceEditChanges } from "../mapping/lsp-types.js";
 import {
   logIfSemanticRuntimeRequestAborted,
   semanticRuntimeRequestGuard,
@@ -951,11 +951,11 @@ export async function handleRenameFromTs(
         candidateCount,
       };
     }
-    const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupText(uri), {
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(answer, (uri) => ctx.lookupDocumentSnapshot(uri), {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
-    if (mapping.edit?.changes == null) {
+    if (mapping.edit == null) {
       ctx.logger.warn(`[renameFromTs] template edit mapping was blocked: ${mapping.failures.join(" ")}`);
       return renameFromTsBlocked(
         "mapping-failed",
@@ -966,7 +966,7 @@ export async function handleRenameFromTs(
       );
     }
 
-    const changes = mapping.edit.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+    const changes = workspaceEditChanges(mapping.edit) as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
     const fileCount = Object.keys(changes).length;
 
     if (fileCount > 0) {

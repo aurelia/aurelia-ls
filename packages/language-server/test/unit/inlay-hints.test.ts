@@ -6,6 +6,7 @@ function createMockContext(rows: unknown[]) {
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => ({
+      languageId: "html",
       getText: () => "x".repeat(300),
       positionAt: (offset: number) => ({ line: Math.floor(offset / 100), character: offset % 100 }),
     })),

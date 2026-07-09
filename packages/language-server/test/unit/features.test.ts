@@ -11,6 +11,7 @@ import {
   handlePrepareRename,
   handleReferences,
   handleRename,
+  workspaceEditChanges,
 } from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";
 
@@ -26,10 +27,20 @@ const codeActionText = "<template>${titel}</template>";
 const codeActionStart = codeActionText.indexOf("titel");
 const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
 
+function snapshot(uri: string, text: string, version: number | null = null, languageId = uri.endsWith(".ts") ? "typescript" : "html") {
+  return {
+    uri: canonicalDocumentUri(uri).uri,
+    languageId,
+    version,
+    text,
+  };
+}
+
 function createMockRenameContext(value: Record<string, unknown>) {
   const document = {
     uri: "file:///app/src/my-app.html",
     languageId: "html",
+    version: 3,
     offsetAt: vi.fn(() => renameStart + 1),
     positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => renameText),
@@ -51,6 +62,11 @@ function createMockRenameContext(value: Record<string, unknown>) {
       })),
     },
     lookupText: vi.fn((uri: string) => (uri === definitionUri ? renameDefinitionText : null)),
+    lookupDocumentSnapshot: vi.fn((uri: string) => (
+      canonicalDocumentUri(uri).uri === definitionUri
+        ? snapshot(definitionUri, renameDefinitionText, 8, "typescript")
+        : null
+    )),
   };
 }
 
@@ -69,6 +85,7 @@ function createMockCompletionContext(input: {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => ({
       uri: "file:///app/src/my-app.html",
+      languageId: "html",
       offsetAt: vi.fn(() => 0),
     })),
     semanticRuntime: {
@@ -115,6 +132,7 @@ function createMockCompletionContext(input: {
 function createMockHoverContext() {
   const document = {
     uri: "file:///app/src/my-app.html",
+    languageId: "html",
     offsetAt: vi.fn(() => 14),
   };
   return {
@@ -182,6 +200,7 @@ function createMockDefinitionContext(
     : options.selectedMemberSource;
   const document = {
     uri: "file:///app/src/my-app.html",
+    languageId: "html",
     offsetAt: vi.fn(() => 14),
     positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => testText),
@@ -317,6 +336,7 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
   const document = {
     uri: "file:///app/src/my-app.html",
     languageId: "html",
+    version: 5,
     offsetAt: vi.fn(() => codeActionStart + 1),
     positionAt: vi.fn((offset: number) => ({ line: 0, character: offset })),
     getText: vi.fn(() => codeActionText),
@@ -380,6 +400,11 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
       })),
     },
     lookupText: vi.fn((uri: string) => (uri === definitionUri ? definitionText : null)),
+    lookupDocumentSnapshot: vi.fn((uri: string) => (
+      canonicalDocumentUri(uri).uri === definitionUri
+        ? snapshot(definitionUri, definitionText, 9, "typescript")
+        : null
+    )),
   };
 }
 
@@ -457,12 +482,22 @@ describe("handleRename", () => {
 
     const result = await handleRename(ctx as never, params, testRequestGuard);
     expect(result).not.toBeNull();
-    const uris = Object.keys(result!.changes ?? {});
+    expect(result!.changes).toBeUndefined();
+    expect(result!.documentChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        textDocument: { uri: "file:///app/src/my-app.html", version: 3 },
+      }),
+      expect.objectContaining({
+        textDocument: { uri: definitionLspUri, version: 8 },
+      }),
+    ]));
+    const changes = workspaceEditChanges(result!);
+    const uris = Object.keys(changes);
     expect(uris.sort()).toEqual(["file:///app/src/my-app.html", definitionLspUri].sort());
-    expect(result!.changes!["file:///app/src/my-app.html"]).toEqual([
+    expect(changes["file:///app/src/my-app.html"]).toEqual([
       expect.objectContaining({ newText: "heading" }),
     ]);
-    expect(result!.changes![definitionLspUri]).toEqual([
+    expect(changes[definitionLspUri]).toEqual([
       expect.objectContaining({ newText: "heading" }),
     ]);
   });
@@ -601,7 +636,13 @@ describe("handleCodeAction", () => {
         }),
       }),
     }));
-    expect(result?.[0]?.edit?.changes?.[definitionLspUri]).toEqual([
+    expect(result?.[0]?.edit?.changes).toBeUndefined();
+    expect(result?.[0]?.edit?.documentChanges).toEqual([
+      expect.objectContaining({
+        textDocument: { uri: definitionLspUri, version: 9 },
+      }),
+    ]);
+    expect(workspaceEditChanges(result![0]!.edit!)[definitionLspUri]).toEqual([
       expect.objectContaining({ newText: "\n  titel!: unknown;" }),
     ]);
   });

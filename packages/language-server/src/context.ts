@@ -21,7 +21,15 @@ export interface ServerContext {
   workspaceRoot: string | null;
 
   ensureProgramDocument(uri: string): TextDocument | null;
+  lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null;
   lookupText(uri: DocumentUri): string | null;
+}
+
+export interface DocumentSnapshot {
+  readonly uri: DocumentUri;
+  readonly languageId: string;
+  readonly version: number | null;
+  readonly text: string;
 }
 
 export interface ServerContextInit {
@@ -41,39 +49,56 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   });
 
   function ensureProgramDocument(uri: string): TextDocument | null {
-    const live = documents.get(uri);
+    const live = liveDocumentForUri(uri);
     if (live) {
       return live;
     }
+    const snapshot = lookupDocumentSnapshot(uri);
+    return snapshot == null
+      ? null
+      : TextDocument.create(snapshot.uri, snapshot.languageId, snapshot.version ?? 0, snapshot.text);
+  }
 
+  function lookupDocumentSnapshot(uri: DocumentUri): DocumentSnapshot | null {
+    const live = liveDocumentForUri(uri);
+    if (live) {
+      return {
+        uri: live.uri,
+        languageId: live.languageId,
+        version: live.version,
+        text: live.getText(),
+      };
+    }
     const canonical = canonicalDocumentUri(uri);
     if (!fs.existsSync(canonical.file)) {
       return null;
     }
     const text = fs.readFileSync(canonical.file, "utf8");
-    return TextDocument.create(canonical.uri, guessLanguage(canonical.file), 0, text);
+    return {
+      uri: canonical.uri,
+      languageId: guessLanguage(canonical.file),
+      version: null,
+      text,
+    };
   }
 
   function lookupText(uri: DocumentUri): string | null {
-    const live = documents.get(uri);
-    if (live) {
-      return live.getText();
+    return lookupDocumentSnapshot(uri)?.text ?? null;
+  }
+
+  function liveDocumentForUri(uri: DocumentUri): TextDocument | null {
+    const direct = documents.get(uri);
+    if (direct) {
+      return direct;
     }
     const canonical = canonicalDocumentUri(uri);
-    const matchingOpenDocument = documents.all().find((doc) => {
+    return documents.all().find((doc) => {
       try {
         return canonicalDocumentUri(doc.uri).file.toLowerCase() === canonical.file.toLowerCase();
       } catch {
         return false;
       }
-    });
-    if (matchingOpenDocument) {
-      return matchingOpenDocument.getText();
-    }
-    if (!fs.existsSync(canonical.file)) {
-      return null;
-    }
-    return fs.readFileSync(canonical.file, "utf8");
+    }) ?? null;
   }
 
   return {
@@ -90,6 +115,7 @@ export function createServerContext(init: ServerContextInit): ServerContext {
     },
 
     ensureProgramDocument,
+    lookupDocumentSnapshot,
     lookupText,
   };
 }

@@ -123,7 +123,7 @@ The owner type has no projected members at this cursor, so the selected member c
   "outcome": "result",
   "result": {
     "contentsKind": "markdown",
-    "markdownCharacters": 219,
+    "markdownCharacters": 214,
     "range": null
   }
 }
@@ -141,5 +141,5 @@ owner shape: `primitive`
 
 **information: missing-expression-member**
 
-The selected member is not projected on the owner type, so semantic tooling cannot validate or navigate it.
+Member "label" is not projected on the owner type, so semantic tooling cannot validate or navigate it.
 ```

@@ -12,7 +12,7 @@ import type {
 import {
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,
-  type SemanticSourceReference,
+  semanticExactSourceReference,
   type SemanticTemplateSemanticTokenRow,
 } from "@aurelia-ls/semantic-runtime";
 import type { ServerContext } from "../context.js";
@@ -20,6 +20,7 @@ import {
   logIfSemanticRuntimeRequestAborted,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
 export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
 export const WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE = "aureliaGapConservative" as const;
@@ -54,6 +55,7 @@ export async function handleSemanticTokensFull(
 
       const doc = ctx.ensureProgramDocument(params.textDocument.uri);
       if (!doc) return null;
+      if (!isTemplateDocument(doc)) return null;
 
       const response = await ctx.semanticRuntime.templateSemanticTokens(
         doc,
@@ -80,7 +82,7 @@ export function encodeTokens(tokens: readonly SemanticTemplateSemanticTokenRow[]
   for (const token of tokens) {
     const typeIndex = TYPE_INDEX.get(token.tokenType);
     if (typeIndex === undefined) continue;
-    const source = exactSourceReference(token.source);
+    const source = semanticExactSourceReference(token.source);
     if (source?.start == null || source.end == null) continue;
     const length = source.end - source.start;
     if (length <= 0) continue;
@@ -120,12 +122,6 @@ function encodeModifiers(modifiers?: readonly string[]): number {
     value |= 1 << idx;
   }
   return value;
-}
-
-function exactSourceReference(source: SemanticSourceReference | null): SemanticSourceReference | null {
-  if (source == null) return null;
-  if (source.start != null && source.end != null) return source;
-  return exactSourceReference(source.anchor ?? null);
 }
 
 function positionAtOffset(text: string, offset: number): { line: number; character: number } {

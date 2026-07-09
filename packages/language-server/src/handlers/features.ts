@@ -33,7 +33,7 @@ import { handleWorkspaceSymbols } from "./workspace-symbols.js";
 import { handleSelectionRanges } from "./selection-ranges.js";
 import { handleLinkedEditingRange } from "./linked-editing-ranges.js";
 import { handleFoldingRanges } from "./folding-ranges.js";
-import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
+import { handleInlayHints } from "./inlay-hints.js";
 import { handleCodeLens } from "./code-lens.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import {
@@ -60,6 +60,7 @@ import {
   semanticRuntimeRequestGuard,
 } from "./request-guard.js";
 import type { SemanticRuntimeLspRequestGuard } from "../runtime/semantic-runtime-session.js";
+import { isTemplateDocument } from "../utils/document-kind.js";
 
 // ============================================================================
 // Helpers
@@ -85,6 +86,7 @@ export async function handleCompletion(
 ): Promise<CompletionList> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return { isIncomplete: false, items: [] };
+  if (!isTemplateDocument(doc)) return { isIncomplete: false, items: [] };
 
   try {
     const response = await ctx.semanticRuntime.templateCompletions(
@@ -114,6 +116,7 @@ export async function handleHover(
 ): Promise<Hover | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   try {
     const response = await ctx.semanticRuntime.templateCursorInfo(
@@ -145,6 +148,7 @@ export async function handleDefinition(
 ): Promise<Definition | LocationLink[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
+  if (!isTemplateDocument(doc)) return null;
 
   const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
   try {
@@ -275,16 +279,6 @@ export async function handleDocumentHighlight(
 // Rename Handler
 // ============================================================================
 
-/**
- * Rename ownership: this server answers template-origin renames. TypeScript documents belong to the
- * TypeScript language service; answering (or erroring) for them would fight the owning provider, so
- * non-template documents get a clean null. Template propagation for TS-origin renames stays on the
- * custom `aurelia/renameFromTs` request, which the editor client merges with the TS provider's edit.
- */
-function isTemplateDocument(doc: { readonly languageId: string }): boolean {
-  return doc.languageId === "html";
-}
-
 export function handlePrepareRename(
   ctx: ServerContext,
   params: PrepareRenameParams,
@@ -325,8 +319,6 @@ export async function handleRename(
   if (!doc) return null;
   if (!isTemplateDocument(doc)) return null;
 
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
-
   try {
     const response = await ctx.semanticRuntime.templateRename(
       doc,
@@ -337,7 +329,7 @@ export async function handleRename(
     if (response.value.status !== "available") {
       throw new ResponseError(0, response.value.displayText || response.summary);
     }
-    const mapping = mapSemanticRuntimeTemplateRenameEdit(response, lookupText, {
+    const mapping = mapSemanticRuntimeTemplateRenameEdit(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
     });
@@ -384,8 +376,7 @@ export async function handleCodeAction(
 ): Promise<CodeAction[] | null> {
   const doc = ctx.ensureProgramDocument(params.textDocument.uri);
   if (!doc) return null;
-
-  const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
+  if (!isTemplateDocument(doc)) return null;
 
   try {
     const response = await ctx.semanticRuntime.templateCodeActions(
@@ -393,7 +384,7 @@ export async function handleCodeAction(
       params.range.start,
       guard,
     );
-    return mapSemanticRuntimeTemplateCodeActions(response, lookupText, {
+    return mapSemanticRuntimeTemplateCodeActions(response, (uri) => ctx.lookupDocumentSnapshot(uri), {
       workspaceRoot: ctx.workspaceRoot,
       originDocument: doc,
       diagnostics: params.context.diagnostics,
@@ -432,7 +423,7 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   ctx.connection.onFoldingRanges((params, token) => handleFoldingRanges(ctx, params, requestGuard(ctx, token)));
 
   // Inlay hints — binding mode resolution
-  ctx.connection.languages.inlayHint.on((params, token) => handleInlayHintsRequest(ctx, params, requestGuard(ctx, token)));
+  ctx.connection.languages.inlayHint.on((params, token) => handleInlayHints(ctx, params, requestGuard(ctx, token)));
 
 
   ctx.connection.onRequest(SemanticTokensRequest.type, async (params, token) => {

@@ -175,6 +175,50 @@ export function semanticSourceReferenceMatchesFilePath(
     || semanticSourceReferenceMatchesFilePath(source.anchor ?? null, filePath);
 }
 
+/** Follow anchors until an exact authored span is available. */
+export function semanticExactSourceReference(
+  source: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  if (source == null) {
+    return null;
+  }
+  if (source.start != null && source.end != null) {
+    return source;
+  }
+  return semanticExactSourceReference(source.anchor ?? null);
+}
+
+/** Test whether a public source reference's exact authored span contains an offset. */
+export function semanticSourceReferenceContainsOffset(
+  source: SemanticSourceReference | null,
+  offset: number | null | undefined,
+): boolean {
+  if (offset == null) {
+    return false;
+  }
+  const exact = semanticExactSourceReference(source);
+  return exact?.start != null
+    && exact.end != null
+    && Number.isInteger(exact.start)
+    && Number.isInteger(exact.end)
+    && exact.start <= offset
+    && offset <= exact.end;
+}
+
+/** Test whether a public source reference's exact authored span contains a file-scoped offset. */
+export function semanticSourceReferenceContainsFileOffset(
+  source: SemanticSourceReference | null,
+  filePath: string | null | undefined,
+  offset: number | null | undefined,
+): boolean {
+  if (filePath == null) {
+    return false;
+  }
+  const exact = semanticExactSourceReference(source);
+  return semanticSourceReferenceContainsOffset(exact, offset)
+    && semanticSourceReferenceMatchesFilePath(source, filePath);
+}
+
 /** Pick the higher-evidence source precision without numeric confidence scoring. */
 export function strongerSemanticSourcePrecision(
   left: InquirySourcePrecision,

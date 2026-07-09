@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  collectEdits,
   createFixture,
   decodeHover,
   fileUri,
@@ -164,9 +165,7 @@ test("hover/definition map through semantic-runtime provenance and rename succee
     // Expression-member rename is a working feature: policy allows it,
     // tryExpressionMemberRename produces cross-domain edits.
     expect(renameResult, "rename should return a workspace edit").toBeTruthy();
-    const changes = (renameResult as { changes?: Record<string, unknown[]> }).changes ?? {};
-    const changedUris = Object.keys(changes);
-    expect(changedUris.length, "rename should produce edits in at least one file").toBeGreaterThan(0);
+    expect(collectEdits(renameResult as never).length, "rename should produce edits in at least one file").toBeGreaterThan(0);
   } finally {
     dispose();
     child.kill("SIGKILL");

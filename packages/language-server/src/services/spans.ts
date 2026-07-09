@@ -10,14 +10,14 @@ export interface DiagnosticWithSpan {
   readonly span?: SourceSpan | null;
 }
 
-export function spanToRange(doc: TextDocument, span: SourceSpan): Range {
+export function spanToDocumentRange(doc: TextDocument, span: SourceSpan): Range {
   const normalized = normalizeSpan(span);
   return { start: doc.positionAt(normalized.start), end: doc.positionAt(normalized.end) };
 }
 
 export function spanToRangeOrNull(doc: TextDocument, span: SourceSpan | null | undefined): Range | null {
   if (!span) return null;
-  return spanToRange(doc, span);
+  return spanToDocumentRange(doc, span);
 }
 
 export function diagnosticToRange(doc: TextDocument, diag: DiagnosticWithSpan): Range | null {

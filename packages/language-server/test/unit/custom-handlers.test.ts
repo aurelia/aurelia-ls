@@ -19,12 +19,22 @@ function createMockLogger() {
   };
 }
 
+function snapshot(uri: string, text: string, version: number | null = null, languageId = uri.endsWith(".ts") ? "typescript" : "html") {
+  return {
+    uri: canonicalDocumentUri(uri).uri,
+    languageId,
+    version,
+    text,
+  };
+}
+
 function createMockContext(overrides: Record<string, unknown> = {}) {
   const logger = createMockLogger();
   return {
     logger,
     ensureProgramDocument: vi.fn(() => ({ offsetAt: vi.fn(() => 0) })),
     lookupText: vi.fn(() => null),
+    lookupDocumentSnapshot: vi.fn(() => null),
     workspaceRoot: "/test/workspace",
     documents: {
       all: vi.fn(() => []),
@@ -387,6 +397,11 @@ describe("handleRenameFromTs", () => {
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => templateText),
+      lookupDocumentSnapshot: vi.fn((uri: string) => (
+        canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
+          ? snapshot(uri, templateText, 4, "html")
+          : null
+      )),
     });
     ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
       schemaVersion: "0.1",
@@ -492,6 +507,11 @@ describe("handleRenameFromTs", () => {
     const ctx = createMockContext({
       ensureProgramDocument: vi.fn(() => tsDocument),
       lookupText: vi.fn(() => "<p>${stale}</p>"),
+      lookupDocumentSnapshot: vi.fn((uri: string) => (
+        canonicalDocumentUri(uri).uri.endsWith("/src/app.html")
+          ? snapshot(uri, "<p>${stale}</p>", 4, "html")
+          : null
+      )),
     });
     ctx.semanticRuntime.templateRenameFromTypeScript.mockResolvedValue({
       schemaVersion: "0.1",

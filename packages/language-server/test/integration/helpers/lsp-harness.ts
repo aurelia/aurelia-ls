@@ -100,6 +100,25 @@ export function openDocument(
   });
 }
 
+export function changeDocument(
+  connection: MessageConnection,
+  uri: string,
+  text: string,
+  version: number,
+) {
+  connection.sendNotification("textDocument/didChange", {
+    textDocument: {
+      uri,
+      version,
+    },
+    contentChanges: [
+      {
+        text,
+      },
+    ],
+  });
+}
+
 export function waitForDiagnostics(
   connection: MessageConnection,
   child: ChildProcess,
@@ -108,7 +127,7 @@ export function waitForDiagnostics(
   timeoutMs = 5000,
 ) {
   return new Promise<unknown[]>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("diagnostics timeout")), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`diagnostics timeout for ${uri}`)), timeoutMs);
     const onExit = (code: number | null, signal: string | null) => {
       clearTimeout(timer);
       reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${getStderr()}`));
@@ -124,6 +143,73 @@ export function waitForDiagnostics(
   });
 }
 
+export function createDiagnosticsRecorder(
+  connection: MessageConnection,
+  child: ChildProcess,
+  getStderr: () => string,
+) {
+  const buffered = new Map<string, unknown[][]>();
+  const waiters = new Map<string, Array<(diagnostics: unknown[]) => void>>();
+  const sub = connection.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics?: unknown[] }) => {
+    const diagnostics = params.diagnostics ?? [];
+    const uriWaiters = waiters.get(params.uri);
+    if (uriWaiters != null && uriWaiters.length > 0) {
+      uriWaiters.shift()!(diagnostics);
+      return;
+    }
+    const bucket = buffered.get(params.uri) ?? [];
+    bucket.push(diagnostics);
+    buffered.set(params.uri, bucket);
+  });
+
+  return {
+    wait(uri: string, timeoutMs = 5000): Promise<unknown[]> {
+      const bucket = buffered.get(uri);
+      if (bucket != null && bucket.length > 0) {
+        return Promise.resolve(bucket.shift()!);
+      }
+      return new Promise<unknown[]>((resolve, reject) => {
+        let wrapped: ((diagnostics: unknown[]) => void) | null = null;
+        const removeWaiter = () => {
+          if (wrapped == null) return;
+          const uriWaiters = waiters.get(uri);
+          if (uriWaiters == null) return;
+          const next = uriWaiters.filter((waiter) => waiter !== wrapped);
+          if (next.length === 0) {
+            waiters.delete(uri);
+          } else {
+            waiters.set(uri, next);
+          }
+        };
+        const timer = setTimeout(() => {
+          removeWaiter();
+          child.off("exit", onExit);
+          reject(new Error(`diagnostics timeout for ${uri}`));
+        }, timeoutMs);
+        const onExit = (code: number | null, signal: string | null) => {
+          clearTimeout(timer);
+          removeWaiter();
+          reject(new Error(`server exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${getStderr()}`));
+        };
+        child.once("exit", onExit);
+        wrapped = (diagnostics: unknown[]) => {
+          clearTimeout(timer);
+          child.off("exit", onExit);
+          resolve(diagnostics);
+        };
+        const uriWaiters = waiters.get(uri) ?? [];
+        uriWaiters.push(wrapped);
+        waiters.set(uri, uriWaiters);
+      });
+    },
+    dispose(): void {
+      sub.dispose();
+      buffered.clear();
+      waiters.clear();
+    },
+  };
+}
+
 export function positionAt(text: string, offset: number) {
   const clamped = Math.max(0, Math.min(offset, text.length));
   let line = 0;
@@ -136,6 +222,21 @@ export function positionAt(text: string, offset: number) {
     }
   }
   return { line, character: clamped - lastLineStart };
+}
+
+export function offsetAt(text: string, position: { line: number; character: number }): number {
+  let line = 0;
+  let lineStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (line === position.line) {
+      return Math.min(lineStart + position.character, text.length);
+    }
+    if (text.charCodeAt(i) === 10 /* \n */) {
+      line += 1;
+      lineStart = i + 1;
+    }
+  }
+  return line === position.line ? Math.min(lineStart + position.character, text.length) : text.length;
 }
 
 export function decodeHover(hover: unknown): string {
@@ -160,10 +261,10 @@ interface Edit {
   newText: string;
 }
 
-interface RenameResult {
+export interface RenameResult {
   documentChanges?: Array<{
     kind?: string;
-    textDocument?: { uri: string };
+    textDocument?: { uri: string; version?: number | null };
     edits?: Array<{ range: unknown; newText: string }>;
   }>;
   changes?: Record<string, Array<{ range: unknown; newText: string }> | undefined>;
@@ -199,6 +300,12 @@ export function createFixture(files: Record<string, string>): string {
   return dir;
 }
 
+export function copyFixtureDirectory(sourceDir: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aurelia-lsp-integ-"));
+  fs.cpSync(sourceDir, dir, { recursive: true });
+  return dir;
+}
+
 export function waitForExit(child: ChildProcess, timeoutMs = 2000): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(), timeoutMs);
@@ -214,4 +321,134 @@ export function fileUri(root: string, relPath: string): string {
   expect(path.isAbsolute(normalized)).toBe(true);
   // Use Node's pathToFileURL for consistent URI format (doesn't encode colons)
   return pathToFileURL(normalized).toString();
+}
+
+export function pathFromFileUri(uri: string): string {
+  return fileURLToPath(uri);
+}
+
+export interface TrackedDocument {
+  readonly uri: string;
+  readonly languageId: string;
+  text: string;
+  version: number;
+}
+
+export function applyWorkspaceEditToTrackedDocuments(
+  edit: RenameResult,
+  documents: Map<string, TrackedDocument>,
+): readonly TrackedDocument[] {
+  const changed = new Map<string, TrackedDocument>();
+  const editsByUri = new Map<string, {
+    expectedVersion: number | null;
+    edits: Array<{ range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }>;
+  }>();
+  for (const change of edit.documentChanges ?? []) {
+    if (change.kind === "rename" || change.kind === "create" || change.kind === "delete") continue;
+    if (!change.textDocument || !change.edits) continue;
+    const bucket = editsByUri.get(change.textDocument.uri) ?? {
+      expectedVersion: change.textDocument.version ?? null,
+      edits: [],
+    };
+    if (bucket.expectedVersion == null && change.textDocument.version != null) {
+      bucket.expectedVersion = change.textDocument.version;
+    }
+    bucket.edits.push(...change.edits as Array<{
+      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      newText: string;
+    }>);
+    editsByUri.set(change.textDocument.uri, bucket);
+  }
+  const allEdits = collectEdits(edit) as Array<{
+    uri: string;
+    range: { start: { line: number; character: number }; end: { line: number; character: number } };
+    newText: string;
+  }>;
+  for (const entry of allEdits) {
+    if (editsByUri.has(entry.uri)) continue;
+    const bucket = editsByUri.get(entry.uri) ?? {
+      expectedVersion: null,
+      edits: [],
+    };
+    bucket.edits.push({ range: entry.range, newText: entry.newText });
+    editsByUri.set(entry.uri, bucket);
+  }
+
+  for (const [uri, editBucket] of editsByUri) {
+    const existingKey = trackedDocumentKeyForUri(documents, uri);
+    const version = existingKey == null ? 0 : documents.get(existingKey)!.version;
+    if (editBucket.expectedVersion != null && version !== editBucket.expectedVersion) {
+      throw new Error(`WorkspaceEdit for ${uri} expected document version ${editBucket.expectedVersion} but tracked version is ${version}.`);
+    }
+  }
+
+  for (const [uri, editBucket] of editsByUri) {
+    const existingKey = trackedDocumentKeyForUri(documents, uri);
+    const document = existingKey == null ? {
+      uri,
+      languageId: languageIdForPath(pathFromFileUri(uri)),
+      text: fs.readFileSync(pathFromFileUri(uri), "utf8"),
+      version: 0,
+    } : documents.get(existingKey)!;
+    const sorted = [...editBucket.edits].sort((left, right) =>
+      offsetAt(document.text, right.range.start) - offsetAt(document.text, left.range.start)
+    );
+    let text = document.text;
+    for (const row of sorted) {
+      const start = offsetAt(text, row.range.start);
+      const end = offsetAt(text, row.range.end);
+      text = `${text.slice(0, start)}${row.newText}${text.slice(end)}`;
+    }
+    document.text = text;
+    document.version += 1;
+    if (existingKey == null) {
+      documents.set(uri, document);
+    } else {
+      if (existingKey !== document.uri) {
+        documents.delete(existingKey);
+      }
+      documents.set(document.uri, document);
+    }
+    fs.writeFileSync(pathFromFileUri(uri), text, "utf8");
+    changed.set(uri, document);
+  }
+  return [...changed.values()];
+}
+
+function trackedDocumentKeyForUri(
+  documents: Map<string, TrackedDocument>,
+  uri: string,
+): string | null {
+  const direct = documents.get(uri);
+  if (direct != null) {
+    return uri;
+  }
+  const targetPath = normalizedFileIdentity(pathFromFileUri(uri));
+  for (const candidate of documents.keys()) {
+    if (normalizedFileIdentity(pathFromFileUri(candidate)) === targetPath) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function normalizedFileIdentity(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function languageIdForPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case ".ts":
+      return "typescript";
+    case ".js":
+      return "javascript";
+    case ".html":
+      return "html";
+    case ".json":
+      return "json";
+    default:
+      return "plaintext";
+  }
 }

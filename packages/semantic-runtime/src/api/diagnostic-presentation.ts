@@ -29,10 +29,11 @@ export function appDiagnosticPresentation(
     rowId: diagnosticRowId(index, row),
     row,
   }));
+  const groupedRows = subjectGroups(inputRows);
   const consumed = new Set<number>();
   const groups: SemanticDiagnosticPresentationGroup[] = [];
 
-  for (const [groupKey, groupRows] of subjectGroups(inputRows)) {
+  for (const [groupKey, groupRows] of groupedRows) {
     const unknownOwner = groupRows.find((candidate) => isTemplateUnknownOwnerOverlayDiagnostic(candidate.row)) ?? null;
     if (unknownOwner == null) {
       continue;
@@ -54,6 +55,34 @@ export function appDiagnosticPresentation(
     consumed.add(unknownOwner.index);
     for (const row of related) {
       consumed.add(row.index);
+    }
+  }
+
+  for (const [groupKey, groupRows] of groupedRows) {
+    const missingMembers = groupRows.filter((candidate) =>
+      !consumed.has(candidate.index) && isTemplateMissingMemberDiagnostic(candidate.row)
+    );
+    for (const missingMember of missingMembers) {
+      const related = groupRows.filter((candidate) =>
+        candidate.index !== missingMember.index
+        && !consumed.has(candidate.index)
+        && isTemplateMissingMemberAssignmentDiagnostic(candidate.row)
+      );
+      if (related.length === 0) {
+        continue;
+      }
+      const group = presentationGroup(
+        `missing-member-assignment:${groupKey}`,
+        missingMember.row.subject ?? null,
+        missingMember,
+        related,
+        'same-subject',
+      );
+      groups.push(group);
+      consumed.add(missingMember.index);
+      for (const row of related) {
+        consumed.add(row.index);
+      }
     }
   }
 
@@ -153,6 +182,38 @@ function isTemplateWeakNoMembersDiagnostic(
     && row.diagnosticAuthority === 'semantic-authoring-policy'
     && row.diagnosticKind === 'weak-expression-member-owner'
     && (row.missingInputs ?? []).includes('expression-member-owner-type:no-members');
+}
+
+function isTemplateMissingMemberDiagnostic(
+  row: SemanticAppDiagnosticRow,
+): boolean {
+  return row.diagnosticDomain === 'template'
+    && row.diagnosticAuthority === 'semantic-authoring-policy'
+    && row.diagnosticKind === 'missing-expression-member'
+    && (row.missingInputs ?? []).includes('expression-member:selected-member-missing');
+}
+
+function isTemplateMissingMemberAssignmentDiagnostic(
+  row: SemanticAppDiagnosticRow,
+): boolean {
+  return row.diagnosticDomain === 'template'
+    && (
+      row.diagnosticKind === 'binding-source-assignment-strictness'
+      || row.diagnosticKind === 'binding-source-assignment-runtime-noop'
+    )
+    && hasAnyMissingInput(row, [
+      'binding-source-assignment:scope-slot-missing-typechecker-member',
+      'binding-source-assignment:owner-member-not-projected',
+      'binding-source-assignment:source-member-declaration-missing',
+    ]);
+}
+
+function hasAnyMissingInput(
+  row: SemanticAppDiagnosticRow,
+  values: readonly string[],
+): boolean {
+  const missingInputs = row.missingInputs ?? [];
+  return values.some((value) => missingInputs.includes(value));
 }
 
 function subjectGroupKey(
