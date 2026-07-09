@@ -3880,7 +3880,7 @@
             {
               "name": "route context parameter reads",
               "query": { "kind": "route-context-parameter-reads", "options": { "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 1 },
+              "equals": { "value.rows.length": 5 },
               "rows": [
                 {
                   "fields": {
@@ -3891,6 +3891,22 @@
                     "component.name": "DetailRoute"
                   },
                   "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ id: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ id: string }>()" }
+                },
+                {
+                  "fields": { "componentClassName": "DetailRoute", "mergeStrategy": "parent-first", "includeQueryParams": null, "declaredOpenKeySpace": false, "alignment": "aligned", "component.name": "DetailRoute" },
+                  "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "private readonly parentFirstParams", "token": "resolve(IRouteContext).getRouteParameters<{ id: string }, 'parent-first'>({\n    mergeStrategy: 'parent-first',\n  })" }
+                },
+                {
+                  "fields": { "componentClassName": "DetailRoute", "mergeStrategy": "append", "includeQueryParams": null, "declaredOpenKeySpace": false, "alignment": "aligned", "component.name": "DetailRoute" },
+                  "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "private readonly appendParams", "token": "resolve(IRouteContext).getRouteParameters<{ id: readonly string[] }, 'append'>({\n    mergeStrategy: 'append',\n  })" }
+                },
+                {
+                  "fields": { "componentClassName": "DetailRoute", "mergeStrategy": "by-route", "includeQueryParams": null, "declaredOpenKeySpace": false, "alignment": "aligned", "component.name": "DetailRoute" },
+                  "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "private readonly byRouteParams", "token": "resolve(IRouteContext).getRouteParameters<{ id: Record<string, string> }, 'by-route'>({\n    mergeStrategy: 'by-route',\n  })" }
+                },
+                {
+                  "fields": { "componentClassName": "DetailRoute", "mergeStrategy": "child-first", "includeQueryParams": true, "declaredOpenKeySpace": false, "alignment": "query-or-open-parameters", "component.name": "DetailRoute" },
+                  "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "private readonly queryParams", "token": "resolve(IRouteContext).getRouteParameters<{\n    id: string;\n    mode: string;\n    tag: readonly string[];\n  }>({\n    includeQueryParams: true,\n  })" }
                 }
               ]
             }
@@ -3918,7 +3934,7 @@
               "closure": "complete",
               "equals": { "value.rows.length": 4 },
               "rows": [
-                { "fields": { "path": "details/:id", "finalPath": "details/:id", "componentName": "DetailRoute", "viewport": "default", "fragment": "details" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
+                { "fields": { "path": "details/:id", "finalPath": "details/:id", "viewport": "default", "fragment": "details" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
                 { "rowPath": "value.rows[].byRouteParameterValues[].routeValues", "fields": { "routeId": "detail", "value.name": "id", "value.value": "detail-1" } },
                 { "rowPath": "value.rows[].byRouteParameterValues[].routeValues", "fields": { "routeId": "account", "value.name": "id", "value.value": "account-1" } },
                 { "rowPath": "value.rows[].queryParams", "fields": { "name": "mode", "value": "compact" }, "atLeast": 1 },
@@ -3931,7 +3947,7 @@
               "query": { "kind": "viewport-instruction-trees", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 1 },
               "rows": [
-                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp", "instructionCount": 1, "hasOptions": true, "isAbsolute": false, "queryParamCount": 3, "fragment": "details" }, "source": { "marker": "<a load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"" } },
+                { "fields": { "instructionCount": 1, "hasOptions": true, "isAbsolute": false, "queryParamCount": 3, "fragment": "details" }, "source": { "marker": "<a load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"" } },
                 { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "a" } },
                 { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "b" } }
               ]
@@ -3946,9 +3962,8 @@
               "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 3 },
               "rows": [
-                { "fields": { "label": "RouterRouteParameterAggregationApp", "parentLabel": null } },
-                { "fields": { "label": "RouterRouteParameterAggregationApp/AccountRoute", "parentLabel": "RouterRouteParameterAggregationApp" } },
-                { "fields": { "label": "RouterRouteParameterAggregationApp/AccountRoute/DetailRoute", "parentLabel": "RouterRouteParameterAggregationApp/AccountRoute" } }
+                { "fields": { "parentLabel": null, "hasViewportAgent": false } },
+                { "fields": { "hasViewportAgent": true }, "count": 2 }
               ]
             },
             {
@@ -3956,8 +3971,8 @@
               "query": { "kind": "router-viewports", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 2 },
               "rows": [
-                { "fields": { "name": "default", "routeContext.label": "RouterRouteParameterAggregationApp" }, "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
-                { "fields": { "name": "default", "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
+                { "fields": { "name": "default" }, "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
+                { "fields": { "name": "default" }, "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
               ]
             },
             {
@@ -3965,8 +3980,8 @@
               "query": { "kind": "viewport-agents", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 2 },
               "rows": [
-                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp" }, "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
-                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
+                { "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
+                { "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
               ]
             },
             {
@@ -3974,8 +3989,205 @@
               "query": { "kind": "component-agents", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 2 },
               "rows": [
-                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
-                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute/DetailRoute" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } }
+                { "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" }, "count": 2 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-routecontext-topology-lab",
+      "fixture": "fixtures/pressure/router-routecontext-topology-lab",
+      "aureliaDomain": "router-composition",
+      "capability": "router-routecontext-topology",
+      "domainAxis": "query-contract",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-routecontext-topology-app.html",
+      "requirement": "Router RouteContext topology distinguishes static potential contexts from selected transition rows, preserves viewport-agent/used-by source facts, and spends resolved custom-element names where Aurelia RouteConfigContext and ViewportAgent semantics require them.",
+      "cases": [
+        {
+          "id": "potential-topology-and-selected-transition-boundary",
+          "expectations": [
+            {
+              "name": "route contexts",
+              "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'main'", "endMarker": "\n    }" } },
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'open'", "endMarker": "\n    }" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "path": "main", "finalPath": "main", "viewport": "main", "routeConfig.id": "main" }, "source": { "marker": "load=\"main\"", "token": "main" } },
+                { "fields": { "path": "open", "finalPath": "open", "viewport": "default", "routeConfig.id": "open" }, "source": { "marker": "load=\"open\"", "token": "open" } }
+              ]
+            },
+            {
+              "name": "component agents",
+              "query": { "kind": "component-agents", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "source": { "marker": "load=\"main\"", "token": "main" } },
+                { "source": { "marker": "load=\"open\"", "token": "open" } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "issueKind": "no-available-viewport-agent" }, "source": { "marker": "load=\"main\"", "token": "main" }, "absent": true },
+                { "fields": { "issueKind": "no-available-viewport-agent" }, "source": { "marker": "load=\"open\"", "token": "open" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-source-facts-and-nested-potential-duplication",
+          "expectations": [
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 6 },
+              "rows": [
+                { "fields": { "name": "main" }, "source": { "marker": "<au-viewport name=\"main\"", "token": "<au-viewport name=\"main\"></au-viewport>" } },
+                { "fields": { "name": "side" }, "source": { "marker": "<au-viewport name=\"side\"", "token": "<au-viewport name=\"side\"></au-viewport>" } },
+                { "fields": { "name": "filtered" }, "source": { "marker": "<au-viewport name=\"filtered\"", "token": "<au-viewport name=\"filtered\" used-by=\"filtered-route\"></au-viewport>" } },
+                { "fields": { "name": "blocked" }, "source": { "marker": "<au-viewport name=\"blocked\"", "token": "<au-viewport name=\"blocked\" used-by=\"other-route\"></au-viewport>" } },
+                { "fields": { "name": "report-detail" }, "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "viewport agents",
+              "query": { "kind": "viewport-agents", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 6 },
+              "rows": [
+                { "source": { "marker": "<au-viewport name=\"main\"", "token": "<au-viewport name=\"main\"></au-viewport>" } },
+                { "source": { "marker": "<au-viewport name=\"side\"", "token": "<au-viewport name=\"side\"></au-viewport>" } },
+                { "source": { "marker": "<au-viewport name=\"filtered\"", "token": "<au-viewport name=\"filtered\" used-by=\"filtered-route\"></au-viewport>" } },
+                { "source": { "marker": "<au-viewport name=\"blocked\"", "token": "<au-viewport name=\"blocked\" used-by=\"other-route\"></au-viewport>" } },
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" }, "count": 2 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-context-friendly-path-uses-resolved-custom-element-names",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "route contexts",
+              "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "label": "router-routecontext-topology-app", "parentLabel": null } },
+                { "fields": { "label": "router-routecontext-topology-app/main-route", "parentLabel": "router-routecontext-topology-app" } },
+                { "fields": { "label": "router-routecontext-topology-app/open-route", "parentLabel": "router-routecontext-topology-app" }, "count": 2 },
+                { "fields": { "label": "router-routecontext-topology-app/reports-route", "parentLabel": "router-routecontext-topology-app" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "path": "main", "componentName": "main-route" }, "source": { "marker": "load=\"main\"", "token": "main" } },
+                { "fields": { "path": "open", "componentName": "open-route" }, "source": { "marker": "load=\"open\"", "token": "open" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "used-by-matches-resolved-custom-element-names",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "filtered" }, "source": { "marker": "load=\"filtered\"", "token": "filtered" }, "absent": true },
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "detail/:reportId" }, "source": { "marker": "load=\"reports/detail/r-1\"", "token": "reports/detail/r-1" }, "absent": true }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "path": "filtered", "finalPath": "filtered", "routeConfig.id": "filtered" }, "source": { "marker": "load=\"filtered\"", "token": "filtered" } },
+                { "fields": { "path": "detail/:reportId", "finalPath": "detail/:reportId", "routeConfig.id": "report-detail" }, "source": { "marker": "load=\"reports/detail/r-1\"", "token": "reports/detail/r-1" } }
+              ]
+            },
+            {
+              "name": "component agents",
+              "query": { "kind": "component-agents", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "source": { "marker": "load=\"filtered\"", "token": "filtered" } },
+                { "source": { "marker": "load=\"reports/detail/r-1\"", "token": "reports/detail/r-1" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-routecontext-open-ownership-boundaries",
+      "fixture": "fixtures/pressure/app-builder-part-source-gallery",
+      "aureliaDomain": "router-composition",
+      "capability": "router-routecontext-topology",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/my-app.html",
+      "requirement": "Router load.context overrides are RouteContext ownership boundaries: static instruction closure must publish an exact open seam rather than guessing which IRouteContext will own the viewport instruction tree.",
+      "cases": [
+        {
+          "id": "load-context-override-publishes-route-context-open-seam",
+          "expectations": [
+            {
+              "name": "open seams",
+              "query": {
+                "kind": "open-seams",
+                "options": {
+                  "openSeamReasonKind": "router-instruction-needs-route-context",
+                  "detail": "full",
+                  "page": { "size": 50 }
+                }
+              },
+              "closure": "complete",
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                {
+                  "fields": {
+                    "seamKindKey": "router.open-instruction",
+                    "summary": "Load router resource has a context override; semantic-runtime does not yet remap router instruction ownership across dynamic IRouteContext values."
+                  },
+                  "source": {
+                    "marker": "load=\"route: items; params.bind: { id: selectedId }; context.bind: routeContext.parent; active.bind: isItemsActive; attribute: data-route-href\"",
+                    "token": "route: items; params.bind: { id: selectedId }; context.bind: routeContext.parent; active.bind: isItemsActive; attribute: data-route-href"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "open seam summary",
+              "query": {
+                "kind": "open-seam-summary",
+                "options": {
+                  "openSeamReasonKind": "router-instruction-needs-route-context",
+                  "detail": "compact",
+                  "page": { "size": 50 }
+                }
+              },
+              "closure": "complete",
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                {
+                  "fields": {
+                    "seamKindKey": "router.open-instruction",
+                    "count": 1,
+                    "uniqueSiteCount": 1
+                  }
+                }
               ]
             }
           ]

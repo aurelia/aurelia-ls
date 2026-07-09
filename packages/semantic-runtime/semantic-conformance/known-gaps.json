@@ -99,6 +99,20 @@
       "failureBucket": "router-lazy-routeable-resource-resolution-data-loss",
       "firstObserved": "2026-07-09",
       "rationale": "A closed dynamic import routeable whose module exports a recognizable custom element should carry resolved resource handles through the promise routeable lane; semantic-runtime preserves the promise/source lane but drops the resolved custom-element identity."
+    },
+    {
+      "assertionId": "router-routecontext-topology-lab/route-context-friendly-path-uses-resolved-custom-element-names",
+      "status": "known-gap",
+      "failureBucket": "router-routecontext-resolved-component-name-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "Aurelia RouteConfigContext._friendlyPath is built from the resolved CustomElementDefinition.name, but semantic-runtime RouteConfigContext/RouteContext labels and route-node componentName values are built from the routeable source localName, which is often a TypeScript class name or authored alias."
+    },
+    {
+      "assertionId": "router-routecontext-topology-lab/used-by-matches-resolved-custom-element-names",
+      "status": "known-gap",
+      "failureBucket": "router-viewport-usedby-resolved-component-name-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "Aurelia resolves the routeable to a CustomElementDefinition before calling ViewportAgent._handles, so used-by should compare against the resolved custom-element name; semantic-runtime currently compares used-by against routeConfig.component.localName and emits false no-available-viewport-agent issues for CE-name filters."
     }
   ]
 }

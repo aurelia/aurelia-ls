@@ -1,0 +1,12 @@
+<template>
+  <nav>
+    <a load="main">Main</a>
+    <a load="open">Open</a>
+    <a load="filtered">Filtered</a>
+    <a load="reports/detail/r-1">Report detail</a>
+  </nav>
+  <au-viewport name="main"></au-viewport>
+  <au-viewport name="side"></au-viewport>
+  <au-viewport name="filtered" used-by="filtered-route"></au-viewport>
+  <au-viewport name="blocked" used-by="other-route"></au-viewport>
+</template>
