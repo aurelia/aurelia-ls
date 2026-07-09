@@ -73,8 +73,9 @@ Current matrix scale, as of 2026-07-09:
 - bindable alias references and rename edit plans;
 - custom-element resource references and rename edit plans;
 - router resource cursor/completion/diagnostic/refusal surfaces, router instruction cursor/completion/diagnostic
-  projection, router topology, route recognizer, route-resource instruction closure, routeable string resolution, router
-  diagnostics, active-link state, static redirect controls, and `au-compose` runtime composition;
+  projection, router topology, route recognizer, route-resource instruction closure, route config declaration/routeable
+  identity forms, routeable string resolution, router diagnostics, active-link state, static redirect controls, and
+  `au-compose` runtime composition;
 - template-controller scope behavior over repeat locals, nested repeats, `<let>`, `with`, promise branches,
   switch/case, portal, app-owned template controllers, completions, diagnostics, references, and rename edit plans;
 - template diagnostics, compiler diagnostics, plugin capability diagnostics, and overlay diagnostic provenance;
@@ -82,8 +83,8 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 214 active assertions pass with 12 known gaps. The router-composition subdomain has 51 active
-passes and 1 known gap; the template-controller-scope subdomain has 40 active passes and 3 known gaps.
+Current default output: 218 active assertions pass with 14 known gaps. The router-composition subdomain has 55 active
+passes and 3 known gaps; the template-controller-scope subdomain has 40 active passes and 3 known gaps.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the

@@ -235,6 +235,10 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   string child routeable when multiple custom elements share the same resource name. It preserves Aurelia's
   `resolveCustomElementDefinition(...)` dependency-scope lookup before root-container fallback without teaching
   recommendable generators to create duplicate custom-element names.
+- `router-route-config-identity` captures route config declaration forms and routeable identity lanes in one routed
+  app: `@route(...)` object and path shorthand, `Route.configure(...)`, class static route metadata, class routeable
+  children, string routeables, valid lazy imports, redirects, fallback components, aliases, and child route configs. It
+  preserves route-config/source-product pressure without making generated apps prefer every supported authoring form.
 - `router-route-parameter-aggregation` captures nested routed components where parent and child route configs both use
   the same `:id` parameter name. It preserves `IRouteContext.getRouteParameters()` child-first/parent-first aggregation
   pressure, append/by-route strategy projection, recursive residual-route recognition, nested `RouteNode` /

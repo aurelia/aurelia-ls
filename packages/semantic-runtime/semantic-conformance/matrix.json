@@ -4599,6 +4599,135 @@
       ]
     },
     {
+      "id": "router-route-config-and-routeable-identity",
+      "fixture": "fixtures/pressure/router-route-config-identity",
+      "aureliaDomain": "router-composition",
+      "capability": "router-route-config-identity",
+      "domainAxis": "query-contract",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-route-config-identity-app.ts",
+      "requirement": "Router route config products preserve Aurelia's declaration forms, normalized value shapes, routeable component lanes, route-recognizer handoff paths, and honest gaps where source-backed routeable identity is known but not yet spent.",
+      "cases": [
+        {
+          "id": "route-config-declaration-forms-preserve-origin-and-value-shape",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "object-literal", "title": "Router Route Config Identity Pressure", "childRouteCount": 6, "component.name": "RouterRouteConfigIdentityApp", "component.resolved": true } },
+                { "fields": { "routeKind": "route", "originKind": "configure-call", "valueKind": "object-literal", "id": "configured-id", "title": "Configured Route", "childRouteCount": 1, "component.name": "ConfiguredRoute", "fallback.name": "FallbackRoute" } },
+                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "path-expression", "id": "decorator-path", "title": "Decorator Path Title", "viewport": "main", "component.name": "DecoratorPathRoute" }, "source": { "marker": "@route(['decorator-path', 'decorator-alt'])", "token": "@route(['decorator-path', 'decorator-alt'])" } },
+                { "fields": { "routeKind": "route", "originKind": "class-static-defaults", "valueKind": "class-static-defaults", "id": "static-default-id", "title": "Static Defaults Title", "caseSensitive": true, "transitionPlan": "replace", "viewport": "details", "hasData": true, "childRouteCount": 2, "fallback.name": "FallbackRoute", "nav": false } },
+                { "fields": { "routeKind": "redirect", "originKind": "child-routes-property", "valueKind": "object-literal", "id": "", "redirectTo": "decorator-object", "component": null } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "routeable-component-lanes-preserve-authoring-form-and-source",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "id": "decorator-object", "component.componentKind": "resource-definition", "component.name": "DecoratorObjectRoute", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: DecoratorObjectRoute", "token": "DecoratorObjectRoute" } },
+                { "fields": { "id": "decorator-object", "fallback.componentKind": "resource-definition", "fallback.name": "FallbackRoute", "fallback.resolved": true }, "sourceField": "fallback.source", "source": { "marker": "transitionPlan: 'invoke-lifecycles'", "token": "FallbackRoute" } },
+                { "fields": { "id": "class-reference-route", "valueKind": "routeable-component", "component.componentKind": "resource-definition", "component.name": "ClassReferenceRoute", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "ClassReferenceRoute,\n    {", "token": "ClassReferenceRoute" } },
+                { "fields": { "id": "scoped-alias", "component.componentKind": "custom-element-name", "component.name": "scoped-child-alias", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "id: 'scoped-alias'", "token": "'scoped-child-alias'" } },
+                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route" }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-config-recognizer-patterns-use-authored-field-sources",
+          "expectations": [
+            {
+              "name": "route patterns",
+              "query": { "kind": "route-patterns", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "decorator-object", "routeConfig.routeKind": "child-route" }, "source": { "marker": "path: ['decorator-object', 'decorator-object-alt']", "token": "['decorator-object', 'decorator-object-alt']" } },
+                { "fields": { "path": "class-reference-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "ClassReferenceRoute,\n    {", "token": "ClassReferenceRoute" } },
+                { "fields": { "path": "scoped-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "path: 'scoped-alias'", "token": "'scoped-alias'" } },
+                { "fields": { "path": "static-child/:childId", "routeConfig.routeKind": "child-route", "parameterCount": 1 }, "source": { "marker": "path: 'static-child/:childId'", "token": "'static-child/:childId'" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "template-loads-recognize-configured-route-identities",
+          "sourceFile": "src/router-route-config-identity-app.html",
+          "expectations": [
+            {
+              "name": "recognized routes",
+              "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "decorator-object", "redirectDepth": 0, "endpoint.path": "decorator-object" }, "source": { "marker": "load=\"decorator-object\"", "token": "decorator-object" } },
+                { "fields": { "path": "class-reference-route", "redirectDepth": 0, "endpoint.path": "class-reference-route" }, "source": { "marker": "load=\"class-reference-route\"", "token": "class-reference-route" } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-default-class-routeable-applies-route-get-config",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "routeKind": "child-route", "originKind": "child-routes-property", "valueKind": "routeable-component", "id": "static-default-id", "title": "Static Defaults Title", "component.name": "StaticDefaultsRoute", "fallback.name": "FallbackRoute", "childRouteCount": 2 }, "source": { "marker": "StaticDefaultsRoute,\n  ],", "token": "StaticDefaultsRoute" } }
+              ]
+            },
+            {
+              "name": "route patterns",
+              "query": { "kind": "route-patterns", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "static-default", "routeConfig.routeKind": "child-route" }, "source": { "marker": "StaticDefaultsRoute,\n  ],", "token": "StaticDefaultsRoute" } }
+              ]
+            },
+            {
+              "name": "recognized routes",
+              "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "static-default", "residue": "static-child/example", "hasResidue": true }, "source": { "sourceFile": "src/router-route-config-identity-app.html", "marker": "load=\"static-default/static-child/example\"", "token": "static-default/static-child/example" } },
+                { "fields": { "path": "static-child/example", "endpoint.path": "static-child/:childId", "parameterCount": 1 }, "source": { "sourceFile": "src/router-route-config-identity-app.html", "marker": "load=\"static-default/static-child/example\"", "token": "static-default/static-child/example" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "lazy-import-routeable-resolves-resource-definition",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "router-diagnostics-and-recognizer-errors",
       "fixture": "fixtures/pressure/router-invalid-paths",
       "aureliaDomain": "router-composition",
