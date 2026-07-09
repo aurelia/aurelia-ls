@@ -127,6 +127,13 @@
       "failureBucket": "router-diagnostic-repair-projection-data-loss",
       "firstObserved": "2026-07-09",
       "rationale": "TemplateDiagnostics projects the AUR3174 router issue with missingInput and a fix-router-instruction suggestion, but the owning AppDiagnostics router row preserves only domain/code/source and drops the repair intent before IDE/custom diagnostic repair affordances are assembled."
+    },
+    {
+      "assertionId": "router-lifecycle-hook-completion-vocabulary/current-router-view-model-hook-vocabulary",
+      "status": "known-gap",
+      "failureBucket": "router-lifecycle-hook-vocabulary-drift",
+      "firstObserved": "2026-07-09",
+      "rationale": "Aurelia IRouteViewModel exposes loaded(...) and does not expose load(...), but semantic-runtime's completion hook vocabulary marks load as router-lifecycle and does not mark loaded."
     }
   ]
 }

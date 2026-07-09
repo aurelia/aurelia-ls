@@ -5174,6 +5174,36 @@
       ]
     },
     {
+      "id": "router-lifecycle-hook-completion-vocabulary",
+      "fixture": "fixtures/pressure/router-lifecycle-hook-vocabulary",
+      "aureliaDomain": "router-composition",
+      "capability": "template-completions",
+      "domainAxis": "type-system",
+      "coverageIntent": "known-gap-witness",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/routes/hook-route.html",
+      "requirement": "Template completions classify current Aurelia router view-model hook methods from IRouteViewModel without treating ordinary load() methods as router lifecycle hooks.",
+      "cases": [
+        {
+          "id": "current-router-view-model-hook-vocabulary",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "canLoad", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loaded", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "canUnload", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "unloading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "load", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "au-compose-runtime-composition",
       "fixture": "fixtures/pressure/au-compose-dynamic-composition",
       "aureliaDomain": "runtime-composition",

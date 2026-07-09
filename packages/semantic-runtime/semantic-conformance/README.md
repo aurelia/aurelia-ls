@@ -75,7 +75,8 @@ Current matrix scale, as of 2026-07-09:
 - custom-element resource references and rename edit plans;
 - router resource cursor/completion/diagnostic/refusal surfaces, router instruction cursor/completion/diagnostic
   projection, router topology, route recognizer, route-resource instruction closure, route config declaration/routeable
-  identity forms, routeable string resolution, router diagnostics, active-link state, and static redirect controls;
+  identity forms, routeable string resolution, router diagnostics, active-link state, static redirect controls, and the
+  current router view-model hook completion vocabulary boundary;
 - `au-compose` runtime composition rows for component/model/template resolution, recursive resource analysis context,
   activation handoff evidence, and static framework-error diagnostics;
 - template-controller scope behavior over repeat locals, nested repeats, `<let>`, `with`, promise branches,
@@ -85,7 +86,7 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 223 active assertions pass with 18 known gaps. The router-composition subdomain has 63 assertion
+Current default output: 223 active assertions pass with 19 known gaps. The router-composition subdomain has 64 assertion
 rows, including the current router known-gap witnesses; the runtime-composition subdomain has 4 assertion rows.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
