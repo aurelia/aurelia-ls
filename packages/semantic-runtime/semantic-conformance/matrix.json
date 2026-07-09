@@ -3815,6 +3815,836 @@
           ]
         }
       ]
+    },
+    {
+      "id": "router-route-topology-and-aggregation",
+      "fixture": "fixtures/pressure/router-route-parameter-aggregation",
+      "aureliaDomain": "router-composition",
+      "capability": "router-route-topology",
+      "domainAxis": "query-contract",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-route-parameter-aggregation-app.html",
+      "requirement": "Router topology rows preserve route configs, path patterns, residual endpoints, route-recognizer state, nested route contexts, parameter/query aggregation, and viewport/component-agent handoffs as pre-transition static facts.",
+      "cases": [
+        {
+          "id": "route-config-patterns-and-residual-endpoints",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "routeKind": "child-route", "originKind": "child-routes-property", "id": "account", "component.name": "AccountRoute", "component.resolved": true } },
+                { "fields": { "routeKind": "child-route", "originKind": "child-routes-property", "id": "detail", "component.name": "DetailRoute", "component.resolved": true } },
+                { "fields": { "routeKind": "route", "originKind": "route-decorator", "component.name": "RouterRouteParameterAggregationApp", "childRouteCount": 1 } }
+              ]
+            },
+            {
+              "name": "route patterns",
+              "query": { "kind": "route-patterns", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "path": "accounts/:id", "recognizerPath": "accounts/:id", "parameterCount": 1, "routeConfig.id": "account" }, "source": { "sourceFile": "src/router-route-parameter-aggregation-app.ts", "marker": "path: 'accounts/:id'", "token": "'accounts/:id'" } },
+                { "fields": { "path": "details/:id", "recognizerPath": "details/:id", "parameterCount": 1, "routeConfig.id": "detail" }, "source": { "sourceFile": "src/routes/account-route.ts", "marker": "path: 'details/:id'", "token": "'details/:id'" } },
+                { "rowPath": "value.rows[].segments", "fields": { "segmentKind": "dynamic", "name": "id", "optional": false }, "count": 2 },
+                { "rowPath": "value.rows[].parameters", "fields": { "name": "id", "isOptional": false, "isStar": false }, "count": 2 }
+              ]
+            },
+            {
+              "name": "route endpoints",
+              "query": { "kind": "route-endpoints", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "path": "accounts/:id", "isResidual": false, "parameterCount": 1 }, "source": { "sourceFile": "src/router-route-parameter-aggregation-app.ts", "marker": "path: 'accounts/:id'", "token": "'accounts/:id'" } },
+                { "fields": { "path": "accounts/:id/*$$residue", "isResidual": true, "parameterCount": 2 }, "source": { "sourceFile": "src/router-route-parameter-aggregation-app.ts", "marker": "path: 'accounts/:id'", "token": "'accounts/:id'" } },
+                { "fields": { "path": "details/:id/*$$residue", "isResidual": true, "parameterCount": 2 }, "source": { "sourceFile": "src/routes/account-route.ts", "marker": "path: 'details/:id'", "token": "'details/:id'" } },
+                { "rowPath": "value.rows[].parameters", "fields": { "name": "$$residue", "isOptional": true, "isStar": true }, "count": 2 }
+              ]
+            },
+            {
+              "name": "route recognizer states",
+              "query": { "kind": "route-recognizer-states", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "stateKind": "dynamic", "segmentName": "id", "isDynamic": true, "endpoint.path": "accounts/:id" }, "source": { "sourceFile": "src/router-route-parameter-aggregation-app.ts", "marker": "path: 'accounts/:id'", "token": "'accounts/:id'" } },
+                { "fields": { "stateKind": "dynamic", "segmentName": "id", "isDynamic": true, "endpoint.path": "details/:id" }, "source": { "sourceFile": "src/routes/account-route.ts", "marker": "path: 'details/:id'", "token": "'details/:id'" } },
+                { "fields": { "stateKind": "residue", "segmentName": "$$residue", "isDynamic": true, "endpoint.path": "accounts/:id/*$$residue" } },
+                { "fields": { "stateKind": "residue", "segmentName": "$$residue", "isDynamic": true, "endpoint.path": "details/:id/*$$residue" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-context-parameter-read-alignment",
+          "expectations": [
+            {
+              "name": "route context parameter reads",
+              "query": { "kind": "route-context-parameter-reads", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                {
+                  "fields": {
+                    "componentClassName": "DetailRoute",
+                    "mergeStrategy": "child-first",
+                    "declaredOpenKeySpace": false,
+                    "alignment": "aligned",
+                    "component.name": "DetailRoute"
+                  },
+                  "source": { "sourceFile": "src/routes/detail-route.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ id: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ id: string }>()" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "recognized-routes-route-node-aggregation-and-query-fragment",
+          "expectations": [
+            {
+              "name": "recognized routes",
+              "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "path": "accounts/account-1", "residue": "details/detail-1", "hasResidue": true, "endpoint.path": "accounts/:id/*$$residue" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
+                { "fields": { "path": "details/detail-1", "residue": null, "hasResidue": false, "endpoint.path": "details/:id" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
+                { "rowPath": "value.rows[].parameterValues", "fields": { "name": "id", "value": "account-1", "isFulfilled": true, "isResidue": false } },
+                { "rowPath": "value.rows[].parameterValues", "fields": { "name": "id", "value": "detail-1", "isFulfilled": true, "isResidue": false } },
+                { "rowPath": "value.rows[].parameterValues", "fields": { "name": "$$residue", "value": "details/detail-1", "isResidue": true } }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "path": "details/:id", "finalPath": "details/:id", "componentName": "DetailRoute", "viewport": "default", "fragment": "details" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
+                { "rowPath": "value.rows[].byRouteParameterValues[].routeValues", "fields": { "routeId": "detail", "value.name": "id", "value.value": "detail-1" } },
+                { "rowPath": "value.rows[].byRouteParameterValues[].routeValues", "fields": { "routeId": "account", "value.name": "id", "value.value": "account-1" } },
+                { "rowPath": "value.rows[].queryParams", "fields": { "name": "mode", "value": "compact" }, "atLeast": 1 },
+                { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "a" }, "atLeast": 1 },
+                { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "b" }, "atLeast": 1 }
+              ]
+            },
+            {
+              "name": "viewport instruction tree",
+              "query": { "kind": "viewport-instruction-trees", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp", "instructionCount": 1, "hasOptions": true, "isAbsolute": false, "queryParamCount": 3, "fragment": "details" }, "source": { "marker": "<a load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"" } },
+                { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "a" } },
+                { "rowPath": "value.rows[].queryParams", "fields": { "name": "tag", "value": "b" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "runtime-route-contexts-viewports-and-agents",
+          "expectations": [
+            {
+              "name": "route contexts",
+              "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "label": "RouterRouteParameterAggregationApp", "parentLabel": null } },
+                { "fields": { "label": "RouterRouteParameterAggregationApp/AccountRoute", "parentLabel": "RouterRouteParameterAggregationApp" } },
+                { "fields": { "label": "RouterRouteParameterAggregationApp/AccountRoute/DetailRoute", "parentLabel": "RouterRouteParameterAggregationApp/AccountRoute" } }
+              ]
+            },
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "name": "default", "routeContext.label": "RouterRouteParameterAggregationApp" }, "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
+                { "fields": { "name": "default", "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
+              ]
+            },
+            {
+              "name": "viewport agents",
+              "query": { "kind": "viewport-agents", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp" }, "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } },
+                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "sourceFile": "src/routes/account-route.html", "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" } }
+              ]
+            },
+            {
+              "name": "component agents",
+              "query": { "kind": "component-agents", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } },
+                { "fields": { "routeContext.label": "RouterRouteParameterAggregationApp/AccountRoute/DetailRoute" }, "source": { "marker": "load=\"accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details\"", "token": "accounts/account-1/details/detail-1?mode=compact&tag=a&tag=b#details" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-resource-surfaces",
+      "fixture": "fixtures/pressure/router-dynamic-pattern",
+      "aureliaDomain": "router-composition",
+      "capability": "router-resource-surfaces",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/routes/products-route.html",
+      "requirement": "Router framework resources expose precise cursor surfaces for load/href/au-viewport and their bindables, complete router-specific completions, and conservative references/rename refusal when the selected resource is framework-owned rather than workspace source-backed.",
+      "cases": [
+        {
+          "id": "load-attribute-cursor-selects-router-resource",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.resourceKind": "custom-attribute",
+                "value.selectedDefinition.name": "load",
+                "value.selectedDefinition.targetName": "LoadCustomAttribute",
+                "value.selectedDefinition.source.kind": "external-address",
+                "value.selectedBindable.name": "route",
+                "value.selectedBindable.attribute": "route",
+                "value.selectedBindable.mode": "toView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "load-route-segment-selects-route-bindable",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "route" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.valueSite.siteKind": "multi-binding-value",
+                "value.selectedDefinition.name": "load",
+                "value.selectedBindable.name": "route",
+                "value.selectedBindable.mode": "toView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "load-params-segment-selects-params-bindable",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "params" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.name": "load",
+                "value.selectedBindable.name": "params",
+                "value.selectedBindable.attribute": "params",
+                "value.selectedBindable.mode": "toView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "load-active-segment-selects-from-view-bindable",
+          "fixture": "fixtures/pressure/router-active-link-state",
+          "sourceFile": "src/router-active-link-state-app.html",
+          "cursor": { "marker": "load=\"route: settings; active.bind: settingsActive\"", "token": "active" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.name": "load",
+                "value.selectedBindable.name": "active",
+                "value.selectedBindable.attribute": "active",
+                "value.selectedBindable.mode": "fromView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "href-attribute-cursor-selects-router-resource",
+          "cursor": { "marker": "href=\"${stateBackedHref('state-coffee')}\"", "token": "href" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.resourceKind": "custom-attribute",
+                "value.selectedDefinition.name": "href",
+                "value.selectedDefinition.targetName": "HrefCustomAttribute",
+                "value.selectedDefinition.source.kind": "external-address",
+                "value.selectedBindable.name": "value",
+                "value.selectedBindable.attribute": "value",
+                "value.selectedBindable.mode": "toView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "explicit-external-href-still-has-router-surface",
+          "cursor": { "marker": "href.bind=\"explicitExternalHref(product)\" external", "token": "href" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "href",
+                "value.selectedBindable.name": "value"
+              }
+            }
+          ]
+        },
+        {
+          "id": "viewport-element-cursor-selects-router-resource",
+          "cursor": { "marker": "<au-viewport name=\"details\">", "token": "au-viewport" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "element-name",
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "au-viewport",
+                "value.selectedDefinition.targetName": "ViewportCustomElement",
+                "value.selectedDefinition.source.kind": "external-address"
+              }
+            }
+          ]
+        },
+        {
+          "id": "viewport-name-attribute-selects-bindable",
+          "cursor": { "marker": "<au-viewport name=\"details\">", "token": "name" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "au-viewport",
+                "value.selectedBindable.name": "name",
+                "value.selectedBindable.attribute": "name",
+                "value.selectedBindable.mode": "toView"
+              }
+            }
+          ]
+        },
+        {
+          "id": "framework-load-references-refuse-source-backed-list",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" },
+          "expectations": [
+            {
+              "name": "template references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "outcomes": [ "miss" ],
+              "closure": "complete",
+              "equals": {
+                "value.selectedMemberName": null,
+                "value.rows.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "framework-load-rename-refuses-source-backed-edit-plan",
+          "cursor": { "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "load" },
+          "expectations": [
+            {
+              "name": "template rename",
+              "query": { "kind": "template-rename", "options": { "newName": "navigate" } },
+              "outcomes": [ "miss" ],
+              "closure": "complete",
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "no-source-backed-member",
+                "value.edits.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "framework-viewport-references-refuse-source-backed-list",
+          "cursor": { "marker": "<au-viewport name=\"details\">", "token": "au-viewport" },
+          "expectations": [
+            {
+              "name": "template references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "outcomes": [ "miss" ],
+              "closure": "complete",
+              "equals": {
+                "value.selectedMemberName": null,
+                "value.rows.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "registered-router-resource-template-diagnostics-clean",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "active-link-router-resource-diagnostics-clean",
+          "fixture": "fixtures/pressure/router-active-link-state",
+          "sourceFile": "src/router-active-link-state-app.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                { "count": 0 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                { "count": 0 }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "load-multi-binding-key-completions",
+          "cursor": { "marker": "load=\"route: product-detail; ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "attribute-value" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "route", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "params", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "active", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "attribute", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "context", "sourceKind": "resource-definition" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-bindable-completions",
+          "cursor": { "marker": "<au-viewport ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "attribute-name" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "name", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "used-by", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "default", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "fallback", "sourceKind": "resource-definition" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "href-attribute-semantic-token",
+          "fixture": "fixtures/pressure/app-builder-part-source-gallery",
+          "sourceFile": "src/my-app.html",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "<a href=\"items\">Href</a>", "token": "href" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-resource-instruction-closure",
+      "fixture": "fixtures/pressure/router-dynamic-pattern",
+      "aureliaDomain": "router-composition",
+      "capability": "router-resource-instruction-closure",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-pattern-app.html",
+      "requirement": "Router resource instructions close literal and statically reduced internal routes, preserve dynamic route holes honestly, keep external href escapes out of router ownership, and avoid diagnostics for genuinely open values.",
+      "cases": [
+        {
+          "id": "static-and-reduced-instructions-close-to-recognized-routes",
+          "expectations": [
+            {
+              "name": "typed navigation instructions",
+              "query": { "kind": "typed-navigation-instructions", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "closure": "complete",
+              "rows": [
+                { "fields": { "instructionKind": "string", "value": "coffee" }, "source": { "marker": "load.bind=\"{ component: productsRoute", "token": "{ component: productsRoute, children: [{ component: productDetailsRoute, params: { productId: 'coffee' }, viewport: 'details' }] }" } },
+                { "fields": { "instructionKind": "string", "value": "sencha" }, "source": { "marker": "load.bind=\"new SenchaRouteInstruction()\"", "token": "new SenchaRouteInstruction()" } },
+                { "fields": { "instructionKind": "string", "value": "genmaicha" }, "source": { "marker": "load.bind=\"taggedInstruction`genmaicha`\"", "token": "taggedInstruction`genmaicha`" } },
+                { "fields": { "instructionKind": "string", "value": "state-coffee" }, "source": { "sourceFile": "src/routes/products-route.html", "marker": "href=\"${stateBackedHref('state-coffee')}\"", "token": "${stateBackedHref('state-coffee')}" } }
+              ]
+            },
+            {
+              "name": "recognized routes",
+              "query": { "kind": "recognized-routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "closure": "complete",
+              "rows": [
+                { "fields": { "path": "coffee" }, "source": { "marker": "load.bind=\"{ component: productsRoute", "token": "{ component: productsRoute, children: [{ component: productDetailsRoute, params: { productId: 'coffee' }, viewport: 'details' }] }" } },
+                { "fields": { "path": "espresso" }, "source": { "sourceFile": "src/routes/products-route.html", "marker": "load=\"route: product-detail; params.bind: { productId: 'espresso' }\"", "token": "route: product-detail; params.bind: { productId: 'espresso' }" } },
+                { "fields": { "path": "state-coffee" }, "source": { "sourceFile": "src/routes/products-route.html", "marker": "href=\"${stateBackedHref('state-coffee')}\"", "token": "${stateBackedHref('state-coffee')}" } },
+                { "fields": { "path": "__au_dynamic_0__" }, "source": { "sourceFile": "src/routes/products-route.html", "marker": "href=\"${productHref(product)}\"", "token": "${productHref(product)}" }, "atLeast": 1 },
+                { "rowPath": "value.rows[].parameterValues", "fields": { "name": "productId", "value": "__au_dynamic_0__", "isFulfilled": true }, "atLeast": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "external-href-open-seam-and-no-router-issue",
+          "sourceFile": "src/routes/products-route.html",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                { "count": 0 }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 100 } } },
+              "closure": "complete",
+              "rows": [
+                {
+                  "fields": { "seamKindKey": "router.open-instruction" },
+                  "source": { "marker": "href=\"${externalPackageHref(product.id)}\"", "token": "${externalPackageHref(product.id)}" }
+                },
+                {
+                  "fields": { "seamKindKey": "router.open-instruction" },
+                  "source": { "marker": "href.bind=\"explicitExternalHref(product)\" external", "token": "explicitExternalHref(product)" },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "open seam reasons",
+              "query": { "kind": "open-seams", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.rows[].reasonSources", "fields": { "reasonKind": "external-module-value" } },
+                { "rowPath": "value.rows[].reasonSources", "fields": { "reasonKind": "router-href-externality-open" } },
+                { "rowPath": "value.rows[].reasonSources", "fields": { "reasonKind": "router-href-click-interception-target-open" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "active-link-option-and-from-view-state",
+          "fixture": "fixtures/pressure/router-active-link-state",
+          "sourceFile": "src/router-active-link-state-app.html",
+          "domainAxis": "query-contract",
+          "expectations": [
+            {
+              "name": "router options",
+              "query": { "kind": "router-options", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "activeClass": "is-active" }, "source": { "sourceFile": "src/main.ts", "marker": "activeClass: 'is-active'", "token": "activeClass: 'is-active'" } }
+              ]
+            },
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "sourceName": "homeActive" }, "source": { "marker": "active.bind: homeActive", "token": "homeActive" } },
+                { "fields": { "sourceName": "settingsActive" }, "source": { "marker": "active.bind: settingsActive", "token": "settingsActive" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-resource-routeable-resolution",
+      "fixture": "fixtures/pressure/router-routeable-alias",
+      "aureliaDomain": "router-composition",
+      "capability": "router-routeable-resource-resolution",
+      "domainAxis": "resources",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-routeable-alias-app.ts",
+      "requirement": "String routeable components resolve through Aurelia resource visibility, including aliases and dependency-scoped duplicate names, without reporting router issues.",
+      "cases": [
+        {
+          "id": "aliased-routeable-string-resolution",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "routeKind": "child-route", "component.componentKind": "custom-element-name", "component.name": "routeable-alias", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: 'routeable-alias'", "token": "'routeable-alias'" } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "contextual-routeable-string-resolution",
+          "fixture": "fixtures/pressure/router-contextual-string-routeable",
+          "sourceFile": "src/router-contextual-string-routeable-app.ts",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "routeKind": "child-route", "component.componentKind": "custom-element-name", "component.name": "duplicate-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: 'duplicate-route'", "token": "'duplicate-route'" } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-diagnostics-and-recognizer-errors",
+      "fixture": "fixtures/pressure/router-invalid-paths",
+      "aureliaDomain": "router-composition",
+      "capability": "router-diagnostics",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-invalid-paths-app.ts",
+      "requirement": "Router diagnostics preserve owning product lanes, framework error codes/raw authorities, issue phases, and authored source spans across recognizer grammar, instruction parsing/creation, route recognition, redirect, viewport, eager path, and config-validation failures.",
+      "cases": [
+        {
+          "id": "route-recognizer-path-grammar-issues",
+          "expectations": [
+            {
+              "name": "route recognizer issues",
+              "query": { "kind": "route-recognizer-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "issueKind": "reserved-parameter-name", "diagnosticAuthority": "framework-runtime-behavior", "path": "orders/:$$residue" }, "source": { "marker": "path: 'orders/:$$residue'", "token": "'orders/:$$residue'" } },
+                { "fields": { "issueKind": "reserved-parameter-name", "diagnosticAuthority": "framework-runtime-behavior", "path": "files/*$$residue" }, "source": { "marker": "path: 'files/*$$residue'", "token": "'files/*$$residue'" } },
+                { "fields": { "issueKind": "invalid-parameter-constraint", "diagnosticAuthority": "framework-runtime-behavior", "path": "reports/:kind{{[}}" }, "source": { "marker": "path: 'reports/:kind{{[}}'", "token": "'reports/:kind{{[}}'" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-instruction-template-issues",
+          "fixture": "fixtures/pressure/router-instruction-errors",
+          "sourceFile": "src/router-instruction-errors-app.html",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 5 },
+              "rows": [
+                { "fields": { "phase": "route-recognition", "issueKind": "instruction-no-fallback", "frameworkErrorCode": "AUR3401", "path": "missing-route" }, "source": { "marker": "load=\"missing-route\"", "token": "missing-route" } },
+                { "fields": { "phase": "typed-navigation-instruction-creation", "issueKind": "invalid-instruction", "frameworkErrorCode": "AUR3400" }, "source": { "marker": "load.bind=\"42\"", "token": "42" } },
+                { "fields": { "phase": "route-expression-parsing", "issueKind": "route-expression-unexpected-segment", "frameworkErrorCode": "AUR3500", "path": "(" }, "source": { "marker": "load=\"(\"", "token": "(" } },
+                { "fields": { "phase": "route-expression-parsing", "issueKind": "route-expression-not-done", "frameworkErrorCode": "AUR3501", "path": "known)" }, "source": { "marker": "load=\"known)\"", "token": "known)" } },
+                { "fields": { "phase": "route-tree-redirect-resolution", "issueKind": "instruction-unknown-redirect", "frameworkErrorCode": "AUR3402", "path": "old-route" }, "source": { "sourceFile": "src/router-instruction-errors-app.ts", "marker": "redirectTo: 'missing-redirect-target'", "token": "'missing-redirect-target'" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-resolution-issue",
+          "fixture": "fixtures/pressure/router-viewport-resolution-errors",
+          "sourceFile": "src/router-viewport-resolution-errors-app.html",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                { "fields": { "phase": "route-tree-viewport-resolution", "issueKind": "no-available-viewport-agent", "frameworkErrorCode": "AUR3174", "path": "side-only" }, "source": { "marker": "load=\"side-only\"", "token": "side-only" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "eager-path-generation-issue",
+          "fixture": "fixtures/pressure/router-eager-path-generation-errors",
+          "sourceFile": "src/router-eager-path-generation-errors-app.html",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                { "fields": { "phase": "route-context-eager-path-generation", "issueKind": "eager-path-generation-failed", "frameworkErrorCode": "AUR3166", "path": "detail/:id" }, "source": { "marker": "load.bind=\"{ component: detailRoute, params: {} }\"", "token": "{ component: detailRoute, params: {} }" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-config-validation-issues",
+          "fixture": "fixtures/pressure/router-route-config-validation-errors",
+          "sourceFile": "src/router-route-config-validation-errors-app.ts",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 8 },
+              "rows": [
+                { "fields": { "phase": "route-config-validation", "issueKind": "invalid-route-config-property", "frameworkErrorCode": "AUR3554", "property": "routes[0].path" }, "source": { "marker": "path: 42 as unknown as string", "token": "42 as unknown as string" } },
+                { "fields": { "phase": "route-config-validation", "issueKind": "unknown-route-config-property", "frameworkErrorCode": "AUR3556", "property": "routes[1].unexpectedRouteProperty" }, "source": { "marker": "unexpectedRouteProperty: true", "token": "unexpectedRouteProperty" } },
+                { "fields": { "phase": "route-config-validation", "issueKind": "unknown-redirect-route-config-property", "frameworkErrorCode": "AUR3557", "property": "routes[2].title" }, "source": { "marker": "title: 'Redirects cannot carry route-only fields'", "token": "title" } },
+                { "fields": { "phase": "route-config-context-child-route-configuration", "issueKind": "child-route-lazy-import-missing-path", "frameworkErrorCode": "AUR3173", "property": "routes[3].path" }, "source": { "marker": "{\n      component: import('./routes/lazy-child-route'),\n    }", "token": "{\n      component: import('./routes/lazy-child-route'),\n    }" } },
+                { "fields": { "phase": "route-context-lazy-import-resolution", "issueKind": "invalid-lazy-import", "frameworkErrorCode": "AUR3175", "property": "routes[4].component" }, "source": { "marker": "component: import('./routes/not-a-component')", "token": "import('./routes/not-a-component')" } },
+                { "fields": { "phase": "routeable-component-resolution", "issueKind": "routeable-component-not-found", "frameworkErrorCode": "AUR3552", "property": "routes[5].component", "actual": "missing-string-route" }, "source": { "marker": "component: 'missing-string-route'", "token": "'missing-string-route'" } },
+                { "fields": { "phase": "routeable-component-resolution", "issueKind": "routeable-component-not-found", "frameworkErrorCode": "AUR3552", "property": "routes[5].fallback", "actual": "missing-string-fallback" }, "source": { "marker": "fallback: 'missing-string-fallback'", "token": "'missing-string-fallback'" } },
+                { "fields": { "phase": "route-config-validation", "issueKind": "invalid-route-config", "frameworkErrorCode": "AUR3555", "actual": "null" }, "source": { "sourceFile": "src/routes/null-config-route.ts", "marker": "route(null", "token": "null" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "redirect-migration-issues",
+          "fixture": "fixtures/pressure/router-redirect-expression-errors",
+          "sourceFile": "src/router-redirect-expression-errors-app.ts",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "phase": "route-config-validation", "issueKind": "unknown-redirect-route-config-property", "frameworkErrorCode": "AUR3557", "property": "routes[0].id" }, "source": { "marker": "id: 'legacy'", "token": "id" } },
+                { "fields": { "phase": "route-config-validation", "issueKind": "unknown-redirect-route-config-property", "frameworkErrorCode": "AUR3557", "property": "routes[0].title" }, "source": { "marker": "title: 'Legacy Redirect'", "token": "title" } },
+                { "fields": { "phase": "route-tree-redirect-migration", "issueKind": "redirect-unexpected-expression-kind", "frameworkErrorCode": "AUR3502", "redirectTo": "target+other" }, "source": { "marker": "redirectTo: 'target+other'", "token": "'target+other'" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-redirect-target-control",
+          "fixture": "fixtures/pressure/router-static-redirect-target",
+          "sourceFile": "src/router-static-redirect-target-app.html",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            },
+            {
+              "name": "recognized routes",
+              "query": { "kind": "recognized-routes", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "path": "legacy", "redirectDepth": 0 }, "source": { "marker": "load=\"legacy\"", "token": "legacy" } },
+                { "fields": { "path": "target", "redirectDepth": 1 }, "source": { "marker": "load=\"legacy\"", "token": "legacy" } }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "path": "target", "finalPath": "target", "componentName": "TargetRoute" }, "source": { "marker": "load=\"legacy\"", "token": "legacy" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "au-compose-runtime-composition",
+      "fixture": "fixtures/pressure/au-compose-dynamic-composition",
+      "aureliaDomain": "router-composition",
+      "capability": "runtime-composition",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/compose-dashboard-app.html",
+      "requirement": "AuCompose runtime composition rows preserve component/model/template resolution posture, recursive resource analysis context, activation handoff evidence, and static framework-error diagnostics without claiming live hydration.",
+      "cases": [
+        {
+          "id": "component-model-template-resolution",
+          "expectations": [
+            {
+              "name": "runtime compositions",
+              "query": { "kind": "runtime-compositions", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 10 },
+              "rows": [
+                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "recursive-resource-instance", "componentResolutionKind": "type-candidate", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 2 }, "source": { "marker": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>", "token": "<au-compose component.bind=\"widget.component\" model.bind=\"widget\"></au-compose>" } },
+                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 1 }, "source": { "marker": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>", "token": "<au-compose component=\"chart-widget\" model.bind=\"selectedWidget\"></au-compose>" } },
+                { "fields": { "renderingDefinitionName": "compose-dashboard-app", "renderingContextKind": "definition-resource", "componentResolutionKind": "template-only", "modelResolutionKind": "absent", "modelAssignableToActivationParameterCount": 0 }, "source": { "marker": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>", "token": "<au-compose template.bind=\"getAsyncTemplate()\" scope-behavior=\"scoped\" composition.bind=\"composition\"></au-compose>" } },
+                { "fields": { "renderingDefinitionName": "widget-host", "renderingContextKind": "definition-resource", "componentResolutionKind": "static-value", "modelResolutionKind": "static-value", "modelAssignableToActivationParameterCount": 0 }, "source": { "sourceFile": "src/widget-host.html", "marker": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>", "token": "<au-compose component.bind=\"component\" model.bind=\"model\"></au-compose>" } },
+                { "fields": { "openReason": null }, "count": 10 }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "count": 0 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-au-compose-framework-errors",
+          "fixture": "fixtures/pressure/runtime-html-au-compose-errors",
+          "sourceFile": "src/runtime-html-au-compose-errors-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0805", "missingInput": "runtime-controller:AUR0805" }, "source": { "marker": "scope-behavior=\"global\"", "token": "global" } },
+                { "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0809", "missingInput": "runtime-controller:AUR0809" }, "source": { "marker": "flush-mode=\"deferred\"", "token": "deferred" } },
+                { "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0806", "missingInput": "runtime-controller:AUR0806" }, "source": { "marker": "component=\"missing-widget\"", "token": "missing-widget" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0805", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "scope-behavior=\"global\"", "token": "global" } },
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0809", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "flush-mode=\"deferred\"", "token": "deferred" } },
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0806", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "component=\"missing-widget\"", "token": "missing-widget" } }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
