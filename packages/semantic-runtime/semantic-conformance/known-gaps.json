@@ -80,6 +80,160 @@
       "rationale": "Binding behavior tokens are classified and semantic-tokenized, and resource definitions preserve the behavior declaration, but cursor info, references, and rename do not join expression behavior usages to that resource definition."
     },
     {
+      "assertionId": "bindable-contracts-lab/inline-multi-binding-segment-semantic-tokens",
+      "status": "known-gap",
+      "failureBucket": "inline-multi-binding-segment-source-projection",
+      "firstObserved": "2026-07-09",
+      "rationale": "MultiBindingSegment preserves each target and raw command-bearing name, but TemplateSemanticTokens projects only the enclosing custom attribute plus segment value expressions, omitting all authored segment target and command tokens."
+    },
+    {
+      "assertionId": "bindable-contract-metadata-depth/coercion-nullability-policy-is-preserved",
+      "status": "known-gap",
+      "failureBucket": "bindable-coercion-policy-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "Aurelia's nullable flag changes the runtime coercer wrapper, but semantic-runtime collapses type coercion to setterKind=type-coercion and drops nullable from both BindableDefinition and the public resource row."
+    },
+    {
+      "assertionId": "bindable-contract-metadata-depth/custom-attribute-no-multi-bindings-policy-is-public",
+      "status": "known-gap",
+      "failureBucket": "custom-attribute-compiler-policy-public-projection-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "CustomAttributeDefinition retains noMultiBindings and template lowering honors it, but SemanticResourceDefinitionRow does not project the policy for MCP, IDE, or future AOT consumers."
+    },
+    {
+      "assertionId": "bindable-contract-metadata-depth/known-interceptor-function-references-close",
+      "status": "known-gap",
+      "failureBucket": "bindable-setter-function-reference-convergence",
+      "firstObserved": "2026-07-09",
+      "rationale": "The framework accepts set: String as a closed bindable interceptor, but semantic-runtime classifies the global function reference as open through both decorator and static-record metadata while inline function expressions close."
+    },
+    {
+      "assertionId": "bindable-contract-metadata-depth/authored-callback-mode-and-set-field-sources",
+      "status": "known-gap",
+      "failureBucket": "bindable-field-provenance-projection-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "BindableDefinitionField names callback, mode, and set, but convergence only publishes field provenance for name and attribute and the public bindable row has no exact callbackSource, modeSource, or setSource."
+    },
+    {
+      "assertionId": "bindable-contract-locus-and-completion-depth/bindable-cursor-preserves-value-type-facts",
+      "status": "known-gap",
+      "failureBucket": "bindable-cursor-type-projection-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "Resource definition rows preserve bindable value type and call-signature facts, but SemanticTemplateCursorBindableRow drops them before hover and other cursor consumers can present the selected bindable's type."
+    },
+    {
+      "assertionId": "bindable-contract-reference-closure-depth/class-level-bindable-property-reference-closure",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Class-level @bindable metadata, its class property, default-derived attribute sites, and child-template usages describe one bindable property, but references choose the decorator string as declaration and omit the TypeScript field."
+    },
+    {
+      "assertionId": "bindable-contract-reference-closure-depth/inherited-static-bindable-property-reference-closure",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Inherited static bindable metadata closes to template and attribute usages, but references omit the TypeScript property declaration that the metadata names."
+    },
+    {
+      "assertionId": "bindable-contract-reference-closure-depth/nearest-static-bindable-property-reference-closure",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Nearest static bindable references use the broad metadata entry and child-template usage only; they omit the exact name token, class field, and explicit-alias attribute usage."
+    },
+    {
+      "assertionId": "bindable-contract-reference-closure-depth/static-record-bindable-property-reference-closure",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "A static record key and same-named class field are not joined as one bindable property target, so references from the child template omit the metadata key and explicit-alias attribute usage."
+    },
+    {
+      "assertionId": "bindable-contract-reference-closure-depth/definition-object-bindable-property-reference-closure",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Definition-object bindable metadata wins framework merge precedence, but references do not join its exact property-name token to the class field or explicit-alias attribute usage."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/class-level-bindable-template-origin-rename",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Template-origin rename cannot route from a class-level @bindable declaration string to the TypeScript field, so it refuses instead of synchronizing metadata, field, derived attribute, and child-template usage."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/nearest-static-bindable-template-origin-rename",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Template-origin rename cannot route from static bindable metadata to the named TypeScript field and refuses instead of updating metadata, field, and child-template usage while retaining the explicit alias."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/static-record-bindable-template-origin-rename",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Template-origin rename follows the class symbol and child template but leaves the static bindables record key stale, splitting runtime metadata from the renamed property."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/definition-object-bindable-template-origin-rename",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "Template-origin rename cannot route from definition-object bindable metadata to the TypeScript field and refuses instead of updating the metadata name, field, and child-template usage."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-conventional-callback-propagation",
+      "status": "known-gap",
+      "failureBucket": "typescript-origin-bindable-callback-propagation",
+      "firstObserved": "2026-07-09",
+      "rationale": "Template-origin bindable rename updates the derived nameChanged callback, but TemplateRenameFromTypeScript emits only template/attribute edits even though TypeScript rename cannot infer the separate conventional callback symbol."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-class-level-metadata-propagation",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "A TypeScript field rename does not close back to its class-level @bindable metadata, so the semantic propagation query returns no metadata, derived-attribute, or child-template edits."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-inherited-static-metadata-propagation",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "A TypeScript rename of a field named by inherited static bindables cannot recover the inherited metadata declaration or its default-derived template surfaces."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-nearest-static-metadata-propagation",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "A TypeScript rename of a field named by nearest static bindables returns no metadata or child-template edits, even though the explicit public alias should remain stable."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-static-record-metadata-propagation",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "TypeScript-origin propagation updates the child template but not the static record key that declares the bindable property, leaving runtime metadata stale."
+    },
+    {
+      "assertionId": "bindable-contract-rename-closure-depth/typescript-origin-definition-object-metadata-propagation",
+      "status": "known-gap",
+      "failureBucket": "bindable-metadata-class-symbol-closure",
+      "firstObserved": "2026-07-09",
+      "rationale": "A TypeScript rename of a definition-object bindable field returns no metadata or child-template edits because the winning bindable declaration is not linked back to the class symbol."
+    },
+    {
+      "assertionId": "bindable-contract-lowering-depth/inline-multi-binding-inlay-hints-use-segment-sources",
+      "status": "known-gap",
+      "failureBucket": "inline-multi-binding-segment-source-projection",
+      "firstObserved": "2026-07-09",
+      "rationale": "TemplateInlayHints ignores MultiBindingSegment target/raw-name sources and anchors every segment hint to the enclosing custom-attribute name, causing multiple unrelated hints to stack at one position."
+    },
+    {
       "assertionId": "router-instruction-closure-surfaces/route-params-key-completions-use-selected-route-parameters",
       "status": "known-gap",
       "failureBucket": "router-instruction-param-completion-data-loss",

@@ -1377,6 +1377,8 @@
       "cases": [
         {
           "id": "property-reference-declaration",
+          "domainAxis": "source-precision",
+          "capability": "bindable-reference-context",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1391,6 +1393,8 @@
         },
         {
           "id": "property-reference-template-usage",
+          "domainAxis": "source-precision",
+          "capability": "bindable-reference-context",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1405,6 +1409,8 @@
         },
         {
           "id": "property-reference-explicit-alias-usage",
+          "domainAxis": "source-precision",
+          "capability": "bindable-reference-context",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1422,6 +1428,8 @@
         },
         {
           "id": "alias-reference-declaration",
+          "domainAxis": "source-precision",
+          "capability": "bindable-alias-reference-context",
           "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
           "expectations": [
             {
@@ -1435,6 +1443,8 @@
         },
         {
           "id": "alias-reference-template-usage",
+          "domainAxis": "source-precision",
+          "capability": "bindable-alias-reference-context",
           "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
           "expectations": [
             {
@@ -1448,6 +1458,8 @@
         },
         {
           "id": "inline-alias-reference-declaration",
+          "domainAxis": "source-precision",
+          "capability": "bindable-alias-reference-context",
           "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
           "expectations": [
             {
@@ -1461,6 +1473,8 @@
         },
         {
           "id": "inline-alias-reference-segment-usage",
+          "domainAxis": "source-precision",
+          "capability": "bindable-alias-reference-context",
           "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
           "expectations": [
             {
@@ -1474,6 +1488,8 @@
         },
         {
           "id": "property-rename-declaration-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1494,6 +1510,8 @@
         },
         {
           "id": "property-rename-template-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1514,6 +1532,8 @@
         },
         {
           "id": "property-rename-does-not-edit-explicit-alias",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
           "sourceFile": "src/product-card.html",
           "cursor": { "marker": "${labelText}", "token": "labelText" },
           "expectations": [
@@ -1533,6 +1553,8 @@
         },
         {
           "id": "alias-rename-declaration-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
           "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
           "expectations": [
             {
@@ -1552,6 +1574,8 @@
         },
         {
           "id": "alias-rename-template-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
           "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
           "expectations": [
             {
@@ -1571,6 +1595,8 @@
         },
         {
           "id": "inline-alias-rename-declaration-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
           "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
           "expectations": [
             {
@@ -1590,6 +1616,8 @@
         },
         {
           "id": "inline-alias-rename-segment-edit",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
           "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
           "expectations": [
             {
@@ -1603,6 +1631,1774 @@
                   "source": { "sourceFile": "src/app.html", "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
                   "oldTextMatchesSource": true
                 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contracts-lab",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-contract-model",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/bindable-lab-app.html",
+      "requirement": "Bindable resource metadata, template cursor surfaces, references, rename, completions, diagnostics, and source-token projections preserve the distinction between property identity, public attribute spelling, and binding command/value syntax.",
+      "cases": [
+        {
+          "id": "decorator-alias-bindable-definition-sources",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "labelText", "attribute": "display-label", "callback": "labelTextChanged", "mode": "toView", "valueType": "string" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "labelText" }
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "labelText", "attribute": "display-label" },
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "callable-bindable-type-surface",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "onAction", "attribute": "action", "valueTypeHasCallSignature": true },
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'action' }) onAction", "token": "action" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-bindable-definition-field-sources",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "headline", "attribute": "display-headline", "callback": "headlineChanged", "mode": "oneTime" },
+                  "source": { "sourceFile": "src/static-card.ts", "marker": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }", "token": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }" }
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "headline", "attribute": "display-headline" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/static-card.ts", "marker": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }", "token": "headline" }
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "headline", "attribute": "display-headline" },
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/static-card.ts", "marker": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }", "token": "display-headline" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-default-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "title.bind=\"titleText\"", "token": "title" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "profile-card",
+                "value.selectedBindable.name": "title",
+                "value.selectedBindable.attribute": "title",
+                "value.selectedBindable.mode": "toView",
+                "value.selectedBindable.attributeSource": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "custom-element-alias-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedBindable.name": "labelText",
+                "value.selectedBindable.attribute": "display-label"
+              },
+              "rows": [
+                {
+                  "rowPath": "value.selectedBindable",
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "two-way-derived-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "selected-id.two-way=\"selectedId\"", "token": "selected-id" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedBindable.name": "selectedId",
+                "value.selectedBindable.attribute": "selected-id",
+                "value.selectedBindable.mode": "twoWay",
+                "value.selectedBindable.attributeSource": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "inline-custom-attribute-alias-segment-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.name": "display-hint",
+                "value.selectedBindable.name": "labelText",
+                "value.selectedBindable.attribute": "display-label",
+                "value.valueSite.siteKind": "multi-binding-value"
+              },
+              "rows": [
+                {
+                  "rowPath": "value.selectedBindable",
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-custom-attribute-default-segment-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "tone.bind: accentTone", "token": "tone" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.name": "display-hint",
+                "value.selectedBindable.name": "tone",
+                "value.selectedBindable.attribute": "tone",
+                "value.selectedBindable.attributeSource": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "primary-custom-attribute-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "display-hint.bind=\"statusMessage\"", "token": "display-hint" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "display-hint",
+                "value.selectedBindable.name": "message",
+                "value.selectedBindable.attribute": "message"
+              }
+            }
+          ]
+        },
+        {
+          "id": "implicit-custom-attribute-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "active-state.bind=\"isActive\"", "token": "active-state" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "active-state",
+                "value.selectedBindable.name": "value",
+                "value.selectedBindable.attribute": "value",
+                "value.selectedBindable.attributeSource": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "static-alias-bindable-cursor",
+          "domainAxis": "query-locus",
+          "capability": "template-cursor-info",
+          "cursor": { "marker": "display-headline.bind=\"headline\"", "token": "display-headline" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "static-card",
+                "value.selectedBindable.name": "headline",
+                "value.selectedBindable.attribute": "display-headline",
+                "value.selectedBindable.mode": "oneTime"
+              },
+              "rows": [
+                {
+                  "rowPath": "value.selectedBindable",
+                  "sourceField": "attributeSource",
+                  "source": { "sourceFile": "src/static-card.ts", "marker": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }", "token": "display-headline" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "default-derived-property-references-include-attribute-and-template-usage",
+          "domainAxis": "source-precision",
+          "capability": "bindable-reference-context",
+          "cursor": { "marker": "count.bind=\"count\"", "token": "count" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "count", "value.rows.length": 3, "value.candidateRows.length": 0 },
+              "rows": [
+                {
+                  "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "default-derived" },
+                  "source": { "marker": "count.bind=\"count\"", "token": "count" }
+                },
+                {
+                  "fields": { "referenceKind": "template-usage" },
+                  "source": { "sourceFile": "src/profile-card.html", "marker": "${count}", "token": "count" }
+                },
+                {
+                  "fields": { "referenceKind": "declaration" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "count = 0", "token": "count" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "default-derived-property-rename-edits-callback-attribute-and-template-usage",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
+          "cursor": { "marker": "count.bind=\"count\"", "token": "count" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "totalCount" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 2, "value.edits.length": 4 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "count", "newText": "totalCount" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "count = 0", "token": "count" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "countChanged", "newText": "totalCountChanged" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "countChanged(newValue", "token": "countChanged" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "count", "newText": "total-count" },
+                  "source": { "marker": "count.bind=\"count\"", "token": "count" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "count", "newText": "totalCount" },
+                  "source": { "sourceFile": "src/profile-card.html", "marker": "${count}", "token": "count" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "two-way-property-rename-derives-kebab-template-target",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
+          "cursor": { "marker": "selected-id.two-way=\"selectedId\"", "token": "selected-id" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "currentId" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "selected-id", "newText": "current-id" },
+                  "source": { "marker": "selected-id.two-way=\"selectedId\"", "token": "selected-id" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "selectedId", "newText": "currentId" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "selectedId = ''", "token": "selectedId" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "explicit-alias-references-include-bound-and-static-usages",
+          "domainAxis": "source-precision",
+          "capability": "bindable-alias-reference-context",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "display-label", "value.rows.length": 3, "value.candidateRows.length": 0 },
+              "rows": [
+                {
+                  "fields": { "referenceKind": "declaration" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }
+                },
+                {
+                  "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" },
+                  "source": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" }
+                },
+                {
+                  "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" },
+                  "source": { "marker": "display-label=\"Literal public label\"", "token": "display-label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "explicit-alias-rename-edits-declaration-bound-and-static-usages",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "public-label" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 0, "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute-alias-declaration", "oldText": "display-label", "newText": "public-label" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "display-label", "newText": "public-label" },
+                  "source": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "display-label", "newText": "public-label" },
+                  "source": { "marker": "display-label=\"Literal public label\"", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-default-derived-segment-rename-edits-segment-target",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-rename",
+          "cursor": { "marker": "tone.bind: accentTone", "token": "tone" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "accentToneValue" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "tone", "newText": "accent-tone-value" },
+                  "source": { "marker": "tone.bind: accentTone", "token": "tone" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "tone", "newText": "accentToneValue" },
+                  "source": { "sourceFile": "src/display-hint.ts", "marker": "tone = ''", "token": "tone" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-explicit-alias-rename-edits-static-metadata-and-usage",
+          "domainAxis": "edit-plan",
+          "capability": "bindable-alias-rename",
+          "cursor": { "marker": "display-headline.bind=\"headline\"", "token": "display-headline" },
+          "expectations": [
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "hero-headline" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 0, "value.edits.length": 2 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute-alias-declaration", "oldText": "display-headline", "newText": "hero-headline" },
+                  "source": { "sourceFile": "src/static-card.ts", "marker": "{ name: 'headline', attribute: 'display-headline', mode: BindingMode.oneTime }", "token": "display-headline" },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "display-headline", "newText": "hero-headline" },
+                  "source": { "marker": "display-headline.bind=\"headline\"", "token": "display-headline" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "implicit-custom-attribute-shorthand-keeps-resource-reference-surface",
+          "domainAxis": "source-precision",
+          "capability": "resource-reference-context",
+          "cursor": { "marker": "active-state.bind=\"isActive\"", "token": "active-state" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.selectedMemberName": "active-state" },
+              "rows": [
+                {
+                  "fields": { "referenceKind": "declaration" },
+                  "source": { "sourceFile": "src/active-state.ts", "marker": "@customAttribute('active-state')", "token": "active-state" }
+                },
+                {
+                  "fields": { "referenceKind": "resource-usage" },
+                  "source": { "marker": "active-state.bind=\"isActive\"", "token": "active-state" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-bindable-completions",
+          "domainAxis": "template-syntax",
+          "capability": "bindable-completions",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<profile-card\n    ", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "title", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "display-label", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "selected-id", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "count", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "action", "sourceKind": "resource-definition" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-custom-attribute-bindable-completions",
+          "domainAxis": "template-syntax",
+          "capability": "bindable-completions",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "display-hint=\"message.bind: statusMessage; ", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "message", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "display-label", "sourceKind": "resource-definition" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "tone", "sourceKind": "resource-definition" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "top-level-bindable-semantic-tokens",
+          "domainAxis": "source-precision",
+          "capability": "template-semantic-tokens",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "title.bind=\"titleText\"", "token": "title" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "selected-id.two-way=\"selectedId\"", "token": "selected-id" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-headline.bind=\"headline\"", "token": "display-headline" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-multi-binding-segment-semantic-tokens",
+          "coverageIntent": "known-gap-witness",
+          "domainAxis": "source-precision",
+          "capability": "template-semantic-tokens",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage", "token": "message" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" } },
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "tone.bind: accentTone", "token": "tone" } },
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "message.bind: statusMessage", "token": "bind" } },
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "display-label.bind: aliasLabel", "token": "bind" } },
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "tone.bind: accentTone", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "clean-bindable-lab-template-diagnostics",
+          "domainAxis": "diagnostics",
+          "capability": "template-diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bindable-decorator-resource-issues",
+          "fixture": "fixtures/pressure/resource-metadata-errors",
+          "sourceFile": "src/resource-metadata-errors-app.ts",
+          "domainAxis": "diagnostics",
+          "capability": "resource-diagnostics",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "bindable-decorator", "issueKind": "invalid-bindable-decorator-usage-class-without-configuration", "frameworkErrorCode": "AUR0228" },
+                  "source": { "marker": "@bindable(null as unknown as { name: string })", "token": "null as unknown as { name: string }" }
+                },
+                {
+                  "fields": { "phase": "bindable-decorator", "issueKind": "invalid-bindable-decorator-usage-class-without-property-name-configuration", "frameworkErrorCode": "AUR0229" },
+                  "source": { "marker": "@bindable({})", "token": "{}" }
+                },
+                {
+                  "fields": { "phase": "bindable-decorator", "issueKind": "invalid-bindable-decorator-usage-symbol", "frameworkErrorCode": "AUR0227" },
+                  "source": { "marker": "@bindable({ name: 0 as unknown as string })", "token": "name" }
+                },
+                {
+                  "fields": { "phase": "bindable-decorator", "issueKind": "invalid-bindable-decorator-usage-symbol", "frameworkErrorCode": "AUR0227" },
+                  "source": { "marker": "[Symbol.for('semantic-runtime.invalid-bindable-name')]", "token": "[Symbol.for('semantic-runtime.invalid-bindable-name')]" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-metadata-depth",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-contract-model",
+      "domainAxis": "resources",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/bindable-lab-app.html",
+      "requirement": "All framework bindable declaration forms preserve merge precedence, runtime policy, authored field provenance, and exact property/public-attribute identities.",
+      "cases": [
+        {
+          "id": "decorator-setter-and-accessor-metadata",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "quantity", "attribute": "quantity", "setterKind": "type-coercion", "valueType": "number" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "quantity = 0", "token": "quantity" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "strictQuantity", "attribute": "strict-quantity", "setterKind": "type-coercion", "valueType": "number | null" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "strictQuantity: number | null", "token": "strictQuantity" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "normalizedLabel", "attribute": "normalized-label", "setterKind": "function", "valueType": "string" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "normalizedLabel = ''", "token": "normalizedLabel" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "summary", "attribute": "summary", "setterKind": "default", "valueType": "string" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "get summary(): string", "token": "summary" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "coercion-nullability-policy-is-preserved",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "strictQuantity", "setterKind": "type-coercion", "nullable": false },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "strictQuantity: number | null", "token": "strictQuantity" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-attribute-no-multi-bindings-policy-is-public",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "raw-hint", "resourceKind": "custom-attribute", "defaultProperty": "value", "noMultiBindings": true }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "known-interceptor-function-references-close",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "stringifiedLabel", "attribute": "stringified-label", "mode": "toView", "setterKind": "function" },
+                  "source": { "sourceFile": "src/profile-card.ts", "marker": "stringifiedLabel = ''", "token": "stringifiedLabel" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "status", "attribute": "status-text", "callback": "statusDidChange", "mode": "fromView", "setterKind": "function" },
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "status: {", "token": "status" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "authored-callback-mode-and-set-field-sources",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "status" },
+                  "sourceField": "callbackSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "callback: 'statusDidChange'", "token": "statusDidChange" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "status" },
+                  "sourceField": "modeSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "mode: BindingMode.fromView", "token": "BindingMode.fromView" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "status" },
+                  "sourceField": "setSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "set: String", "token": "String" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "decorator-bindables-inherit-base-to-derived",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "inherited-badge", "bindables.length": 2 }, "count": 1 },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "shared", "attribute": "shared" },
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "@bindable shared", "token": "shared" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "own", "attribute": "own" },
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "@bindable own", "token": "own" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-bindables-use-nearest-constructor-property",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "inherited-static-badge", "bindables.length": 1, "bindables.0.name": "baseStatic" }, "count": 1 },
+                { "fields": { "name": "nearest-static-badge", "bindables.length": 1, "bindables.0.name": "ownStatic" }, "count": 1 },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "baseStatic", "attribute": "base-static" },
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "static readonly bindables: StaticBindableConfig = ['baseStatic']", "token": "baseStatic" },
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "ownStatic", "attribute": "own-static" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "{ name: 'ownStatic', attribute: 'own-static' }", "token": "ownStatic" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bindable-source-form-merge-precedence",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "bindable-precedence-card", "bindables.length": 4 }, "count": 1 },
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "value", "attribute": "definition-value", "mode": "oneTime" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" },
+                  "count": 1
+                },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "inheritedOnly", "attribute": "inherited-only" }, "count": 1 },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "staticOnly", "attribute": "static-only" }, "count": 1 },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "definitionOnly", "attribute": "definition-only" }, "count": 1 },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "value", "attribute": "base-value" }, "absent": true },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "value", "attribute": "decorator-value" }, "absent": true },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "value", "attribute": "static-value" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "class-level-bindable-name-source",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].bindables",
+                  "fields": { "name": "externalValue", "attribute": "external-value" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/binding-contract-surfaces.ts", "marker": "@bindable('externalValue')", "token": "externalValue" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "implicit-default-bindable-is-compiler-synthetic",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "implicit-state", "resourceKind": "custom-attribute", "defaultProperty": "state", "bindables.length": 0 }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-locus-and-completion-depth",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "template-cursor-info",
+      "domainAxis": "query-locus",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/bindable-lab-app.html",
+      "requirement": "Cursor and completion projections preserve compiler precedence, target-versus-value identity, primary-bindable lowering, no-multi-binding policy, and bindable type facts.",
+      "cases": [
+        {
+          "id": "same-token-target-and-parent-value-dispatch",
+          "expectations": [
+            {
+              "name": "target cursor info",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "count.bind=\"count\"", "token": "count", "occurrence": 1 },
+                "options": { "detail": "handles" }
+              },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "profile-card",
+                "value.selectedBindable.name": "count",
+                "value.selectedMember": null
+              }
+            },
+            {
+              "name": "value cursor info",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "count.bind=\"count\"", "token": "count", "occurrence": 2 },
+                "options": { "detail": "handles" }
+              },
+              "equals": {
+                "value.siteKind": "expression",
+                "value.selectedDefinition.name": "profile-card",
+                "value.selectedBindable.name": "count",
+                "value.selectedMember.name": "count"
+              }
+            }
+          ]
+        },
+        {
+          "id": "no-multi-bindings-keeps-colon-text-on-primary-bindable",
+          "cursor": { "marker": "raw-hint=\"message.bind: statusMessage; tone.bind: accentTone\"", "token": "message" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-value",
+                "value.selectedDefinition.name": "raw-hint",
+                "value.selectedBindable.name": "value",
+                "value.selectedMember": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "binding-command-value-colon-is-not-inline-multi-binding",
+          "cursor": { "marker": "display-hint.bind=\"statusMessage ? accentTone : aliasLabel\"", "token": "accentTone" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "expression",
+                "value.valueSite.siteKind": "binding-command-value",
+                "value.valueSite.bindingCommandName": "bind",
+                "value.selectedDefinition.name": "display-hint",
+                "value.selectedBindable.name": "message",
+                "value.selectedMember.name": "accentTone"
+              }
+            }
+          ]
+        },
+        {
+          "id": "implicit-custom-attribute-default-property-dispatch",
+          "cursor": { "marker": "implicit-state.bind=\"implicitValue\"", "token": "implicit-state" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.siteKind": "attribute-name",
+                "value.selectedDefinition.name": "implicit-state",
+                "value.selectedBindable.name": "state",
+                "value.selectedBindable.attribute": "state",
+                "value.selectedBindable.attributeSource": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "bindable-cursor-preserves-value-type-facts",
+          "coverageIntent": "known-gap-witness",
+          "cursor": { "marker": "action.bind=\"handleAction\"", "token": "action" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "options": { "detail": "handles" } },
+              "equals": {
+                "value.selectedDefinition.name": "profile-card",
+                "value.selectedBindable.name": "onAction",
+                "value.selectedBindable.attribute": "action",
+                "value.selectedBindable.valueType": "((value: string) => void) | null",
+                "value.selectedBindable.valueTypeHasCallSignature": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "expanded-custom-element-bindable-completions",
+          "domainAxis": "template-syntax",
+          "capability": "bindable-completions",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<profile-card\n    ", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "quantity", "sourceKind": "resource-definition" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "strict-quantity", "sourceKind": "resource-definition" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "normalized-label", "sourceKind": "resource-definition" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "stringified-label", "sourceKind": "resource-definition" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "summary", "sourceKind": "resource-definition" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "merge-precedence-controls-completion-vocabulary",
+          "domainAxis": "template-syntax",
+          "capability": "bindable-completions",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<bindable-precedence-card\n    ", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "definition-value" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "inherited-only" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "static-only" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "definition-only" }, "count": 1 },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "base-value" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "decorator-value" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "static-value" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "no-multi-bindings-suppresses-segment-completions",
+          "domainAxis": "template-syntax",
+          "capability": "bindable-completions",
+          "expectations": [
+            {
+              "name": "template completions",
+              "outcomes": ["miss"],
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "raw-hint=\"", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "message" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "bindable-attribute", "name": "tone" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-reference-closure-depth",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-reference-context",
+      "domainAxis": "source-precision",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/bindable-lab-app.html",
+      "requirement": "Bindable property and alias references are owner-isolated and close across authored metadata, TypeScript property declarations, template usages, and public attribute sites.",
+      "cases": [
+        {
+          "id": "property-references-isolate-same-spelling-alias-owners",
+          "sourceFile": "src/profile-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "labelText", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/profile-card.ts", "marker": "labelText = ''", "token": "labelText" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "sourceFile": "src/profile-card.html", "marker": "${labelText}", "token": "labelText" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "display-label=\"Literal public label\"", "token": "display-label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-alias-references-isolate-same-spelling-element-bindable",
+          "cursor": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "display-label", "value.rows.length": 2, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/display-hint.ts", "marker": "@bindable({ attribute: 'display-label' }) labelText", "token": "display-label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "marker": "display-hint=\"message.bind: statusMessage; display-label.bind: aliasLabel", "token": "display-label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inherited-decorator-property-reference-closure",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${shared}:${own}</span>'", "token": "shared" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "shared", "value.rows.length": 3, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "@bindable shared", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${shared}:${own}</span>'", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "default-derived" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "shared.bind=\"inheritedShared\"", "token": "shared" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "class-level-bindable-property-reference-closure",
+          "coverageIntent": "known-gap-witness",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "externalValue", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "@bindable('externalValue')", "token": "externalValue" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "externalValue = ''", "token": "externalValue" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "default-derived" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "external-value.bind=\"externalValue\"", "token": "external-value" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inherited-static-bindable-property-reference-closure",
+          "coverageIntent": "known-gap-witness",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${baseStatic}</span>'", "token": "baseStatic" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "baseStatic", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "static readonly bindables: StaticBindableConfig = ['baseStatic']", "token": "baseStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "baseStatic = ''", "token": "baseStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${baseStatic}</span>'", "token": "baseStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "default-derived" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "base-static.bind=\"inheritedStatic\"", "token": "base-static" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nearest-static-bindable-property-reference-closure",
+          "coverageIntent": "known-gap-witness",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "ownStatic", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "{ name: 'ownStatic', attribute: 'own-static' }", "token": "ownStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "ownStatic = ''", "token": "ownStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "own-static.bind=\"ownStatic\"", "token": "own-static" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-record-bindable-property-reference-closure",
+          "coverageIntent": "known-gap-witness",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${status}</span>'", "token": "status" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "status", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "status: {", "token": "status" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "status = ''", "token": "status" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${status}</span>'", "token": "status" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "status-text.bind=\"recordStatus\"", "token": "status-text" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "definition-object-bindable-property-reference-closure",
+          "coverageIntent": "known-gap-witness",
+          "sourceFile": "src/binding-contract-surfaces.ts",
+          "cursor": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "closure": "complete",
+              "equals": { "value.selectedMemberName": "value", "value.rows.length": 4, "value.candidateRows.length": 0 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" }, "count": 1 },
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "override value = ''", "token": "value" }, "count": 1 },
+                { "fields": { "referenceKind": "template-usage" }, "source": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "definition-value.bind=\"precedenceValue\"", "token": "definition-value" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-rename-closure-depth",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-rename",
+      "domainAxis": "edit-plan",
+      "coverageIntent": "known-gap-witness",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/binding-contract-surfaces.ts",
+      "requirement": "Template- and TypeScript-origin bindable property renames keep metadata, TypeScript symbols, derived template spellings, child-template usages, and conventional callbacks synchronized without rewriting explicit aliases.",
+      "cases": [
+        {
+          "id": "class-level-bindable-template-origin-rename",
+          "cursor": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "externalState" } },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "@bindable('externalValue')", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "externalValue = ''", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "external-value", "newText": "external-state" },
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "external-value.bind=\"externalValue\"", "token": "external-value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nearest-static-bindable-template-origin-rename",
+          "cursor": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "ownValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "{ name: 'ownStatic', attribute: 'own-static' }", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "ownStatic = ''", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "own-static.bind=\"ownStatic\"", "token": "own-static" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "static-record-bindable-template-origin-rename",
+          "cursor": { "marker": "template: '<span>${status}</span>'", "token": "status" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "state" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "status", "newText": "state" },
+                  "source": { "marker": "status: {", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "status", "newText": "state" },
+                  "source": { "marker": "status = ''", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "status", "newText": "state" },
+                  "source": { "marker": "template: '<span>${status}</span>'", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "status-text.bind=\"recordStatus\"", "token": "status-text" },
+                  "absent": true
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "marker": "statusDidChange(): void", "token": "statusDidChange" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "definition-object-bindable-template-origin-rename",
+          "cursor": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "currentValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "override value = ''", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "definition-value.bind=\"precedenceValue\"", "token": "definition-value" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-conventional-callback-propagation",
+          "sourceFile": "src/profile-card.ts",
+          "cursor": { "marker": "count = 0", "token": "count" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "totalCount" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "oldText": "countChanged", "newText": "totalCountChanged" },
+                  "source": { "marker": "countChanged(newValue", "token": "countChanged" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "count", "newText": "total-count" },
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "count.bind=\"count\"", "token": "count" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "count", "newText": "totalCount" },
+                  "source": { "sourceFile": "src/profile-card.html", "marker": "${count}", "token": "count" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-class-level-metadata-propagation",
+          "cursor": { "marker": "externalValue = ''", "token": "externalValue" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "externalState" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "@bindable('externalValue')", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "external-value", "newText": "external-state" },
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "external-value.bind=\"externalValue\"", "token": "external-value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "externalValue", "newText": "externalState" },
+                  "source": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-inherited-static-metadata-propagation",
+          "cursor": { "marker": "baseStatic = ''", "token": "baseStatic" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "baseValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "baseStatic", "newText": "baseValue" },
+                  "source": { "marker": "static readonly bindables: StaticBindableConfig = ['baseStatic']", "token": "baseStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "oldText": "base-static", "newText": "base-value" },
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "base-static.bind=\"inheritedStatic\"", "token": "base-static" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "baseStatic", "newText": "baseValue" },
+                  "source": { "marker": "template: '<span>${baseStatic}</span>'", "token": "baseStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-nearest-static-metadata-propagation",
+          "cursor": { "marker": "ownStatic = ''", "token": "ownStatic" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "ownValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "{ name: 'ownStatic', attribute: 'own-static' }", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "ownStatic", "newText": "ownValue" },
+                  "source": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "own-static.bind=\"ownStatic\"", "token": "own-static" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-static-record-metadata-propagation",
+          "cursor": { "marker": "status = ''", "token": "status" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "state" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "status", "newText": "state" },
+                  "source": { "marker": "status: {", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "status", "newText": "state" },
+                  "source": { "marker": "template: '<span>${status}</span>'", "token": "status" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "status-text.bind=\"recordStatus\"", "token": "status-text" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "typescript-origin-definition-object-metadata-propagation",
+          "cursor": { "marker": "override value = ''", "token": "value" },
+          "expectations": [
+            {
+              "name": "TypeScript-origin property rename",
+              "query": { "kind": "template-rename-from-typescript", "options": { "newName": "currentValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "{ name: 'value', attribute: 'definition-value', mode: BindingMode.oneTime }", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "oldText": "value", "newText": "currentValue" },
+                  "source": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "sourceFile": "src/bindable-lab-app.html", "marker": "definition-value.bind=\"precedenceValue\"", "token": "definition-value" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-lowering-depth",
+      "fixture": "fixtures/pressure/bindable-contracts-lab",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-lowering-projection",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/bindable-lab-app.html",
+      "requirement": "Binding modes, type flows, inline segment addresses, and no-multi-binding lowering remain aligned from resource metadata through compiler products and editor projections.",
+      "cases": [
+        {
+          "id": "declared-bindable-modes-drive-effective-inlays",
+          "domainAxis": "source-precision",
+          "capability": "template-inlay-hints",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "targetProperty": "data", "authoredMode": "default", "effectiveMode": "two-way", "effectiveModeLabel": "twoWay" },
+                  "source": { "marker": "two-way-state.bind=\"twoWayValue\"", "token": "two-way-state.bind" },
+                  "count": 1
+                },
+                {
+                  "fields": { "targetProperty": "headline", "authoredMode": "default", "effectiveMode": "one-time", "effectiveModeLabel": "oneTime" },
+                  "source": { "marker": "display-headline.bind=\"headline\"", "token": "display-headline.bind" },
+                  "count": 1
+                },
+                {
+                  "fields": { "targetProperty": "status", "authoredMode": "default", "effectiveMode": "from-view", "effectiveModeLabel": "fromView" },
+                  "source": { "marker": "status-text.bind=\"recordStatus\"", "token": "status-text.bind" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bindable-types-and-modes-drive-data-flow",
+          "capability": "binding-data-flows",
+          "expectations": [
+            {
+              "name": "binding data flows",
+              "query": { "kind": "binding-data-flows", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "targetProperty": "selectedId",
+                    "direction": "two-way",
+                    "sourceName": "selectedId",
+                    "sourceType": "string",
+                    "targetPropertyType": "string",
+                    "sourceToTargetAssignable": true,
+                    "targetToSourceAssignable": true
+                  },
+                  "source": { "marker": "selected-id.two-way=\"selectedId\"", "token": "selected-id.two-way=\"selectedId\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "targetProperty": "onAction",
+                    "direction": "source-to-target",
+                    "sourceName": "handleAction",
+                    "sourceType": "(value: string) => void",
+                    "targetPropertyType": "((value: string) => void) | null",
+                    "sourceToTargetAssignable": true
+                  },
+                  "source": { "marker": "action.bind=\"handleAction\"", "token": "action.bind=\"handleAction\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "targetProperty": "quantity",
+                    "direction": "source-to-target",
+                    "sourceName": "quantity",
+                    "sourceType": "number",
+                    "targetPropertyType": "number",
+                    "sourceToTargetAssignable": true
+                  },
+                  "source": { "marker": "quantity.bind=\"quantity\"", "token": "quantity.bind=\"quantity\"" },
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "targetProperty": "status",
+                    "direction": "target-to-source",
+                    "sourceName": "recordStatus",
+                    "sourceType": "string",
+                    "targetPropertyType": "string",
+                    "targetToSourceAssignable": true
+                  },
+                  "source": { "marker": "status-text.bind=\"recordStatus\"", "token": "status-text.bind=\"recordStatus\"" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-multi-binding-inlay-hints-use-segment-sources",
+          "coverageIntent": "known-gap-witness",
+          "domainAxis": "source-precision",
+          "capability": "template-inlay-hints",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "targetProperty": "message", "authoredMode": "default", "effectiveMode": "to-view" },
+                  "source": { "marker": "message.bind: statusMessage", "token": "message.bind" },
+                  "count": 1
+                },
+                {
+                  "fields": { "targetProperty": "labelText", "authoredMode": "default", "effectiveMode": "to-view" },
+                  "source": { "marker": "display-label.bind: aliasLabel", "token": "display-label.bind" },
+                  "count": 1
+                },
+                {
+                  "fields": { "targetProperty": "tone", "authoredMode": "default", "effectiveMode": "to-view" },
+                  "source": { "marker": "tone.bind: accentTone", "token": "tone.bind" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "no-multi-bindings-does-not-mint-segment-inlays",
+          "domainAxis": "source-precision",
+          "capability": "template-inlay-hints",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "raw-hint=\"message.bind: statusMessage; tone.bind: accentTone\"", "token": "message.bind" }, "absent": true },
+                { "source": { "marker": "raw-hint=\"message.bind: statusMessage; tone.bind: accentTone\"", "token": "tone.bind" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bindable-contract-open-boundaries",
+      "fixture": "fixtures/pressure/resource-bindable-boundary-config",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-open-honesty",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/app.ts",
+      "requirement": "Open bindable configurations preserve every statically closed field, avoid fabricated defaults, and publish one source-backed seam per authored dynamic boundary.",
+      "cases": [
+        {
+          "id": "closed-fields-survive-open-bindable-configurations",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "enabled", "mode": "twoWay", "setterKind": "open" }, "count": 1 },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "label", "mode": "default", "setterKind": "open" }, "count": 1 },
+                { "rowPath": "value.rows[].bindables", "fields": { "name": "externalValue", "mode": "default", "setterKind": "open" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dynamic-bindable-configurations-publish-authored-seams",
+          "expectations": [
+            {
+              "name": "open seam sites",
+              "query": {
+                "kind": "open-seam-sites",
+                "fetchAllPages": true,
+                "options": {
+                  "openSeamKindKey": "resource.open-definition-field",
+                  "page": { "size": 100 }
+                }
+              },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "source": { "marker": "{ ...import.meta.env, mode: BindingMode.twoWay }", "token": "{ ...import.meta.env, mode: BindingMode.twoWay }" }, "count": 1 },
+                { "source": { "marker": "{ ...import.meta.env }", "token": "{ ...import.meta.env }" }, "count": 1 },
+                { "source": { "marker": "{ ...import.meta.env, name: 'externalValue' }", "token": "{ ...import.meta.env, name: 'externalValue' }" }, "count": 1 }
               ]
             }
           ]

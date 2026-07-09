@@ -71,7 +71,10 @@ Current matrix scale, as of 2026-07-09:
 - source precision and cross-query agreement canaries;
 - semantic token source exactness over the source gallery, including plugin syntax and template controllers;
 - folding range and inlay hint source exactness;
-- bindable alias references and rename edit plans;
+- bindable contract rows for decorator, inherited decorator, class-level decorator, inherited/nearest static, static
+  record, and definition-object metadata; merge precedence; coercion/setter policy; open configuration honesty; public
+  attribute aliases; binding modes and data flows; cursor/completion surfaces; references; template- and TS-origin
+  rename plans; diagnostics; inlay hints; and semantic-token source projection;
 - custom-element resource references and rename edit plans;
 - router resource cursor/completion/diagnostic/refusal surfaces, router instruction cursor/completion/diagnostic
   projection, router topology, route recognizer, route-resource instruction closure, route config declaration/routeable
@@ -86,8 +89,12 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 223 active assertions pass with 19 known gaps. The router-composition subdomain has 64 assertion
-rows, including the current router known-gap witnesses; the runtime-composition subdomain has 4 assertion rows.
+Current default output: 268 active assertions pass with 41 known gaps. The bindable-contracts subdomain has 82 assertion
+rows: 60 active passes and 22 known-gap witnesses. Its gaps are grouped by causal mechanism rather than surface symptom:
+bindable metadata/class-symbol closure, inline multi-binding segment projection, coercion policy loss, field-provenance
+loss, cursor type loss, interceptor-reference convergence, custom-attribute compiler-policy projection, and TS-origin callback
+propagation. The router-composition subdomain has 64 assertion rows, including the current router known-gap witnesses;
+the runtime-composition subdomain has 4 assertion rows.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the
