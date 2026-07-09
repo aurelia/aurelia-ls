@@ -1,0 +1,48 @@
+{
+  "$schema": "./schema.semantic-conformance-known-gaps.v1.json",
+  "schemaVersion": "semantic-conformance-known-gaps.v1",
+  "knownGaps": [
+    {
+      "assertionId": "storefront-searchText-line-character-cursor-parity",
+      "status": "known-gap",
+      "failureBucket": "query-cursor-offset-consistency",
+      "firstObserved": "2026-07-09",
+      "rationale": "References resolve the same member from line/character-only cursor input, but rename refuses it unless the cursor includes an offset."
+    },
+    {
+      "assertionId": "mixed-form-option-label-diagnostic-provenance-agreement",
+      "status": "known-gap",
+      "failureBucket": "diagnostic-provenance-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "TemplateDiagnostics preserves selectedMemberName for the weak owner row, while AppDiagnostics preserves source/domain but drops that selected member identity."
+    },
+    {
+      "assertionId": "code-action-edit-plan-coverage/declaration-insertion-old-text",
+      "status": "known-gap",
+      "failureBucket": "code-action-edit-plan-oldText-data-loss",
+      "firstObserved": "2026-07-09",
+      "rationale": "Declare-view-model-member code action edits target a zero-length TypeScript insertion span but publish oldText as null, while other insertion edit plans publish empty-string oldText for all-or-nothing validation."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/promise-then-declaration-local",
+      "status": "known-gap",
+      "failureBucket": "template-controller-branch-local-declaration-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "The then-branch local declaration value is materialized as a source-backed binding-context slot for usages, but cursor dispatch at the declaration value selects the built-in controller/bindable surface instead of the local slot, so references and rename miss the declaration locus."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/promise-catch-declaration-local",
+      "status": "known-gap",
+      "failureBucket": "template-controller-branch-local-declaration-dispatch",
+      "firstObserved": "2026-07-09",
+      "rationale": "The catch-branch local declaration value is materialized as a source-backed binding-context slot for usages, but cursor dispatch at the declaration value selects the built-in controller/bindable surface instead of the local slot, so references and rename miss the declaration locus."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/let-parent-overlay-does-not-report-false-missing-member",
+      "status": "known-gap",
+      "failureBucket": "template-overlay-let-binding-context-parent-alias",
+      "firstObserved": "2026-07-09",
+      "rationale": "Cursor info, references, and rename resolve nested $parent.hostTitle to the <let to-binding-context> binding-context slot, matching Aurelia Scope.getContext semantics, but the TypeScript overlay still reports TS2339 at that same token."
+    }
+  ]
+}

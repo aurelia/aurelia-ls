@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aurelia-ls.local/semantic-conformance-matrix.v1.schema.json",
+  "title": "Aurelia semantic-runtime semantic conformance matrix",
+  "type": "object",
+  "required": ["schemaVersion"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "semantic-conformance-matrix.v1" },
+    "assertions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/assertion" }
+    },
+    "assertionSets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/assertionSet" }
+    }
+  },
+  "anyOf": [
+    { "required": ["assertions"] },
+    { "required": ["assertionSets"] }
+  ],
+  "$defs": {
+    "domainAxis": {
+      "enum": [
+        "diagnostics",
+        "edit-plan",
+        "open-honesty",
+        "overlays",
+        "plugin-capabilities",
+        "query-contract",
+        "query-locus",
+        "resources",
+        "source-precision",
+        "template-syntax",
+        "type-system"
+      ]
+    },
+    "aureliaDomain": {
+      "enum": [
+        "bindable-contracts",
+        "plugin-capability-admission",
+        "resource-registration",
+        "router-composition",
+        "runtime-api-boundary",
+        "template-binding-syntax",
+        "template-controller-scope",
+        "template-expression-typing"
+      ]
+    },
+    "coverageIntent": {
+      "enum": [
+        "boundary-contract",
+        "domain-canary",
+        "known-gap-witness",
+        "regression-contract"
+      ]
+    },
+    "assertionKind": {
+      "enum": [
+        "candidate-honesty",
+        "diagnostic-provenance-agreement",
+        "edit-plan-old-text",
+        "line-character-cursor-parity",
+        "query-catalog-expectations",
+        "query-expectations",
+        "source-precision-agreement"
+      ]
+    },
+    "assertionBase": {
+      "type": "object",
+      "required": [
+        "id",
+        "aureliaDomain",
+        "capability",
+        "domainAxis",
+        "coverageIntent",
+        "assertionKind",
+        "requirement"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fixture": { "type": "string", "minLength": 1 },
+        "sourceFile": { "type": "string", "minLength": 1 },
+        "aureliaDomain": { "$ref": "#/$defs/aureliaDomain" },
+        "capability": { "type": "string", "minLength": 1 },
+        "domainAxis": { "$ref": "#/$defs/domainAxis" },
+        "coverageIntent": { "$ref": "#/$defs/coverageIntent" },
+        "assertionKind": { "$ref": "#/$defs/assertionKind" },
+        "requirement": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "assertion": {
+      "$ref": "#/$defs/assertionBase"
+    },
+    "assertionSet": {
+      "allOf": [
+        { "$ref": "#/$defs/assertionBase" },
+        {
+          "type": "object",
+          "required": ["cases"],
+          "properties": {
+            "cases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "aureliaDomain": { "$ref": "#/$defs/aureliaDomain" },
+                  "coverageIntent": { "$ref": "#/$defs/coverageIntent" }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

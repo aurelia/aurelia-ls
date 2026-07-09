@@ -1,0 +1,59 @@
+<template>
+  <h1>${hostTitle}</h1>
+
+  <section if.bind="isReady">
+    <span class="if-title">${hostTitle}</span>
+  </section>
+  <section else>
+    <span class="else-title">${hostTitle}</span>
+  </section>
+
+  <section repeat.for="task of tasks; key: id; contextual.bind: contextualRepeat">
+    <h2>${task.name}</h2>
+    <span class="repeat-flags">${$index}:${$first}:${$last}</span>
+    <button click.trigger="selectTask(task.id, $index)">Select</button>
+    <let localTask.bind="task"></let>
+    <span class="let-local">${localTask.name}</span>
+    <let hostTitle.bind="task.name" to-binding-context></let>
+    <span class="let-binding-context">${hostTitle}</span>
+
+    <ul>
+      <li repeat.for="child of task.children">
+        <span class="child-name">${child.name}</span>
+        <span class="parent-task-name">${task.name}</span>
+        <span class="parent-host-title">${$parent.hostTitle}</span>
+      </li>
+    </ul>
+  </section>
+
+  <section with.bind="selectedTask">
+    <span class="with-name">${name}</span>
+    <span class="with-done">${done}</span>
+    <span class="with-parent">${$parent.hostTitle}</span>
+    <span class="with-missing">${label}</span>
+  </section>
+
+  <section promise.bind="loadTask()">
+    <p pending>${hostTitle}</p>
+    <p then="resolvedTask">${resolvedTask.name}</p>
+    <p catch="loadError">${loadError.message}</p>
+  </section>
+
+  <section switch.bind="status">
+    <p case.bind="'open'">${hostTitle}</p>
+    <p case.bind="'closed'">${selectedTask.name}</p>
+    <p default-case>${hostTitle}</p>
+  </section>
+
+  <section portal="target: body; position: beforeend">
+    <span class="portal-title">${hostTitle}</span>
+  </section>
+
+  <section surface-gate.bind="isReady"></section>
+
+  <section class="invalid-scope-shapes">
+    <span repeat.for="broken of notIterable">${broken}</span>
+    <p then="orphanTask">${orphanTask}</p>
+    <p case.bind="'orphan'">${hostTitle}</p>
+  </section>
+</template>

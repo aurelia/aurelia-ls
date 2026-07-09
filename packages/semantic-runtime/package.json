@@ -79,6 +79,7 @@
     "contract:template-code-actions": "pnpm build && node scripts/contract-template-code-actions.mjs",
     "contract:template-semantic-tokens": "pnpm build && node scripts/contract-template-semantic-tokens.mjs",
     "contract:template-folding-ranges": "pnpm build && node scripts/contract-template-folding-ranges.mjs",
+    "contract:semantic-conformance": "pnpm build && node scripts/contract-semantic-conformance.mjs",
     "contract:template-completion-source-scope": "pnpm build && node scripts/contract-template-completion-source-scope.mjs",
     "contract:template-completion-member-metadata": "pnpm build && node scripts/contract-template-completion-member-metadata.mjs",
     "contract:contextual-call-argument-completion": "pnpm build && node scripts/contract-contextual-call-argument-completion.mjs",

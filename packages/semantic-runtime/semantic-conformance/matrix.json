@@ -1,0 +1,3352 @@
+{
+  "$schema": "./schema.semantic-conformance-matrix.v1.json",
+  "schemaVersion": "semantic-conformance-matrix.v1",
+  "assertions": [
+    {
+      "id": "storefront-searchText-source-precision-agreement",
+      "fixture": "fixtures/pressure/app-pattern-routed-catalog-storefront",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-member-navigation",
+      "domainAxis": "source-precision",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "source-precision-agreement",
+      "requirement": "Cursor info, references, rename, and semantic tokens agree on the authored token span for a source-backed template member.",
+      "sourceFile": "src/routes/item-list-route.html",
+      "cursor": {
+        "marker": "state.items.searchText",
+        "token": "searchText"
+      },
+      "expected": {
+        "memberName": "searchText",
+        "renameNewName": "queryText",
+        "referenceKind": "template-usage",
+        "renameEditKind": "template-usage",
+        "semanticTokenType": "property"
+      }
+    },
+    {
+      "id": "storefront-searchText-line-character-cursor-parity",
+      "fixture": "fixtures/pressure/app-pattern-routed-catalog-storefront",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-member-rename",
+      "domainAxis": "query-locus",
+      "coverageIntent": "known-gap-witness",
+      "assertionKind": "line-character-cursor-parity",
+      "requirement": "Cursor-locus queries that accept line and character resolve the same semantic member as offset-aware queries for the same source position.",
+      "sourceFile": "src/routes/item-list-route.html",
+      "cursor": {
+        "marker": "state.items.searchText",
+        "token": "searchText"
+      },
+      "expected": {
+        "memberName": "searchText",
+        "renameNewName": "queryText",
+        "referenceKind": "template-usage",
+        "renameEditKind": "template-usage"
+      }
+    },
+    {
+      "id": "mixed-form-option-label-open-candidate-honesty",
+      "fixture": "fixtures/pressure/mixed-form-surfaces",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "open-reference-honesty",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "candidate-honesty",
+      "requirement": "Unproven weak/dynamic member references return only proven rows, preserve candidates separately, and mark the answer open.",
+      "sourceFile": "src/components/loose-picklist.html",
+      "cursor": {
+        "marker": "${option.label || option}",
+        "token": "label"
+      },
+      "expected": {
+        "memberName": "label",
+        "closure": "open",
+        "rows": 1,
+        "candidateRowsAtLeast": 1,
+        "referenceKind": "template-usage"
+      }
+    },
+    {
+      "id": "mixed-form-option-label-diagnostic-provenance-agreement",
+      "fixture": "fixtures/pressure/mixed-form-surfaces",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "diagnostic-provenance",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "known-gap-witness",
+      "assertionKind": "diagnostic-provenance-agreement",
+      "requirement": "App-level diagnostic aggregation preserves the template diagnostic subject, selected member identity, suggestion action, source, and domain.",
+      "sourceFile": "src/components/loose-picklist.html",
+      "cursor": {
+        "marker": "${option.label || option}",
+        "token": "label"
+      },
+      "expected": {
+        "diagnosticKind": "weak-expression-member-owner",
+        "selectedMemberName": "label",
+        "subjectMarker": "option.label",
+        "suggestionActionKind": "inspect-owner-type",
+        "appDiagnosticDomain": "template"
+      }
+    },
+    {
+      "id": "unregistered-router-code-action-oldText",
+      "fixture": "fixtures/pressure/unregistered-plugin-resources",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "code-action-edit-plan",
+      "domainAxis": "edit-plan",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "edit-plan-old-text",
+      "requirement": "Edit-bearing template code actions carry explicit oldText and validate insertion/replacement text against authored source.",
+      "sourceFile": "src/unregistered-plugin-resources-app.html",
+      "cursor": {
+        "marker": "load=\"orders\"",
+        "token": "load"
+      },
+      "expected": {
+        "title": "Register RouterConfiguration for router.default-resources",
+        "editKind": "register-framework-capability",
+        "editSourceFile": "src/main.ts",
+        "oldText": "",
+        "newText": ".register(RouterConfiguration)\n  "
+      }
+    }
+  ],
+  "assertionSets": [
+    {
+      "id": "app-query-catalog-public-contract",
+      "aureliaDomain": "runtime-api-boundary",
+      "capability": "app-query-catalog",
+      "domainAxis": "query-contract",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-catalog-expectations",
+      "requirement": "Public app-query catalog rows preserve the cursor/source-file/paging/materialization boundary that IDE, MCP, and contract callers use to choose safe query shapes.",
+      "cases": [
+        {
+          "id": "template-code-actions",
+          "catalog": {
+            "kind": "template-code-actions",
+            "fields": {
+              "group": "template",
+              "resultRole": "cursor-locus",
+              "runtimeBoundary": "app-world",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "none",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": false,
+              "supportsSourceFile": false,
+              "supportsDiagnosticProjection": true
+            }
+          }
+        },
+        {
+          "id": "template-completions",
+          "catalog": {
+            "kind": "template-completions",
+            "fields": {
+              "group": "template",
+              "resultRole": "cursor-locus",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "continuation-cursor",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": true,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "template-cursor-info",
+          "catalog": {
+            "kind": "template-cursor-info",
+            "fields": {
+              "group": "template",
+              "resultRole": "cursor-locus",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "none",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": false,
+              "supportsDiagnosticProjection": true
+            }
+          }
+        },
+        {
+          "id": "template-references",
+          "catalog": {
+            "kind": "template-references",
+            "fields": {
+              "group": "template",
+              "resultRole": "row-table",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "offset-cursor",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": true,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "template-rename",
+          "catalog": {
+            "kind": "template-rename",
+            "fields": {
+              "group": "template",
+              "resultRole": "cursor-locus",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "none",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": false,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "template-rename-from-typescript",
+          "catalog": {
+            "kind": "template-rename-from-typescript",
+            "fields": {
+              "group": "template",
+              "resultRole": "cursor-locus",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "none",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": true,
+              "supportsPaging": false,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "template-diagnostics",
+          "catalog": {
+            "kind": "template-diagnostics",
+            "fields": {
+              "group": "template",
+              "resultRole": "row-table",
+              "materializationPolicy": "query-type-projection",
+              "pagingKind": "offset-cursor",
+              "minimumAnalysisDepth": "binding-observation",
+              "requiresCursor": false,
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsDiagnosticProjection": true
+            }
+          }
+        },
+        {
+          "id": "template-semantic-tokens",
+          "catalog": {
+            "kind": "template-semantic-tokens",
+            "fields": {
+              "group": "template",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "pagingKind": "offset-cursor",
+              "minimumAnalysisDepth": "runtime-topology",
+              "requiresCursor": false,
+              "supportsPaging": true,
+              "supportsSourceFile": true
+            }
+          }
+        },
+        {
+          "id": "template-folding-ranges",
+          "catalog": {
+            "kind": "template-folding-ranges",
+            "fields": {
+              "group": "template",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true
+            }
+          }
+        },
+        {
+          "id": "template-inlay-hints",
+          "catalog": {
+            "kind": "template-inlay-hints",
+            "fields": {
+              "group": "template",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "binding-observation",
+              "supportsPaging": true,
+              "supportsSourceFile": true
+            }
+          }
+        },
+        {
+          "id": "app-diagnostics",
+          "catalog": {
+            "kind": "app-diagnostics",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "row-table",
+              "materializationPolicy": "query-type-projection",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsDiagnosticProjection": true
+            }
+          }
+        },
+        {
+          "id": "app-diagnostic-summary",
+          "catalog": {
+            "kind": "app-diagnostic-summary",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "summary-row-table",
+              "materializationPolicy": "query-type-projection",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsDiagnosticProjection": true
+            }
+          }
+        },
+        {
+          "id": "typescript-diagnostics",
+          "catalog": {
+            "kind": "typescript-diagnostics",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "row-table",
+              "materializationPolicy": "query-type-projection",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsDiagnosticProjection": false
+            }
+          }
+        },
+        {
+          "id": "typescript-diagnostic-summary",
+          "catalog": {
+            "kind": "typescript-diagnostic-summary",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "summary-row-table",
+              "materializationPolicy": "query-type-projection",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true
+            }
+          }
+        },
+        {
+          "id": "framework-capability-demands",
+          "catalog": {
+            "kind": "framework-capability-demands",
+            "fields": {
+              "group": "framework",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true
+            }
+          }
+        },
+        {
+          "id": "open-seams",
+          "catalog": {
+            "kind": "open-seams",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsOpenSeamFilters": true
+            }
+          }
+        },
+        {
+          "id": "open-seam-summary",
+          "catalog": {
+            "kind": "open-seam-summary",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "summary-row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsOpenSeamFilters": true
+            }
+          }
+        },
+        {
+          "id": "open-seam-sites",
+          "catalog": {
+            "kind": "open-seam-sites",
+            "fields": {
+              "group": "diagnostics",
+              "resultRole": "summary-row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": true,
+              "supportsOpenSeamFilters": true
+            }
+          }
+        },
+        {
+          "id": "resource-definitions",
+          "catalog": {
+            "kind": "resource-definitions",
+            "fields": {
+              "group": "resources",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "resource-visibility",
+          "catalog": {
+            "kind": "resource-visibility",
+            "fields": {
+              "group": "resources",
+              "resultRole": "row-table",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": false
+            }
+          }
+        },
+        {
+          "id": "source-files",
+          "catalog": {
+            "kind": "source-files",
+            "fields": {
+              "group": "source",
+              "resultRole": "row-table",
+              "runtimeBoundary": "project-frame",
+              "materializationPolicy": "projection-only",
+              "minimumAnalysisDepth": "runtime-topology",
+              "supportsPaging": true,
+              "supportsSourceFile": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "gallery-semantic-token-source-exactness",
+      "fixture": "fixtures/pressure/app-builder-part-source-gallery",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "template-semantic-tokens",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/my-app.html",
+      "requirement": "Template semantic tokens preserve exact authored token spans for Aurelia syntax and expression surfaces.",
+      "cases": [
+        {
+          "id": "interpolation-root-title",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "${title}", "token": "title" }, "note": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-bind-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-bind-root",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "draft" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-bind-member",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "property" }, "source": { "marker": "<input value.bind=\"draft.title\">", "token": "title" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "number-value-as-number-root",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<input type=\"number\" value-as-number.bind=\"draft.quantity\">", "token": "draft" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "number-value-as-number-member",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "property" }, "source": { "marker": "<input type=\"number\" value-as-number.bind=\"draft.quantity\">", "token": "quantity" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "checkbox-checked-bind-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input type=\"checkbox\" checked.bind=\"draft.enabled\">", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "checkbox-checked-member",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "property" }, "source": { "marker": "<input type=\"checkbox\" checked.bind=\"draft.enabled\">", "token": "enabled" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "repeat" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-command-for",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "for" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-local-declaration",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "option" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-iterable-root",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<label repeat.for=\"option of options\">", "token": "options" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "model-bind-repeat-local-usage",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "model.bind=\"option\"", "token": "option" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-local-member-label",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "property" }, "source": { "marker": "${option.label}", "token": "label" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "event-trigger-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "trigger" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "event-trigger-method",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "function" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "handle" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "event-trigger-event",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<button click.trigger=\"handle($event)\">", "token": "$event" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "event-capture-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<button click.capture=\"handle($event)\">", "token": "capture" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ref-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<div ref=\"element\" class.bind=\"classes\"", "token": "ref" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ref-local-target",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<div ref=\"element\" class.bind=\"classes\"", "token": "element" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "class-bind-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "class.bind=\"classes\"", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "class-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "is-active.class=\"isActive\"", "token": "class" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "style-bind-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "style.bind=\"styleRules\"", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "style-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "display.style=\"isVisible ? 'block' : 'none'\"", "token": "style" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "to-view-command",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "disabled.to-view=\"isDisabled\"", "token": "to-view" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-meta-element",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaMetaElement" }, "source": { "marker": "<let item.bind=\"selectedItem\"></let>", "token": "let" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gallery-late-semantic-token-source-exactness",
+      "fixture": "fixtures/pressure/app-builder-part-source-gallery",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "template-semantic-tokens",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/my-app.html",
+      "requirement": "Paged template semantic tokens preserve exact authored spans for plugin syntax, controllers, router resources, and composition resources.",
+      "cases": [
+        {
+          "id": "let-local-declaration",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<let item.bind=\"selectedItem\"></let>", "token": "item" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-bind-command",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<let item.bind=\"selectedItem\"></let>", "token": "bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-command-default-store",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input value.state=\"title\">", "token": "state" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-command-named-store",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<input value.state:users=\"title\">", "token": "state:users" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dispatch-command-default-store",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "click.dispatch=\"{ type: 'activate' }\"", "token": "dispatch" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dispatch-command-named-store",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "click.dispatch:users=\"{ type: 'activate' }\"", "token": "dispatch:users" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "i18n-t-command",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "<span t=\"app.title\" t-params.bind=\"{ count: itemCount }\"></span>", "token": "t" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "i18n-t-params-command",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaCommand" }, "source": { "marker": "t-params.bind=\"{ count: itemCount }\"", "token": "t-params.bind" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-one-time",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBehavior" }, "source": { "marker": "value & oneTime", "token": "oneTime" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-debounce",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBehavior" }, "source": { "marker": "draft.title & debounce", "token": "debounce" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-behavior-update-trigger",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBehavior" }, "source": { "marker": "draft.title & updateTrigger:'blur'", "token": "updateTrigger" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-converter-sanitize",
+          "aureliaDomain": "resource-registration",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaConverter" }, "source": { "marker": "${descriptionHtml | sanitize}", "token": "sanitize" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "value-converter-i18n-t",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaConverter" }, "source": { "marker": "| t}</span>", "token": "t" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "if-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section if.bind=\"isReady\">", "token": "if" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "else-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section else>Not ready</section>", "token": "else" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtual-repeat-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<li virtual-repeat.for=\"item of items\">", "token": "virtual-repeat" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "switch-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section switch.bind=\"status\">", "token": "switch" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "case-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<p case.bind=\"'ready'\">", "token": "case" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section promise.bind=\"loadItems()\">", "token": "promise" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-then-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<p then=\"item\">${item.label}</p>", "token": "then" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-then-local",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable" }, "source": { "marker": "<p then=\"item\">${item.label}</p>", "token": "item" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "with-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section with.bind=\"selectedItem\">", "token": "with" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "portal-controller",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaController" }, "source": { "marker": "<section portal>Portal default</section>", "token": "portal" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compose-element",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-compose></au-compose>", "token": "au-compose" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "compose-component-bindable",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "component.bind=\"currentComponent\"", "token": "component" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "slot-element",
+          "aureliaDomain": "resource-registration",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-slot name=\"secondary\"></au-slot>", "token": "au-slot" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "focus-attribute",
+          "aureliaDomain": "resource-registration",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "<input focus.bind=\"isFocused\">", "token": "focus" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-element",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<au-viewport name=\"main\"", "token": "au-viewport" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "viewport-name-bindable",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaBindable" }, "source": { "marker": "<au-viewport name=\"main\"", "token": "name" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-load-attribute",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "<a load=\"items\">", "token": "load" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-context-member",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "property" }, "source": { "marker": "context.bind: routeContext.parent", "token": "parent" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-errors-attribute",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaAttribute" }, "source": { "marker": "validation-errors.from-view=\"errors\"", "token": "validation-errors" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-container-element",
+          "aureliaDomain": "plugin-capability-admission",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<validation-container></validation-container>", "token": "validation-container" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "sample-card-element",
+          "aureliaDomain": "resource-registration",
+          "expectations": [
+            {
+              "name": "semantic tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "aureliaElement" }, "source": { "marker": "<sample-card containerless>", "token": "sample-card" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gallery-folding-and-inlay-source-exactness",
+      "fixture": "fixtures/pressure/app-builder-part-source-gallery",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "template-structure-hints",
+      "domainAxis": "template-syntax",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/my-app.html",
+      "requirement": "Template folding ranges and inlay hints preserve authored source spans and distinguish implicit helper hints from explicitly authored syntax.",
+      "cases": [
+        {
+          "id": "main-element-folding-range",
+          "expectations": [
+            {
+              "name": "template folding ranges",
+              "query": { "kind": "template-folding-ranges", "fetchAllPages": true, "options": { "page": { "size": 25 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "foldKind": "element",
+                    "tagName": "main",
+                    "selfClosing": false
+                  },
+                  "source": { "startMarker": "<main>", "endMarker": "</main>" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-label-folding-range",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "template folding ranges",
+              "query": { "kind": "template-folding-ranges", "fetchAllPages": true, "options": { "page": { "size": 25 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "foldKind": "element",
+                    "tagName": "label",
+                    "selfClosing": false
+                  },
+                  "source": {
+                    "startMarker": "<label repeat.for=\"option of options\">",
+                    "endMarker": "</label>"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "single-line-input-not-foldable",
+          "expectations": [
+            {
+              "name": "template folding ranges",
+              "query": { "kind": "template-folding-ranges", "fetchAllPages": true, "options": { "page": { "size": 25 } } },
+              "rows": [
+                {
+                  "fields": { "foldKind": "element" },
+                  "source": { "marker": "<input value.bind=\"draft.title\">", "token": "<input value.bind=\"draft.title\">" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "time-value-bind-two-way-inlay",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "targetProperty": "value",
+                    "authoredMode": "default",
+                    "effectiveMode": "two-way",
+                    "effectiveModeLabel": "twoWay"
+                  },
+                  "source": {
+                    "marker": "<input type=\"time\" value.bind=\"draft.title\"",
+                    "token": "value.bind"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "disabled-bind-to-view-inlay",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "targetProperty": "disabled",
+                    "authoredMode": "default",
+                    "effectiveMode": "to-view",
+                    "effectiveModeLabel": "toView"
+                  },
+                  "source": {
+                    "marker": "<button disabled.bind",
+                    "token": "disabled.bind"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "explicit-disabled-to-view-has-no-implicit-inlay",
+          "expectations": [
+            {
+              "name": "template inlay hints",
+              "query": { "kind": "template-inlay-hints", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "source": {
+                    "marker": "disabled.to-view=\"isDisabled\"",
+                    "token": "disabled.to-view"
+                  },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "aliased-bindable-reference-and-rename",
+      "fixture": "fixtures/pressure/aliased-bindable-surfaces",
+      "aureliaDomain": "bindable-contracts",
+      "capability": "bindable-alias-navigation",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/app.html",
+      "requirement": "Bindable property and explicit public-attribute alias surfaces preserve distinct references and rename edit plans.",
+      "cases": [
+        {
+          "id": "property-reference-declaration",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/product-card.ts", "marker": "labelText = ''", "token": "labelText" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "property-reference-template-usage",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "template-usage" }, "source": { "sourceFile": "src/product-card.html", "marker": "${labelText}", "token": "labelText" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "property-reference-explicit-alias-usage",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                {
+                  "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" },
+                  "source": { "sourceFile": "src/app.html", "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "alias-reference-declaration",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/product-card.ts", "marker": "'display-label'", "token": "display-label" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "alias-reference-template-usage",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "sourceFile": "src/app.html", "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-alias-reference-declaration",
+          "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "inline alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/display-hint.ts", "marker": "'display-label'", "token": "display-label" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-alias-reference-segment-usage",
+          "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "inline alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "bindable-attribute" }, "source": { "sourceFile": "src/app.html", "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "property-rename-declaration-edit",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "headlineText" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "typescript-reference", "newText": "headlineText" },
+                  "source": { "sourceFile": "src/product-card.ts", "marker": "labelText = ''", "token": "labelText" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "property-rename-template-edit",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "headlineText" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "template-usage", "newText": "headlineText" },
+                  "source": { "sourceFile": "src/product-card.html", "marker": "${labelText}", "token": "labelText" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "property-rename-does-not-edit-explicit-alias",
+          "sourceFile": "src/product-card.html",
+          "cursor": { "marker": "${labelText}", "token": "labelText" },
+          "expectations": [
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "headlineText" } },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "oldText": "display-label" },
+                  "source": { "sourceFile": "src/app.html", "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "alias-rename-declaration-edit",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "headline-label" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 0 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute-alias-declaration", "newText": "headline-label" },
+                  "source": { "sourceFile": "src/product-card.ts", "marker": "'display-label'", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "alias-rename-template-edit",
+          "cursor": { "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "headline-label" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "newText": "headline-label" },
+                  "source": { "sourceFile": "src/app.html", "marker": "display-label.bind=\"aliasLabel\"", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-alias-rename-declaration-edit",
+          "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "inline alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "hint-label" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 0 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute-alias-declaration", "newText": "hint-label" },
+                  "source": { "sourceFile": "src/display-hint.ts", "marker": "'display-label'", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inline-alias-rename-segment-edit",
+          "cursor": { "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
+          "expectations": [
+            {
+              "name": "inline alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "hint-label" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "bindable-attribute", "newText": "hint-label" },
+                  "source": { "sourceFile": "src/app.html", "marker": "display-hint=\"display-label.bind: aliasLabel", "token": "display-label" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-reference-and-rename",
+      "fixture": "fixtures/pressure/app-pattern-routed-catalog-storefront",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-navigation",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/routes/item-list-route.html",
+      "requirement": "Explicit custom-element resource references and rename plans use exact public-name declaration and tag-token sources.",
+      "cases": [
+        {
+          "id": "custom-element-resource-declaration-reference",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "item-card" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/components/item-card.ts", "marker": "name: 'item-card'", "token": "item-card" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-open-tag-reference",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-close-tag-reference",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</item-card>", "token": "item-card" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-resource-name-rename-edit",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "product-card" } },
+              "equals": { "value.status": "available", "value.typeScriptReferenceCount": 0 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-name-declaration", "newText": "product-card" },
+                  "source": { "sourceFile": "src/components/item-card.ts", "marker": "name: 'item-card'", "token": "item-card" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-open-tag-rename-edit",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "product-card" } },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-element-tag", "newText": "product-card" },
+                  "source": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-element-close-tag-rename-edit",
+          "cursor": { "marker": "<item-card item.bind=\"item\">", "token": "item-card" },
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "product-card" } },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-element-tag", "newText": "product-card" },
+                  "source": { "marker": "</item-card>", "token": "item-card" },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "diagnostic-source-and-vocabulary",
+      "fixture": "fixtures/pressure/guidance-truth-canaries",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-diagnostics",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/guidance-truth-canary-app.html",
+      "requirement": "Template diagnostics preserve diagnostic kind, missing-input vocabulary, selected symbol, suggestion action, and authored source.",
+      "cases": [
+        {
+          "id": "missing-template-root",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "missing-expression-member",
+                    "missingInput": "expression-member:selected-member-missing",
+                    "selectedMemberName": "titel",
+                    "suggestion.actionKind": "declare-member"
+                  },
+                  "source": { "marker": "${titel}", "token": "titel" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unsupported-host-global",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "unsupported-expression-global",
+                    "missingInput": "expression-global:not-admitted",
+                    "selectedMemberName": "console",
+                    "suggestion.actionKind": "rewrite-expression"
+                  },
+                  "source": { "marker": "console.log(title)", "token": "console" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "event-slot-not-missing-root",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "missing-expression-member",
+                    "selectedMemberName": "$event"
+                  },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "writeback-ghost-local-assignment-strictness",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "binding-source-assignment-strictness",
+                    "missingInput": "binding-source-assignment:owner-member-not-projected",
+                    "selectedMemberName": "$ghostLocal",
+                    "suggestion.actionKind": "declare-member"
+                  },
+                  "source": { "marker": "$ghostLocal", "token": "$ghostLocal" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compiler-diagnostic-vocabulary",
+      "fixture": "fixtures/pressure/template-compiler-errors",
+      "aureliaDomain": "template-binding-syntax",
+      "capability": "template-diagnostics",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-compiler-errors-app.html",
+      "requirement": "Compiler diagnostics preserve framework-code vocabulary and authored source ownership.",
+      "cases": [
+        {
+          "id": "let-invalid-command-aur0704",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-compiler-error",
+                    "frameworkErrorCode": "AUR0704",
+                    "missingInput": "template-compiler:AUR0704",
+                    "suggestion.actionKind": "rewrite-template-syntax"
+                  },
+                  "source": { "marker": "<let item.trigger=\"enabled\"></let>", "token": "item.trigger=\"enabled\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "legacy-delegate-command-aur0713",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-compiler-error",
+                    "frameworkErrorCode": "AUR0713",
+                    "missingInput": "template-compiler:AUR0713",
+                    "suggestion.actionKind": "rewrite-template-syntax"
+                  },
+                  "source": { "marker": "click.delegate=\"enabled = !enabled\"", "token": "click.delegate=\"enabled = !enabled\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "non-bindable-custom-attribute-segment",
+          "aureliaDomain": "bindable-contracts",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-compiler-error",
+                    "frameworkErrorCode": "AUR0707",
+                    "missingInput": "template-compiler:AUR0707"
+                  },
+                  "source": { "marker": "missing.bind: enabled", "token": "missing" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plugin-capability-diagnostics",
+      "fixture": "fixtures/pressure/unregistered-plugin-resources",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "template-diagnostics",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/unregistered-plugin-resources-app.html",
+      "requirement": "Missing plugin capability diagnostics preserve the concrete framework capability and authored syntax source.",
+      "cases": [
+        {
+          "id": "router-load-capability",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "router.default-resources",
+                    "selectedMemberName": "load",
+                    "suggestion.actionKind": "register-framework-capability"
+                  },
+                  "source": { "marker": "load=\"orders\"", "token": "load=\"orders\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-viewport-capability",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "router.default-resources",
+                    "selectedMemberName": "au-viewport"
+                  },
+                  "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtual-repeat-capability",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "ui-virtualization.default-resources",
+                    "selectedMemberName": "virtual-repeat.for"
+                  },
+                  "source": { "marker": "virtual-repeat.for=\"item of items\"", "token": "virtual-repeat.for=\"item of items\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "i18n-value-converter-capability",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "i18n.default-resources",
+                    "selectedMemberName": "t"
+                  },
+                  "source": { "marker": "${labelKey | t}", "token": "t" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-binding-behavior-capability",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "validation-html.default-resources",
+                    "selectedMemberName": "validate"
+                  },
+                  "source": { "marker": "displayName & validate", "token": "validate" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-binding-behavior-capability",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "missingInput": "state.default-resources",
+                    "selectedMemberName": "state"
+                  },
+                  "source": { "marker": "dashboardState & state", "token": "state" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "overlay-diagnostic-provenance",
+      "fixture": "fixtures/pressure/template-overlay-type-errors",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-diagnostics",
+      "domainAxis": "overlays",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-overlay-type-errors-app.html",
+      "requirement": "Template overlay diagnostics preserve TypeScript code identity while retaining authored template source and semantic subject spans.",
+      "cases": [
+        {
+          "id": "unknown-owner-ts18046-source",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "missingInput": "typescript:TS18046",
+                    "source.role": "typescript-overlay:semantic"
+                  },
+                  "source": { "marker": "${unknownItem.label}", "token": "unknownItem" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nullish-owner-ts18047-source",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "missingInput": "typescript:TS18047",
+                    "source.role": "typescript-overlay:semantic",
+                    "suggestion.actionKind": "rewrite-expression"
+                  },
+                  "source": { "marker": "${maybeItem.label}", "token": "maybeItem" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "invalid-call-argument-ts2345-source",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "missingInput": "typescript:TS2345",
+                    "source.role": "typescript-overlay:semantic"
+                  },
+                  "source": { "marker": "submit('not-an-item')", "token": "'not-an-item'" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "invalid-arity-ts2554-source",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "missingInput": "typescript:TS2554",
+                    "source.role": "typescript-overlay:semantic"
+                  },
+                  "source": { "marker": "submit(selectedItem, selectedItem)", "token": "selectedItem", "occurrence": 2 }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "completion-member-and-state-boundary",
+      "fixture": "fixtures/pressure/template-completion-member-metadata",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-completions",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/app.html",
+      "requirement": "Template completions preserve binding-scope visibility, checker member metadata, and Aurelia hook facts without losing state-projected owner types.",
+      "cases": [
+        {
+          "id": "root-binding-scope-title",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "equals": { "value.siteKind": "expression" },
+              "closure": "complete",
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "title",
+                    "candidateKind": "binding-context-slot",
+                    "sourceKind": "binding-scope"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "root-binding-scope-private-member-visible-without-policy-loss",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "applyDarkTheme",
+                    "candidateKind": "binding-context-slot",
+                    "sourceKind": "binding-scope"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-title-property",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "equals": { "value.siteKind": "expression-member" },
+              "closure": "complete",
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "title",
+                    "candidateKind": "type-member",
+                    "sourceKind": "type-system",
+                    "typeDisplay": "string",
+                    "memberKind": "property",
+                    "memberVisibility": "public",
+                    "memberIsReadonly": false,
+                    "aureliaHookKind": null
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-readonly-property",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "publicCount",
+                    "candidateKind": "type-member",
+                    "typeDisplay": "1",
+                    "memberKind": "property",
+                    "memberVisibility": "public",
+                    "memberIsReadonly": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-accessor",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "summary",
+                    "candidateKind": "type-member",
+                    "typeDisplay": "string",
+                    "memberKind": "accessor",
+                    "memberVisibility": "public",
+                    "memberIsReadonly": false
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-component-lifecycle-hook",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "attached",
+                    "candidateKind": "type-member",
+                    "typeDisplay": "() => void",
+                    "memberKind": "method",
+                    "memberVisibility": "public",
+                    "memberIsReadonly": false,
+                    "aureliaHookKind": "component-lifecycle"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-private-visibility-preserved",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "applyDarkTheme",
+                    "candidateKind": "type-member",
+                    "memberKind": "method",
+                    "memberVisibility": "private",
+                    "memberIsReadonly": false
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "this-member-protected-visibility-preserved",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$this.", "position": "after-marker" },
+                "options": { "page": { "size": 100 } }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "resetTheme",
+                    "candidateKind": "type-member",
+                    "memberKind": "method",
+                    "memberVisibility": "protected",
+                    "memberIsReadonly": false
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-owner-before-state-projection-stays-open",
+          "fixture": "fixtures/pressure/template-controller-state-condition-boundary",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "sourceFile": "src/app.html",
+                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "occurrence": 1 },
+                "options": { "page": { "size": 100 } }
+              },
+              "outcomes": [ "partial" ],
+              "closure": "open",
+              "equals": { "value.siteKind": "expression-member" },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": { "name": "title" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-owner-after-state-projection-completes",
+          "fixture": "fixtures/pressure/template-controller-state-condition-boundary",
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": {
+                "kind": "template-completions",
+                "sourceFile": "src/app.html",
+                "cursor": { "marker": "${selectedTask.", "position": "after-marker", "occurrence": 2 },
+                "options": { "page": { "size": 100 } }
+              },
+              "outcomes": [ "hit" ],
+              "closure": "complete",
+              "equals": { "value.siteKind": "expression-member" },
+              "rows": [
+                {
+                  "rowPath": "value.candidates",
+                  "fields": {
+                    "name": "title",
+                    "candidateKind": "type-member",
+                    "sourceKind": "type-system",
+                    "typeDisplay": "string",
+                    "memberKind": "property",
+                    "memberVisibility": "public",
+                    "memberIsReadonly": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "code-action-edit-plan-coverage",
+      "fixture": "fixtures/pressure/guidance-truth-canaries",
+      "aureliaDomain": "template-expression-typing",
+      "capability": "template-code-actions",
+      "domainAxis": "edit-plan",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/guidance-truth-canary-app.html",
+      "requirement": "Template code actions distinguish safe edit plans from diagnostic-only suggestions and preserve exact edit provenance, oldText, and action affordance metadata.",
+      "cases": [
+        {
+          "id": "declare-member-action-row",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": "${titel}", "token": "titel" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "fields": {
+                    "title": "Declare member 'titel' on GuidanceTruthCanaryApp",
+                    "kind": "quickfix",
+                    "diagnosticKind": "missing-expression-member",
+                    "suggestionKind": "declare-explicit-member",
+                    "actionKind": "declare-member",
+                    "repair.actionability": "guided",
+                    "repair.editPlanState": "available",
+                    "repair.applicationKind": "single-edit",
+                    "isPreferred": true
+                  },
+                  "sourceField": "diagnosticSource",
+                  "source": { "marker": "${titel}", "token": "titel" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "declaration-insertion-old-text",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": "${titel}", "token": "titel" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "declare-view-model-member",
+                    "oldText": "",
+                    "newText": "\n  titel!: unknown;"
+                  },
+                  "source": {
+                    "sourceFile": "src/guidance-truth-canary-app.ts",
+                    "marker": "\n}",
+                    "position": "before-marker"
+                  },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unsupported-global-has-no-edit-plan",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": "console.log(title)", "token": "console" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "count": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "weak-owner-repair-has-no-member-declaration-edit",
+          "fixture": "fixtures/pressure/mixed-form-surfaces",
+          "sourceFile": "src/app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": "weakMetadata.source", "token": "source" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "count": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-registration-action-and-chain-edit",
+          "aureliaDomain": "router-composition",
+          "fixture": "fixtures/pressure/unregistered-plugin-resources",
+          "sourceFile": "src/unregistered-plugin-resources-app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": "load=\"orders\"", "token": "load" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "fields": {
+                    "title": "Register RouterConfiguration for router.default-resources",
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "suggestionKind": "register-framework-capability",
+                    "actionKind": "register-framework-capability",
+                    "actionTarget.memberName": "router.default-resources",
+                    "actionTarget.typeDisplay": "@aurelia/router",
+                    "repair.planKind": "framework-capability-registration",
+                    "repair.editPlanState": "available"
+                  },
+                  "sourceField": "diagnosticSource",
+                  "source": { "marker": "load=\"orders\"", "token": "load=\"orders\"" }
+                },
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(RouterConfiguration)\n  "
+                  },
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": ".app({",
+                    "position": "before-marker"
+                  },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "shorthand-registration-import-and-chain-edit",
+          "aureliaDomain": "template-binding-syntax",
+          "fixture": "fixtures/pressure/unregistered-shorthand-syntax",
+          "sourceFile": "src/unregistered-shorthand-syntax-app.html",
+          "expectations": [
+            {
+              "name": "template code actions",
+              "query": {
+                "kind": "template-code-actions",
+                "cursor": { "marker": ":value=\"value\"", "token": ":value" }
+              },
+              "rows": [
+                {
+                  "rowPath": "value.rows",
+                  "fields": {
+                    "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax",
+                    "diagnosticKind": "framework-capability-not-registered",
+                    "suggestionKind": "register-framework-capability",
+                    "actionKind": "register-framework-capability",
+                    "actionTarget.memberName": "runtime-html.short-hand-binding-syntax",
+                    "actionTarget.typeDisplay": "@aurelia/runtime-html",
+                    "repair.planKind": "framework-capability-registration",
+                    "repair.editPlanState": "available"
+                  },
+                  "sourceField": "diagnosticSource",
+                  "source": { "marker": ":value=\"value\"", "token": ":value=\"value\"" }
+                },
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "{ Aurelia, StandardConfiguration }",
+                    "newText": "{ Aurelia, StandardConfiguration, ShortHandBindingSyntax }"
+                  },
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": "{ Aurelia, StandardConfiguration }",
+                    "token": "{ Aurelia, StandardConfiguration }"
+                  },
+                  "oldTextMatchesSource": true
+                },
+                {
+                  "rowPath": "value.rows[].edits",
+                  "fields": {
+                    "editKind": "register-framework-capability",
+                    "oldText": "",
+                    "newText": ".register(ShortHandBindingSyntax)\n  "
+                  },
+                  "source": {
+                    "sourceFile": "src/main.ts",
+                    "marker": ".app({",
+                    "position": "before-marker"
+                  },
+                  "oldTextMatchesSource": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "framework-capability-demand-provenance",
+      "fixture": "fixtures/pressure/unregistered-plugin-resources",
+      "aureliaDomain": "plugin-capability-admission",
+      "capability": "framework-capability-demands",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "domain-canary",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/unregistered-plugin-resources-app.html",
+      "requirement": "Framework capability demand rows preserve the capability key, admission/actionability state, module recommendation, authored syntax source, and related diagnostic lane before presentation diagnostics are assembled.",
+      "cases": [
+        {
+          "id": "router-load-missing-registration",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-attribute",
+                    "authoredName": "load",
+                    "requiredCapability": "router.default-resources",
+                    "admissionState": "not-admitted",
+                    "availabilityState": "evidence-found",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/router",
+                    "relatedQueryKind": "router-issues"
+                  },
+                  "source": { "marker": "load=\"orders\"", "token": "load=\"orders\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "router-viewport-missing-registration",
+          "aureliaDomain": "router-composition",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-element",
+                    "authoredName": "au-viewport",
+                    "requiredCapability": "router.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/router"
+                  },
+                  "source": { "marker": "<au-viewport></au-viewport>", "token": "<au-viewport></au-viewport>" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "virtual-repeat-missing-registration",
+          "aureliaDomain": "template-controller-scope",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-attribute",
+                    "authoredName": "virtual-repeat.for",
+                    "requiredCapability": "ui-virtualization.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/ui-virtualization"
+                  },
+                  "source": { "marker": "virtual-repeat.for=\"item of items\"", "token": "virtual-repeat.for=\"item of items\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "i18n-value-converter-missing-registration",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-value-converter",
+                    "authoredName": "t",
+                    "requiredCapability": "i18n.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/i18n"
+                  },
+                  "source": { "marker": "${labelKey | t}", "token": "t" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-element-missing-registration",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-element",
+                    "authoredName": "validation-container",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/validation-html"
+                  },
+                  "source": {
+                    "marker": "<validation-container>\n  <div validation-errors.bind=\"errors\"></div>\n</validation-container>",
+                    "token": "<validation-container>\n  <div validation-errors.bind=\"errors\"></div>\n</validation-container>"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-errors-attribute-missing-registration",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-attribute",
+                    "authoredName": "validation-errors.bind",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/validation-html"
+                  },
+                  "source": { "marker": "validation-errors.bind=\"errors\"", "token": "validation-errors.bind=\"errors\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "validation-binding-behavior-missing-registration",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-binding-behavior",
+                    "authoredName": "validate",
+                    "requiredCapability": "validation-html.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/validation-html"
+                  },
+                  "source": { "marker": "displayName & validate", "token": "validate" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-binding-behavior-missing-registration",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-binding-behavior",
+                    "authoredName": "state",
+                    "requiredCapability": "state.default-resources",
+                    "admissionState": "not-admitted",
+                    "actionability": "missing-registration",
+                    "recommendedModuleName": "@aurelia/state"
+                  },
+                  "source": { "marker": "dashboardState & state", "token": "state" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "standard-binding-language-admitted",
+          "aureliaDomain": "template-binding-syntax",
+          "expectations": [
+            {
+              "name": "framework capability demands",
+              "query": { "kind": "framework-capability-demands", "options": { "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "siteKind": "template-attribute",
+                    "authoredName": "value.bind",
+                    "requiredCapability": "runtime-html.default-binding-language",
+                    "admissionState": "admitted",
+                    "actionability": "registered",
+                    "recommendedModuleName": "@aurelia/runtime-html"
+                  },
+                  "source": { "marker": "value.bind=\"displayName & validate\"", "token": "value.bind=\"displayName & validate\"" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-controller-scope-lab",
+      "fixture": "fixtures/pressure/template-controller-scope-lab",
+      "aureliaDomain": "template-controller-scope",
+      "capability": "template-controller-scope-model",
+      "domainAxis": "type-system",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/scope-lab-app.html",
+      "requirement": "Template-controller scope constructs preserve Aurelia binding-context, override-context, branch-local, parent-scope, resource, diagnostic, and edit-plan semantics through public query answers.",
+      "cases": [
+        {
+          "id": "repeat-local-navigation-and-edit-plan",
+          "cursor": { "marker": "repeat.for=\"task of tasks", "token": "task" },
+          "expectations": [
+            {
+              "name": "repeat local cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "task",
+                "value.selectedMember.typeDisplay": "ScopeTask",
+                "value.selectedDefinition.resourceKind": "template-controller",
+                "value.selectedDefinition.name": "repeat",
+                "value.selectedBindable.name": "items"
+              }
+            },
+            {
+              "name": "repeat local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 7 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "task" }, "source": { "marker": "repeat.for=\"task of tasks", "token": "task" } },
+                { "fields": { "referenceKind": "template-usage", "name": "task" }, "source": { "marker": "${task.name}</span>\n        <span class=\"parent-host-title\"", "token": "task" } }
+              ]
+            },
+            {
+              "name": "repeat local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "taskRenamed" } },
+              "equals": { "value.status": "available", "value.edits.length": 7 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "task", "newText": "taskRenamed" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "task", "newText": "taskRenamed" }, "count": 6, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-context-completions",
+          "capability": "template-completions",
+          "expectations": [
+            {
+              "name": "repeat scope completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<h2>${", "position": "after-marker" },
+                "options": { "page": { "size": 200 } }
+              },
+              "equals": { "value.siteKind": "expression" },
+              "closure": "complete",
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "task", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$index", "candidateKind": "override-context-slot", "typeDisplay": "number" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$first", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$last", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-repeat-local-and-parent-scope",
+          "capability": "template-completions",
+          "expectations": [
+            {
+              "name": "nested repeat scope completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<span class=\"child-name\">${", "position": "after-marker" },
+                "options": { "page": { "size": 200 } }
+              },
+              "closure": "complete",
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "child", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeChild" } },
+                { "rowPath": "value.candidates", "fields": { "name": "task", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
+                { "rowPath": "value.candidates", "fields": { "name": "localTask", "candidateKind": "override-context-slot", "typeDisplay": "ScopeTask" } },
+                { "rowPath": "value.candidates", "fields": { "name": "hostTitle", "candidateKind": "binding-context-slot", "typeDisplay": "string" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "child-local-navigation-and-edit-plan",
+          "cursor": { "marker": "${child.name}", "token": "child" },
+          "expectations": [
+            {
+              "name": "child local cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "child",
+                "value.selectedMember.typeDisplay": "ScopeChild"
+              }
+            },
+            {
+              "name": "child local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "child" }, "source": { "marker": "repeat.for=\"child of task.children\"", "token": "child" } },
+                { "fields": { "referenceKind": "template-usage", "name": "child" }, "source": { "marker": "${child.name}", "token": "child" } }
+              ]
+            },
+            {
+              "name": "child local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "childRenamed" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "child", "newText": "childRenamed" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "child", "newText": "childRenamed" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-override-local-navigation-and-edit-plan",
+          "cursor": { "marker": "${localTask.name}", "token": "localTask" },
+          "expectations": [
+            {
+              "name": "let override local cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "localTask",
+                "value.selectedMember.typeDisplay": "ScopeTask"
+              }
+            },
+            {
+              "name": "let override local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "localTask" }, "source": { "marker": "<let localTask.bind=\"task\"", "token": "localTask" } },
+                { "fields": { "referenceKind": "template-usage", "name": "localTask" }, "source": { "marker": "${localTask.name}", "token": "localTask" } }
+              ]
+            },
+            {
+              "name": "let override local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "currentTask" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "localTask", "newText": "currentTask" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "localTask", "newText": "currentTask" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-binding-context-shadowing",
+          "cursor": { "marker": "<span class=\"let-binding-context\">${hostTitle}</span>", "token": "hostTitle" },
+          "expectations": [
+            {
+              "name": "let binding-context shadow cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "hostTitle",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "let binding-context shadow references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "marker": "<let hostTitle.bind=\"task.name\"", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<span class=\"let-binding-context\">${hostTitle}</span>", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "${$parent.hostTitle}", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "hostTitle = 'Scope lab'", "token": "hostTitle" }, "absent": true }
+              ]
+            },
+            {
+              "name": "let binding-context shadow rename",
+              "query": { "kind": "template-rename", "options": { "newName": "rowTitle" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "hostTitle", "newText": "rowTitle" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "hostTitle", "newText": "rowTitle" }, "count": 2, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "root-hostTitle-does-not-capture-let-shadow",
+          "cursor": { "marker": "<h1>${hostTitle}</h1>", "token": "hostTitle" },
+          "expectations": [
+            {
+              "name": "root hostTitle references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "hostTitle = 'Scope lab'", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "marker": "<let hostTitle.bind=\"task.name\"", "token": "hostTitle" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "with-value-scope-members",
+          "cursor": { "marker": "${name}</span>", "token": "name" },
+          "expectations": [
+            {
+              "name": "with scope member cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "name",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "with scope member references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "name" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "export interface ScopeTask {\n  readonly id: string;\n  readonly name: string;", "token": "name" } },
+                { "fields": { "referenceKind": "template-usage", "name": "name" }, "source": { "marker": "${name}</span>", "token": "name" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "with-parent-scope-hostTitle",
+          "cursor": { "marker": "<span class=\"with-parent\">${$parent.hostTitle}</span>", "token": "hostTitle" },
+          "expectations": [
+            {
+              "name": "with parent hostTitle references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "hostTitle = 'Scope lab'", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<span class=\"with-parent\">${$parent.hostTitle}</span>", "token": "hostTitle" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-then-usage-local",
+          "cursor": { "marker": "${resolvedTask.name}", "token": "resolvedTask" },
+          "expectations": [
+            {
+              "name": "promise then local cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "resolvedTask",
+                "value.selectedMember.typeDisplay": "ScopeTask"
+              }
+            },
+            {
+              "name": "promise then local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "resolvedTask" }, "source": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolvedTask" }, "source": { "marker": "${resolvedTask.name}", "token": "resolvedTask" } }
+              ]
+            },
+            {
+              "name": "promise then local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "loadedTask" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "resolvedTask", "newText": "loadedTask" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "resolvedTask", "newText": "loadedTask" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-catch-usage-local",
+          "cursor": { "marker": "${loadError.message}", "token": "loadError" },
+          "expectations": [
+            {
+              "name": "promise catch local cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "loadError",
+                "value.selectedMember.typeDisplay": "unknown"
+              }
+            },
+            {
+              "name": "promise catch local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "loadError" }, "source": { "marker": "<p catch=\"loadError\"", "token": "loadError" } },
+                { "fields": { "referenceKind": "template-usage", "name": "loadError" }, "source": { "marker": "${loadError.message}", "token": "loadError" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-then-declaration-local",
+          "coverageIntent": "known-gap-witness",
+          "cursor": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" },
+          "expectations": [
+            {
+              "name": "promise then declaration cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "resolvedTask",
+                "value.selectedMember.typeDisplay": "ScopeTask"
+              }
+            },
+            {
+              "name": "promise then declaration rename",
+              "query": { "kind": "template-rename", "options": { "newName": "loadedTask" } },
+              "equals": { "value.status": "available" }
+            }
+          ]
+        },
+        {
+          "id": "promise-catch-declaration-local",
+          "coverageIntent": "known-gap-witness",
+          "cursor": { "marker": "<p catch=\"loadError\"", "token": "loadError" },
+          "expectations": [
+            {
+              "name": "promise catch declaration cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "loadError",
+                "value.selectedMember.typeDisplay": "unknown"
+              }
+            },
+            {
+              "name": "promise catch declaration rename",
+              "query": { "kind": "template-rename", "options": { "newName": "caughtError" } },
+              "equals": { "value.status": "available" }
+            }
+          ]
+        },
+        {
+          "id": "promise-branch-completions",
+          "capability": "template-completions",
+          "expectations": [
+            {
+              "name": "promise then completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<p then=\"resolvedTask\">${", "position": "after-marker" },
+                "options": { "page": { "size": 200 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "resolvedTask", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
+              ]
+            },
+            {
+              "name": "promise catch completions",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<p catch=\"loadError\">${", "position": "after-marker" },
+                "options": { "page": { "size": 200 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loadError", "candidateKind": "binding-context-slot", "typeDisplay": "unknown" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "if-switch-and-portal-preserve-parent-scope",
+          "cursor": { "marker": "<p case.bind=\"'open'\">${hostTitle}</p>", "token": "hostTitle" },
+          "expectations": [
+            {
+              "name": "switch case parent scope references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "hostTitle" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "hostTitle = 'Scope lab'", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<p case.bind=\"'open'\">${hostTitle}</p>", "token": "hostTitle" } },
+                { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<span class=\"portal-title\">${hostTitle}</span>", "token": "hostTitle" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-template-controller-resource-rename",
+          "capability": "template-resource-navigation",
+          "domainAxis": "resources",
+          "cursor": { "marker": "<section surface-gate.bind=\"isReady\"", "token": "surface-gate" },
+          "expectations": [
+            {
+              "name": "app template-controller cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.name": "surface-gate",
+                "value.selectedDefinition.resourceKind": "template-controller",
+                "value.selectedBindable.name": "value"
+              }
+            },
+            {
+              "name": "app template-controller references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage", "name": "surface-gate" }, "source": { "marker": "<section surface-gate.bind=\"isReady\"", "token": "surface-gate" } },
+                { "fields": { "referenceKind": "declaration", "name": "surface-gate" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "name: 'surface-gate'", "token": "surface-gate" } }
+              ]
+            },
+            {
+              "name": "app template-controller rename",
+              "query": { "kind": "template-rename", "options": { "newName": "surface-door" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-attribute-target", "oldText": "surface-gate", "newText": "surface-door" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration", "oldText": "surface-gate", "newText": "surface-door" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "built-in-template-controller-resource-is-external",
+          "capability": "template-resource-navigation",
+          "domainAxis": "resources",
+          "cursor": { "marker": "<section repeat.for=\"task of tasks", "token": "repeat" },
+          "expectations": [
+            {
+              "name": "built-in repeat cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.name": "repeat",
+                "value.selectedDefinition.resourceKind": "template-controller",
+                "value.selectedDefinition.nameSource": null
+              }
+            },
+            {
+              "name": "built-in repeat references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "outcomes": [ "miss" ],
+              "equals": { "value.rows.length": 0 }
+            },
+            {
+              "name": "built-in repeat rename refusal",
+              "query": { "kind": "template-rename", "options": { "newName": "loop-over" } },
+              "outcomes": [ "miss" ],
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "no-source-backed-member",
+                "value.edits.length": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "invalid-template-controller-relationships",
+          "capability": "template-diagnostics",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "runtime-controller-framework-error",
+                    "frameworkErrorCode": "AUR0813",
+                    "missingInput": "runtime-controller:AUR0813"
+                  },
+                  "source": { "marker": "then=\"orphanTask\"", "token": "then=\"orphanTask\"" }
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "runtime-controller-framework-error",
+                    "frameworkErrorCode": "AUR0815",
+                    "missingInput": "runtime-controller:AUR0815"
+                  },
+                  "source": { "marker": "case.bind=\"'orphan'\"", "token": "case.bind=\"'orphan'\"" }
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "missing-expression-member",
+                    "selectedMemberName": "label",
+                    "missingInput": "expression-member:selected-member-missing"
+                  },
+                  "source": { "marker": "${label}</span>", "token": "label" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-diagnostics-preserve-controller-relationship-errors",
+          "capability": "template-diagnostics",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticDomain": "template",
+                    "diagnosticKind": "runtime-controller-framework-error",
+                    "frameworkErrorCode": "AUR0813"
+                  },
+                  "source": { "marker": "then=\"orphanTask\"", "token": "then=\"orphanTask\"" }
+                },
+                {
+                  "fields": {
+                    "diagnosticDomain": "template",
+                    "diagnosticKind": "runtime-controller-framework-error",
+                    "frameworkErrorCode": "AUR0815"
+                  },
+                  "source": { "marker": "case.bind=\"'orphan'\"", "token": "case.bind=\"'orphan'\"" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-parent-overlay-does-not-report-false-missing-member",
+          "capability": "template-diagnostics",
+          "domainAxis": "overlays",
+          "coverageIntent": "known-gap-witness",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "missingInput": "typescript:TS2339"
+                  },
+                  "source": { "marker": "${$parent.hostTitle}", "token": "hostTitle" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
