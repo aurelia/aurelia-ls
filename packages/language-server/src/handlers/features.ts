@@ -26,7 +26,7 @@ import {
   type CompletionParams,
   type CancellationToken,
   MessageType,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import type { ServerContext } from "../context.js";
 import { handleDocumentSymbols } from "./document-symbols.js";
 import { handleWorkspaceSymbols } from "./workspace-symbols.js";

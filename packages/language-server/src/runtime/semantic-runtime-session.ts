@@ -1,5 +1,5 @@
 import { URI } from "vscode-uri";
-import type { Position } from "vscode-languageserver/node.js";
+import type { Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createSemanticRuntime,

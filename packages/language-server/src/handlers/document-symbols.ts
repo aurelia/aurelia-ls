@@ -10,7 +10,7 @@ import {
   type DocumentSymbol,
   type DocumentSymbolParams,
   type Range,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionBindableRow,

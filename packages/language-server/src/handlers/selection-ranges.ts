@@ -10,7 +10,7 @@ import {
   type Range,
   type SelectionRange,
   type SelectionRangeParams,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type {
   SemanticTemplateCursorInfoResult,

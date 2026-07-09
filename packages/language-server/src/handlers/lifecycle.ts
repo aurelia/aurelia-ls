@@ -8,7 +8,7 @@ import {
   type InitializeResult,
   type DidChangeWatchedFilesParams,
   type FileEvent,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";

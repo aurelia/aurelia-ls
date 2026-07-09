@@ -8,7 +8,7 @@ import type {
   SemanticTokens,
   SemanticTokensParams,
   SemanticTokensLegend,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import {
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_MODIFIERS,
   SEMANTIC_TEMPLATE_SEMANTIC_TOKEN_TYPES,

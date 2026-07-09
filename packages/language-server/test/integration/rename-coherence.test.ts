@@ -127,23 +127,23 @@ test("TypeScript-origin bindable rename propagation stays coherent across merged
     await waitForDiagnostics(connection, child, () => getStderr(), myApp.uri, 5000);
 
     const first = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item", "item2");
-    expect(first.status).toBe("success");
+    expectRenameFromTsSuccess(first);
     const firstChanged = [
-      ...applyWorkspaceEditToTrackedDocuments(first as RenameResult, documents),
+      ...applyWorkspaceEditToTrackedDocuments(first.workspaceEdit, documents),
       renameWordInTrackedDocument(productCardTs, "item", "item2"),
     ];
     notifyChangedOpenDocuments(connection, firstChanged, openUris);
 
     const second = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item2", "item");
-    expect(second.status).toBe("success");
+    expectRenameFromTsSuccess(second);
     const secondChanged = [
-      ...applyWorkspaceEditToTrackedDocuments(second as RenameResult, documents),
+      ...applyWorkspaceEditToTrackedDocuments(second.workspaceEdit, documents),
       renameWordInTrackedDocument(productCardTs, "item2", "item"),
     ];
     notifyChangedOpenDocuments(connection, secondChanged, openUris);
 
     const third = await renameFromTsAtNeedle(connection, productCardTs, "@bindable item", "item2");
-    expect(third.status).toBe("success");
+    expectRenameFromTsSuccess(third);
   } finally {
     dispose();
     child.kill("SIGKILL");
@@ -285,12 +285,13 @@ async function renameAtNeedle(
 }
 
 type RenameFromTsResponse =
-  | (RenameResult & {
+  | {
     status: "success";
+    workspaceEdit: RenameResult;
     message: string;
     templateReferenceCount: number;
     candidateCount: number;
-  })
+  }
   | {
     status: "not-applicable" | "refused" | "blocked";
     reason: string;
@@ -299,6 +300,12 @@ type RenameFromTsResponse =
     templateReferenceCount?: number;
     candidateCount?: number;
   };
+
+function expectRenameFromTsSuccess(
+  response: RenameFromTsResponse,
+): asserts response is Extract<RenameFromTsResponse, { status: "success" }> {
+  expect(response.status).toBe("success");
+}
 
 async function renameFromTsAtNeedle(
   connection: ReturnType<typeof startServer>["connection"],

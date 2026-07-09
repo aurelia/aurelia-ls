@@ -10,7 +10,7 @@
  * - handlers/custom.ts   - Custom Aurelia request handlers
  * - handlers/lifecycle.ts - Lifecycle and document event handlers
  */
-import { createConnection, ProposedFeatures, TextDocuments } from "vscode-languageserver/node.js";
+import { createConnection, ProposedFeatures, TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "./context.js";
 import type { Logger } from "./services/types.js";

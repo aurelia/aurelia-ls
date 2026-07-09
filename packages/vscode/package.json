@@ -8,7 +8,7 @@
   "type": "module",
   "main": "./dist/extension.cjs",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages"
@@ -365,10 +365,10 @@
   },
   "dependencies": {
     "typescript": "^6.0.3",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "1.91.0",
     "esbuild": "^0.24.0"
   }
 }

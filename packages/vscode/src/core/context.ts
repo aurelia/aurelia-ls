@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "vscode";
-import type { LanguageClient } from "vscode-languageclient/node.js";
+import type { LanguageClient } from "vscode-languageclient/node";
 import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger } from "../log.js";
 import type { AureliaLanguageClient } from "../client-core.js";

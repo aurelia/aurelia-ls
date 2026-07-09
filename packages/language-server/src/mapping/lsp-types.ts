@@ -19,7 +19,7 @@ import {
   type Diagnostic,
   type DiagnosticRelatedInformation,
   type Range,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import path from "node:path";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { pathToFileURL } from "node:url";
@@ -997,7 +997,12 @@ export function workspaceEditChanges(
     if (!("textDocument" in change) || !Array.isArray(change.edits)) continue;
     const uri = change.textDocument.uri;
     const bucket = changes[uri] ?? [];
-    bucket.push(...change.edits.map((edit) => ({ range: edit.range, newText: edit.newText })));
+    for (const edit of change.edits) {
+      if (!("newText" in edit)) {
+        throw new Error("workspaceEditChanges only flattens plain text edits; snippet edits must keep their protocol carrier.");
+      }
+      bucket.push({ range: edit.range, newText: edit.newText });
+    }
     changes[uri] = bucket;
   }
   return changes;

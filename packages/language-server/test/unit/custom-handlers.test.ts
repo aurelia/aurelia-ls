@@ -469,9 +469,14 @@ describe("handleRenameFromTs", () => {
     if (result.status !== "success") {
       throw new Error("Expected successful rename propagation.");
     }
-    const [templateUri, edits] = Object.entries(result.changes)[0] ?? [];
-    expect(templateUri).toContain("src/app.html");
-    expect(edits).toEqual([
+    const [change] = result.workspaceEdit.documentChanges ?? [];
+    expect(change).toMatchObject({
+      textDocument: {
+        uri: expect.stringContaining("src/app.html"),
+        version: 4,
+      },
+    });
+    expect("edits" in change! ? change.edits : []).toEqual([
       {
         range: {
           start: { line: 0, character: 5 },

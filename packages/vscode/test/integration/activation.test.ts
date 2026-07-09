@@ -1,5 +1,5 @@
 import { test, expect, vi } from "vitest";
-import type { LanguageClient } from "vscode-languageclient/node.js";
+import type { LanguageClient } from "vscode-languageclient/node";
 import type { FeatureModule } from "../../out/core/feature-graph.js";
 import type { VscodeApi } from "../../out/vscode-api.js";
 import { createVscodeApi, stubExtensionContext } from "../helpers/vscode-stub.js";

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { SymbolKind } from "vscode-languageserver/node.js";
+import { SymbolKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { handleDocumentSymbols } from "@aurelia-ls/language-server/api";
 import { testRequestGuard } from "./test-request-guard.js";

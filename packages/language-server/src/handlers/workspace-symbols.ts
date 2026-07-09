@@ -9,7 +9,7 @@ import {
   SymbolKind,
   type SymbolInformation,
   type WorkspaceSymbolParams,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import type {

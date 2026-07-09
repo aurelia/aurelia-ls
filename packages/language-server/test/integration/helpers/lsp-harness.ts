@@ -9,7 +9,7 @@ import {
   StreamMessageWriter,
   createMessageConnection,
   type MessageConnection,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 
 const serverEntry = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

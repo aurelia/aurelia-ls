@@ -6,7 +6,7 @@
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CancellationToken, Position } from "vscode-languageserver/node.js";
+import type { CancellationToken, Position, WorkspaceEdit } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type {
   SemanticResourceDefinitionRow,
@@ -24,7 +24,7 @@ import {
 import type { ServerContext } from "../context.js";
 import { canonicalDocumentUri } from "../utils/document-uri.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
-import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode, workspaceEditChanges } from "../mapping/lsp-types.js";
+import { mapSemanticRuntimeTemplateRenameEdit, semanticRuntimeDiagnosticCode } from "../mapping/lsp-types.js";
 import {
   logIfSemanticRuntimeRequestAborted,
   semanticRuntimeRequestGuard,
@@ -353,7 +353,23 @@ export async function handleGetDiagnostics(
   }
 }
 
-export function handleDumpState(ctx: ServerContext) {
+export type DumpStateResponse =
+  | {
+    workspaceRoot: string | null;
+    fingerprint: string;
+    openDocumentCount: number;
+    engine: string;
+    error?: undefined;
+  }
+  | {
+    error: string;
+    workspaceRoot?: undefined;
+    fingerprint?: undefined;
+    openDocumentCount?: undefined;
+    engine?: undefined;
+  };
+
+export function handleDumpState(ctx: ServerContext): DumpStateResponse {
   try {
     return {
       workspaceRoot: ctx.workspaceRoot,
@@ -881,7 +897,7 @@ export type RenameFromTsParams = {
 export type RenameFromTsResponse = {
   status: "success";
   /** Template-side edits only (TS edits come from the built-in TS rename). */
-  changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+  workspaceEdit: WorkspaceEdit;
   message: string;
   templateReferenceCount: number;
   candidateCount: number;
@@ -966,8 +982,9 @@ export async function handleRenameFromTs(
       );
     }
 
-    const changes = workspaceEditChanges(mapping.edit) as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
-    const fileCount = Object.keys(changes).length;
+    const fileCount = new Set((mapping.edit.documentChanges ?? [])
+      .filter((change) => "textDocument" in change)
+      .map((change) => change.textDocument.uri)).size;
 
     if (fileCount > 0) {
       ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s), ${templateReferenceCount} runtime reference(s)`);
@@ -975,7 +992,7 @@ export async function handleRenameFromTs(
     return fileCount
       ? {
         status: "success",
-        changes,
+        workspaceEdit: mapping.edit,
         message: answer.value.displayText || answer.summary,
         templateReferenceCount,
         candidateCount,
@@ -1069,7 +1086,7 @@ function normalizedFilePath(filePath: string): string {
 export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam, token: CancellationToken) =>
     handleGetDiagnostics(ctx, params, requestGuard(ctx, token)));
-  ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
+  ctx.connection.onRequest<DumpStateResponse, unknown>("aurelia/dumpState", () => handleDumpState(ctx));
   ctx.connection.onRequest("aurelia/getResources", (token: CancellationToken) =>
     handleGetResources(ctx, requestGuard(ctx, token)));
   ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }, token: CancellationToken) =>

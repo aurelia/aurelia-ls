@@ -1,4 +1,4 @@
-import type { CancellationToken } from "vscode-languageserver/node.js";
+import type { CancellationToken } from "vscode-languageserver/node";
 import type { ServerContext } from "../context.js";
 import {
   isSemanticRuntimeLspRequestAborted,

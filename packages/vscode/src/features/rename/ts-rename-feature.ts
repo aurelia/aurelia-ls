@@ -18,7 +18,8 @@
  */
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { DisposableStore } from "../../core/disposables.js";
-import type { RenameFromTsResponse } from "../../types.js";
+import type { ProtocolWorkspaceEdit, RenameFromTsResponse } from "../../types.js";
+import { assertWorkspaceEditVersionsCurrent } from "./workspace-edit-versions.js";
 
 export const TsRenameFeature: FeatureModule = {
   id: "rename.tsPropagate",
@@ -75,22 +76,30 @@ export const TsRenameFeature: FeatureModule = {
           return tsEdit;
         }
 
+        assertWorkspaceEditVersionsCurrent(
+          ctx.vscode,
+          aureliaRename.workspaceEdit,
+          "Aurelia template rename propagation was blocked because editor documents changed",
+        );
+        const convertWorkspaceEdit = ctx.rawClient.protocol2CodeConverter.asWorkspaceEdit as (
+          workspaceEdit: ProtocolWorkspaceEdit,
+          token: import("vscode").CancellationToken,
+        ) => Promise<import("vscode").WorkspaceEdit | undefined>;
+        const templateEdit = await convertWorkspaceEdit(aureliaRename.workspaceEdit, token);
+        if (templateEdit == null) {
+          throw new Error("Aurelia template rename propagation returned no convertible workspace edit.");
+        }
+
         // Step 3: Merge TS + template edits
         const merged = tsEdit ?? new vscode.WorkspaceEdit();
         let templateEditCount = 0;
-        for (const [uri, edits] of Object.entries(aureliaRename.changes)) {
-          const fileUri = vscode.Uri.parse(uri);
-          for (const edit of edits) {
-            merged.replace(
-              fileUri,
-              new vscode.Range(
-                new vscode.Position(edit.range.start.line, edit.range.start.character),
-                new vscode.Position(edit.range.end.line, edit.range.end.character),
-              ),
-              edit.newText,
-            );
-            templateEditCount++;
-          }
+        for (const [uri, edits] of templateEdit.entries()) {
+          const existingEdits = merged.get(uri);
+          merged.set(uri, [...existingEdits, ...edits]);
+          templateEditCount += edits.length;
+        }
+        if (templateEditCount === 0) {
+          log.debug("[TsRename] template propagation returned an empty workspace edit");
         }
 
         notifyUnverifiedCandidates(ctx, aureliaRename);

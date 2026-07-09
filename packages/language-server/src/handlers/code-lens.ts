@@ -9,7 +9,7 @@ import path from "node:path";
 import type {
   CodeLens,
   CodeLensParams,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 import type {
   SemanticBindingBehaviorApplicationRow,

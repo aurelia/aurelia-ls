@@ -1,4 +1,4 @@
-import type { Connection, TextDocuments } from "vscode-languageserver/node.js";
+import type { Connection, TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import fs from "node:fs";
 import { URI } from "vscode-uri";

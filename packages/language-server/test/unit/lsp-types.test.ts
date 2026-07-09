@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { CompletionItemKind } from "vscode-languageserver/node.js";
+import { CompletionItemKind } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,

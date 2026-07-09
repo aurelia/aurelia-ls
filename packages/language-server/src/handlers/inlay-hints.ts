@@ -15,7 +15,7 @@ import {
   InlayHintKind,
   type InlayHint,
   type InlayHintParams,
-} from "vscode-languageserver/node.js";
+} from "vscode-languageserver/node";
 import type {
   SemanticTemplateInlayHintRow,
 } from "@aurelia-ls/semantic-runtime";

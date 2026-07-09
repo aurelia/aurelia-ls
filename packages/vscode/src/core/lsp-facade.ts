@@ -1,4 +1,4 @@
-import type { LanguageClient } from "vscode-languageclient/node.js";
+import type { LanguageClient } from "vscode-languageclient/node";
 import type { ClientLogger } from "../log.js";
 import type { DebugChannel, ObservabilityService, TraceService } from "./observability.js";
 import type {

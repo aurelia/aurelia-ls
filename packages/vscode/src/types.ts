@@ -29,6 +29,24 @@ export type ProtocolRange = {
   end: ProtocolPosition;
 };
 
+export type ProtocolTextEdit = {
+  range: ProtocolRange;
+  newText: string;
+};
+
+export type ProtocolTextDocumentEdit = {
+  textDocument: {
+    uri: string;
+    version: number | null;
+  };
+  edits: ProtocolTextEdit[];
+};
+
+export type ProtocolWorkspaceEdit = {
+  changes?: Record<string, ProtocolTextEdit[]>;
+  documentChanges?: ProtocolTextDocumentEdit[];
+};
+
 export type DiagnosticsSnapshotIssue = {
   kind: string;
   message: string;
@@ -205,7 +223,7 @@ export type RelatedFileResponse = {
 
 export type RenameFromTsResponse = {
   status: "success";
-  changes: Record<string, { range: ProtocolRange; newText: string }[]>;
+  workspaceEdit: ProtocolWorkspaceEdit;
   message: string;
   templateReferenceCount: number;
   candidateCount: number;

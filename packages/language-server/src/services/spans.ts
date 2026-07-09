@@ -1,4 +1,4 @@
-import type { Range } from "vscode-languageserver/node.js";
+import type { Range } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
 export interface SourceSpan {

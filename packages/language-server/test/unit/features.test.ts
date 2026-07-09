@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
-import { CompletionItemKind, ResponseError } from "vscode-languageserver/node.js";
+import { CompletionItemKind, ResponseError } from "vscode-languageserver/node";
 import {
   COMPLETION_GAP_MARKER_LABEL,
   canonicalDocumentUri,

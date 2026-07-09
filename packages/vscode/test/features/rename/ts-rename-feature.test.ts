@@ -41,6 +41,23 @@ class StubWorkspaceEdit {
     this.replacements.push({ uri, range, newText });
   }
 
+  get(uri: StubUri): Array<{ range: StubRange; newText: string }> {
+    return this.replacements
+      .filter((replacement) => replacement.uri.toString() === uri.toString())
+      .map((replacement) => ({ range: replacement.range, newText: replacement.newText }));
+  }
+
+  set(uri: StubUri, edits: Array<{ range: StubRange; newText: string }>): void {
+    for (let index = this.replacements.length - 1; index >= 0; index--) {
+      if (this.replacements[index]!.uri.toString() === uri.toString()) {
+        this.replacements.splice(index, 1);
+      }
+    }
+    for (const edit of edits) {
+      this.replace(uri, edit.range, edit.newText);
+    }
+  }
+
   entries(): Array<[StubUri, unknown[]]> {
     const byUri = new Map<string, { uri: StubUri; edits: unknown[] }>();
     for (const replacement of this.replacements) {
@@ -54,7 +71,7 @@ class StubWorkspaceEdit {
 }
 
 type RenameResponse =
-  | { status: "success"; changes: Record<string, { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }[]>; message: string; templateReferenceCount: number; candidateCount: number }
+  | { status: "success"; workspaceEdit: { documentChanges?: Array<{ textDocument: { uri: string; version: number | null }; edits: Array<{ range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }> }> }; message: string; templateReferenceCount: number; candidateCount: number }
   | { status: "not-applicable"; reason: string; message: string; templateReferenceCount: number; candidateCount: number }
   | { status: "refused"; reason: string; message: string; templateReferenceCount: number; candidateCount: number }
   | { status: "blocked"; reason: string; message: string; failures?: readonly string[]; templateReferenceCount?: number; candidateCount?: number };
@@ -62,11 +79,12 @@ type RenameResponse =
 type StubDocument = {
   languageId: string;
   uri: StubUri;
+  version: number;
   getWordRangeAtPosition(position: StubPosition): StubRange | undefined;
   getText(range: StubRange): string;
 };
 
-function createContext(options: { renameResponse?: RenameResponse } = {}) {
+function createContext(options: { renameResponse?: RenameResponse; textDocuments?: StubDocument[] } = {}) {
   const providers: StubProvider[] = [];
   const infoMessages: string[] = [];
   const tsEdit = new StubWorkspaceEdit();
@@ -97,6 +115,9 @@ function createContext(options: { renameResponse?: RenameResponse } = {}) {
         parse: (value: string) => new StubUri(value),
       },
       WorkspaceEdit: StubWorkspaceEdit,
+      workspace: {
+        textDocuments: options.textDocuments ?? [],
+      },
       window: {
         showInformationMessage: vi.fn((message: string) => {
           infoMessages.push(message);
@@ -113,6 +134,27 @@ function createContext(options: { renameResponse?: RenameResponse } = {}) {
     lsp: {
       renameFromTs,
     },
+    rawClient: {
+      protocol2CodeConverter: {
+        asWorkspaceEdit: vi.fn(async (workspaceEdit: Extract<RenameResponse, { status: "success" }>["workspaceEdit"]) => {
+          const edit = new StubWorkspaceEdit();
+          for (const change of workspaceEdit.documentChanges ?? []) {
+            const uri = new StubUri(change.textDocument.uri);
+            for (const row of change.edits) {
+              edit.replace(
+                uri,
+                new StubRange(
+                  new StubPosition(row.range.start.line, row.range.start.character),
+                  new StubPosition(row.range.end.line, row.range.end.character),
+                ),
+                row.newText,
+              );
+            }
+          }
+          return edit;
+        }),
+      },
+    },
     logger: {
       debug: vi.fn(),
       warn: vi.fn(),
@@ -127,6 +169,7 @@ function createDocument(): StubDocument {
   return {
     languageId: "typescript",
     uri: new StubUri("file:///app.ts"),
+    version: 1,
     getWordRangeAtPosition: vi.fn(() => wordRange),
     getText: vi.fn(() => "title"),
   };
@@ -148,14 +191,17 @@ describe("TsRenameFeature", () => {
     const harness = createContext({
       renameResponse: {
         status: "success",
-        changes: {
-          "file:///app.html": [
+        workspaceEdit: {
+          documentChanges: [
             {
+              textDocument: { uri: "file:///app.html", version: 7 },
+              edits: [{
               range: {
                 start: { line: 0, character: 3 },
                 end: { line: 0, character: 8 },
               },
               newText: "heading",
+            }],
             },
           ],
         },
@@ -194,6 +240,47 @@ describe("TsRenameFeature", () => {
       },
       newText: "heading",
     });
+  });
+
+  test("blocks TS-origin rename when template propagation targets a stale open document version", async () => {
+    const openTemplate = {
+      languageId: "html",
+      uri: new StubUri("file:///app.html"),
+      version: 8,
+      getWordRangeAtPosition: vi.fn(),
+      getText: vi.fn(),
+    };
+    const harness = createContext({
+      textDocuments: [openTemplate],
+      renameResponse: {
+        status: "success",
+        workspaceEdit: {
+          documentChanges: [
+            {
+              textDocument: { uri: "file:///app.html", version: 7 },
+              edits: [{
+                range: {
+                  start: { line: 0, character: 3 },
+                  end: { line: 0, character: 8 },
+                },
+                newText: "heading",
+              }],
+            },
+          ],
+        },
+        message: "1 template edit.",
+        templateReferenceCount: 1,
+        candidateCount: 0,
+      },
+    });
+    TsRenameFeature.activate(harness.ctx);
+    const document = createDocument();
+
+    await expect(harness.providers[0]?.provideRenameEdits(
+      document,
+      new StubPosition(2, 11),
+      "heading",
+    )).rejects.toThrow("editor documents changed");
   });
 
   test("returns TypeScript-only edits when template propagation is not applicable", async () => {
