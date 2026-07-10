@@ -16,6 +16,9 @@ import {
   type SemanticSourceReference,
 } from './source-reference.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
+import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
+import { bindingDataFlowDirectionIncludesTargetToSource } from '../observation/binding-data-flow-direction.js';
+import { completedTemplateExpressionAstForParse } from '../template/expression-parse-projection.js';
 import type {
   SemanticBindingDataFlowRow,
   SemanticBindingDataFlowIssueKind,
@@ -1216,6 +1219,7 @@ function bindingDataFlowRow(
     sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
     sourceTypeOpenKind: dataFlow.sourceTypeOpenKind,
     sourceAssignmentTargetType: dataFlow.sourceAssignmentTargetType?.display ?? null,
+    sourceAssignmentOccurrenceSource: sourceAssignmentOccurrenceSource(store, dataFlow, parse),
     sourceAssignmentTargetSource: describeAddress(store, dataFlow.sourceAssignmentTargetSourceAddressHandle),
     targetKind: dataFlow.targetAccess?.targetKind
       ?? dataFlow.targetOperation?.targetKind
@@ -1260,6 +1264,28 @@ function bindingDataFlowRow(
       },
     } : {}),
   };
+}
+
+function sourceAssignmentOccurrenceSource(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+  parse: TemplateExpressionParse | null,
+): SemanticSourceReference | null {
+  if (parse == null || !bindingDataFlowDirectionIncludesTargetToSource(dataFlow.direction)) {
+    return null;
+  }
+  const expression = completedTemplateExpressionAstForParse(parse);
+  if (expression == null) {
+    return null;
+  }
+  const target = runtimeAssignmentTargetAstForExpression(expression);
+  if (target.$kind !== 'AccessScope' && target.$kind !== 'AccessMember') {
+    return null;
+  }
+  const expressionSource = describeAddress(store, parse.sourceAddressHandle);
+  return expressionSource?.path == null
+    ? null
+    : sourceReferenceForParserSpan(expressionSource.path, target.name.span, 'name');
 }
 
 function bindingObservedDependencyRow(

@@ -29,6 +29,12 @@ import {
   ResourceDefinitionKind,
 } from '../resources/resource-kind.js';
 import {
+  BindingScopeCreatorKind,
+  BindingScopeOwnerKind,
+  type BindingScope,
+} from '../configuration/scope.js';
+import { bindingScopeForTemplateExpressionParse } from '../template/template-expression-selection.js';
+import {
   TemplateInstructionKind,
 } from '../template/instruction-ir.js';
 import {
@@ -46,19 +52,6 @@ import {
 } from './contracts.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
-
-const AURELIA_BUILTIN_SCOPE_NAMES = new Set([
-  '$index',
-  '$first',
-  '$last',
-  '$even',
-  '$odd',
-  '$length',
-  '$event',
-  '$host',
-  '$this',
-  '$parent',
-]);
 
 export function readTemplateSemanticTokenRows(
   store: KernelStore,
@@ -208,7 +201,16 @@ function expressionSemanticTokenRows(
     if (root == null) {
       continue;
     }
-    collectExpressionTokens(root, parseSource, resource.compilation.definition.name, parse.productHandle, parse.sourceAddressHandle, handles, rows);
+    collectExpressionTokens(
+      root,
+      parseSource,
+      resource.compilation.definition.name,
+      parse.productHandle,
+      parse.sourceAddressHandle,
+      bindingScopeForTemplateExpressionParse(resource, parse),
+      handles,
+      rows,
+    );
   }
   return rows;
 }
@@ -219,16 +221,17 @@ function collectExpressionTokens(
   definitionName: string,
   semanticProductHandle: ProductHandle,
   sourceAddressHandle: AddressHandle | null,
+  scope: BindingScope | null,
   handles: boolean,
   rows: SemanticTemplateSemanticTokenRow[],
 ): void {
   visitExpression(expression, (node) => {
     switch (node.$kind) {
       case 'AccessScope':
-        pushExpressionToken(rows, 'variable', modifiersForScopeName(node.name.name), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        pushExpressionToken(rows, 'variable', modifiersForScopeName(node.name.name, scope), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
         break;
       case 'CallScope':
-        pushExpressionToken(rows, 'function', modifiersForScopeName(node.name.name), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
+        pushExpressionToken(rows, 'function', modifiersForScopeName(node.name.name, scope), node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
         break;
       case 'AccessGlobal':
         pushExpressionToken(rows, 'variable', ['defaultLibrary'], node.name.span, parseSource, definitionName, semanticProductHandle, sourceAddressHandle, handles);
@@ -630,8 +633,21 @@ function expressionRoot(
 
 function modifiersForScopeName(
   name: string,
+  scope: BindingScope | null,
 ): readonly SemanticTemplateSemanticTokenModifier[] {
-  return AURELIA_BUILTIN_SCOPE_NAMES.has(name) ? ['defaultLibrary'] : [];
+  if (name === '$host') {
+    return ['defaultLibrary'];
+  }
+  const located = scope?.locate(name) ?? null;
+  if (located?.slot == null || located.scope == null || !name.startsWith('$')) {
+    return [];
+  }
+  const repeatContextual = located.scope.ownerKind === BindingScopeOwnerKind.RepeatedItem
+    && located.context === located.scope.overrideContext;
+  const listenerContextual = located.scope.scopeCreators.some((creator) =>
+    creator.creatorKind === BindingScopeCreatorKind.ListenerEvent
+  );
+  return repeatContextual || listenerContextual ? ['defaultLibrary'] : [];
 }
 
 function sourceSlice(

@@ -1645,6 +1645,9 @@ class CompiledTemplateInstructionTraversal {
       const expressionHandle = commandInstruction instanceof PropertyBindingInstruction
         ? commandInstruction.expressionProductHandle
         : site == null ? null : this.indexes.parseBySite.get(site.productHandle)?.productHandle ?? null;
+      const literalValue = classification?.bindingCommand == null && site == null
+        ? syntax.rawValue
+        : null;
       const targetSourceAddressHandle = this.letBindingTargetSourceAddressHandle(attribute, syntax);
       result.push(this.assemblyState.createInstruction(
         `let-binding:${attribute.productHandle}`,
@@ -1658,6 +1661,7 @@ class CompiledTemplateInstructionTraversal {
           attribute.toReference(),
           camelCaseAttributeName(syntax.target),
           expressionHandle,
+          literalValue,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
           targetSourceAddressHandle,
           [],

@@ -272,6 +272,12 @@ parameter or return types need import rewriting and unqualified checker-global d
 interfaces. This keeps bound-controller overlays from falling back to a child placeholder bindable type merely because
 the parent-bound value is a structural function returned by a converter, and keeps listener event overlays from owning
 their own display-string type printer for `currentTarget`/`target` refinements.
+Scope-slot type spelling spends `targetTypeSourceProductHandle` when value flow supplied a current type that differs
+from the slot declaration. The slot's `targetProductHandle` remains declaration/symbol identity for navigation and
+write policy. Overlay projection must not overwrite that identity merely to obtain an importable indexed-access type;
+the two handles encode different causal relationships. Transforming wrappers such as value converters leave the
+member carrier unset and spell the evaluated return type directly; matching display text does not make pre-converter
+member provenance truthful.
 `dom-node-type.ts` owns DOM tag-name and event-map vocabulary. `$event` scope construction, listener handler-reference
 value channels, and generated overlay event helpers should spend that vocabulary instead of spelling
 `GlobalEventHandlersEventMap`/`HTMLElementEventMap` fallback policy locally.

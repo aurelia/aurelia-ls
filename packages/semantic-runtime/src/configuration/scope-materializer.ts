@@ -135,7 +135,7 @@ export class BindingScopeMaterializer {
     const source = this.recordsForSource(local, input.sourceAddressHandle);
     records.push(...source.records);
 
-    const handles = this.handlesForScope(local);
+    const handles = this.handlesForScope(local, input);
     const products = this.productsForScope(input, handles, source);
     const claims = this.recordsForClaims(
       local,
@@ -160,14 +160,15 @@ export class BindingScopeMaterializer {
     return products.toEmission(records);
   }
 
-  private handlesForScope(local: string): BindingScopeHandleSet {
+  private handlesForScope(local: string, input: BindingScopeConstructionRequest): BindingScopeHandleSet {
+    const predecessor = input.predecessor;
     return new BindingScopeHandleSet(
       this.store.handles.product(`binding-context:${local}`),
-      this.store.handles.identity(`binding-context:${local}`),
+      predecessor?.bindingContext.identityHandle ?? this.store.handles.identity(`binding-context:${local}`),
       this.store.handles.product(`override-context:${local}`),
-      this.store.handles.identity(`override-context:${local}`),
+      predecessor?.overrideContext.identityHandle ?? this.store.handles.identity(`override-context:${local}`),
       this.store.handles.product(`binding-scope:${local}`),
-      this.store.handles.identity(`binding-scope:${local}`),
+      predecessor?.identityHandle ?? this.store.handles.identity(`binding-scope:${local}`),
     );
   }
 
@@ -216,7 +217,7 @@ export class BindingScopeMaterializer {
       handles.bindingContextProductHandle,
       handles.bindingContextIdentityHandle,
       input.bindingContextKind,
-      input.ownerProductHandle,
+      input.predecessor?.bindingContext.ownerProductHandle ?? input.ownerProductHandle,
       input.bindingContextType,
       bindingContextSlots.map((slot) => slot.toSlot()),
       source.sourceAddressHandle,
@@ -251,7 +252,7 @@ export class BindingScopeMaterializer {
     return new BindingScope(
       handles.scopeProductHandle,
       handles.scopeIdentityHandle,
-      input.parent,
+      input.runtimeParent,
       bindingContext,
       overrideContext,
       input.isBoundary,
@@ -259,6 +260,7 @@ export class BindingScopeMaterializer {
       source.sourceAddressHandle,
       [],
       input.scopeCreators,
+      input.predecessor,
     );
   }
 
@@ -268,6 +270,9 @@ export class BindingScopeMaterializer {
     handles: BindingScopeHandleSet,
     source: BindingScopeSourceSet,
   ): readonly ConfigurationIdentity[] {
+    if (input.predecessor != null) {
+      return [];
+    }
     return [
       new ConfigurationIdentity(
         handles.bindingContextIdentityHandle,
@@ -352,6 +357,7 @@ export class BindingScopeMaterializer {
     return [
       ...this.contextClaimsForScope(local, bindingContext, overrideContext, scope, provenanceHandle),
       ...nullableClaim(this.parentClaimForScope(local, input, scope, provenanceHandle)),
+      ...nullableClaim(this.predecessorClaimForScope(local, input, scope, provenanceHandle)),
       ...nullableClaim(this.controllerOwnerClaimForScope(local, input, scope, provenanceHandle)),
       ...this.scopeEffectOwnerClaimsForScope(local, input, scope, provenanceHandle),
     ];
@@ -388,13 +394,13 @@ export class BindingScopeMaterializer {
     scope: BindingScope,
     provenanceHandle: ProvenanceHandle,
   ): SemanticClaim | null {
-    return input.parent == null
+    return input.runtimeParent == null
       ? null
       : new SemanticClaim(
         this.store.handles.claim(`binding-scope:${local}:parent`),
         scope.productHandle,
         KernelVocabulary.Configuration.BindingScopeHasParent.key,
-        input.parent.productHandle,
+        input.runtimeParent.productHandle,
         provenanceHandle,
       );
   }
@@ -416,6 +422,23 @@ export class BindingScopeMaterializer {
       : null;
   }
 
+  private predecessorClaimForScope(
+    local: string,
+    input: BindingScopeConstructionRequest,
+    scope: BindingScope,
+    provenanceHandle: ProvenanceHandle,
+  ): SemanticClaim | null {
+    return input.predecessor == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`binding-scope:${local}:predecessor`),
+        scope.productHandle,
+        KernelVocabulary.Configuration.BindingScopeDerivedFromScope.key,
+        input.predecessor.productHandle,
+        provenanceHandle,
+      );
+  }
+
   private scopeEffectOwnerClaimsForScope(
     local: string,
     input: BindingScopeConstructionRequest,
@@ -429,7 +452,9 @@ export class BindingScopeMaterializer {
           new SemanticClaim(
             this.store.handles.claim(`binding-scope:${local}:scope-effect-owner:${index}`),
             creator.productHandle,
-            KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
+            (input.predecessor == null
+              ? KernelVocabulary.Binding.ScopeEffectCreatesBindingScope
+              : KernelVocabulary.Binding.ScopeEffectUpdatesBindingScope).key,
             scope.productHandle,
             provenanceHandle,
           ),

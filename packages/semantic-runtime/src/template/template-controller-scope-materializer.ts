@@ -7,13 +7,17 @@ import {
 import {
   BindingScopeCreator,
   BindingScopeCreatorKind,
+  BindingContextSlotAssignmentAccessKind,
+  type BindingContextSlot,
   BindingContextSlotDraft,
   BindingScope,
+  BindingScopeLookupKind,
 } from '../configuration/scope.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryValue,
+  evaluationPrimitiveValueFromExpressionValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type {
@@ -99,7 +103,9 @@ import {
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
+  bindingContextSlotDraftForContextTypeMember,
   bindingContextSlotDraftForExpressionAccess,
+  bindingContextSlotTargetTypeSourceMember,
 } from '../configuration/binding-scope-slot-projector.js';
 import {
   ProvenanceRecord,
@@ -112,8 +118,11 @@ import {
   HydrateElementInstruction,
   HydrateLetElementInstruction,
   HydrateTemplateControllerInstruction,
+  IteratorBindingInstruction,
   DispatchBindingInstruction,
   ListenerBindingInstruction,
+  MultiAttrInstruction,
+  nestedInstructionProductHandlesForInstructions,
   PropertyBindingInstruction,
   SpreadElementPropBindingInstruction,
   StateBindingInstruction,
@@ -451,6 +460,7 @@ export class TemplateControllerScopeMaterializer {
       this.scopeNarrower,
       this.typeSupport,
       this.constructScopeEffects.bind(this),
+      this.constructRuntimeAssignmentStateForBinding.bind(this),
     );
   }
 
@@ -611,17 +621,13 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
   ): BindingScope {
+    if (instruction instanceof HydrateLetElementInstruction) {
+      return this.constructLetElementScope(frame, currentScope, instruction, localSuffix, controllerContext);
+    }
+
     this.measure(frame.input, 'owned-binding-instruction-scopes', () =>
       this.recordOwnedBindingInstructionScopes(instruction, currentScope, frame, localSuffix, controllerContext)
     );
-
-    if (instruction instanceof HydrateLetElementInstruction) {
-      const emission = this.constructLetElementScope(frame.input, currentScope, instruction, localSuffix);
-      if (emission == null) {
-        return currentScope;
-      }
-      return frame.addDerivedScope(emission);
-    }
 
     if (instruction instanceof HydrateTemplateControllerInstruction) {
       this.measure(frame.input, 'template-controller-scope', () =>
@@ -661,7 +667,7 @@ export class TemplateControllerScopeMaterializer {
     );
     if (assignmentScope != null) {
       frame.flowState.clearBranch(currentScope);
-      return frame.addDerivedScope(assignmentScope);
+      return assignmentScope;
     }
 
     frame.flowState.clearBranch(currentScope);
@@ -750,12 +756,13 @@ export class TemplateControllerScopeMaterializer {
     contextType: CheckerTypeReference | null,
   ): readonly BindingContextSlotDraft[] {
     return input.boundControllerValues?.readAll(controllerProductHandle, contextType)
-      .flatMap((value) => this.boundControllerBindingContextSlot(input, value)) ?? [];
+      .flatMap((value) => this.boundControllerBindingContextSlot(input, value, contextType)) ?? [];
   }
 
   private boundControllerBindingContextSlot(
     input: TemplateScopeConstructionRequest,
     value: RuntimeBoundControllerPropertyValue,
+    contextType: CheckerTypeReference | null,
   ): readonly BindingContextSlotDraft[] {
     if (value.expressionProductHandle == null || value.sourceScope == null) {
       return [];
@@ -776,20 +783,30 @@ export class TemplateControllerScopeMaterializer {
         `${input.localKey}:bound-controller:${value.propertyName}:source-slot`,
       );
     const evaluatedType = this.boundControllerExpressionType(input, sourceSite, value.propertyName, value.sourceResourceScope);
-    const targetType = sourceSlot?.targetType ?? evaluatedType;
+    const targetType = evaluatedType ?? sourceSlot?.targetType;
     if (targetType == null) {
       return [];
     }
-    const sourceAddressHandle = this.boundControllerPropertySourceAddressHandle(value)
-      ?? value.sourceAddressHandle
-      ?? sourceSlot?.sourceAddressHandle
-      ?? null;
+    const declarationSlot = bindingContextSlotDraftForContextTypeMember(
+      this.store,
+      contextType,
+      value.propertyName,
+    );
+    const sourceTypeMember = sourceSlot?.targetType == null
+      || !sameCheckerTypeReference(sourceSlot.targetType, targetType)
+      ? null
+      : bindingContextSlotTargetTypeSourceMember(this.store, sourceSlot);
     return [new BindingContextSlotDraft(
       value.propertyName,
-      sourceSlot?.targetIdentityHandle ?? null,
-      sourceSlot?.targetProductHandle ?? null,
+      declarationSlot?.targetIdentityHandle ?? null,
+      declarationSlot?.targetProductHandle ?? null,
       targetType,
-      sourceAddressHandle,
+      declarationSlot?.sourceAddressHandle ?? this.boundControllerPropertySourceAddressHandle(value),
+      declarationSlot?.fieldProvenance ?? [],
+      null,
+      declarationSlot?.memberTypes ?? [],
+      declarationSlot?.assignmentAccessKind ?? null,
+      sourceTypeMember?.productHandle ?? null,
     )];
   }
 
@@ -799,9 +816,10 @@ export class TemplateControllerScopeMaterializer {
     const definition = value.controllerDefinitionProductHandle == null
       ? null
       : this.store.productDetails.read(ResourceProductDetails.Definition, value.controllerDefinitionProductHandle);
-    return definition instanceof CustomElementDefinition
-      ? definition.bindables.find((bindable) => bindable.name === value.propertyName)?.sourceAddressHandle ?? null
+    const bindable = definition instanceof CustomElementDefinition
+      ? definition.bindables.find((candidate) => candidate.name === value.propertyName) ?? null
       : null;
+    return bindable?.nameSourceAddressHandle ?? bindable?.sourceAddressHandle ?? null;
   }
 
   private boundControllerExpressionType(
@@ -865,7 +883,15 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
   ): void {
-    ownedBindingInstructionProductHandles(instruction).forEach((productHandle, index) => {
+    const ownedProductHandles = ownedBindingInstructionProductHandles(instruction);
+    const ownedInstructions = ownedProductHandles
+      .map((productHandle) => frame.readInstruction(productHandle))
+      .filter((candidate): candidate is TemplateInstruction => candidate != null);
+    const nestedProductHandles = new Set(nestedInstructionProductHandlesForInstructions(ownedInstructions));
+    ownedProductHandles.forEach((productHandle, index) => {
+      if (nestedProductHandles.has(productHandle)) {
+        return;
+      }
       const childInstruction = frame.readInstruction(productHandle);
       if (childInstruction == null) {
         return;
@@ -930,27 +956,21 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
   ): BindingScope | null {
-    const slot = this.runtimeAssignmentSlotForBinding(frame, parent, ownerInstruction, binding, localSuffix, controllerContext);
-    if (slot == null) {
+    const promiseAssignment = ownerInstruction instanceof HydrateTemplateControllerInstruction
+      ? this.controllerFlow.promiseSettlementAssignmentProjection(frame, parent, ownerInstruction, localSuffix)
+      : null;
+    if (promiseAssignment?.valid === false) {
       return null;
     }
-    const emission = this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
-      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-expression`,
-      ownerProductHandle: binding.productHandle,
-      ownerIdentityHandle: binding.identityHandle,
-      base: parent,
-      bindingContextSlots: [slot],
-      overrideContextSlots: [],
-      sourceAddressHandle: binding.sourceAddressHandle,
-      scopeCreators: [new BindingScopeCreator(
-        BindingScopeCreatorKind.RuntimeAssignment,
-        binding.productHandle,
-        binding.sourceAddressHandle,
-        null,
-        [slot.name],
-      )],
-    }));
-    return frame.addDerivedScope(emission);
+    return this.constructRuntimeAssignmentStateForBinding(
+      frame,
+      parent,
+      ownerInstruction,
+      binding,
+      `${localSuffix}:expression`,
+      controllerContext,
+      promiseAssignment == null ? undefined : promiseAssignment.valueType,
+    );
   }
 
   private constructStateBindingCommandScope(
@@ -997,6 +1017,8 @@ export class TemplateControllerScopeMaterializer {
         BindingScopeCreatorKind.ListenerEvent,
         instruction.productHandle,
         instruction.sourceAddressHandle,
+        null,
+        ['$event'],
       )],
     }));
   }
@@ -1007,84 +1029,74 @@ export class TemplateControllerScopeMaterializer {
     instruction: TemplateInstruction,
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
-  ): BindingScopeConstructionEmission | null {
-    const slots = this.runtimeAssignmentSlots(frame, parent, instruction, localSuffix, controllerContext);
-    if (slots.length === 0) {
-      return null;
-    }
-    return this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
-      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment`,
-      ownerProductHandle: instruction.productHandle,
-      ownerIdentityHandle: instruction.identityHandle,
-      base: parent,
-      bindingContextSlots: slots,
-      overrideContextSlots: [],
-      sourceAddressHandle: instruction.sourceAddressHandle,
-      scopeCreators: [new BindingScopeCreator(
-        BindingScopeCreatorKind.RuntimeAssignment,
-        instruction.productHandle,
-        instruction.sourceAddressHandle,
-        null,
-        slots.map((slot) => slot.name),
-      )],
-    }));
-  }
-
-  private runtimeAssignmentSlots(
-    frame: TemplateScopeConstructionFrame,
-    parent: BindingScope,
-    instruction: TemplateInstruction,
-    localSuffix: string,
-    controllerContext: RuntimeControllerFrame | null,
-  ): readonly BindingContextSlotDraft[] {
+  ): BindingScope | null {
     const bindables = bindablesForInstruction(this.store, instruction);
     if (bindables.length === 0) {
-      return [];
+      return null;
     }
 
-    const slots: BindingContextSlotDraft[] = [];
-    for (const productHandle of bindableInstructionProductHandles(instruction)) {
+    let current = parent;
+    let changed = false;
+    for (const [index, productHandle] of bindableInstructionProductHandles(instruction).entries()) {
       const binding = frame.readInstruction(productHandle);
       if (!(binding instanceof PropertyBindingInstruction)) {
         continue;
       }
-      const slot = this.runtimeAssignmentSlotForBinding(frame, parent, instruction, binding, localSuffix, controllerContext, bindables);
-      if (slot == null) {
-        continue;
+      const next = this.constructRuntimeAssignmentStateForBinding(
+        frame,
+        current,
+        instruction,
+        binding,
+        `${localSuffix}:binding:${index}`,
+        controllerContext,
+        undefined,
+        bindables,
+      );
+      if (next != null) {
+        current = next;
+        changed = true;
       }
-      slots.push(slot);
     }
-    return slots;
+    return changed ? current : null;
   }
 
-  private runtimeAssignmentSlotForBinding(
+  private constructRuntimeAssignmentStateForBinding(
     frame: TemplateScopeConstructionFrame,
     parent: BindingScope,
     ownerInstruction: TemplateInstruction,
     binding: PropertyBindingInstruction,
     localSuffix: string,
     controllerContext: RuntimeControllerFrame | null,
+    assignedValueTypeOverride: CheckerTypeReference | null | undefined = undefined,
     ownerBindables: readonly BindableDefinition[] = bindablesForInstruction(this.store, ownerInstruction),
-  ): BindingContextSlotDraft | null {
+  ): BindingScope | null {
     if (ownerBindables.length === 0 || !bindingCanAssignToSource(this.store, binding, frame.input.resourceScope)) {
       return null;
     }
     const parse = this.typeSupport.readParse(binding.expressionProductHandle);
     const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
-    const target = expression == null ? null : runtimeAssignmentTargetAstForExpression(expression);
-    const name = target?.$kind === 'AccessScope' && target.ancestor === 0
-      ? target.name.name
-      : null;
-    if (name == null || parent.lookup(name, 0).slot != null) {
+    if (expression == null) {
+      return null;
+    }
+    const target = runtimeAssignmentTargetAstForExpression(expression);
+    if (target?.$kind !== 'AccessScope' || target.name.name === '$host') {
+      return null;
+    }
+    const lookup = parent.locate(target.name.name, target.ancestor);
+    const targetScope = lookup.scope;
+    if (targetScope == null || lookup.context == null) {
+      return null;
+    }
+    const descendants = runtimeScopeDescendants(parent, targetScope);
+    if (descendants == null) {
       return null;
     }
     const targetMember = runtimeAssignmentTargetMember(this.store, ownerInstruction, binding, ownerBindables);
     const targetMemberValueType = targetMember == null
       ? null
       : this.runtimeAssignmentTargetMemberValueType(frame, targetMember, localSuffix);
-    const targetType = expression == null
-      ? targetMemberValueType
-      : this.runtimeAssignmentTargetToSourceType(
+    const assignedValueType = assignedValueTypeOverride === undefined
+      ? this.runtimeAssignmentTargetToSourceType(
           frame,
           parent,
           binding,
@@ -1092,17 +1104,83 @@ export class TemplateControllerScopeMaterializer {
           targetMemberValueType,
           localSuffix,
           controllerContext,
-        );
-    const targetProductHandle = targetMember != null && targetMemberValueType != null && targetType != null && sameCheckerTypeReference(targetType, targetMemberValueType)
-      ? targetMember.productHandle
-      : null;
-    return new BindingContextSlotDraft(
-      name,
-      null,
+        )
+      : assignedValueTypeOverride;
+    const existingSlot = lookup.slot;
+    const targetType = assignedValueType ?? existingSlot?.targetType ?? targetMemberValueType;
+    const targetProductHandle = existingSlot?.targetProductHandle ?? null;
+    const targetSource = existingSlot == null && parse != null
+      ? sourceAddressForRuntimeExpressionSpan(
+          this.store,
+          `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-target:${localKeyPart(target.name.name)}`,
+          parse.sourceAddressHandle,
+          target.name.span,
+        )
+      : { handle: existingSlot?.sourceAddressHandle ?? null, records: [] };
+    const slot = new BindingContextSlotDraft(
+      target.name.name,
+      existingSlot?.targetIdentityHandle ?? null,
       targetProductHandle,
       targetType,
-      parse?.sourceAddressHandle ?? binding.sourceAddressHandle,
+      targetSource.handle ?? binding.sourceAddressHandle,
+      existingSlot?.fieldProvenance ?? [],
+      null,
+      [],
+      existingSlot?.assignmentAccessKind
+        ?? (existingSlot == null ? BindingContextSlotAssignmentAccessKind.Writable : null),
+      targetMember != null
+        && targetMemberValueType != null
+        && targetType != null
+        && sameCheckerTypeReference(targetMemberValueType, targetType)
+        ? targetMember.productHandle
+        : existingSlot?.targetType != null
+          && targetType != null
+          && sameCheckerTypeReference(existingSlot.targetType, targetType)
+          ? existingSlot.targetTypeSourceProductHandle
+          : null,
     );
+    const assignmentEmission = this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
+      localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment`,
+      ownerProductHandle: binding.productHandle,
+      ownerIdentityHandle: binding.identityHandle,
+      base: targetScope,
+      bindingContextSlots: lookup.lookupKind === BindingScopeLookupKind.OverrideContext ? [] : [slot],
+      overrideContextSlots: lookup.lookupKind === BindingScopeLookupKind.OverrideContext ? [slot] : [],
+      sourceAddressHandle: binding.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.RuntimeAssignment,
+        binding.productHandle,
+        binding.sourceAddressHandle,
+        null,
+        existingSlot == null ? [slot.name] : [],
+        [slot.name],
+        lookup.context.contextKind,
+      )],
+    }));
+    let current = frame.addDerivedScope(new BindingScopeConstructionEmission(
+      assignmentEmission.bindingContext,
+      assignmentEmission.overrideContext,
+      assignmentEmission.scope,
+      [...targetSource.records, ...assignmentEmission.records],
+    ));
+    for (const [index, descendant] of [...descendants].reverse().entries()) {
+      current = frame.addDerivedScope(this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
+        localKey: `${frame.input.localKey}:scope:${localSuffix}:runtime-assignment-rebase:${index}`,
+        ownerProductHandle: binding.productHandle,
+        ownerIdentityHandle: binding.identityHandle,
+        base: descendant,
+        runtimeParent: current,
+        bindingContextSlots: [],
+        overrideContextSlots: [],
+        sourceAddressHandle: binding.sourceAddressHandle,
+        scopeCreators: [new BindingScopeCreator(
+          BindingScopeCreatorKind.RuntimeAssignment,
+          binding.productHandle,
+          binding.sourceAddressHandle,
+        )],
+      })));
+    }
+    return current;
   }
 
   private runtimeAssignmentRuntimeBinding(
@@ -1228,7 +1306,7 @@ export class TemplateControllerScopeMaterializer {
       scope.productHandle === controllerScopeReference.productHandle
     ) ?? null;
     // SpreadBinding.bind uses the hydration-context controller scope's parent as the inner binding scope.
-    return controllerScope?.parent ?? null;
+    return controllerScope?.runtimeParent ?? null;
   }
 
   private constructChildElementScope(
@@ -1338,7 +1416,6 @@ export class TemplateControllerScopeMaterializer {
     }
 
     let current = parent;
-    const letEffects: LetBindingScopeEffect[] = [];
     effects.forEach((effect, index) => {
       if (effect instanceof IteratorBindingScopeEffect) {
         const emission = this.measure(frame.input, 'iterator-scope', () =>
@@ -1347,24 +1424,15 @@ export class TemplateControllerScopeMaterializer {
         current = frame.addDerivedScope(emission);
       }
       if (effect instanceof LetBindingScopeEffect) {
-        letEffects.push(effect);
+        current = this.constructLetEffectScope(
+          frame,
+          current,
+          effect,
+          `${localSuffix}:let:${index}`,
+          effect.sourceAddressHandle,
+        );
       }
     });
-
-    if (letEffects.length > 0) {
-      const emission = this.measure(
-        frame.input,
-        'let-scope',
-        () => this.constructLetScope(
-          frame.input,
-          current,
-          letEffects,
-          `${localSuffix}:let`,
-          letEffects[0]?.sourceAddressHandle ?? null,
-        ),
-      );
-      current = frame.addDerivedScope(emission);
-    }
 
     return current;
   }
@@ -1382,9 +1450,15 @@ export class TemplateControllerScopeMaterializer {
       this.iteratorLocalSlots(iteratorFrame)
     );
     const overrideSlots = this.measure(input, 'iterator-override-slots', () =>
-      this.typeSupport.repeatOverrideSlots(input, effect.sourceAddressHandle, iteratorFrame.iteratorProjection.elementType)
+      this.typeSupport.repeatOverrideSlots(
+        input,
+        localSuffix,
+        effect.sourceAddressHandle,
+        iteratorFrame.iteratorProjection.elementType,
+        this.iteratorContextualMode(iteratorFrame),
+      )
     );
-    return this.measure(input, 'iterator-scope-prepare', () => this.scopeMaterializer.prepare(BindingScope.fromRepeatedItem({
+    const emission = this.measure(input, 'iterator-scope-prepare', () => this.scopeMaterializer.prepare(BindingScope.fromRepeatedItem({
       localKey: `${input.localKey}:scope:${localSuffix}`,
       ownerProductHandle: effect.productHandle,
       ownerIdentityHandle: effect.identityHandle,
@@ -1396,8 +1470,47 @@ export class TemplateControllerScopeMaterializer {
         BindingScopeCreatorKind.RuntimeBindingScopeEffect,
         effect.productHandle,
         effect.sourceAddressHandle,
+        null,
+        [...localSlots, ...overrideSlots].map((slot) => slot.name),
       )],
     })));
+    this.recordIteratorTailExpressionScopes(frame, iteratorFrame, emission.scope);
+    return emission;
+  }
+
+  private recordIteratorTailExpressionScopes(
+    frame: TemplateScopeConstructionFrame,
+    iteratorFrame: IteratorScopeMaterializationFrame,
+    repeatedItemScope: BindingScope,
+  ): void {
+    const binding = iteratorFrame.binding;
+    if (binding == null) {
+      return;
+    }
+    const instruction = this.store.productDetails.read(
+      TemplateProductDetails.Instruction,
+      binding.instructionProductHandle,
+    );
+    if (!(instruction instanceof IteratorBindingInstruction)) {
+      return;
+    }
+    const controllerProductHandle = frame.input.runtimeBindings
+      .readRenderContextForBinding(binding.productHandle)
+      ?.renderingController.productHandle ?? null;
+    for (const handle of instruction.tailInstructionProductHandles) {
+      const tail = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      if (!(tail instanceof MultiAttrInstruction) || tail.expressionProductHandle == null) {
+        continue;
+      }
+      const scope = tail.target === 'key'
+        ? repeatedItemScope
+        : tail.target === 'contextual'
+          ? iteratorFrame.parent
+          : null;
+      if (scope != null) {
+        frame.addInstructionScope(tail.productHandle, scope, controllerProductHandle);
+      }
+    }
   }
 
   private iteratorScopeMaterializationFrame(
@@ -1434,6 +1547,27 @@ export class TemplateControllerScopeMaterializer {
       iteratorProjection,
       localTypes: new Map(iteratorProjection.localProjection.locals.map((local) => [local.name, local.typeReference])),
     };
+  }
+
+  private iteratorContextualMode(frame: IteratorScopeMaterializationFrame): boolean | null {
+    const instruction = frame.binding == null
+      ? null
+      : this.store.productDetails.read(TemplateProductDetails.Instruction, frame.binding.instructionProductHandle);
+    if (!(instruction instanceof IteratorBindingInstruction)) {
+      return null;
+    }
+    const contextual = instruction.tailInstructionProductHandles
+      .map((handle) => this.store.productDetails.read(TemplateProductDetails.Instruction, handle))
+      .find((candidate): candidate is MultiAttrInstruction =>
+        candidate instanceof MultiAttrInstruction && candidate.target === 'contextual'
+      );
+    if (contextual == null) {
+      return true;
+    }
+    if (contextual.command == null) {
+      return contextual.value !== 'false' && contextual.value.length > 0;
+    }
+    return null;
   }
 
   private publishIteratorScopeIssues(
@@ -1515,6 +1649,8 @@ export class TemplateControllerScopeMaterializer {
         bindingExpressionScopes,
         input.resourceScope,
       ),
+      [],
+      BindingContextSlotAssignmentAccessKind.Writable,
     ));
   }
 
@@ -1553,63 +1689,117 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructLetElementScope(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
+    frame: TemplateScopeConstructionFrame,
+    base: BindingScope,
     instruction: HydrateLetElementInstruction,
     localSuffix: string,
-  ): BindingScopeConstructionEmission | null {
-    const letEffects = input.runtimeBindings.readScopeEffectsForOwner(instruction.productHandle)
+    controllerContext: RuntimeControllerFrame | null,
+  ): BindingScope {
+    const letEffects = frame.input.runtimeBindings.readScopeEffectsForOwner(instruction.productHandle)
       .filter((effect): effect is LetBindingScopeEffect => effect instanceof LetBindingScopeEffect);
-    if (letEffects.length === 0) {
-      return null;
-    }
-    return this.constructLetScope(input, parent, letEffects, `let-element:${localSuffix}`, instruction.sourceAddressHandle);
+    const effectsByBinding = new Map(letEffects.flatMap((effect) =>
+      effect.binding.productHandle == null ? [] : [[effect.binding.productHandle, effect] as const]
+    ));
+    let current = base;
+    ownedBindingInstructionProductHandles(instruction).forEach((productHandle, index) => {
+      const childInstruction = frame.readInstruction(productHandle);
+      if (childInstruction == null) {
+        return;
+      }
+      frame.addInstructionScope(
+        childInstruction.productHandle,
+        this.constructInstructionExpressionScope(
+          frame,
+          current,
+          childInstruction,
+          `${localSuffix}:owned:${index}:expression`,
+          controllerContext,
+          instruction,
+        ),
+        controllerContext?.productHandle ?? null,
+      );
+      const runtimeBindings = (controllerContext?.readBindings()
+        ?? frame.input.runtimeBindings.readBindingsForInstruction(childInstruction.productHandle))
+        .filter((binding) => binding.instructionProductHandle === childInstruction.productHandle);
+      const runtimeBinding = runtimeBindings.length === 1 ? runtimeBindings[0]! : null;
+      const effect = runtimeBinding == null
+        ? null
+        : effectsByBinding.get(runtimeBinding.productHandle) ?? null;
+      if (effect != null) {
+        current = this.constructLetEffectScope(
+          frame,
+          current,
+          effect,
+          `let-element:${localSuffix}:${index}`,
+          instruction.sourceAddressHandle,
+        );
+      }
+    });
+    return current;
   }
 
-  private constructLetScope(
-    input: TemplateScopeConstructionRequest,
-    parent: BindingScope,
-    effects: readonly LetBindingScopeEffect[],
+  private constructLetEffectScope(
+    frame: TemplateScopeConstructionFrame,
+    base: BindingScope,
+    effect: LetBindingScopeEffect,
     localSuffix: string,
     sourceAddressHandle: AddressHandle | null,
-  ): BindingScopeConstructionEmission {
-    const bindingContextLetSlots = effects
-      .filter((effect) => effect.targetContext === LetBindingTargetContext.BindingContext)
-      .map((effect) => this.letSlot(input, parent, effect));
-    const overrideContextLetSlots = effects
-      .filter((effect) => effect.targetContext === LetBindingTargetContext.OverrideContext)
-      .map((effect) => this.letSlot(input, parent, effect));
-    return this.scopeMaterializer.prepare(BindingScope.fromLetBindings({
-      localKey: `${input.localKey}:scope:${localSuffix}`,
-      ownerProductHandle: effects[0]?.productHandle ?? null,
-      ownerIdentityHandle: effects[0]?.identityHandle ?? null,
-      parent,
-      bindingContextSlots: bindingContextLetSlots,
-      overrideContextSlots: overrideContextLetSlots,
-      sourceAddressHandle,
-      scopeCreators: effects.map((effect) => new BindingScopeCreator(
-        BindingScopeCreatorKind.RuntimeBindingScopeEffect,
-        effect.productHandle,
-        effect.sourceAddressHandle,
-      )),
-    }));
+  ): BindingScope {
+    return this.measure(frame.input, 'let-scope', () => {
+      const existingSlot = this.letTargetSlot(base, effect);
+      const slot = this.letSlot(frame.input, base, effect, existingSlot);
+      return frame.addDerivedScope(this.scopeMaterializer.prepare(BindingScope.fromLetBindings({
+        localKey: `${frame.input.localKey}:scope:${localSuffix}`,
+        ownerProductHandle: effect.productHandle,
+        ownerIdentityHandle: effect.identityHandle,
+        base,
+        bindingContextSlots: effect.targetContext === LetBindingTargetContext.BindingContext ? [slot] : [],
+        overrideContextSlots: effect.targetContext === LetBindingTargetContext.OverrideContext ? [slot] : [],
+        sourceAddressHandle: effect.sourceAddressHandle ?? sourceAddressHandle,
+        scopeCreators: [new BindingScopeCreator(
+          BindingScopeCreatorKind.RuntimeBindingScopeEffect,
+          effect.productHandle,
+          effect.sourceAddressHandle,
+          null,
+          existingSlot == null ? [slot.name] : [],
+        )],
+      })));
+    });
   }
 
   private letSlot(
     input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: LetBindingScopeEffect,
+    existingSlot: BindingContextSlot | null,
   ): BindingContextSlotDraft {
     const targetType = this.typeSupport.letTargetType(input, parent, effect);
     return new BindingContextSlotDraft(
       effect.target,
-      null,
-      null,
+      existingSlot?.targetIdentityHandle ?? null,
+      existingSlot?.targetProductHandle ?? null,
       targetType,
       effect.targetSourceAddressHandle ?? effect.sourceAddressHandle,
-      [],
+      existingSlot?.fieldProvenance ?? [],
       this.letStaticValue(input, parent, effect, targetType),
+      [],
+      existingSlot?.assignmentAccessKind
+        ?? (existingSlot == null ? BindingContextSlotAssignmentAccessKind.Writable : null),
+      existingSlot?.targetType != null
+        && targetType != null
+        && sameCheckerTypeReference(existingSlot.targetType, targetType)
+        ? existingSlot.targetTypeSourceProductHandle
+        : null,
     );
+  }
+
+  private letTargetSlot(
+    scope: BindingScope,
+    effect: LetBindingScopeEffect,
+  ): BindingContextSlot | null {
+    return effect.targetContext === LetBindingTargetContext.BindingContext
+      ? scope.bindingContext.lookup(effect.target)
+      : scope.overrideContext.lookup(effect.target);
   }
 
   private letStaticValue(
@@ -1618,6 +1808,9 @@ export class TemplateControllerScopeMaterializer {
     effect: LetBindingScopeEffect,
     targetType: CheckerTypeReference | null,
   ): EvaluationValue | null {
+    if (effect.literalValue != null) {
+      return evaluationPrimitiveValueFromExpressionValue(effect.literalValue);
+    }
     const frame = this.letStaticValueEvaluationFrame(input, parent, effect, targetType);
     if (frame == null) {
       return null;
@@ -1804,6 +1997,9 @@ function bindableInstructionProductHandles(
   if (instruction instanceof HydrateAttributeInstruction) {
     return instruction.bindingInstructionProductHandles;
   }
+  if (instruction instanceof HydrateTemplateControllerInstruction) {
+    return instruction.bindingInstructionProductHandles;
+  }
   return [];
 }
 
@@ -1811,7 +2007,11 @@ function bindablesForInstruction(
   store: KernelStore,
   instruction: TemplateInstruction,
 ): readonly BindableDefinition[] {
-  if (!(instruction instanceof HydrateElementInstruction) && !(instruction instanceof HydrateAttributeInstruction)) {
+  if (
+    !(instruction instanceof HydrateElementInstruction)
+    && !(instruction instanceof HydrateAttributeInstruction)
+    && !(instruction instanceof HydrateTemplateControllerInstruction)
+  ) {
     return [];
   }
   const definition = instruction.definitionProductHandle == null
@@ -1848,7 +2048,11 @@ function bindableTargetMember(
   instruction: TemplateInstruction,
   bindable: BindableDefinition,
 ): CheckerTypeMember | null {
-  if (!(instruction instanceof HydrateElementInstruction) && !(instruction instanceof HydrateAttributeInstruction)) {
+  if (
+    !(instruction instanceof HydrateElementInstruction)
+    && !(instruction instanceof HydrateAttributeInstruction)
+    && !(instruction instanceof HydrateTemplateControllerInstruction)
+  ) {
     return null;
   }
   const definition = instruction.definitionProductHandle == null
@@ -1906,6 +2110,19 @@ function uniqueInstructionScopeApplications(
     unique.push(application);
   }
   return unique;
+}
+
+function runtimeScopeDescendants(
+  scope: BindingScope,
+  target: BindingScope,
+): readonly BindingScope[] | null {
+  const descendants: BindingScope[] = [];
+  let current: BindingScope | null = scope;
+  while (current != null && current.productHandle !== target.productHandle) {
+    descendants.push(current);
+    current = current.runtimeParent;
+  }
+  return current == null ? null : descendants;
 }
 
 function uniqueTemplateControllerLinks(

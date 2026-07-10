@@ -11,6 +11,7 @@ import {
   BindingScopeLookupKind,
   type BindingContextSlot,
 } from '../configuration/scope.js';
+import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type {
   AddressHandle,
 } from '../kernel/handles.js';
@@ -29,7 +30,7 @@ import {
   checkerTypeMemberReachableIdentityHandle,
   sameCheckerTypeReference,
 } from './type-shape.js';
-import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import { checkerNullishType } from './checker-related-types.js';
 import {
   checkerPrimitiveLiteralType,
@@ -563,6 +564,10 @@ export class CheckerExpressionScopeNarrower {
         ...slot.memberTypes.filter((candidate) => candidate.name !== memberName),
         memberRefinement,
       ],
+      slot.assignmentAccessKind,
+      ownerType != null && slot.targetType != null && sameCheckerTypeReference(ownerType, slot.targetType)
+        ? slot.targetTypeSourceProductHandle
+        : null,
     );
   }
 
@@ -608,9 +613,7 @@ export class CheckerExpressionScopeNarrower {
       return reference;
     }
 
-    const member = slot.targetProductHandle == null
-      ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = bindingContextSlotTargetTypeSourceMember(this.store, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -1094,6 +1097,10 @@ function bindingContextSlotWithTargetType(
     source.fieldProvenance,
     source.staticValue,
     source.memberTypes,
+    source.assignmentAccessKind,
+    source.targetType != null && sameCheckerTypeReference(targetType, source.targetType)
+      ? source.targetTypeSourceProductHandle
+      : null,
   );
 }
 

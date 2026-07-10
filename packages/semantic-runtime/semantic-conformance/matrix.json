@@ -8,7 +8,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "template-member-navigation",
       "domainAxis": "source-precision",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "boundary-contract",
       "assertionKind": "source-precision-agreement",
       "requirement": "Cursor info, references, rename, and semantic tokens agree on the authored token span for a source-backed template member.",
       "sourceFile": "src/routes/item-list-route.html",
@@ -30,7 +30,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "template-member-rename",
       "domainAxis": "query-locus",
-      "coverageIntent": "known-gap-witness",
+      "coverageIntent": "boundary-contract",
       "assertionKind": "line-character-cursor-parity",
       "requirement": "Cursor-locus queries that accept line and character resolve the same semantic member as offset-aware queries for the same source position.",
       "sourceFile": "src/routes/item-list-route.html",
@@ -51,7 +51,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "open-reference-honesty",
       "domainAxis": "open-honesty",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "boundary-contract",
       "assertionKind": "candidate-honesty",
       "requirement": "Unproven weak/dynamic member references return only proven rows, preserve candidates separately, and mark the answer open.",
       "sourceFile": "src/components/loose-picklist.html",
@@ -73,7 +73,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "diagnostic-provenance",
       "domainAxis": "diagnostics",
-      "coverageIntent": "known-gap-witness",
+      "coverageIntent": "boundary-contract",
       "assertionKind": "diagnostic-provenance-agreement",
       "requirement": "App-level diagnostic aggregation preserves the template diagnostic subject, selected member identity, suggestion action, source, and domain.",
       "sourceFile": "src/components/loose-picklist.html",
@@ -95,7 +95,7 @@
       "aureliaDomain": "plugin-capability-admission",
       "capability": "code-action-edit-plan",
       "domainAxis": "edit-plan",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "boundary-contract",
       "assertionKind": "edit-plan-old-text",
       "requirement": "Edit-bearing template code actions carry explicit oldText and validate insertion/replacement text against authored source.",
       "sourceFile": "src/unregistered-plugin-resources-app.html",
@@ -450,7 +450,7 @@
       "aureliaDomain": "template-binding-syntax",
       "capability": "template-semantic-tokens",
       "domainAxis": "template-syntax",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/my-app.html",
       "requirement": "Template semantic tokens preserve exact authored token spans for Aurelia syntax and expression surfaces.",
@@ -783,7 +783,7 @@
       "aureliaDomain": "template-binding-syntax",
       "capability": "template-semantic-tokens",
       "domainAxis": "template-syntax",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/my-app.html",
       "requirement": "Paged template semantic tokens preserve exact authored spans for plugin syntax, controllers, router resources, and composition resources.",
@@ -1235,7 +1235,7 @@
       "aureliaDomain": "template-binding-syntax",
       "capability": "template-structure-hints",
       "domainAxis": "template-syntax",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/my-app.html",
       "requirement": "Template folding ranges and inlay hints preserve authored source spans and distinguish implicit helper hints from explicitly authored syntax.",
@@ -1370,7 +1370,7 @@
       "aureliaDomain": "bindable-contracts",
       "capability": "bindable-alias-navigation",
       "domainAxis": "resources",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/app.html",
       "requirement": "Bindable property and explicit public-attribute alias surfaces preserve distinct references and rename edit plans.",
@@ -1643,7 +1643,7 @@
       "aureliaDomain": "bindable-contracts",
       "capability": "bindable-contract-model",
       "domainAxis": "resources",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/bindable-lab-app.html",
       "requirement": "Bindable resource metadata, template cursor surfaces, references, rename, completions, diagnostics, and source-token projections preserve the distinction between property identity, public attribute spelling, and binding command/value syntax.",
@@ -2180,7 +2180,7 @@
         },
         {
           "id": "inline-multi-binding-segment-semantic-tokens",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "domainAxis": "source-precision",
           "capability": "template-semantic-tokens",
           "expectations": [
@@ -2293,7 +2293,7 @@
         },
         {
           "id": "coercion-nullability-policy-is-preserved",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "resource definitions",
@@ -2311,7 +2311,7 @@
         },
         {
           "id": "custom-attribute-no-multi-bindings-policy-is-public",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "resource definitions",
@@ -2324,7 +2324,7 @@
         },
         {
           "id": "known-interceptor-function-references-close",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "resource definitions",
@@ -2348,7 +2348,7 @@
         },
         {
           "id": "authored-callback-mode-and-set-field-sources",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "resource definitions",
@@ -2583,7 +2583,7 @@
         },
         {
           "id": "bindable-cursor-preserves-value-type-facts",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "cursor": { "marker": "action.bind=\"handleAction\"", "token": "action" },
           "expectations": [
             {
@@ -2735,7 +2735,7 @@
         },
         {
           "id": "class-level-bindable-property-reference-closure",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "sourceFile": "src/binding-contract-surfaces.ts",
           "cursor": { "marker": "template: '<span>${externalValue}</span>'", "token": "externalValue" },
           "expectations": [
@@ -2755,7 +2755,7 @@
         },
         {
           "id": "inherited-static-bindable-property-reference-closure",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "sourceFile": "src/binding-contract-surfaces.ts",
           "cursor": { "marker": "template: '<span>${baseStatic}</span>'", "token": "baseStatic" },
           "expectations": [
@@ -2775,7 +2775,7 @@
         },
         {
           "id": "nearest-static-bindable-property-reference-closure",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "sourceFile": "src/binding-contract-surfaces.ts",
           "cursor": { "marker": "template: '<span>${ownStatic}</span>'", "token": "ownStatic" },
           "expectations": [
@@ -2795,7 +2795,7 @@
         },
         {
           "id": "static-record-bindable-property-reference-closure",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "sourceFile": "src/binding-contract-surfaces.ts",
           "cursor": { "marker": "template: '<span>${status}</span>'", "token": "status" },
           "expectations": [
@@ -2815,7 +2815,7 @@
         },
         {
           "id": "definition-object-bindable-property-reference-closure",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "sourceFile": "src/binding-contract-surfaces.ts",
           "cursor": { "marker": "template: '<span>${value}:${inheritedOnly}:${staticOnly}:${definitionOnly}</span>'", "token": "value" },
           "expectations": [
@@ -2841,7 +2841,7 @@
       "aureliaDomain": "bindable-contracts",
       "capability": "bindable-rename",
       "domainAxis": "edit-plan",
-      "coverageIntent": "known-gap-witness",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/binding-contract-surfaces.ts",
       "requirement": "Template- and TypeScript-origin bindable property renames keep metadata, TypeScript symbols, derived template spellings, child-template usages, and conventional callbacks synchronized without rewriting explicit aliases.",
@@ -3312,7 +3312,7 @@
         },
         {
           "id": "inline-multi-binding-inlay-hints-use-segment-sources",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "domainAxis": "source-precision",
           "capability": "template-inlay-hints",
           "expectations": [
@@ -3411,7 +3411,7 @@
       "aureliaDomain": "resource-registration",
       "capability": "resource-navigation",
       "domainAxis": "resources",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/item-list-route.html",
       "requirement": "Explicit custom-element resource references and rename plans use exact public-name declaration and tag-token sources.",
@@ -3519,7 +3519,7 @@
       "aureliaDomain": "resource-registration",
       "capability": "resource-registration-model",
       "domainAxis": "resources",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/resource-lab-app.html",
       "requirement": "Resource registration rows preserve framework registration identity, author-facing taxonomy, declaration carrier forms, aliases, and exact public-name sources across custom elements, custom attributes, template controllers, value converters, and binding behaviors.",
@@ -3794,7 +3794,7 @@
         {
           "id": "primary-resource-rename-does-not-collapse-alias-usages",
           "cursor": { "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "resource rename",
@@ -3820,7 +3820,7 @@
         {
           "id": "local-template-resource-dispatch",
           "cursor": { "marker": "<local-chip public-label.bind=\"title\">", "token": "local-chip" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "cursor info",
@@ -3845,7 +3845,7 @@
         {
           "id": "as-element-resource-dispatch",
           "cursor": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "cursor info",
@@ -3870,7 +3870,7 @@
         {
           "id": "value-converter-expression-resource-dispatch",
           "cursor": { "marker": "${title | formatName}", "token": "formatName" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "cursor info",
@@ -3896,7 +3896,7 @@
         {
           "id": "binding-behavior-expression-resource-dispatch",
           "cursor": { "marker": "title & trackEdit", "token": "trackEdit" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "cursor info",
@@ -3927,7 +3927,7 @@
       "aureliaDomain": "resource-registration",
       "capability": "resource-registration-diagnostics",
       "domainAxis": "diagnostics",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/resource-registration-duplicates-app.html",
       "requirement": "Runtime resource registration collisions publish framework-owned resource issue rows with AUR0153-AUR0156 codes and source spans on the duplicate registration carrier.",
@@ -3987,7 +3987,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "template-diagnostics",
       "domainAxis": "diagnostics",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/guidance-truth-canary-app.html",
       "requirement": "Template diagnostics preserve diagnostic kind, missing-input vocabulary, selected symbol, suggestion action, and authored source.",
@@ -4078,7 +4078,7 @@
       "aureliaDomain": "template-binding-syntax",
       "capability": "template-diagnostics",
       "domainAxis": "diagnostics",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/template-compiler-errors-app.html",
       "requirement": "Compiler diagnostics preserve framework-code vocabulary and authored source ownership.",
@@ -4151,7 +4151,7 @@
       "aureliaDomain": "plugin-capability-admission",
       "capability": "template-diagnostics",
       "domainAxis": "plugin-capabilities",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/unregistered-plugin-resources-app.html",
       "requirement": "Missing plugin capability diagnostics preserve the concrete framework capability and authored syntax source.",
@@ -4282,7 +4282,7 @@
       "aureliaDomain": "template-expression-typing",
       "capability": "template-diagnostics",
       "domainAxis": "overlays",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/template-overlay-type-errors-app.html",
       "requirement": "Template overlay diagnostics preserve TypeScript code identity while retaining authored template source and semantic subject spans.",
@@ -4686,7 +4686,7 @@
         },
         {
           "id": "declaration-insertion-old-text",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "template code actions",
@@ -4865,7 +4865,7 @@
       "aureliaDomain": "plugin-capability-admission",
       "capability": "framework-capability-demands",
       "domainAxis": "plugin-capabilities",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/unregistered-plugin-resources-app.html",
       "requirement": "Framework capability demand rows preserve the capability key, admission/actionability state, module recommendation, authored syntax source, and related diagnostic lane before presentation diagnostics are assembled.",
@@ -5088,7 +5088,7 @@
       "coverageIntent": "regression-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/scope-lab-app.html",
-      "requirement": "Template-controller scope constructs preserve Aurelia binding-context, override-context, branch-local, parent-scope, resource, diagnostic, and edit-plan semantics through public query answers.",
+      "requirement": "Template-controller scope constructs preserve Aurelia binding-context, override-context, assignment-target, parent-scope, resource, diagnostic, and edit-plan semantics through public query answers.",
       "cases": [
         {
           "id": "repeat-local-navigation-and-edit-plan",
@@ -5108,7 +5108,7 @@
             {
               "name": "repeat local references",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 7 },
+              "equals": { "value.rows.length": 15 },
               "rows": [
                 { "fields": { "referenceKind": "declaration", "name": "task" }, "source": { "marker": "repeat.for=\"task of tasks", "token": "task" } },
                 { "fields": { "referenceKind": "template-usage", "name": "task" }, "source": { "marker": "${task.name}</span>\n        <span class=\"parent-host-title\"", "token": "task" } }
@@ -5117,10 +5117,10 @@
             {
               "name": "repeat local rename",
               "query": { "kind": "template-rename", "options": { "newName": "taskRenamed" } },
-              "equals": { "value.status": "available", "value.edits.length": 7 },
+              "equals": { "value.status": "available", "value.edits.length": 15 },
               "rows": [
                 { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "task", "newText": "taskRenamed" }, "count": 1, "oldTextMatchesSource": true },
-                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "task", "newText": "taskRenamed" }, "count": 6, "oldTextMatchesSource": true }
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "task", "newText": "taskRenamed" }, "count": 14, "oldTextMatchesSource": true }
               ]
             }
           ]
@@ -5268,6 +5268,206 @@
           ]
         },
         {
+          "id": "let-declaration-and-sequential-source-state",
+          "coverageIntent": "domain-contract",
+          "cursor": { "marker": "<let first-label.bind=\"task.name\"", "token": "first-label" },
+          "expectations": [
+            {
+              "name": "first let declaration cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "firstLabel",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "first let local references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "firstLabel" }, "source": { "marker": "<let first-label.bind=\"task.name\"", "token": "first-label" } },
+                { "fields": { "referenceKind": "template-usage", "name": "firstLabel" }, "source": { "marker": "upper-label.bind=\"firstLabel.toUpperCase()\"", "token": "firstLabel" } }
+              ]
+            },
+            {
+              "name": "first let local rename",
+              "query": { "kind": "template-rename", "options": { "newName": "initialLabel" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "first-label", "newText": "initial-label" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "firstLabel", "newText": "initialLabel" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            },
+            {
+              "name": "sequential let source cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "upper-label.bind=\"firstLabel.toUpperCase()\"", "token": "firstLabel" } },
+              "equals": {
+                "value.selectedMemberName": "firstLabel",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            }
+          ]
+        },
+        {
+          "id": "let-latest-write-wins",
+          "coverageIntent": "domain-contract",
+          "cursor": { "marker": "<span class=\"let-latest-value\">${latestValue.toUpperCase()}</span>", "token": "latestValue" },
+          "expectations": [
+            {
+              "name": "latest let value cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "latestValue",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "latest let value references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "latestValue" }, "source": { "marker": "<let latest-value.bind=\"task.name\"></let>", "token": "latest-value" } },
+                { "fields": { "referenceKind": "template-usage", "name": "latestValue" }, "source": { "marker": "${latestValue.toUpperCase()}", "token": "latestValue" } },
+                { "fields": { "referenceKind": "declaration", "name": "latestValue" }, "source": { "marker": "<let latest-value.bind=\"task\"></let>", "token": "latest-value" }, "absent": true }
+              ]
+            },
+            {
+              "name": "latest let value rename",
+              "query": { "kind": "template-rename", "options": { "newName": "currentValue" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "latest-value", "newText": "current-value" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "latestValue", "newText": "currentValue" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "let-state-lineage-is-not-runtime-ancestry",
+          "coverageIntent": "domain-contract",
+          "cursor": { "marker": "<span class=\"let-current-is-ready\">${isReady.toUpperCase()}</span>", "token": "isReady" },
+          "expectations": [
+            {
+              "name": "current let binding-context cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "isReady",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "current let binding-context references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "isReady" }, "source": { "marker": "<let is-ready.bind=\"task.name\"", "token": "is-ready" } },
+                { "fields": { "referenceKind": "template-usage", "name": "isReady" }, "source": { "marker": "${isReady.toUpperCase()}", "token": "isReady" } },
+                { "fields": { "referenceKind": "template-usage", "name": "isReady" }, "source": { "marker": "${$parent.isReady.toUpperCase()}", "token": "isReady" } },
+                { "fields": { "referenceKind": "declaration", "name": "isReady" }, "source": { "sourceFile": "src/scope-lab-app.ts", "marker": "isReady = true", "token": "isReady" }, "absent": true }
+              ]
+            },
+            {
+              "name": "immediate runtime parent stays root scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"let-runtime-parent-is-ready\">${$parent.isReady ?", "token": "isReady" } },
+              "equals": {
+                "value.selectedMemberName": "isReady",
+                "value.selectedMember.typeDisplay": "boolean"
+              }
+            },
+            {
+              "name": "nested runtime parent sees let-updated repeat scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"parent-let-is-ready\">${$parent.isReady.toUpperCase()}", "token": "isReady" } },
+              "equals": {
+                "value.selectedMemberName": "isReady",
+                "value.selectedMember.typeDisplay": "string"
+              }
+            },
+            {
+              "name": "nested runtime grandparent stays root scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"grandparent-root-is-ready\">${$parent.$parent.isReady ?", "token": "isReady" } },
+              "equals": {
+                "value.selectedMemberName": "isReady",
+                "value.selectedMember.typeDisplay": "boolean"
+              }
+            }
+          ]
+        },
+        {
+          "id": "let-source-form-types",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "bound let target type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"let-selected-label\">${selectedLabel}</span>", "token": "selectedLabel" } },
+              "equals": { "value.selectedMemberName": "selectedLabel", "value.selectedMember.typeDisplay": "string" }
+            },
+            {
+              "name": "literal let target type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"let-literal-label\">${literalLabel}</span>", "token": "literalLabel" } },
+              "equals": { "value.selectedMemberName": "literalLabel", "value.selectedMember.typeDisplay": "\"literal\"" }
+            },
+            {
+              "name": "interpolated let target type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span class=\"let-interpolated-label\">${interpolatedLabel}</span>", "token": "interpolatedLabel" } },
+              "equals": { "value.selectedMemberName": "interpolatedLabel", "value.selectedMember.typeDisplay": "string" }
+            }
+          ]
+        },
+        {
+          "id": "same-name-scope-resolution-winner",
+          "coverageIntent": "domain-contract",
+          "cursor": { "marker": "<span class=\"let-dual-name\">${dualName.name}</span>", "token": "dualName" },
+          "expectations": [
+            {
+              "name": "override-context lookup wins over the same-name binding-context slot",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedMemberName": "dualName",
+                "value.selectedMember.typeDisplay": "ScopeTask",
+                "value.diagnostics.length": 0
+              }
+            },
+            {
+              "name": "references follow the runtime lookup winner only",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "dualName" }, "source": { "marker": "<let dual-name.bind=\"task\"></let>", "token": "dual-name" } },
+                { "fields": { "referenceKind": "template-usage", "name": "dualName" }, "source": { "marker": "${dualName.name}", "token": "dualName" } },
+                { "fields": { "referenceKind": "declaration", "name": "dualName" }, "source": { "marker": "<let dual-name.bind=\"task.name\" to-binding-context>", "token": "dual-name" }, "absent": true }
+              ]
+            },
+            {
+              "name": "rename follows the runtime lookup winner only",
+              "query": { "kind": "template-rename", "options": { "newName": "selectedDual" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "dual-name", "newText": "selected-dual" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "dualName", "newText": "selectedDual" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "same-name-completion-winner",
+          "capability": "template-completions",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "completion publishes one candidate for the runtime lookup winner",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "<span class=\"let-dual-name\">${", "position": "after-marker" },
+                "options": { "page": { "size": 200 } }
+              },
+              "closure": "complete",
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "dualName", "candidateKind": "override-context-slot", "typeDisplay": "ScopeTask" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
           "id": "root-hostTitle-does-not-capture-let-shadow",
           "cursor": { "marker": "<h1>${hostTitle}</h1>", "token": "hostTitle" },
           "expectations": [
@@ -5318,11 +5518,11 @@
           ]
         },
         {
-          "id": "promise-then-usage-local",
+          "id": "promise-then-carrier-assignment",
           "cursor": { "marker": "${resolvedTask.name}", "token": "resolvedTask" },
           "expectations": [
             {
-              "name": "promise then local cursor info",
+              "name": "promise then write refines the existing carrier slot",
               "query": { "kind": "template-cursor-info" },
               "equals": {
                 "value.selectedMemberName": "resolvedTask",
@@ -5330,30 +5530,32 @@
               }
             },
             {
-              "name": "promise then local references",
+              "name": "promise then references preserve declaration write and read",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 3 },
               "rows": [
-                { "fields": { "referenceKind": "declaration", "name": "resolvedTask" }, "source": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" } },
+                { "fields": { "referenceKind": "declaration", "name": "resolvedTask" }, "source": { "marker": "<let resolved-task.bind=\"selectedTask\"", "token": "resolved-task" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolvedTask" }, "source": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" } },
                 { "fields": { "referenceKind": "template-usage", "name": "resolvedTask" }, "source": { "marker": "${resolvedTask.name}", "token": "resolvedTask" } }
               ]
             },
             {
-              "name": "promise then local rename",
+              "name": "promise then rename preserves declaration write and read",
               "query": { "kind": "template-rename", "options": { "newName": "loadedTask" } },
-              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
               "rows": [
-                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "resolvedTask", "newText": "loadedTask" }, "count": 1, "oldTextMatchesSource": true },
-                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "resolvedTask", "newText": "loadedTask" }, "count": 1, "oldTextMatchesSource": true }
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "resolved-task", "newText": "loaded-task" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "resolvedTask", "newText": "loadedTask" }, "count": 2, "oldTextMatchesSource": true }
               ]
             }
           ]
         },
         {
-          "id": "promise-catch-usage-local",
+          "id": "promise-catch-carrier-assignment",
           "cursor": { "marker": "${loadError.message}", "token": "loadError" },
           "expectations": [
             {
-              "name": "promise catch local cursor info",
+              "name": "promise catch write refines the existing carrier slot",
               "query": { "kind": "template-cursor-info" },
               "equals": {
                 "value.selectedMemberName": "loadError",
@@ -5361,57 +5563,60 @@
               }
             },
             {
-              "name": "promise catch local references",
+              "name": "promise catch references preserve declaration write and read",
               "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 3 },
               "rows": [
-                { "fields": { "referenceKind": "declaration", "name": "loadError" }, "source": { "marker": "<p catch=\"loadError\"", "token": "loadError" } },
+                { "fields": { "referenceKind": "declaration", "name": "loadError" }, "source": { "marker": "load-error.bind=\"null\"", "token": "load-error" } },
+                { "fields": { "referenceKind": "template-usage", "name": "loadError" }, "source": { "marker": "<p catch=\"loadError\"", "token": "loadError" } },
                 { "fields": { "referenceKind": "template-usage", "name": "loadError" }, "source": { "marker": "${loadError.message}", "token": "loadError" } }
+              ]
+            },
+            {
+              "name": "promise catch rename preserves declaration write and read",
+              "query": { "kind": "template-rename", "options": { "newName": "caughtError" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "load-error", "newText": "caught-error" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "loadError", "newText": "caughtError" }, "count": 2, "oldTextMatchesSource": true }
               ]
             }
           ]
         },
         {
-          "id": "promise-then-declaration-local",
-          "coverageIntent": "known-gap-witness",
-          "cursor": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" },
+          "id": "promise-assignment-target-cursor-dispatch",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
-              "name": "promise then declaration cursor info",
-              "query": { "kind": "template-cursor-info" },
+              "name": "promise then target resolves the carrier slot",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" } },
               "equals": {
                 "value.selectedMemberName": "resolvedTask",
                 "value.selectedMember.typeDisplay": "ScopeTask"
               }
             },
             {
-              "name": "promise then declaration rename",
-              "query": { "kind": "template-rename", "options": { "newName": "loadedTask" } },
-              "equals": { "value.status": "available" }
-            }
-          ]
-        },
-        {
-          "id": "promise-catch-declaration-local",
-          "coverageIntent": "known-gap-witness",
-          "cursor": { "marker": "<p catch=\"loadError\"", "token": "loadError" },
-          "expectations": [
-            {
-              "name": "promise catch declaration cursor info",
-              "query": { "kind": "template-cursor-info" },
+              "name": "promise catch target resolves and refines the carrier slot",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p catch=\"loadError\"", "token": "loadError" } },
               "equals": {
                 "value.selectedMemberName": "loadError",
                 "value.selectedMember.typeDisplay": "unknown"
               }
             },
             {
-              "name": "promise catch declaration rename",
-              "query": { "kind": "template-rename", "options": { "newName": "caughtError" } },
-              "equals": { "value.status": "available" }
+              "name": "promise then target starts the same conservative edit plan as its read",
+              "query": { "kind": "template-rename", "cursor": { "marker": "<p then=\"resolvedTask\"", "token": "resolvedTask" }, "options": { "newName": "loadedTask" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 }
+            },
+            {
+              "name": "promise catch target starts the same conservative edit plan as its read",
+              "query": { "kind": "template-rename", "cursor": { "marker": "<p catch=\"loadError\"", "token": "loadError" }, "options": { "newName": "caughtError" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 }
             }
           ]
         },
         {
-          "id": "promise-branch-completions",
+          "id": "promise-carrier-completions",
           "capability": "template-completions",
           "expectations": [
             {
@@ -5422,7 +5627,7 @@
                 "options": { "page": { "size": 200 } }
               },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "resolvedTask", "candidateKind": "binding-context-slot", "typeDisplay": "ScopeTask" } },
+                { "rowPath": "value.candidates", "fields": { "name": "resolvedTask", "candidateKind": "override-context-slot", "typeDisplay": "ScopeTask" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
               ]
             },
@@ -5434,7 +5639,7 @@
                 "options": { "page": { "size": 200 } }
               },
               "rows": [
-                { "rowPath": "value.candidates", "fields": { "name": "loadError", "candidateKind": "binding-context-slot", "typeDisplay": "unknown" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loadError", "candidateKind": "override-context-slot", "typeDisplay": "unknown" }, "count": 1 },
                 { "rowPath": "value.candidates", "fields": { "name": "$parent", "candidateKind": "scope-keyword" } }
               ]
             }
@@ -5452,6 +5657,162 @@
                 { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<p case.bind=\"'open'\">${hostTitle}</p>", "token": "hostTitle" } },
                 { "fields": { "referenceKind": "template-usage", "name": "hostTitle" }, "source": { "marker": "<span class=\"portal-title\">${hostTitle}</span>", "token": "hostTitle" } }
               ]
+            }
+          ]
+        },
+        {
+          "id": "same-element-template-controller-order",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "repeat before if exposes the repeat local to the inner condition and view",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "<span class=\"ordered-task\">${orderedTask.name}</span>", "token": "orderedTask" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "orderedTask" }, "source": { "marker": "repeat.for=\"orderedTask of tasks\"", "token": "orderedTask" } },
+                { "fields": { "referenceKind": "template-usage", "name": "orderedTask" }, "source": { "marker": "if.bind=\"orderedTask.done\"", "token": "orderedTask" } },
+                { "fields": { "referenceKind": "template-usage", "name": "orderedTask" }, "source": { "marker": "${orderedTask.name}", "token": "orderedTask" } }
+              ]
+            },
+            {
+              "name": "repeat before if local rename",
+              "query": {
+                "kind": "template-rename",
+                "cursor": { "marker": "<span class=\"ordered-task\">${orderedTask.name}</span>", "token": "orderedTask" },
+                "options": { "newName": "visibleTask" }
+              },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "orderedTask", "newText": "visibleTask" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "orderedTask", "newText": "visibleTask" }, "count": 2, "oldTextMatchesSource": true }
+              ]
+            },
+            {
+              "name": "if before repeat cannot see the later repeat local",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "missing-expression-member",
+                    "selectedMemberName": "lateTask",
+                    "missingInput": "expression-member:selected-member-missing"
+                  },
+                  "source": { "marker": "if.bind=\"lateTask.done\" repeat.for", "token": "lateTask" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "registered-array-like-repeat-handler",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "registered ArrayLikeHandler supplies the repeat local element type",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "<span class=\"window-task\">${windowTask.name}</span>", "token": "windowTask" }
+              },
+              "equals": {
+                "value.selectedMemberName": "windowTask",
+                "value.selectedMember.typeDisplay": "ScopeTask",
+                "value.diagnostics.length": 0
+              }
+            },
+            {
+              "name": "registered ArrayLikeHandler suppresses the built-in-only repeat rejection",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777" },
+                  "source": { "marker": "windowTask of taskWindow", "token": "taskWindow" },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "array-like repeat local remains a source-backed lexical target",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "<span class=\"window-task\">${windowTask.name}</span>", "token": "windowTask" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "windowTask" }, "source": { "marker": "repeat.for=\"windowTask of taskWindow\"", "token": "windowTask" } },
+                { "fields": { "referenceKind": "template-usage", "name": "windowTask" }, "source": { "marker": "${windowTask.name}", "token": "windowTask" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-registered-repeat-handler-honesty",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "custom repeat handler leaves the element type explicitly open",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "<span class=\"custom-window-task\">${customWindowTask.name}</span>", "token": "customWindowTask" }
+              },
+              "outcomes": [ "partial" ],
+              "closure": "open",
+              "equals": {
+                "value.selectedMemberName": "customWindowTask",
+                "value.selectedMember.typeDisplay": "unknown"
+              },
+              "rows": [
+                { "rowPath": "value.diagnostics", "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" }, "absent": true }
+              ]
+            },
+            {
+              "name": "custom repeat handler suppresses the built-in-only repeat rejection",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777" },
+                  "source": { "marker": "customWindowTask of customTaskWindow", "token": "customTaskWindow" },
+                  "absent": true
+                },
+                {
+                  "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS18046" },
+                  "source": { "marker": "${customWindowTask.name}", "token": "customWindowTask" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-owned-template-controller-scope-effect",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "project-local Scope.fromParent controller exposes its value binding context",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "<span class=\"custom-scope-name\">${name}</span>", "token": "name" }
+              },
+              "equals": {
+                "value.selectedMemberName": "name",
+                "value.selectedMember.typeDisplay": "string",
+                "value.diagnostics.length": 0
+              }
+            },
+            {
+              "name": "project-local Scope.fromParent controller preserves runtime parent lookup",
+              "query": {
+                "kind": "template-cursor-info",
+                "cursor": { "marker": "<span class=\"custom-scope-parent\">${$parent.hostTitle}</span>", "token": "hostTitle" }
+              },
+              "equals": {
+                "value.selectedMemberName": "hostTitle",
+                "value.selectedMember.typeDisplay": "string"
+              }
             }
           ]
         },
@@ -5589,10 +5950,40 @@
           ]
         },
         {
+          "id": "cursor-diagnostics-preserve-runtime-controller-errors",
+          "capability": "template-diagnostics",
+          "domainAxis": "diagnostics",
+          "coverageIntent": "domain-contract",
+          "expectations": [
+            {
+              "name": "orphan promise branch carries its runtime controller diagnostic at the cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "then=\"orphanTask\"", "token": "then" } },
+              "rows": [
+                {
+                  "rowPath": "value.diagnostics",
+                  "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0813", "missingInput": "runtime-controller:AUR0813" },
+                  "source": { "marker": "then=\"orphanTask\"", "token": "then=\"orphanTask\"" }
+                }
+              ]
+            },
+            {
+              "name": "invalid repeat source carries its runtime binding diagnostic at the cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "broken of notIterable", "token": "notIterable" } },
+              "rows": [
+                {
+                  "rowPath": "value.diagnostics",
+                  "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777", "missingInput": "runtime-repeat:AUR0777" },
+                  "source": { "marker": "broken of notIterable", "token": "notIterable" }
+                }
+              ]
+            }
+          ]
+        },
+        {
           "id": "let-parent-overlay-does-not-report-false-missing-member",
           "capability": "template-diagnostics",
           "domainAxis": "overlays",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "template diagnostics",
@@ -5606,6 +5997,804 @@
                   "source": { "marker": "${$parent.hostTitle}", "token": "hostTitle" },
                   "absent": true
                 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "template-controller-built-ins",
+      "fixture": "fixtures/pressure/template-controller-built-ins",
+      "aureliaDomain": "template-controller-scope",
+      "capability": "template-controller-built-in-semantics",
+      "domainAxis": "type-system",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/template-controller-built-ins-app.html",
+      "requirement": "Every built-in template-controller family preserves its framework flow, scope, narrowing, declaration, source-address, and edit-plan semantics through public semantic queries.",
+      "cases": [
+        {
+          "id": "runtime-controller-flow-vocabulary",
+          "domainAxis": "query-contract",
+          "expectations": [
+            {
+              "name": "first runtime-controller page preserves representative flow distinctions",
+              "query": { "kind": "runtime-controllers", "fetchAllPages": true, "options": { "detail": "compact", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "controllerName": "if", "templateControllerFlowKind": "conditional", "childViewCardinality": "optional" } },
+                { "fields": { "controllerName": "pending", "templateControllerFlowKind": "promise-pending", "templateControllerLinkKind": "promise-branch-to-promise", "linkedTemplateControllerName": "promise" } },
+                { "fields": { "controllerName": "then", "templateControllerFlowKind": "promise-fulfilled", "templateControllerLinkKind": "promise-branch-to-promise", "linkedTemplateControllerName": "promise" } },
+                { "fields": { "controllerName": "catch", "templateControllerFlowKind": "promise-rejected", "templateControllerLinkKind": "promise-branch-to-promise", "linkedTemplateControllerName": "promise" } },
+                { "fields": { "controllerName": "case", "templateControllerFlowKind": "switch-case", "templateControllerLinkKind": "switch-case-to-switch", "linkedTemplateControllerName": "switch" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "conditional-branch-type-narrowing",
+          "expectations": [
+            {
+              "name": "truthy if narrows a nullable member",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "selectedProduct.label", "token": "selectedProduct" } },
+              "equals": { "value.selectedMemberName": "selectedProduct", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "discriminant if branch narrows the union",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "currentItem.pages", "token": "currentItem" } },
+              "equals": { "value.selectedMemberName": "currentItem", "value.selectedMember.typeDisplay": "BookCatalogItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "discriminant else branch excludes the matched arm",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "notBookOnly(currentItem)", "token": "currentItem" } },
+              "equals": { "value.selectedMemberName": "currentItem", "value.selectedMember.typeDisplay": "ServiceCatalogItem | ArchivedCatalogItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "typeof if branch narrows a primitive union",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "stringOnly(currentPrimitive)", "token": "currentPrimitive" } },
+              "equals": { "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "typeof else branch excludes the string arm",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "numberOnly(currentPrimitive)", "token": "currentPrimitive" } },
+              "equals": { "value.selectedMember.typeDisplay": "number", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "in operator branch narrows by property presence",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "bookOnly(probedItem)", "token": "probedItem" } },
+              "equals": { "value.selectedMember.typeDisplay": "BookCatalogItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "instanceof branch narrows to the constructor type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "mixedProduct.shippingWeight", "token": "mixedProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "PhysicalBuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "instanceof else branch excludes the constructor type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "digitalOnly(mixedProduct)", "token": "mixedProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "DigitalBuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "nested else-if true branch accumulates the outer exclusion",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "serviceOnly(secondaryItem)", "token": "secondaryItem" } },
+              "equals": { "value.selectedMember.typeDisplay": "ServiceCatalogItem", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "nested else-if final branch accumulates both prior exclusions",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "archivedOnly(secondaryItem)", "token": "secondaryItem" } },
+              "equals": { "value.selectedMember.typeDisplay": "ArchivedCatalogItem", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "repeat-source-category-types",
+          "expectations": [
+            {
+              "name": "array repeat element type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "arrayProduct.label", "token": "arrayProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct" }
+            },
+            {
+              "name": "map repeat tuple value type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "product.labelLength()", "token": "product" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct" }
+            },
+            {
+              "name": "set repeat element type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "setProduct.label", "token": "setProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct" }
+            },
+            {
+              "name": "number repeat local type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "repeatIndex.toFixed()", "token": "repeatIndex" } },
+              "equals": { "value.selectedMember.typeDisplay": "number" }
+            },
+            {
+              "name": "nullable repeat union projects the non-null element type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "nullableProduct.label", "token": "nullableProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "repeat-contextual-previous-semantics",
+          "expectations": [
+            {
+              "name": "$previous is optional on the first contextual row",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$previous?.label", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct | undefined" }
+            },
+            {
+              "name": "contextual false makes $previous unavailable as a value",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "typeof $previous}:${contextlessProduct.label}", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "undefined" }
+            },
+            {
+              "name": "repeat completions preserve optional $previous typing",
+              "query": {
+                "kind": "template-completions",
+                "cursor": { "marker": "${$index}:${$odd}", "token": "$index" },
+                "options": { "page": { "size": 200 } }
+              },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "$previous", "candidateKind": "override-context-slot", "typeDisplay": "BuiltInProduct | undefined" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$index", "candidateKind": "override-context-slot", "typeDisplay": "number" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$first", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$last", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$middle", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$even", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$odd", "candidateKind": "override-context-slot", "typeDisplay": "boolean" } },
+                { "rowPath": "value.candidates", "fields": { "name": "$length", "candidateKind": "override-context-slot", "typeDisplay": "number" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-tuple-elision-and-previous-types",
+          "expectations": [
+            {
+              "name": "map previous preserves the tuple item type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$previous?.[1].label", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "[string, BuiltInProduct] | undefined", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "array-pattern elision preserves the third tuple element type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "tripleProduct.label", "token": "tripleProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "array-pattern previous preserves the complete readonly tuple",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$previous?.[2].label", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "readonly [string, string, BuiltInProduct] | undefined", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "nested repeat previous has the inner item type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${nestedProduct.label}:${$previous?.label", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct | undefined", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "nested repeat parent previous has the outer item type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$parent.$previous?.[0].label", "token": "$previous" } },
+              "equals": { "value.selectedMember.typeDisplay": "readonly BuiltInProduct[] | undefined", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "repeat-destructuring-navigation-and-edit-plans",
+          "expectations": [
+            {
+              "name": "key expression evaluates in the repeated-item scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "key.bind: tripleProduct.id", "token": "tripleProduct" } },
+              "equals": { "value.selectedMemberName": "tripleProduct", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "key expression member uses the destructured local type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "key.bind: tripleProduct.id", "token": "id" } },
+              "equals": { "value.selectedMemberName": "id", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "map key declaration references",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "<dt>${key}</dt>", "token": "key" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "key" }, "source": { "marker": "repeat.for=\"[key, product] of productEntries\"", "token": "key" } },
+                { "fields": { "referenceKind": "template-usage", "name": "key" }, "source": { "marker": "<dt>${key}</dt>", "token": "key" } }
+              ]
+            },
+            {
+              "name": "map key rename",
+              "query": { "kind": "template-rename", "cursor": { "marker": "<dt>${key}</dt>", "token": "key" }, "options": { "newName": "entryKey" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "key", "newText": "entryKey" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "key", "newText": "entryKey" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            },
+            {
+              "name": "elided tuple local references include the key expression",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "${tripleProduct.label}", "token": "tripleProduct" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "tripleProduct" }, "source": { "marker": "repeat.for=\"[tripleKey, , tripleProduct] of productTriples", "token": "tripleProduct" } },
+                { "fields": { "referenceKind": "template-usage", "name": "tripleProduct" }, "source": { "marker": "key.bind: tripleProduct.id", "token": "tripleProduct" } },
+                { "fields": { "referenceKind": "template-usage", "name": "tripleProduct" }, "source": { "marker": "${tripleProduct.label}", "token": "tripleProduct" } }
+              ]
+            },
+            {
+              "name": "elided tuple local rename includes the key expression",
+              "query": { "kind": "template-rename", "cursor": { "marker": "${tripleProduct.label}", "token": "tripleProduct" }, "options": { "newName": "selectedTriple" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "tripleProduct", "newText": "selectedTriple" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "tripleProduct", "newText": "selectedTriple" }, "count": 2, "oldTextMatchesSource": true }
+              ]
+            },
+            {
+              "name": "references dispatch from the key expression",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "key.bind: tripleProduct.id", "token": "tripleProduct" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 3 }
+            },
+            {
+              "name": "rename dispatches from the key expression",
+              "query": { "kind": "template-rename", "cursor": { "marker": "key.bind: tripleProduct.id", "token": "tripleProduct" }, "options": { "newName": "selectedTriple" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 }
+            }
+          ]
+        },
+        {
+          "id": "repeat-contextual-binding-parent-scope",
+          "expectations": [
+            {
+              "name": "contextual binding evaluates before the repeated-item scope exists",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "contextual.bind: contextualEnabled", "token": "contextualEnabled" } },
+              "equals": { "value.selectedMemberName": "contextualEnabled", "value.selectedMember.typeDisplay": "true", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "same-name tuple local owns the child expression",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${contextualEnabled.toUpperCase()}", "token": "contextualEnabled" } },
+              "equals": { "value.selectedMemberName": "contextualEnabled", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "contextual binding references the root property only",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "contextual.bind: contextualEnabled", "token": "contextualEnabled" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "contextualEnabled" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "readonly contextualEnabled = true", "token": "contextualEnabled" } },
+                { "fields": { "referenceKind": "template-usage", "name": "contextualEnabled" }, "source": { "marker": "contextual.bind: contextualEnabled", "token": "contextualEnabled" } }
+              ]
+            },
+            {
+              "name": "child references stay on the same-name tuple local",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "${contextualEnabled.toUpperCase()}", "token": "contextualEnabled" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "contextualEnabled" }, "source": { "marker": "repeat.for=\"[contextualEnabled, contextualProduct]", "token": "contextualEnabled" } },
+                { "fields": { "referenceKind": "template-usage", "name": "contextualEnabled" }, "source": { "marker": "${contextualEnabled.toUpperCase()}", "token": "contextualEnabled" } }
+              ]
+            },
+            {
+              "name": "root rename excludes the shadowing tuple local",
+              "query": { "kind": "template-rename", "cursor": { "marker": "contextual.bind: contextualEnabled", "token": "contextualEnabled" }, "options": { "newName": "useContextualMetadata" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "oldText": "contextualEnabled", "newText": "useContextualMetadata" }, "count": 2, "oldTextMatchesSource": true }
+              ]
+            },
+            {
+              "name": "tuple-local rename excludes the contextual binding",
+              "query": { "kind": "template-rename", "cursor": { "marker": "${contextualEnabled.toUpperCase()}", "token": "contextualEnabled" }, "options": { "newName": "entryKey" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "contextualEnabled", "newText": "entryKey" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "contextualEnabled", "newText": "entryKey" }, "count": 1, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-controller-runtime-ancestry",
+          "expectations": [
+            {
+              "name": "with binding context sees the repeated value members",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<span>${label}</span>", "token": "label" } },
+              "equals": { "value.selectedMember.typeDisplay": "string" }
+            },
+            {
+              "name": "with parent reaches the repeat binding context",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$parent.scopedProduct.label", "token": "scopedProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct" }
+            },
+            {
+              "name": "with grandparent reaches the root binding context",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$parent.$parent.portalMessage", "token": "portalMessage" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"Portaled content\"" }
+            },
+            {
+              "name": "repeat before if exposes its local in the condition and child view",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "availableProduct.label.length", "token": "availableProduct" } },
+              "equals": { "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "scope-keyword-runtime-distinction",
+          "expectations": [
+            {
+              "name": "$this resolves the current repeated binding context",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$this.availableProduct.label", "token": "availableProduct" } },
+              "equals": { "value.selectedMemberName": "availableProduct", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "this resolves the root boundary binding context",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "this.portalMessage", "token": "portalMessage" } },
+              "equals": { "value.selectedMemberName": "portalMessage", "value.selectedMember.typeDisplay": "\"Portaled content\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "$parent follows runtime scope ancestry rather than state lineage",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$parent.$parent.portalMessage", "token": "portalMessage" } },
+              "equals": { "value.selectedMemberName": "portalMessage", "value.selectedMember.typeDisplay": "\"Portaled content\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "promise-implicit-boundary-assignment",
+          "expectations": [
+            {
+              "name": "fulfilled promise assignment has the awaited value type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "resolved.labelLength()", "token": "resolved" } },
+              "equals": { "value.selectedMemberName": "resolved", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "missing assignment target falls back to the boundary binding context",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$parent.resolved?.label", "token": "resolved" } },
+              "equals": { "value.selectedMemberName": "resolved", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "fulfilled promise references include the assignment target and all reads",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "resolved.labelLength()", "token": "resolved" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "resolved" }, "source": { "marker": "then=\"resolved\"", "token": "resolved" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolved" }, "source": { "marker": "${resolved.label}", "token": "resolved" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolved" }, "source": { "marker": "resolved.labelLength()", "token": "resolved" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolved" }, "source": { "marker": "$parent.resolved?.label", "token": "resolved" } }
+              ]
+            },
+            {
+              "name": "fulfilled promise assignment rename",
+              "query": { "kind": "template-rename", "cursor": { "marker": "resolved.labelLength()", "token": "resolved" }, "options": { "newName": "loadedProduct" } },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "resolved", "newText": "loadedProduct" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "resolved", "newText": "loadedProduct" }, "count": 3, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-existing-carrier-assignment",
+          "expectations": [
+            {
+              "name": "carrier let target is refined by the fulfilled value",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${carrierResult?.label}", "token": "carrierResult" } },
+              "equals": { "value.selectedMemberName": "carrierResult", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "promise write to a runtime-authored let slot is not TypeScript strictness",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "binding-source-assignment-strictness" },
+                  "source": { "marker": "then=\"carrierResult\"", "token": "carrierResult" },
+                  "absent": true
+                }
+              ]
+            },
+            {
+              "name": "carrier let references include declaration assignment and read",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "${carrierResult?.label}", "token": "carrierResult" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "carrierResult" }, "source": { "marker": "<let carrier-result.bind=\"selectedProduct\"", "token": "carrier-result" } },
+                { "fields": { "referenceKind": "template-usage", "name": "carrierResult" }, "source": { "marker": "then=\"carrierResult\"", "token": "carrierResult" } },
+                { "fields": { "referenceKind": "template-usage", "name": "carrierResult" }, "source": { "marker": "${carrierResult?.label}", "token": "carrierResult" } }
+              ]
+            },
+            {
+              "name": "carrier let rename includes declaration assignment and read",
+              "query": { "kind": "template-rename", "cursor": { "marker": "${carrierResult?.label}", "token": "carrierResult" }, "options": { "newName": "carrierProduct" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-declaration", "oldText": "carrier-result", "newText": "carrier-product" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-local-usage", "oldText": "carrierResult", "newText": "carrierProduct" }, "count": 2, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-existing-root-assignment",
+          "expectations": [
+            {
+              "name": "existing root target keeps its TypeScript declaration identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" } },
+              "equals": { "value.selectedMemberName": "resolvedProduct", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "root target references include TypeScript declaration assignment and reads",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "resolvedProduct" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "resolvedProduct: BuiltInProduct | undefined", "token": "resolvedProduct" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolvedProduct" }, "source": { "marker": "then=\"resolvedProduct\"", "token": "resolvedProduct" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolvedProduct" }, "source": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" } },
+                { "fields": { "referenceKind": "template-usage", "name": "resolvedProduct" }, "source": { "marker": "$parent.resolvedProduct?.label", "token": "resolvedProduct" } }
+              ]
+            },
+            {
+              "name": "root target rename includes TypeScript declaration assignment and reads",
+              "query": { "kind": "template-rename", "cursor": { "marker": "${resolvedProduct?.label}", "token": "resolvedProduct" }, "options": { "newName": "fulfilledProduct" } },
+              "equals": { "value.status": "available", "value.edits.length": 4 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "typescript-reference", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "count": 1, "oldTextMatchesSource": true },
+                { "rowPath": "value.edits", "fields": { "editKind": "template-usage", "oldText": "resolvedProduct", "newText": "fulfilledProduct" }, "count": 3, "oldTextMatchesSource": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-parent-member-and-implicit-target-assignment",
+          "expectations": [
+            {
+              "name": "explicit parent catch target preserves the root member identity",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" } },
+              "equals": { "value.selectedMemberName": "rejectedReason", "value.selectedMember.typeDisplay": "unknown", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "explicit parent catch target references include declaration write and read",
+              "query": {
+                "kind": "template-references",
+                "cursor": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" },
+                "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } }
+              },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration", "name": "rejectedReason" }, "source": { "sourceFile": "src/template-controller-built-ins-app.ts", "marker": "rejectedReason: unknown", "token": "rejectedReason" } },
+                { "fields": { "referenceKind": "template-usage", "name": "rejectedReason" }, "source": { "marker": "catch=\"$parent.rejectedReason\"", "token": "rejectedReason" } },
+                { "fields": { "referenceKind": "template-usage", "name": "rejectedReason" }, "source": { "marker": "formatReason($parent.rejectedReason)", "token": "rejectedReason" } }
+              ]
+            },
+            {
+              "name": "valueless then uses its implicit target without disturbing parent lookup",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p then>${statusMessage}</p>", "token": "statusMessage" } },
+              "equals": { "value.selectedMemberName": "statusMessage", "value.selectedMember.typeDisplay": "\"Loading product\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "let-state-feeds-downstream-controllers",
+          "expectations": [
+            {
+              "name": "repeat consumes the prior let array element type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${filteredProduct.label}", "token": "filteredProduct" } },
+              "equals": { "value.selectedMemberName": "filteredProduct", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "if consumes the prior let array state",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${filteredProducts[0].label}", "token": "filteredProducts" } },
+              "equals": { "value.selectedMemberName": "filteredProducts", "value.selectedMember.typeDisplay": "BuiltInProduct[]", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "switch consumes and narrows the prior let union state",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "listOnly(currentMode)", "token": "currentMode" } },
+              "equals": { "value.selectedMemberName": "currentMode", "value.selectedMember.typeDisplay": "\"list\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "with-object-undefined-and-guarded-nullability",
+          "expectations": [
+            {
+              "name": "object literal with scope preserves literal member types",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "${id}:${label}", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "\"Inline product\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "undefined with value uses an empty binding context and falls through to the parent",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<section with.bind=\"absentProduct\">\n    <span>${statusMessage}</span>", "token": "statusMessage" } },
+              "equals": { "value.selectedMemberName": "statusMessage", "value.selectedMember.typeDisplay": "\"Loading product\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "guarded nullable with value is non-null in the child scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<div with.bind=\"maybeProduct\">${label}</div>", "token": "label" } },
+              "equals": { "value.selectedMemberName": "label", "value.selectedMember.typeDisplay": "string", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "switch-case-narrowing-and-fall-through",
+          "expectations": [
+            {
+              "name": "scalar case narrows to list",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p case=\"list\">${listTitle} ${listOnly(mode)}</p>", "token": "mode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"list\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "scalar case narrows to detail",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p case=\"detail\">${detailTitle} ${detailOnly(mode)}</p>", "token": "mode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"detail\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "default case excludes explicit scalar cases",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p default-case>${fallbackMessage} ${otherOnly(mode)}</p>", "token": "mode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"other\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "array case narrows to its finite literal union",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "listOrDetailOnly(modeGroup)", "token": "modeGroup" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"list\" | \"detail\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "fall-through accumulates the prior case type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "listOrDetailOnly(fallMode)", "token": "fallMode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"list\" | \"detail\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "overlapping first case keeps its own match type",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "case=\"value.bind: ['a', 'b']; fall-through: true\">${overlapMode}", "token": "overlapMode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"a\" | \"b\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "overlapping second case accumulates prior fall-through values",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "case=\"value.bind: ['b', 'c']; fall-through: true\">${overlapMode}", "token": "overlapMode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"a\" | \"b\" | \"c\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "case after a fall-through chain sees the full active prefix",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p case=\"d\">${overlapMode}</p>", "token": "overlapMode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"a\" | \"b\" | \"c\" | \"d\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "default case excludes every explicit and fall-through-covered value",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p default-case>${overlapMode}</p>", "token": "overlapMode" } },
+              "equals": { "value.selectedMember.typeDisplay": "\"other\"", "value.diagnostics.length": 0 }
+            }
+          ]
+        },
+        {
+          "id": "portal-parent-scope-and-clean-diagnostics",
+          "expectations": [
+            {
+              "name": "portal content retains the source binding scope",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<p>${portalMessage}</p>", "token": "portalMessage" } },
+              "equals": { "value.selectedMemberName": "portalMessage", "value.selectedMember.typeDisplay": "\"Portaled content\"", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "with bind mode hint remains anchored to the authored command name",
+              "query": { "kind": "template-inlay-hints", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "hintKind": "binding-mode-resolution", "targetProperty": "value", "authoredMode": "default", "effectiveMode": "to-view" },
+                  "source": { "marker": "with.bind=\"selectedProduct\"", "token": "with.bind" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "controller-relationship-framework-errors",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "promise branch nested below another controller has no immediate promise parent",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0813", "missingInput": "runtime-controller:AUR0813" },
+                  "source": { "marker": "then=\"nestedResult\"", "token": "then=\"nestedResult\"" }
+                }
+              ]
+            },
+            {
+              "name": "switch rejects multiple default cases",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "runtime-controller-framework-error", "frameworkErrorCode": "AUR0816", "missingInput": "runtime-controller:AUR0816" },
+                  "source": { "marker": "<p default-case>second default</p>", "token": "default-case" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unsupported-object-binding-pattern-is-diagnosed",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "object binding pattern is rejected because the checked-in runtime does not create repeat locals for it",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "unsupported-repeat-declaration", "missingInput": "repeat-declaration:object-binding-pattern-runtime-unsupported" },
+                  "source": { "marker": "repeat.for=\"{ id, label } of products\"", "token": "{ id, label }" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-source-rejection-and-cascade-policy",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "unregistered ArrayLike source is rejected at the iterable",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777", "missingInput": "runtime-repeat:AUR0777" },
+                  "source": { "marker": "windowProduct of unregisteredProductWindow", "token": "unregisteredProductWindow" }
+                },
+                {
+                  "fields": { "diagnosticKind": "runtime-binding-scope-framework-error", "frameworkErrorCode": "AUR0777", "missingInput": "runtime-repeat:AUR0777" },
+                  "source": { "marker": "unsupportedProduct of unsupportedRepeatSource", "token": "unsupportedRepeatSource" }
+                },
+                {
+                  "fields": { "selectedMemberName": "label" },
+                  "source": { "marker": "${windowProduct.label}", "token": "label" },
+                  "absent": true
+                },
+                {
+                  "fields": { "selectedMemberName": "label" },
+                  "source": { "marker": "${unsupportedProduct.label}", "token": "label" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeat-contextual-assignment-authority",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "repeat framework-managed contextual slots reject target-to-source assignment",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "binding-source-assignment-framework-managed", "missingInput": "binding-source-assignment:scope-slot-framework-managed" },
+                  "source": { "marker": "checked.two-way=\"$odd\"", "token": "$odd" }
+                },
+                {
+                  "fields": { "diagnosticKind": "binding-source-assignment-framework-managed", "missingInput": "binding-source-assignment:scope-slot-framework-managed" },
+                  "source": { "marker": "value-as-number.two-way=\"$index\"", "token": "$index" }
+                },
+                {
+                  "fields": { "diagnosticKind": "binding-source-assignment-framework-managed", "missingInput": "binding-source-assignment:scope-slot-framework-managed" },
+                  "source": { "marker": "value-as-number.two-way=\"$length\"", "token": "$length" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "with-null-binding-context-is-diagnosed",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "reachable null with value reports the runtime scope hazard at the controller input",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "template-controller-null-binding-context", "missingInput": "with-binding-context:reachable-null" },
+                  "source": { "marker": "with.bind=\"maybeProduct\"", "token": "maybeProduct" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "promise-carrier-this-member-uses-named-scope-lookup",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "overlays",
+          "expectations": [
+            {
+              "name": "$this.member resolves through the same override-first named lookup as ordinary scope access",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "$this.carrierResult?.label", "token": "carrierResult" } },
+              "equals": { "value.selectedMemberName": "carrierResult", "value.selectedMember.typeDisplay": "BuiltInProduct", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "$this.member does not invent a binding-context-only TypeScript diagnostic",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticKind": "template-expression-typescript-diagnostic", "missingInput": "typescript:TS2339" },
+                  "source": { "marker": "$this.carrierResult?.label", "token": "carrierResult" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "portal-dynamic-target-is-environmental",
+          "sourceFile": "src/template-controller-edge-cases-app.html",
+          "domainAxis": "diagnostics",
+          "expectations": [
+            {
+              "name": "dynamic portal target keeps the declared PortalTarget-compatible union",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "target.bind: portalTarget", "token": "portalTarget" } },
+              "equals": { "value.selectedMemberName": "portalTarget", "value.selectedMember.typeDisplay": "string | Element | null", "value.diagnostics.length": 0 }
+            },
+            {
+              "name": "dynamic portal target is not rejected as a statically invalid selector",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "frameworkErrorCode": "AUR0812" },
+                  "source": { "marker": "target.bind: portalTarget", "token": "portalTarget" },
+                  "absent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "scope-declaration-semantic-token-source-precision",
+          "domainAxis": "source-precision",
+          "expectations": [
+            {
+              "name": "destructuring declarations and usages retain distinct exact tokens",
+              "query": { "kind": "template-semantic-tokens", "fetchAllPages": true, "options": { "detail": "full", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["declaration"] }, "source": { "marker": "repeat.for=\"[key, product] of productEntries\"", "token": "key" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["declaration"] }, "source": { "marker": "repeat.for=\"[key, product] of productEntries\"", "token": "product" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["declaration"] }, "source": { "marker": "repeat.for=\"[tripleKey, , tripleProduct] of productTriples", "token": "tripleKey" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["declaration"] }, "source": { "marker": "repeat.for=\"[tripleKey, , tripleProduct] of productTriples", "token": "tripleProduct" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$index" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$odd" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$even" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$first" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$middle" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$last" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "${$index}:${$odd}:${$even}:${$first}:${$middle}:${$last}:${$length}", "token": "$length" } },
+                { "fields": { "tokenType": "variable", "tokenModifiers": ["defaultLibrary"] }, "source": { "marker": "$previous?.label", "token": "$previous" } }
               ]
             }
           ]
@@ -5798,7 +6987,7 @@
       "aureliaDomain": "router-composition",
       "capability": "router-routecontext-topology",
       "domainAxis": "query-contract",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/router-routecontext-topology-app.html",
       "requirement": "Router RouteContext topology distinguishes static potential contexts from selected transition rows, preserves viewport-agent/used-by source facts, and spends resolved custom-element names where Aurelia RouteConfigContext and ViewportAgent semantics require them.",
@@ -5871,7 +7060,7 @@
         },
         {
           "id": "route-context-friendly-path-uses-resolved-custom-element-names",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "route contexts",
@@ -5895,7 +7084,7 @@
         },
         {
           "id": "used-by-matches-resolved-custom-element-names",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "router issues",
@@ -5996,7 +7185,7 @@
       "aureliaDomain": "router-composition",
       "capability": "router-resource-surfaces",
       "domainAxis": "resources",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/products-route.html",
       "requirement": "Router framework resources expose precise cursor surfaces for load/href/au-viewport and their bindables, complete router-specific completions, and conservative references/rename refusal when the selected resource is framework-owned rather than workspace source-backed.",
@@ -6293,7 +7482,7 @@
       "aureliaDomain": "router-composition",
       "capability": "router-instruction-surface-projection",
       "domainAxis": "query-contract",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/products-route.html",
       "requirement": "Router instruction values preserve route-world closure through cursor facts, completions, diagnostic projections, and honest gaps where the route substrate knows more than the current IDE-facing surface exposes.",
@@ -6355,7 +7544,7 @@
         {
           "id": "route-params-key-completions-use-selected-route-parameters",
           "cursor": { "marker": "params.bind: { ", "position": "after-marker" },
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "template completions",
@@ -6612,7 +7801,7 @@
       "aureliaDomain": "router-composition",
       "capability": "router-route-config-identity",
       "domainAxis": "query-contract",
-      "coverageIntent": "domain-canary",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/router-route-config-identity-app.ts",
       "requirement": "Router route config products preserve Aurelia's declaration forms, normalized value shapes, routeable component lanes, route-recognizer handoff paths, and honest gaps where source-backed routeable identity is known but not yet spent.",
@@ -6694,7 +7883,7 @@
         },
         {
           "id": "static-default-class-routeable-applies-route-get-config",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "routes",
@@ -6722,7 +7911,7 @@
         },
         {
           "id": "lazy-import-routeable-resolves-resource-definition",
-          "coverageIntent": "known-gap-witness",
+          "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "routes",
@@ -6887,7 +8076,7 @@
       "aureliaDomain": "router-composition",
       "capability": "router-diagnostic-repair-projection",
       "domainAxis": "diagnostics",
-      "coverageIntent": "known-gap-witness",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/router-instruction-errors-app.html",
       "requirement": "Template-origin router diagnostics preserve the same repair intent through TemplateDiagnostics and owning AppDiagnostics rows without inventing edit-backed actions.",
@@ -6975,7 +8164,7 @@
       "aureliaDomain": "router-composition",
       "capability": "template-completions",
       "domainAxis": "type-system",
-      "coverageIntent": "known-gap-witness",
+      "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/hook-route.html",
       "requirement": "Template completions classify current Aurelia router view-model hook methods from IRouteViewModel without treating ordinary load() methods as router lifecycle hooks.",

@@ -52,8 +52,7 @@
     "coverageIntent": {
       "enum": [
         "boundary-contract",
-        "domain-canary",
-        "known-gap-witness",
+        "domain-contract",
         "regression-contract"
       ]
     },

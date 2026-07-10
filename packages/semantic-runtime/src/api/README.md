@@ -711,8 +711,10 @@ checker evidence without turning overlay diagnostics into a second public diagno
 Diagnostic rows keep `missingInput` as the primary compact reason and also expose `missingInputs` for the full reason
 set. Binding assignment strictness can legitimately carry multiple TypeScript-policy reasons for one authored source
 span, so consumers should aggregate `missingInputs` when they need pressure counts or code-action routing.
-Binding data-flow rows expose `sourceAssignmentTargetSource` when source writeability was resolved through a
-TypeChecker-backed scope/context member. Template diagnostics use the same address for their suggestion action target,
+Binding data-flow rows expose `sourceAssignmentOccurrenceSource` for the exact authored token receiving a
+target-to-source write and `sourceAssignmentTargetSource` for the declaration/context slot reached by Aurelia scope
+lookup. Template references and rename join those two facts so pure writes remain navigable without masquerading as
+observed reads. Template diagnostics use the target address for their suggestion action target,
 which lets a future code action jump from `value.bind="priority"` or a custom two-way bindable directly to the
 authored getter/setter/member that receives the observer value.
 Binding data-flow summary rows preserve compact source-type open counts and issue rollups so MCP/LSP callers can explain
@@ -735,6 +737,10 @@ that controls commonly write strings even when their visual domain looks numeric
 Runtime-unassignable target-to-source bindings are separate from TypeScript strictness. Aurelia's `astAssign` falls
 through without updating unsupported expression targets, so semantic-runtime reports those as
 `binding-source-assignment-runtime-noop` with `use-assignable-expression` guidance rather than as framework errors.
+Framework-managed scope state is a third class. Repeat contextuals are readable authoring surfaces but are updated by
+the framework, so attempted writeback reports `binding-source-assignment-framework-managed` under
+`semantic-authoring-policy`. This remains true for `$index` and `$length` even though `Repeat` mutates their runtime
+properties internally; runtime representation does not grant template-author assignment authority.
 Source-assignment diagnostics are published from binding data-flow rather than template checker overlays, because
 data-flow already knows the binding direction, target observer/value channel, source write capability, and Aurelia
 `astAssign` policy. When a parse AST is available, the public diagnostic source narrows through

@@ -122,6 +122,7 @@ const templatePage = await templateBuiltIns.runtime.answerAppQuery({
   kind: SemanticAppQueryKind.FrameworkCapabilityDemands,
   page: { size: 5 },
 });
+const templateTotalRows = templatePage.page?.totalRows ?? 0;
 if (templatePage.outcome !== 'partial' || templatePage.page?.nextCursor == null) {
   failures.push('Expected template built-in capability query to page through many rows.');
 }
@@ -141,11 +142,11 @@ const templateScopedToMain = await templateBuiltIns.runtime.answerAppQuery({
   sourceFile: { filePath: 'src/main.ts' },
   page: { size: 100 },
 });
-if (templateScopedToMain.page?.totalRows !== 64 || templateScopedToMain.value.rows.length === 0) {
+if (templateTotalRows === 0 || templateScopedToMain.page?.totalRows !== templateTotalRows || templateScopedToMain.value.rows.length === 0) {
   failures.push(`Expected src/main.ts sourceFile scope to match template demands through package/import evidence, observed ${templateScopedToMain.value.rows.length} of ${templateScopedToMain.page?.totalRows ?? '<unknown>'}.`);
 }
-if (templateScoped.page?.totalRows !== 64 || templateScoped.value.rows.length === 0) {
-  failures.push(`Expected template sourceFile scope to expose 64 total built-in demand rows, observed ${templateScoped.value.rows.length} of ${templateScoped.page?.totalRows ?? '<unknown>'}.`);
+if (templateTotalRows === 0 || templateScoped.page?.totalRows !== templateTotalRows || templateScoped.value.rows.length === 0) {
+  failures.push(`Expected template sourceFile scope to preserve the complete built-in demand set, observed ${templateScoped.value.rows.length} of ${templateScoped.page?.totalRows ?? '<unknown>'} versus unscoped ${templateTotalRows}.`);
 }
 if (!templateScoped.value.displayText.includes('Admission: admitted(')) {
   failures.push(`Expected template scoped display text to summarize admitted rows, observed ${templateScoped.value.displayText}.`);

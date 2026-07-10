@@ -241,18 +241,24 @@
       "domains": [
         "semantic-runtime",
         "configuration",
-        "binding",
-        "scope",
-        "type-system"
+      "binding",
+      "scope",
+      "type-system",
+      "provenance",
+      "runtime-assignment"
       ],
       "summary": "BindingScope, BindingContext, and OverrideContext are framework-shaped semantic models for runtime Scope lookup and template-visible names.",
-      "rationale": "Binding scope sits between controller activation, template locals, expression lookup, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper.",
+    "rationale": "Binding scope sits between controller activation, template locals, expression lookup, runtime assignment, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper. Runtime ancestry, immutable state history, declaration identity, current value type, and author assignment authority are distinct axes on this model.",
       "guidance": [
         "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
         "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
-        "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
-        "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
-        "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
+      "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
+      "Use BindingScope.lookup/locate/locateThis/locateBoundary for runtime name, `$this`, and boundary lookup; TypeChecker and source-value consumers should not carry their own parent-scope traversal loops.",
+      "Keep BindingScope.runtimeParent for Aurelia `$parent`/fallback traversal and BindingScope.predecessor for prior immutable states of the same runtime Scope identity. A state transition must not become a synthetic runtime ancestor.",
+      "Promise settlement and target-to-source binding writes use the generic runtime-assignment transition: lookup the assignment input state, update the selected context lane, then publish the post-write state for later reads. Do not create controller-specific result-local scope models.",
+      "BindingContextSlot.targetProductHandle/sourceAddressHandle are declaration identity; targetType is the current runtime value type; targetTypeSourceProductHandle is an optional direct member carrier for spelling that type. Do not overwrite declaration identity with a value-flow member.",
+      "BindingContextSlot.assignmentAccessKind is template-author authority, not JavaScript descriptor shape. Repeat contextuals are framework-managed read-only for authors, including internally mutable `$index` and `$length`.",
+      "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
         "Scope API issue spans should carry the boot-admitted source-file handle through sourceSiteForNode/sourceSpanAddressForSite. Do not fall back to filename re-resolution for this scanner-owned path.",
         "Scope API issue products should publish through ConfigurationIssuePublisher after the scanner-owned source span is created."
       ],
@@ -264,10 +270,22 @@
           "line": 280,
           "summary": "Runtime Scope semantic model."
         },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
-          "symbolName": "BindingContext",
+      {
+        "kind": "source",
+        "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+        "symbolName": "BindingContextSlot",
+        "summary": "Runtime scope slot with separate declaration identity, current type source, and author assignment authority."
+      },
+      {
+        "kind": "source",
+        "filePath": "packages/semantic-runtime/src/observation/binding-source-write-capability.ts",
+        "symbolName": "runtimeAssignmentInputScopeForAccessScope",
+        "summary": "Selects assignment input state without confusing immutable predecessor history with runtime ancestry."
+      },
+      {
+        "kind": "source",
+        "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+        "symbolName": "BindingContext",
           "line": 191,
           "summary": "Runtime BindingContext semantic model."
         },
@@ -329,7 +347,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+    "updatedAt": "2026-07-09"
     },
     {
       "id": "frontier:app-world-resource-visibility",

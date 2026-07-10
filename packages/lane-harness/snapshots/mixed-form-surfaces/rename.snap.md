@@ -53,53 +53,71 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html": [
-        {
-          "newText": "caption",
-          "range": {
-            "end": {
-              "character": 9,
-              "line": 1
-            },
-            "start": {
-              "character": 4,
-              "line": 1
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 17,
+                "line": 10
+              },
+              "start": {
+                "character": 12,
+                "line": 10
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.ts": [
-        {
-          "newText": "caption",
-          "range": {
-            "end": {
-              "character": 17,
-              "line": 10
-            },
-            "start": {
-              "character": 12,
-              "line": 10
+      },
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 9,
+                "line": 1
+              },
+              "start": {
+                "character": 4,
+                "line": 1
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/loose-picklist.html",
+          "version": 1
         }
-      ],
-      "fixtures://pressure/mixed-form-surfaces/src/components/ticket-editor.html": [
-        {
-          "newText": "caption",
-          "range": {
-            "end": {
-              "character": 9,
-              "line": 17
-            },
-            "start": {
-              "character": 4,
-              "line": 17
+      },
+      {
+        "edits": [
+          {
+            "newText": "caption",
+            "range": {
+              "end": {
+                "character": 9,
+                "line": 17
+              },
+              "start": {
+                "character": 4,
+                "line": 17
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/components/ticket-editor.html",
+          "version": null
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -152,7 +170,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -169,7 +187,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 10
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -186,7 +204,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 17
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -418,51 +436,63 @@ _No in-memory diff._
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/mixed-form-surfaces/src/app.html": [
-        {
-          "newText": "theme",
-          "range": {
-            "end": {
-              "character": 38,
-              "line": 1
-            },
-            "start": {
-              "character": 29,
-              "line": 1
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "theme",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 14
+              },
+              "start": {
+                "character": 11,
+                "line": 14
+              }
             }
           }
-        },
-        {
-          "newText": "theme",
-          "range": {
-            "end": {
-              "character": 18,
-              "line": 11
-            },
-            "start": {
-              "character": 9,
-              "line": 11
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/app.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/mixed-form-surfaces/src/app.ts": [
-        {
-          "newText": "theme",
-          "range": {
-            "end": {
-              "character": 20,
-              "line": 14
-            },
-            "start": {
-              "character": 11,
-              "line": 14
+      },
+      {
+        "edits": [
+          {
+            "newText": "theme",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 1
+              },
+              "start": {
+                "character": 29,
+                "line": 1
+              }
+            }
+          },
+          {
+            "newText": "theme",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 11
+              },
+              "start": {
+                "character": 9,
+                "line": 11
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -505,7 +535,7 @@ _No in-memory diff._
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -522,7 +552,7 @@ _No in-memory diff._
           "line": 11
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -539,7 +569,7 @@ _No in-memory diff._
           "line": 14
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]

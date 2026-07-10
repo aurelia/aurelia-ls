@@ -53,38 +53,50 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/aliased-bindable-surfaces/src/product-card.html": [
-        {
-          "newText": "headlineText",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 2
-            },
-            "start": {
-              "character": 7,
-              "line": 2
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "headlineText",
+            "range": {
+              "end": {
+                "character": 53,
+                "line": 9
+              },
+              "start": {
+                "character": 44,
+                "line": 9
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts": [
-        {
-          "newText": "headlineText",
-          "range": {
-            "end": {
-              "character": 53,
-              "line": 9
-            },
-            "start": {
-              "character": 44,
-              "line": 9
+      },
+      {
+        "edits": [
+          {
+            "newText": "headlineText",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 2
+              },
+              "start": {
+                "character": 7,
+                "line": 2
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -127,7 +139,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 2
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -144,7 +156,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 9
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -230,38 +242,50 @@ diff --git a/src/product-card.ts b/src/product-card.ts
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/aliased-bindable-surfaces/src/app.html": [
-        {
-          "newText": "headline-label",
-          "range": {
-            "end": {
-              "character": 17,
-              "line": 3
-            },
-            "start": {
-              "character": 4,
-              "line": 3
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "headline-label",
+            "range": {
+              "end": {
+                "character": 17,
+                "line": 3
+              },
+              "start": {
+                "character": 4,
+                "line": 3
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/app.html",
+          "version": 1
         }
-      ],
-      "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts": [
-        {
-          "newText": "headline-label",
-          "range": {
-            "end": {
-              "character": 39,
-              "line": 9
-            },
-            "start": {
-              "character": 26,
-              "line": 9
+      },
+      {
+        "edits": [
+          {
+            "newText": "headline-label",
+            "range": {
+              "end": {
+                "character": 39,
+                "line": 9
+              },
+              "start": {
+                "character": 26,
+                "line": 9
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/product-card.ts",
+          "version": null
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -305,7 +329,7 @@ diff --git a/src/product-card.ts b/src/product-card.ts
           "line": 3
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -322,7 +346,7 @@ diff --git a/src/product-card.ts b/src/product-card.ts
           "line": 9
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -412,38 +436,50 @@ diff --git a/src/product-card.ts b/src/product-card.ts
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/aliased-bindable-surfaces/src/app.html": [
-        {
-          "newText": "hint-label",
-          "range": {
-            "end": {
-              "character": 38,
-              "line": 7
-            },
-            "start": {
-              "character": 25,
-              "line": 7
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "hint-label",
+            "range": {
+              "end": {
+                "character": 38,
+                "line": 7
+              },
+              "start": {
+                "character": 25,
+                "line": 7
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/app.html",
+          "version": 1
         }
-      ],
-      "fixtures://pressure/aliased-bindable-surfaces/src/display-hint.ts": [
-        {
-          "newText": "hint-label",
-          "range": {
-            "end": {
-              "character": 39,
-              "line": 6
-            },
-            "start": {
-              "character": 26,
-              "line": 6
+      },
+      {
+        "edits": [
+          {
+            "newText": "hint-label",
+            "range": {
+              "end": {
+                "character": 39,
+                "line": 6
+              },
+              "start": {
+                "character": 26,
+                "line": 6
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/aliased-bindable-surfaces/src/display-hint.ts",
+          "version": null
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -487,7 +523,7 @@ diff --git a/src/product-card.ts b/src/product-card.ts
           "line": 7
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -504,7 +540,7 @@ diff --git a/src/product-card.ts b/src/product-card.ts
           "line": 6
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]

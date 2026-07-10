@@ -60,6 +60,28 @@ export function checkerNumberIndexValueType(
   return checkerIndexValueType(checker, type, ts.IndexKind.Number);
 }
 
+/** Read a fixed tuple position without collapsing it to the tuple's numeric index union. */
+export function checkerTupleElementType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  index: number,
+): ts.Type | null {
+  if (!checker.isTupleType(type)) {
+    return null;
+  }
+  const reference = type as ts.TupleTypeReference;
+  const arguments_ = checker.getTypeArguments(reference);
+  if (index < reference.target.fixedLength) {
+    return arguments_[index] ?? null;
+  }
+  const variableIndex = reference.target.elementFlags.findIndex((flag) =>
+    (flag & ts.ElementFlags.Variable) !== 0
+  );
+  return variableIndex === reference.target.elementFlags.length - 1
+    ? arguments_[variableIndex] ?? null
+    : null;
+}
+
 export function checkerIndexedValueType(
   checker: ts.TypeChecker,
   type: ts.Type,

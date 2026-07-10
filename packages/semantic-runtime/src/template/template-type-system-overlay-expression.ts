@@ -1,5 +1,5 @@
 import {
-  scopeExpressionUsesCurrentBindingContextRoot,
+  scopeExpressionWasAuthoredFromCurrentBindingContext,
   type ExpressionAstNode,
 } from '../expression/ast.js';
 import type { SourceSpan } from '../expression/source-span.js';
@@ -13,6 +13,7 @@ import {
 } from '../type-system/value-converter-call-surface.js';
 import {
   appendTemplateTypeSystemOverlayExpressionParts,
+  TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS,
   type TemplateTypeSystemOverlayExpressionPart,
   type TemplateTypeSystemOverlaySourceSlice,
 } from './template-type-system-overlay-plan.js';
@@ -331,22 +332,45 @@ export class TemplateTypeSystemOverlayExpressionProjector {
       case 'ValueConverter':
         return this.valueConverterExpression(expression, context, semanticProductHandle);
       case 'AccessScope':
+        if (expression.ancestor > 0) {
+          const unsupportedSyntax = this.ancestorScopeUnsupported(expression, context?.scopeAliases ?? null);
+          return unsupportedSyntax == null
+            ? this.ancestorAccessScopeExpression(expression, semanticProductHandle)
+            : TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupportedSyntax);
+        }
+        if (scopeExpressionWasAuthoredFromCurrentBindingContext(expression)) {
+          return this.currentNamedAccessScopeExpression(expression, semanticProductHandle);
+        }
         return this.copySourceProjection(
           expression,
           context,
           semanticProductHandle,
           [],
-          this.scopeRootUnsupported(expression, context?.scopeAliases ?? null),
+          null,
         );
       case 'CallScope':
-        {
-          const unsupportedSyntax = this.scopeRootUnsupported(expression, context?.scopeAliases ?? null);
+        if (expression.ancestor > 0) {
+          const unsupportedSyntax = this.ancestorScopeUnsupported(expression, context?.scopeAliases ?? null);
           if (unsupportedSyntax != null) {
             return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupportedSyntax);
           }
+          return this.ancestorCallScopeExpression(
+            expression,
+            context,
+            semanticProductHandle,
+            this.shouldLowerNonStrictAccess(context),
+          );
+        }
+        if (scopeExpressionWasAuthoredFromCurrentBindingContext(expression)) {
+          return this.namedCallScopeExpression(
+            expression,
+            context,
+            semanticProductHandle,
+            this.shouldLowerNonStrictAccess(context),
+          );
         }
         if (this.shouldLowerNonStrictAccess(context)) {
-          return this.nonStrictCallScopeExpression(expression, context, semanticProductHandle);
+          return this.namedCallScopeExpression(expression, context, semanticProductHandle, true);
         }
         return this.copySourceProjection(
           expression,
@@ -526,6 +550,60 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     );
   }
 
+  private ancestorAccessScopeExpression(
+    expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessScope' }>,
+    semanticProductHandle: ProductHandle | null,
+  ): TemplateTypeSystemOverlayExpressionProjection {
+    const name = this.sourceSlice(expression.name.span, semanticProductHandle);
+    if (name == null) {
+      return TemplateTypeSystemOverlayExpressionProjection.missingSource();
+    }
+    return TemplateTypeSystemOverlayExpressionProjection.generated([
+      { kind: 'text', text: `${ancestorNamedLookupAlias(expression.ancestor)}.` },
+      { kind: 'source', source: name, label: `ancestor scope member ${expression.name.name}` },
+    ]);
+  }
+
+  private currentNamedAccessScopeExpression(
+    expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessScope' }>,
+    semanticProductHandle: ProductHandle | null,
+  ): TemplateTypeSystemOverlayExpressionProjection {
+    const name = this.sourceSlice(expression.name.span, semanticProductHandle);
+    return name == null
+      ? TemplateTypeSystemOverlayExpressionProjection.missingSource()
+      : TemplateTypeSystemOverlayExpressionProjection.generated([{
+        kind: 'source',
+        source: name,
+        label: `current named scope member ${expression.name.name}`,
+      }]);
+  }
+
+  private ancestorCallScopeExpression(
+    expression: Extract<ExpressionAstNode, { readonly $kind: 'CallScope' }>,
+    context: TemplateTypeSystemOverlayExpressionProjectionContext | null,
+    semanticProductHandle: ProductHandle | null,
+    nonStrict: boolean,
+  ): TemplateTypeSystemOverlayExpressionProjection {
+    const name = this.sourceSlice(expression.name.span, semanticProductHandle);
+    if (name == null) {
+      return TemplateTypeSystemOverlayExpressionProjection.missingSource();
+    }
+    const args = this.argumentParts(expression.args, context, semanticProductHandle, `ancestor call ${expression.name.name} argument`);
+    if (args == null) {
+      return TemplateTypeSystemOverlayExpressionProjection.unsupported(unsupported(
+        TemplateTypeSystemOverlayExpressionUnsupportedKind.NonStandalone,
+        `Ancestor call '${expression.name.name}' has an argument that is not representable in a TypeScript overlay yet.`,
+      ));
+    }
+    return TemplateTypeSystemOverlayExpressionProjection.generated([
+      { kind: 'text', text: `${ancestorNamedLookupAlias(expression.ancestor)}.` },
+      { kind: 'source', source: name, label: `ancestor scope call ${expression.name.name}` },
+      { kind: 'text', text: nonStrict ? '?.(' : '(' },
+      ...args,
+      { kind: 'text', text: ')' },
+    ]);
+  }
+
   private nonStrictAccessMemberExpression(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessMember' }>,
     context: TemplateTypeSystemOverlayExpressionProjectionContext | null,
@@ -567,10 +645,11 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     ]);
   }
 
-  private nonStrictCallScopeExpression(
+  private namedCallScopeExpression(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'CallScope' }>,
     context: TemplateTypeSystemOverlayExpressionProjectionContext | null,
     semanticProductHandle: ProductHandle | null,
+    nonStrict: boolean,
   ): TemplateTypeSystemOverlayExpressionProjection {
     const source = this.sourceSlice(expression.name.span, semanticProductHandle);
     if (source == null) {
@@ -583,8 +662,8 @@ export class TemplateTypeSystemOverlayExpressionProjector {
         `Call '${expression.name.name}' has an argument that is not representable in a TypeScript overlay yet.`,
       ))
       : TemplateTypeSystemOverlayExpressionProjection.generated([
-        { kind: 'source', source, label: `non-strict call ${expression.name.name}` },
-        { kind: 'text', text: '?.(' },
+        { kind: 'source', source, label: `named scope call ${expression.name.name}` },
+        { kind: 'text', text: nonStrict || expression.optional ? '?.(' : '(' },
         ...args,
         { kind: 'text', text: ')' },
       ]);
@@ -672,24 +751,16 @@ export class TemplateTypeSystemOverlayExpressionProjector {
     return context?.strictBinding === false && context.lowerNonStrictAccess !== false;
   }
 
-  private scopeRootUnsupported(
+  private ancestorScopeUnsupported(
     expression: Extract<ExpressionAstNode, { readonly $kind: 'AccessScope' | 'CallScope' }>,
     scopeAliases: TemplateTypeSystemOverlayExpressionScopeAliases | null,
   ): TemplateTypeSystemOverlayExpressionUnsupportedSyntax | null {
-    if (expression.ancestor > 0) {
-      return expression.ancestor <= (scopeAliases?.parentBindingContextDepth ?? 0)
-        ? null
-        : unsupported(
-          TemplateTypeSystemOverlayExpressionUnsupportedKind.AncestorScope,
-          '$parent-style ancestor scope access needs a generated scope alias before it can be checked by TypeScript overlays.',
-        );
-    }
-    return scopeExpressionUsesCurrentBindingContextRoot(expression) && scopeAliases?.currentBindingContext !== true
-      ? unsupported(
-        TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext,
-        '$this access needs a generated current binding-context alias before it can be checked by TypeScript overlays.',
-      )
-      : null;
+    return expression.ancestor <= (scopeAliases?.parentBindingContextDepth ?? 0)
+      ? null
+      : unsupported(
+        TemplateTypeSystemOverlayExpressionUnsupportedKind.AncestorScope,
+        '$parent-style ancestor scope access needs a generated scope alias before it can be checked by TypeScript overlays.',
+      );
   }
 
   private accessThisUnsupported(
@@ -711,6 +782,10 @@ export class TemplateTypeSystemOverlayExpressionProjector {
         '$parent-style binding-context access needs generated ancestor aliases before it can be checked by TypeScript overlays.',
       );
   }
+}
+
+function ancestorNamedLookupAlias(ancestor: number): string {
+  return `${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS}${'.$parent'.repeat(Math.max(0, ancestor - 1))}`;
 }
 
 export function appendTemplateTypeSystemOverlayExpressionProjection(

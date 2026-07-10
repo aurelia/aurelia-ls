@@ -23,14 +23,34 @@ export interface TemplateScopeSourceReplayRelation {
   readonly tail: readonly BindingScope[];
 }
 
-/** Runtime Scope ancestry from root to leaf, including controller roots. */
+/**
+ * Ordered replay of two distinct axes: the latest runtime-parent state first, then this Scope identity's immutable
+ * predecessor states. A predecessor may retain an older parent product; the current state's runtimeParent is the
+ * authoritative parent state for `$parent` and named fallback lookup.
+ */
 export function templateScopeChain(scope: BindingScope): readonly BindingScope[] {
   const chain: BindingScope[] = [];
-  let current: BindingScope | null = scope;
-  while (current != null) {
-    chain.unshift(current);
-    current = current.parent;
-  }
+  const seen = new Set<string>();
+
+  const append = (current: BindingScope): void => {
+    const localStates: BindingScope[] = [];
+    let state: BindingScope | null = current;
+    while (state != null) {
+      if (seen.has(state.productHandle)) {
+        throw new Error(`Binding scope replay lineage contains a cycle at '${state.productHandle}'.`);
+      }
+      seen.add(state.productHandle);
+      localStates.push(state);
+      state = state.predecessor;
+    }
+
+    if (current.runtimeParent != null) {
+      append(current.runtimeParent);
+    }
+    chain.push(...localStates.reverse());
+  };
+
+  append(scope);
   return chain;
 }
 
@@ -47,14 +67,15 @@ export function templateScopeReplayChain(scope: BindingScope): readonly BindingS
 
 /** Whether replaying a scope replaces the current binding context visible through `$this`. */
 export function templateScopeCreatesCurrentBindingContextAlias(scope: BindingScope): boolean {
+  if (scope.predecessor != null) {
+    return false;
+  }
   if (scope.ownerKind === BindingScopeOwnerKind.RepeatedItem) {
     return templateRepeatScopeCurrentAliasExpression(scope) != null;
   }
   if (scope.ownerKind === BindingScopeOwnerKind.SyntheticView) {
     return scope.scopeCreators.some((creator) =>
       creator.creatorKind === BindingScopeCreatorKind.TemplateControllerValueScope
-    ) && !scope.scopeCreators.some((creator) =>
-      creator.creatorKind === BindingScopeCreatorKind.TemplateControllerPromiseResult
     );
   }
   return scope.ownerKind === BindingScopeOwnerKind.StateBinding;
@@ -81,7 +102,7 @@ export function templateScopeVisibleSlots(scope: BindingScope): readonly Binding
   ];
 }
 
-/** Whether an ambient same-level overlay scope has replayed the source scope's creator and slot facts. */
+/** Whether an ambient product state of the same runtime Scope has replayed the source state's creator and slot facts. */
 export function templateScopeCanReplaySourceScope(
   ambientScope: BindingScope,
   sourceScope: BindingScope,
@@ -89,14 +110,34 @@ export function templateScopeCanReplaySourceScope(
   if (ambientScope.productHandle === sourceScope.productHandle) {
     return true;
   }
-  if (ambientScope.ownerKind !== BindingScopeOwnerKind.SyntheticView) {
+  if (ambientScope.identityHandle !== sourceScope.identityHandle) {
     return false;
   }
-  if (ambientScope.parent?.productHandle !== sourceScope.parent?.productHandle) {
+  if (!scopeStateIncludes(ambientScope.runtimeParent, sourceScope.runtimeParent)) {
     return false;
   }
   return scopeCreatorsInclude(ambientScope.scopeCreators, sourceScope.scopeCreators)
     && visibleSlotsInclude(templateScopeVisibleSlots(ambientScope), templateScopeVisibleSlots(sourceScope));
+}
+
+function scopeStateIncludes(
+  ambient: BindingScope | null,
+  source: BindingScope | null,
+): boolean {
+  if (source == null) {
+    return ambient == null;
+  }
+  if (ambient == null || ambient.identityHandle !== source.identityHandle) {
+    return false;
+  }
+  let current: BindingScope | null = ambient;
+  while (current != null) {
+    if (current.productHandle === source.productHandle) {
+      return true;
+    }
+    current = current.predecessor;
+  }
+  return false;
 }
 
 /** Whether source-scope bindings can be evaluated at an ambient generated analysis point. */
@@ -133,7 +174,7 @@ export function templateScopeSourceReplayRelation(
   return null;
 }
 
-/** Alias reachability for copying authored `$this` and `$parent` expressions into generated TypeScript overlays. */
+/** Alias reachability for bare `$this`, bare `$parent`, and explicit-ancestor named lookup in generated overlays. */
 export function templateScopeAliasSupport(scope: BindingScope): TemplateScopeAliasSupport {
   let currentBindingContext = true;
   let parentBindingContextDepth = 0;
@@ -154,14 +195,7 @@ function templateScopeIsAncestorOrSelf(
   ancestor: BindingScope,
   scope: BindingScope,
 ): boolean {
-  let current: BindingScope | null = scope;
-  while (current != null) {
-    if (current.productHandle === ancestor.productHandle) {
-      return true;
-    }
-    current = current.parent;
-  }
-  return false;
+  return templateScopeChain(scope).some((candidate) => candidate.productHandle === ancestor.productHandle);
 }
 
 function scopeCreatorsInclude(
@@ -198,9 +232,13 @@ function slotTypeReferencesMatch(
   right: BindingContextSlot,
 ): boolean {
   if (
+    left.targetTypeSourceProductHandle == null
+    && right.targetTypeSourceProductHandle == null
+    && (
     left.targetIdentityHandle != null
     || left.targetProductHandle != null
     || left.sourceAddressHandle != null
+    )
   ) {
     return true;
   }

@@ -15,6 +15,8 @@ import {
 import {
   TypeSystemProjectBuilder,
 } from '../out/type-system/project.js';
+import { TypeSystemHotDetails } from '../out/type-system/product-details.js';
+import { checkerTypeMemberSourceAddressHandle } from '../out/type-system/checker-type-member-source.js';
 import {
   TypeSystemOverlaySourceBuilder,
 } from '../out/type-system/overlay.js';
@@ -36,13 +38,14 @@ import {
   AccessScopeExpression,
   CallScopeExpression,
   Identifier,
-  ScopeExpressionRootKind,
+  ScopeExpressionSyntaxOrigin,
   ValueConverterExpression,
 } from '../out/expression/ast.js';
 import {
   SourceFileRef,
   SourceSpan,
 } from '../out/expression/source-span.js';
+import { KernelVocabulary } from '../out/kernel/vocabulary/index.js';
 import {
   readTypeSystemProjectDiagnostics,
   readTypeSystemOverlayDiagnostics,
@@ -427,6 +430,9 @@ for (const local of ['$displayData', '$activeRow']) {
   if (row.sourceAssignmentTargetSourcePath !== 'src/synthetic-writeback-local-app.html') {
     failures.push(`Expected runtime-assignment data flow for ${local} to route assignment target source to the template writeback local, observed ${row.sourceAssignmentTargetSourcePath ?? 'missing'}.`);
   }
+  if (row.sourceAssignmentOccurrenceSourcePath !== 'src/synthetic-writeback-local-app.html') {
+    failures.push(`Expected runtime-assignment data flow for ${local} to retain the authored write occurrence, observed ${row.sourceAssignmentOccurrenceSourcePath ?? 'missing'}.`);
+  }
 }
 if (generatedRuntimeAssignmentConverterOverlay.expressionTypes.get('$selectedId.toUpperCase()') !== 'string') {
   failures.push(`Expected converter-backed runtime-assignment overlay to type the synthetic local as the converter fromView result, observed $selectedId.toUpperCase()=${generatedRuntimeAssignmentConverterOverlay.expressionTypes.get('$selectedId.toUpperCase()') ?? 'missing'}.`);
@@ -457,7 +463,7 @@ if (converterWritebackRow == null) {
     failures.push(`Expected converter-backed runtime-assignment data flow to route assignment target source to the template writeback local, observed ${converterWritebackRow.sourceAssignmentTargetSourcePath ?? 'missing'}.`);
   }
 }
-if (generatedScopeAliasOverlay.expressionProbeCount !== 21 || generatedScopeAliasOverlay.skippedExpressionCount !== 0) {
+if (generatedScopeAliasOverlay.expressionProbeCount !== 36 || generatedScopeAliasOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated scope-alias overlay to cover current and parent scope aliases without skips, observed probes=${generatedScopeAliasOverlay.expressionProbeCount}, skipped=${generatedScopeAliasOverlay.skippedExpressionCount}.`);
 }
 if (generatedScopeAliasOverlay.expressionTypes.get('title.length > 0') !== 'boolean') {
@@ -490,8 +496,8 @@ if (generatedScopeAliasOverlay.expressionTypes.get('$parent.titleLength()') !== 
 if (generatedScopeAliasOverlay.expressionTypes.get('$index') !== 'number') {
   failures.push(`Expected generated scope-alias overlay to declare repeat override local $index as number, observed ${generatedScopeAliasOverlay.expressionTypes.get('$index') ?? 'missing'}.`);
 }
-if (generatedScopeAliasOverlay.expressionTypes.get('title') !== 'string') {
-  failures.push(`Expected generated scope-alias overlay to unwrap binding-behavior value expressions as title:string, observed ${generatedScopeAliasOverlay.expressionTypes.get('title') ?? 'missing'}.`);
+if (generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') !== 'string') {
+  failures.push(`Expected generated scope-alias overlay to unwrap binding-behavior value expressions as title:string, observed ${generatedScopeAliasOverlay.expressionTypes.get('title & oneTime') ?? 'missing'}.`);
 }
 if (generatedScopeAliasOverlay.expressionTypes.get('item.label') !== 'string') {
   failures.push(`Expected generated scope-alias overlay to preserve repeat item member type, observed item.label=${generatedScopeAliasOverlay.expressionTypes.get('item.label') ?? 'missing'}.`);
@@ -511,6 +517,27 @@ if (generatedScopeAliasOverlay.expressionTypes.get('child.label') !== 'string') 
 if (generatedScopeAliasOverlay.expressionTypes.get('$parent.item.label') !== 'string') {
   failures.push(`Expected generated scope-alias overlay to preserve immediate parent binding-context type in nested repeats, observed $parent.item.label=${generatedScopeAliasOverlay.expressionTypes.get('$parent.item.label') ?? 'missing'}.`);
 }
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.rowTitle') !== 'string') {
+  failures.push(`Expected generated scope-alias overlay to preserve <let to-binding-context> additions on the nested repeat parent alias, observed $parent.rowTitle=${generatedScopeAliasOverlay.expressionTypes.get('$parent.rowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()') !== 'string') {
+  failures.push(`Expected same-<let> sources to see prior to-binding-context targets, observed ${generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('upperRowTitle') !== 'string') {
+  failures.push(`Expected later template expressions to see the final same-<let> binding-context state, observed ${generatedScopeAliasOverlay.expressionTypes.get('upperRowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()') !== 'string') {
+  failures.push(`Expected repeated override-context let targets to use the latest assigned type, observed ${generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.upperRowTitle') !== 'string') {
+  failures.push(`Expected nested named ancestor lookup to retain same-scope binding-context let additions, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.upperRowTitle') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()') !== 'string') {
+  failures.push(`Expected nested named ancestor lookup to use the latest override-context let value, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()') !== 'string') {
+  failures.push(`Expected named ancestor lookup to include repeat override-context metadata, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()') ?? 'missing'}.`);
+}
 if (generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()') !== 'number') {
   failures.push(`Expected generated scope-alias overlay to preserve immediate parent binding-context member call types in nested repeats, observed $parent.item.labelLength()=${generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()') ?? 'missing'}.`);
 }
@@ -520,11 +547,37 @@ if (!isStringLikeOverlayType(generatedScopeAliasOverlay.expressionTypes.get('$pa
 if (!isStringLikeOverlayType(generatedScopeAliasOverlay.expressionTypes.get('this.title'))) {
   failures.push(`Expected generated scope-alias overlay to preserve boundary this access through the resource view-model type, observed this.title=${generatedScopeAliasOverlay.expressionTypes.get('this.title') ?? 'missing'}.`);
 }
+if (generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()') !== 'string') {
+  failures.push(`Expected direct $this.title syntax to use framework ancestor-zero named lookup and prefer the override-context let value, observed ${generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)') !== 'string') {
+  failures.push(`Expected bare $this to remain the current binding-context object when used as a call argument, observed ${generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()') !== 'string') {
+  failures.push(`Expected named ancestor lookup to prefer an override-context let target over the binding-context member, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()') ?? 'missing'}.`);
+}
+if (generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)') !== 'string') {
+  failures.push(`Expected bare $parent arguments to remain binding-context-only while named ancestor calls use override-first lookup, observed ${generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)') ?? 'missing'}.`);
+}
 if (generatedScopeAliasOverlay.overlayDiagnosticCount !== 0) {
   failures.push(`Expected generated scope-alias overlay to avoid name-resolution diagnostics for represented repeat override locals, observed ${generatedScopeAliasOverlay.overlayDiagnosticCount}.`);
 }
 if (generatedScopeAliasOverlay.nonSourceObservedDependencyCount !== 0) {
   failures.push(`Expected generated scope-alias fixture observed dependencies to stay source-backed after repeat BindingContext aliasing, observed non-source rows=${generatedScopeAliasOverlay.nonSourceObservedDependencyCount}.`);
+}
+if (
+  generatedScopeAliasOverlay.scopeStateTopology.derivedStateCount !== 8
+  || generatedScopeAliasOverlay.scopeStateTopology.effectUpdatedStateCount !== 5
+) {
+  failures.push(`Expected scope-alias pressure to materialize eight immutable same-Scope states including five runtime-effect updates, observed derived=${generatedScopeAliasOverlay.scopeStateTopology.derivedStateCount}, effect-updated=${generatedScopeAliasOverlay.scopeStateTopology.effectUpdatedStateCount}.`);
+}
+if (
+  generatedScopeAliasOverlay.scopeStateTopology.invalidDerivedStateCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.missingPredecessorClaimCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.missingEffectUpdateClaimCount !== 0
+  || generatedScopeAliasOverlay.scopeStateTopology.derivedStateCreateClaimCount !== 0
+) {
+  failures.push(`Expected immutable scope states to preserve runtime identity/topology and publish update rather than creation claims, observed ${JSON.stringify(generatedScopeAliasOverlay.scopeStateTopology)}.`);
 }
 if (generatedValueConverterOverlay.expressionProbeCount !== 10 || generatedValueConverterOverlay.skippedExpressionCount !== 0) {
   failures.push(`Expected generated value-converter overlay to cover interpolation, condition, and repeat expressions without skips, observed probes=${generatedValueConverterOverlay.expressionProbeCount}, skipped=${generatedValueConverterOverlay.skippedExpressionCount}.`);
@@ -553,10 +606,10 @@ if (!generatedChildSpliceOverlay.hasParentPrefixSegment || !generatedChildSplice
   failures.push('Expected generated child splice overlay to preserve parent source segments and child generated call parts.');
 }
 if (
-  nonStrictCurrentBindingCallProjection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.UnsupportedSyntax
-  || nonStrictCurrentBindingCallProjection.unsupportedKind !== TemplateTypeSystemOverlayExpressionUnsupportedKind.CurrentBindingContext
+  nonStrictCurrentBindingCallProjection.kind !== TemplateTypeSystemOverlayExpressionProjectionKind.Generated
+  || nonStrictCurrentBindingCallProjection.text !== 'titleLength?.()'
 ) {
-  failures.push(`Expected non-strict $this call-scope projection without aliases to stay unsupported by current-binding-context policy, observed kind=${nonStrictCurrentBindingCallProjection.kind}, unsupported=${nonStrictCurrentBindingCallProjection.unsupportedKind ?? 'missing'}.`);
+  failures.push(`Expected non-strict $this call-scope syntax to lower to framework ancestor-zero named lookup without needing a bare-$this alias, observed kind=${nonStrictCurrentBindingCallProjection.kind}, text=${nonStrictCurrentBindingCallProjection.text}.`);
 }
 if (generatedValueConverterOverlay.variableTypes.get('word') !== 'string') {
   failures.push(`Expected generated value-converter overlay repeat source to infer repeated word locals as string, observed ${generatedValueConverterOverlay.variableTypes.get('word') ?? 'missing'}.`);
@@ -572,6 +625,24 @@ if (generatedBoundControllerOverlay.expressionProbeCount !== 3 || generatedBound
 }
 if (generatedBoundControllerOverlay.variableTypes.get('onAction') !== '(action: OverlayAction) => boolean') {
   failures.push(`Expected child root alias to use the parent-bound callback type, observed ${generatedBoundControllerOverlay.variableTypes.get('onAction') ?? 'missing'}.`);
+}
+if (
+  generatedBoundControllerOverlay.bindingScopeMemberName !== 'onAction'
+  || generatedBoundControllerOverlay.bindingScopeMemberFile !== 'callback-panel.ts'
+  || !generatedBoundControllerOverlay.bindingScopeMemberSourceMatchesSlot
+  || generatedBoundControllerOverlay.bindingScopeTypeSourceMemberName != null
+  || generatedBoundControllerOverlay.bindingScopeTypeSourceMemberFile != null
+) {
+  failures.push(`Expected converter-backed onAction flow to preserve the child declaration without masquerading the pre-converter handleAction member as its current type source, observed declaration=${generatedBoundControllerOverlay.bindingScopeMemberName ?? 'missing'}@${generatedBoundControllerOverlay.bindingScopeMemberFile ?? 'missing'}, source-match=${generatedBoundControllerOverlay.bindingScopeMemberSourceMatchesSlot}, type-source=${generatedBoundControllerOverlay.bindingScopeTypeSourceMemberName ?? 'none'}@${generatedBoundControllerOverlay.bindingScopeTypeSourceMemberFile ?? 'none'}.`);
+}
+if (
+  generatedBoundControllerOverlay.actionsBindingScopeMemberName !== 'actions'
+  || generatedBoundControllerOverlay.actionsBindingScopeMemberFile !== 'callback-panel.ts'
+  || !generatedBoundControllerOverlay.actionsBindingScopeMemberSourceMatchesSlot
+  || generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberName !== 'actions'
+  || generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberFile !== 'bound-controller-state.ts'
+) {
+  failures.push(`Expected direct parent-bound actions flow to preserve the child declaration and record the parent actions member as current type source, observed declaration=${generatedBoundControllerOverlay.actionsBindingScopeMemberName ?? 'missing'}@${generatedBoundControllerOverlay.actionsBindingScopeMemberFile ?? 'missing'}, source-match=${generatedBoundControllerOverlay.actionsBindingScopeMemberSourceMatchesSlot}, type-source=${generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberName ?? 'missing'}@${generatedBoundControllerOverlay.actionsBindingScopeTypeSourceMemberFile ?? 'missing'}.`);
 }
 if (generatedBoundControllerOverlay.expressionTypes.get('onAction(action)') !== 'boolean') {
   failures.push(`Expected child callback calls to type-check with the parent-bound argument type, observed ${generatedBoundControllerOverlay.expressionTypes.get('onAction(action)') ?? 'missing'}.`);
@@ -836,7 +907,16 @@ if (failures.length > 0) {
           nestedParentCall: generatedScopeAliasOverlay.expressionTypes.get('$parent.item.labelLength()'),
           nestedGrandparentTitle: generatedScopeAliasOverlay.expressionTypes.get('$parent.$parent.title'),
           boundaryThisTitle: generatedScopeAliasOverlay.expressionTypes.get('this.title'),
+          sequentialLetSource: generatedScopeAliasOverlay.expressionTypes.get('rowTitle.toUpperCase()'),
+          latestOverrideLet: generatedScopeAliasOverlay.expressionTypes.get('rollingRow.toUpperCase()'),
+          parentOverrideLet: generatedScopeAliasOverlay.expressionTypes.get('$parent.rollingRow.toUpperCase()'),
+          parentRepeatIndex: generatedScopeAliasOverlay.expressionTypes.get('$parent.$index.toFixed()'),
+          currentNamedLookupThroughThisSyntax: generatedScopeAliasOverlay.expressionTypes.get('$this.title.toFixed()'),
+          bareCurrentBindingContextArgument: generatedScopeAliasOverlay.expressionTypes.get('acceptApp($this)'),
+          shadowedNamedParent: generatedScopeAliasOverlay.expressionTypes.get('$parent.title.toFixed()'),
+          bindingContextOnlyParentArgument: generatedScopeAliasOverlay.expressionTypes.get('$parent.acceptApp($parent)'),
         },
+        scopeStateTopology: generatedScopeAliasOverlay.scopeStateTopology,
         nonSourceObservedDependencyCount: generatedScopeAliasOverlay.nonSourceObservedDependencyCount,
         skippedSummaries: generatedScopeAliasOverlay.skippedSummaries,
       },
@@ -1133,7 +1213,7 @@ async function readGeneratedTemplateScopeOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, overlaySource.fileName, emission.expressionProbes);
   const preciseDiagnosticMapped = generatedTemplateOverlayPreciseDiagnosticMapped(
     app,
     overlaySource,
@@ -1162,7 +1242,7 @@ async function readGeneratedLetScopeOverlayProbe() {
   for (const resource of app.emission.templates.resources) {
     const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
       .build(resource, 'contract-let-template-overlay');
-    if (candidate.expressionProbes.some((probe) => probe.expressionText === 'state.readRequest(requestId)')) {
+    if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'state.readRequest(requestId)')) {
       selected = resource;
       emission = candidate;
       break;
@@ -1192,7 +1272,7 @@ async function readGeneratedLetScopeOverlayProbe() {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     skippedReasons: emission.skippedExpressions.map((skip) => skip.reason),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     overlayDiagnosticCount: diagnostics.length,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
@@ -1240,7 +1320,7 @@ async function readGeneratedEventScopeOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     overlayDiagnosticCount: diagnostics.length,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
     generatedGlobalEventMemberTypeExpression: emission.overlaySource.text.includes('currentTarget: HTMLButtonElement'),
@@ -1260,8 +1340,8 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
     const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-template-overlay');
     if (
-      candidate.expressionProbes.some((probe) => probe.expressionText === 'rows')
-      && candidate.expressionProbes.some((probe) => probe.expressionText === '$displayData')
+      candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'rows')
+      && candidate.expressionProbes.some((probe) => probe.authoredExpressionText === '$displayData')
     ) {
       emission = candidate;
       break;
@@ -1271,7 +1351,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
     return {
       expressionProbeCount: emission?.expressionProbes.length ?? 0,
       skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
-      copiedExpressions: emission?.expressionProbes.map((probe) => probe.expressionText) ?? [],
+      copiedExpressions: emission?.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null) ?? [],
       expressionTypes: new Map(),
       variableTypes: new Map(),
       generatedTypeIndexedAccess: false,
@@ -1292,8 +1372,8 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    copiedExpressions: emission.expressionProbes.map((probe) => probe.expressionText),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    copiedExpressions: emission.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     generatedTypeIndexedAccess: emission.overlaySource.text.includes('SyntheticTableCustomAttribute["activeRow"]'),
     overlayDiagnosticCount: diagnostics.length,
@@ -1312,6 +1392,7 @@ async function readGeneratedRuntimeAssignmentOverlayProbe() {
         direction: row.direction,
         sourceAssignmentKind: row.sourceAssignmentKind,
         sourceAssignmentTargetType: row.sourceAssignmentTargetType,
+        sourceAssignmentOccurrenceSourcePath: row.sourceAssignmentOccurrenceSource?.path ?? null,
         sourceAssignmentTargetSourcePath: row.sourceAssignmentTargetSource?.path ?? null,
         targetToSourceAssignable: row.targetToSourceAssignable,
       })),
@@ -1331,8 +1412,8 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
     const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
       .build(resource, 'contract-runtime-assignment-converter-template-overlay');
     if (
-      candidate.expressionProbes.some((probe) => probe.expressionText.includes('.toView(') && probe.expressionText.includes('$selectedId'))
-      && candidate.expressionProbes.some((probe) => probe.expressionText === '$selectedId.toUpperCase()')
+      candidate.expressionProbes.some((probe) => probe.overlayExpressionText.includes('.toView(') && probe.overlayExpressionText.includes('$selectedId'))
+      && candidate.expressionProbes.some((probe) => probe.authoredExpressionText === '$selectedId.toUpperCase()')
     ) {
       emission = candidate;
       break;
@@ -1342,7 +1423,7 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
     return {
       expressionProbeCount: emission?.expressionProbes.length ?? 0,
       skippedExpressionCount: emission?.skippedExpressions.length ?? 0,
-      copiedExpressions: emission?.expressionProbes.map((probe) => probe.expressionText) ?? [],
+      copiedExpressions: emission?.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null) ?? [],
       expressionTypes: new Map(),
       variableTypes: new Map(),
       generatedPrimitiveTypeExpression: false,
@@ -1364,8 +1445,8 @@ async function readGeneratedRuntimeAssignmentConverterOverlayProbe() {
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    copiedExpressions: emission.expressionProbes.map((probe) => probe.expressionText),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    copiedExpressions: emission.expressionProbes.map((probe) => probe.authoredExpressionText).filter((text) => text != null),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     generatedPrimitiveTypeExpression: emission.overlaySource.text.includes('let $selectedId = undefined as unknown as string;'),
     generatedTargetMemberIndexedAccess: emission.overlaySource.text.includes('SyntheticPickerCustomAttribute["selectedRow"]'),
@@ -1404,6 +1485,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       skippedSummaries: [],
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
+      scopeStateTopology: emptyScopeStateTopology(),
     };
   }
   const emission = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
@@ -1416,6 +1498,7 @@ async function readGeneratedScopeAliasOverlayProbe() {
       expressionTypes: new Map(),
       overlayDiagnosticCount: 0,
       nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
+      scopeStateTopology: emptyScopeStateTopology(),
     };
   }
   const typeSystem = new TypeSystemProjectBuilder().build(
@@ -1432,10 +1515,72 @@ async function readGeneratedScopeAliasOverlayProbe() {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     skippedSummaries: emission.skippedExpressions.map((skip) => skip.summary),
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     overlayDiagnosticCount: diagnostics.length,
     nonSourceObservedDependencyCount: nonSourceObservedDependencyCount(app),
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
+    scopeStateTopology: readScopeStateTopology(runtime.workspace.store, resource),
+  };
+}
+
+function readScopeStateTopology(store, resource) {
+  const scopes = [
+    resource.runtimeAnalysis.scopes.rootScope,
+    ...resource.runtimeAnalysis.scopes.derivedScopes,
+  ];
+  const derivedStates = scopes.filter((scope) => scope.predecessor != null);
+  const effectUpdatedStates = derivedStates.filter((scope) =>
+    scope.scopeCreators.some((creator) => creator.creatorKind === 'runtime-binding-scope-effect')
+  );
+  const predecessorClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Configuration.BindingScopeDerivedFromScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const updateClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Binding.ScopeEffectUpdatesBindingScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const createClaims = store.readClaimsForPredicate(
+    KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
+  ).map((handle) => store.readClaim(handle)).filter((claim) => claim != null);
+  const effectUpdatedProducts = new Set(effectUpdatedStates.map((scope) => scope.productHandle));
+  return {
+    derivedStateCount: derivedStates.length,
+    effectUpdatedStateCount: effectUpdatedStates.length,
+    invalidDerivedStateCount: derivedStates.filter((scope) => {
+      const predecessor = scope.predecessor;
+      return predecessor == null
+        || scope.identityHandle !== predecessor.identityHandle
+        || scope.bindingContext.identityHandle !== predecessor.bindingContext.identityHandle
+        || scope.bindingContext.contextKind !== predecessor.bindingContext.contextKind
+        || scope.bindingContext.ownerProductHandle !== predecessor.bindingContext.ownerProductHandle
+        || scope.overrideContext.identityHandle !== predecessor.overrideContext.identityHandle
+        || scope.overrideContext.ownerProductHandle !== scope.productHandle
+        || scope.runtimeParent?.identityHandle !== predecessor.runtimeParent?.identityHandle
+        || scope.isBoundary !== predecessor.isBoundary
+        || scope.ownerKind !== predecessor.ownerKind;
+    }).length,
+    missingPredecessorClaimCount: derivedStates.filter((scope) =>
+      !predecessorClaims.some((claim) =>
+        claim.subjectHandle === scope.productHandle
+        && claim.objectHandle === scope.predecessor?.productHandle
+      )
+    ).length,
+    missingEffectUpdateClaimCount: effectUpdatedStates.filter((scope) =>
+      !updateClaims.some((claim) => claim.objectHandle === scope.productHandle)
+    ).length,
+    derivedStateCreateClaimCount: createClaims.filter((claim) =>
+      effectUpdatedProducts.has(claim.objectHandle)
+    ).length,
+  };
+}
+
+function emptyScopeStateTopology() {
+  return {
+    derivedStateCount: 0,
+    effectUpdatedStateCount: 0,
+    invalidDerivedStateCount: 0,
+    missingPredecessorClaimCount: 0,
+    missingEffectUpdateClaimCount: 0,
+    derivedStateCreateClaimCount: 0,
   };
 }
 
@@ -1502,7 +1647,7 @@ async function readGeneratedValueConverterOverlayProbe() {
   const argumentMismatch = diagnostics.find((diagnostic) =>
     diagnostic.diagnostic.code === 2345
   ) ?? null;
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
@@ -1656,9 +1801,13 @@ function readNonStrictCurrentBindingCallProjectionProbe() {
     [],
     0,
     false,
-    ScopeExpressionRootKind.CurrentBindingContext,
+    ScopeExpressionSyntaxOrigin.CurrentBindingContext,
   );
-  const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot)
+  const projection = new TemplateTypeSystemOverlayExpressionProjector(scopeAliasFixtureRoot, {
+    readFile(fileName) {
+      return path.normalize(fileName) === path.normalize(file.path) ? titleLength : undefined;
+    },
+  })
     .copyableExpression(call, {
       strictBinding: false,
       valueConverterCallSurface() {
@@ -1681,11 +1830,13 @@ async function readGeneratedBoundControllerOverlayProbe() {
     analysisDepth: 'binding-observation',
   });
   let emission = null;
+  let selectedResource = null;
   for (const resource of app.emission.templates.resources) {
     const candidate = new TemplateTypeSystemOverlayBuilder(runtime.workspace.store, app.emission.typeSystem)
       .build(resource, 'contract-bound-controller-template-overlay');
-    if (candidate.expressionProbes.some((probe) => probe.expressionText === 'onAction(action)')) {
+    if (candidate.expressionProbes.some((probe) => probe.authoredExpressionText === 'onAction(action)')) {
       emission = candidate;
+      selectedResource = resource;
       break;
     }
   }
@@ -1697,6 +1848,11 @@ async function readGeneratedBoundControllerOverlayProbe() {
       variableTypes: new Map(),
       overlayDiagnosticCount: 0,
       overlayDiagnosticCodes: [],
+      bindingScopeMemberName: null,
+      bindingScopeMemberFile: null,
+      bindingScopeMemberSourceMatchesSlot: false,
+      bindingScopeTypeSourceMemberName: null,
+      bindingScopeTypeSourceMemberFile: null,
     };
   }
   const typeSystem = new TypeSystemProjectBuilder().build(
@@ -1709,13 +1865,33 @@ async function readGeneratedBoundControllerOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
+  const bindingScopeMember = readCustomElementBindingScopeSlotMember(
+    runtime.workspace.store,
+    selectedResource,
+    'onAction',
+  );
+  const actionsBindingScopeMember = readCustomElementBindingScopeSlotMember(
+    runtime.workspace.store,
+    selectedResource,
+    'actions',
+  );
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
-    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes),
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     overlayDiagnosticCount: diagnostics.length,
     overlayDiagnosticCodes: diagnostics.map((diagnostic) => diagnostic.diagnostic.code),
+    bindingScopeMemberName: bindingScopeMember.name,
+    bindingScopeMemberFile: bindingScopeMember.file,
+    bindingScopeMemberSourceMatchesSlot: bindingScopeMember.sourceMatchesSlot,
+    bindingScopeTypeSourceMemberName: bindingScopeMember.typeSourceName,
+    bindingScopeTypeSourceMemberFile: bindingScopeMember.typeSourceFile,
+    actionsBindingScopeMemberName: actionsBindingScopeMember.name,
+    actionsBindingScopeMemberFile: actionsBindingScopeMember.file,
+    actionsBindingScopeMemberSourceMatchesSlot: actionsBindingScopeMember.sourceMatchesSlot,
+    actionsBindingScopeTypeSourceMemberName: actionsBindingScopeMember.typeSourceName,
+    actionsBindingScopeTypeSourceMemberFile: actionsBindingScopeMember.typeSourceFile,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
   };
 }
@@ -1763,16 +1939,16 @@ async function readGeneratedStateSourceOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
     expressionTypes,
     variableTypes: readOverlayVariableTypesByName(typeSystem, emission.overlaySource.fileName),
     selectedExpressionTypes: {
-      stateTitle: readExpressionTypeContaining(expressionTypes, 'return title;'),
-      namedStoreLabel: readExpressionTypeContaining(expressionTypes, 'return label;'),
-      stateCondition: readExpressionTypeContaining(expressionTypes, "return draft === '';"),
+      stateTitle: expressionTypes.get('title & state') ?? null,
+      namedStoreLabel: expressionTypes.get("label & state:'filters'") ?? null,
+      stateCondition: expressionTypes.get("draft === '' & state") ?? null,
     },
     bindingScopeTypes: {
       repeatedTask: readRepeatedBindingScopeSlotType(resource, 'task'),
@@ -1824,7 +2000,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
   const diagnostics = readTypeSystemOverlayDiagnostics(typeSystem).filter((diagnostic) =>
     diagnostic.overlayOriginKey === emission.overlaySource.originKey
   );
-  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName);
+  const expressionTypes = readOverlayVariableExpressionTypes(typeSystem, emission.overlaySource.fileName, emission.expressionProbes);
   return {
     expressionProbeCount: emission.expressionProbes.length,
     skippedExpressionCount: emission.skippedExpressions.length,
@@ -1833,7 +2009,7 @@ async function readGeneratedStateConditionBoundaryOverlayProbe() {
     hasOrdinaryChildStateBoundaryDiagnostic: diagnostics.some((diagnostic) =>
       diagnostic.diagnostic.code === 2304 || diagnostic.diagnostic.code === 2339
     ),
-    stateBoundChildType: readExpressionTypeContaining(expressionTypes, 'return selectedTask.title;'),
+    stateBoundChildType: expressionTypes.get('selectedTask.title & state') ?? null,
     generatedAnyHole: overlayTextHasGeneratedAnyHole(emission.overlaySource),
   };
 }
@@ -1850,11 +2026,40 @@ function readRepeatedBindingScopeSlotType(resource, slotName) {
 function readCustomElementBindingScopeSlotType(resource, slotName) {
   const scope = resource.runtimeAnalysis.scopes.readScopes().find((candidate) =>
     candidate.ownerKind === 'custom-element-controller'
-    && candidate.parent != null
+    && candidate.runtimeParent != null
     && (candidate.bindingContext?.slots ?? []).some((slot) => slot.name === slotName)
   ) ?? null;
   const slot = (scope?.bindingContext?.slots ?? []).find((candidate) => candidate.name === slotName) ?? null;
   return slot?.targetType?.display ?? null;
+}
+
+function readCustomElementBindingScopeSlotMember(store, resource, slotName) {
+  const slots = resource?.runtimeAnalysis.scopes.readScopes().flatMap((candidate) =>
+    candidate.ownerKind === 'custom-element-controller'
+      ? (candidate.bindingContext?.slots ?? []).filter((slot) => slot.name === slotName)
+      : []
+  ) ?? [];
+  const slot = slots.find((candidate) => candidate.targetTypeSourceProductHandle != null)
+    ?? slots[0]
+    ?? null;
+  const member = slot?.targetProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+  const typeSourceMember = slot?.targetTypeSourceProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetTypeSourceProductHandle);
+  return {
+    name: member?.name ?? null,
+    file: member?.carrier?.declarations[0] == null
+      ? null
+      : path.basename(member.carrier.declarations[0].getSourceFile().fileName),
+    sourceMatchesSlot: member != null
+      && checkerTypeMemberSourceAddressHandle(store, member) === slot?.sourceAddressHandle,
+    typeSourceName: typeSourceMember?.name ?? null,
+    typeSourceFile: typeSourceMember?.carrier?.declarations[0] == null
+      ? null
+      : path.basename(typeSourceMember.carrier.declarations[0].getSourceFile().fileName),
+  };
 }
 
 async function readPublicTemplateOverlayDiagnosticProbe() {
@@ -2047,9 +2252,13 @@ function overlayTextHasGeneratedAnyHole(overlaySource) {
 function readOverlayVariableExpressionTypes(
   typeSystem,
   overlayFileName,
+  expressionProbes = [],
 ) {
   const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
   const rows = new Map();
+  const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
+    probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]
+  ));
   if (sourceFile == null) {
     return rows;
   }
@@ -2061,7 +2270,7 @@ function readOverlayVariableExpressionTypes(
       && node.initializer != null
     ) {
       rows.set(
-        node.initializer.getText(sourceFile),
+        authoredExpressionByLocal.get(node.name.text) ?? node.initializer.getText(sourceFile),
         typeSystem.checker.typeToString(typeSystem.checker.getTypeAtLocation(node.name)),
       );
     }
@@ -2107,7 +2316,7 @@ function generatedTemplateOverlayPreciseDiagnosticMapped(
   overlaySource,
   expressionProbes,
 ) {
-  const probe = expressionProbes.find((candidate) => candidate.expressionText === 'crumb.path') ?? null;
+  const probe = expressionProbes.find((candidate) => candidate.authoredExpressionText === 'crumb.path') ?? null;
   if (probe == null || probe.sourceStart == null || probe.sourceEnd == null) {
     return false;
   }

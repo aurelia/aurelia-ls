@@ -89,7 +89,11 @@ const uiVirtualizationCatalogControllers = UiVirtualizationBuiltInResourceCatalo
   .sort(compareTemplateControllerRows);
 const expressionTypes = overlayTypeSystem == null || overlayEmission?.overlaySource == null
   ? new Map()
-  : readOverlayVariableExpressionTypes(overlayTypeSystem, overlayEmission.overlaySource.fileName);
+  : readOverlayVariableExpressionTypes(
+      overlayTypeSystem,
+      overlayEmission.overlaySource.fileName,
+      overlayEmission.expressionProbes,
+    );
 const branchSlotDisplays = branchScopeSlotDisplays(resource);
 const virtualRepeatProbe = await readVirtualRepeatProbe();
 
@@ -103,8 +107,8 @@ const assert = (condition, message) => {
 assert(resource != null, 'Expected the built-in template-controller fixture to compile one app resource.');
 assert(overlayEmission?.skippedExpressions.length === 0, `Expected all built-in controller expressions to be overlay-representable, observed skips=${overlayEmission?.skippedExpressions.length ?? 'missing'}.`);
 assert(overlayDiagnostics.length === 0, `Expected built-in controller overlay to have no diagnostics, observed ${overlayDiagnostics.length}.`);
-assert(overlayEmission?.expressionProbes.some((probe) => probe.expressionText === 'resolved') !== true, 'Expected promise then target expression to be owned by promise-result scope, not emitted as a standalone probe.');
-assert(overlayEmission?.expressionProbes.some((probe) => probe.expressionText === 'reason') !== true, 'Expected promise catch target expression to be owned by promise-result scope, not emitted as a standalone probe.');
+assert(overlayEmission?.expressionProbes.some((probe) => probe.authoredExpressionText === 'resolved') !== true, 'Expected the from-view then assignment target to be modeled by runtime-assignment state, not emitted as a standalone read probe.');
+assert(overlayEmission?.expressionProbes.some((probe) => probe.authoredExpressionText === 'reason') !== true, 'Expected the from-view catch assignment target to be modeled by runtime-assignment state, not emitted as a standalone read probe.');
 assertSameTemplateControllerSet(
   runtimeHtmlCatalogControllers,
   frameworkRuntimeHtmlTemplateControllers,
@@ -317,9 +321,13 @@ function compareTemplateControllerRows(left, right) {
 function readOverlayVariableExpressionTypes(
   typeSystem,
   overlayFileName,
+  expressionProbes = [],
 ) {
   const sourceFile = typeSystem.readProgramSourceFileByPath(overlayFileName);
   const rows = new Map();
+  const authoredExpressionByLocal = new Map(expressionProbes.flatMap((probe) =>
+    probe.authoredExpressionText == null ? [] : [[probe.localName, probe.authoredExpressionText]]
+  ));
   if (sourceFile == null) {
     return rows;
   }
@@ -331,7 +339,7 @@ function readOverlayVariableExpressionTypes(
       && node.initializer != null
     ) {
       rows.set(
-        node.initializer.getText(sourceFile),
+        authoredExpressionByLocal.get(node.name.text) ?? node.initializer.getText(sourceFile),
         typeSystem.checker.typeToString(typeSystem.checker.getTypeAtLocation(node.name)),
       );
     }
@@ -381,7 +389,11 @@ async function readVirtualRepeatProbe() {
   );
   return {
     controllerCount: virtualRepeatControllerCount(runtimeControllers),
-    expressionTypes: readOverlayVariableExpressionTypes(overlayTypeSystem, overlayEmission.overlaySource.fileName),
+    expressionTypes: readOverlayVariableExpressionTypes(
+      overlayTypeSystem,
+      overlayEmission.overlaySource.fileName,
+      overlayEmission.expressionProbes,
+    ),
     overlayDiagnosticCount: overlayDiagnostics.length,
     skippedExpressionCount: overlayEmission.skippedExpressions.length,
   };

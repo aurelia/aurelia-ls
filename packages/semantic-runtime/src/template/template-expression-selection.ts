@@ -12,15 +12,19 @@ import {
   RuntimeBindingExpressionScopeProjector,
 } from '../observation/runtime-binding-expression-scope.js';
 import {
+  bindingBehaviorEvaluationForRuntimeBindingSource,
   RuntimeBindingSourceExpressionContextProjector,
   RuntimeBindingSourceExpressionProjectionKind,
   type RuntimeBindingSourceExpressionContextProjection,
 } from '../observation/runtime-binding-source-expression-context.js';
+import { CheckerExpressionTypeBindingBehaviorEvaluation } from '../type-system/expression-type-context.js';
 import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { bindingExpressionAstForProductAtOffset } from './expression-parse-product.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import {
   expressionProductHandlesForInstruction,
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from './template-compilation-project-pass.js';
@@ -100,12 +104,28 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandle(
   if (instruction == null) {
     return [];
   }
+  const bindingOwnerInstruction = runtimeBindingOwnerInstructionForTemplateExpression(
+    resource,
+    instruction,
+  );
   return resource.runtimeAnalysis.runtimeRendering
-    .readBindingsForInstruction(instruction.productHandle)
+    .readBindingsForInstruction(bindingOwnerInstruction.productHandle)
     .filter(isRuntimeExpressionBinding)
-    .filter((binding) =>
-      expressionProductHandlesForRuntimeBinding(binding).includes(expressionProductHandle)
-    );
+    .filter((binding) => bindingOwnerInstruction !== instruction
+      || expressionProductHandlesForRuntimeBinding(binding).includes(expressionProductHandle));
+}
+
+function runtimeBindingOwnerInstructionForTemplateExpression(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  instruction: TemplateInstruction,
+): TemplateInstruction {
+  if (!(instruction instanceof MultiAttrInstruction)) {
+    return instruction;
+  }
+  return resource.compilation.compiledTemplate.instructions.find((candidate) =>
+    candidate instanceof IteratorBindingInstruction
+    && candidate.tailInstructionProductHandles.includes(instruction.productHandle)
+  ) ?? instruction;
 }
 
 /** Runtime bindings for one expression product that can be evaluated from the ambient materialized scope. */
@@ -115,11 +135,20 @@ export function runtimeExpressionBindingsForTemplateExpressionProductHandleInSco
   scope: BindingScope,
   instructionScopes: RuntimeInstructionScopeLookup = instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
 ): readonly RuntimeExpressionBinding[] {
+  const instruction = templateInstructionForExpressionProductHandle(resource, expressionProductHandle);
+  if (instruction == null) {
+    return [];
+  }
   return runtimeExpressionBindingsForTemplateExpressionProductHandle(resource, expressionProductHandle)
     .filter((binding) =>
       bindingSourceScopeMatches(
         scope,
-        instructionScopes.scopeForBinding(resource.runtimeAnalysis.runtimeRendering, binding),
+        instructionScopes.scopeForInstruction(
+          instruction.productHandle,
+          resource.runtimeAnalysis.runtimeRendering
+            .readRenderContextForBinding(binding.productHandle)
+            ?.renderingController.productHandle ?? null,
+        ),
       )
     );
 }
@@ -152,11 +181,16 @@ export function bindingSourceContextProjectionForTemplateExpressionParseAtOffset
     bindings,
     expression,
     localKey: `template-expression-selection:${expressionParse.productHandle}:source-scope`,
-    sourceScope: ambientScope,
+    sourceScope: ambientScope ?? bindingScopeForTemplateExpressionParse(resource, expressionParse),
     sourceExpressions: new RuntimeBindingSourceExpressionContextProjector(
       resource.runtimeAnalysis.runtimeRendering,
       instructionScopeLookup(resource.runtimeAnalysis.scopes.instructionScopes),
       bindingExpressionScopes,
+    ),
+    bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
+      resource,
+      expressionParse.productHandle,
+      binding,
     ),
   });
   return selection.kind === RuntimeBindingSourceContextProjectionSelectionKind.Context
@@ -171,17 +205,23 @@ export function selectRuntimeBindingSourceContextProjection(
     readonly localKey: string;
     readonly sourceScope?: BindingScope | null;
     readonly sourceExpressions: RuntimeBindingSourceExpressionContextProjector;
+    readonly bindingBehaviorForBinding: (
+      binding: RuntimeExpressionBinding,
+    ) => CheckerExpressionTypeBindingBehaviorEvaluation;
   },
 ): RuntimeBindingSourceContextProjectionSelectionResult {
   const projections: RuntimeBindingSourceExpressionContextProjection[] = [];
   let openReason: string | null = null;
   for (const binding of input.bindings) {
-    const projection = input.sourceExpressions.projectSource({
-      binding,
-      expression: input.expression,
-      localKey: input.localKey,
-      sourceScope: input.sourceScope,
-    });
+    const projection = input.sourceExpressions.projectSourceWithBindingBehavior(
+      {
+        binding,
+        expression: input.expression,
+        localKey: input.localKey,
+        sourceScope: input.sourceScope,
+      },
+      input.bindingBehaviorForBinding(binding),
+    );
     if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
       openReason ??= projection.openReason;
       continue;
@@ -219,6 +259,17 @@ export function selectRuntimeBindingSourceContextProjection(
     kind: RuntimeBindingSourceContextProjectionSelectionKind.Context,
     projection: first,
   };
+}
+
+export function bindingBehaviorEvaluationForTemplateExpression(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  expressionProductHandle: ProductHandle,
+  binding: RuntimeExpressionBinding,
+): CheckerExpressionTypeBindingBehaviorEvaluation {
+  const instruction = templateInstructionForExpressionProductHandle(resource, expressionProductHandle);
+  return instruction instanceof MultiAttrInstruction
+    ? CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly
+    : bindingBehaviorEvaluationForRuntimeBindingSource(binding);
 }
 
 /** Runtime bindings for one template expression parse that can be evaluated from the ambient materialized scope. */

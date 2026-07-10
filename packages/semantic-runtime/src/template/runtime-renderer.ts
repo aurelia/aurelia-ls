@@ -29,6 +29,7 @@ import {
   LetBindingInstruction,
   ListenerBindingInstruction,
   MultiAttrInstruction,
+  nestedInstructionProductHandlesForInstructions,
   PropertyBindingInstruction,
   RefBindingInstruction,
   SetAttributeInstruction,
@@ -651,14 +652,12 @@ function renderOwnedBindingInstructions(
   owner: RuntimeRendererInstructionOwner,
   childController: RuntimeControllerFrame,
 ): void {
-  const iteratorTailHandles = new Set(handles.flatMap((handle) => {
-    const instruction = input.readInstruction(handle);
-    return instruction instanceof IteratorBindingInstruction
-      ? instruction.tailInstructionProductHandles
-      : [];
-  }));
+  const instructions = handles
+    .map((handle) => input.readInstruction(handle))
+    .filter((instruction): instruction is TemplateInstruction => instruction != null);
+  const nestedInstructionHandles = new Set(nestedInstructionProductHandlesForInstructions(instructions));
   handles.forEach((handle, index) => {
-    if (iteratorTailHandles.has(handle)) {
+    if (nestedInstructionHandles.has(handle)) {
       return;
     }
     input.renderNestedInstructionByHandle(handle, `${localPrefix}:${index}`, owner, childController);
@@ -1501,6 +1500,7 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
     input.owner?.productHandle ?? instruction.productHandle,
     instruction.target,
     instruction.expressionProductHandle,
+    instruction.literalValue,
     targetContext,
     instruction.sourceAddressHandle,
     instruction.targetSourceAddressHandle,
@@ -1515,6 +1515,7 @@ function renderLetRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRende
       instruction.attribute,
       instruction.target,
       instruction.expressionProductHandle,
+      instruction.literalValue,
       targetContext,
       [effect.toReference()],
       instruction.sourceAddressHandle,

@@ -507,7 +507,7 @@
         "recursive-rendering"
       ],
       "summary": "RuntimeBoundControllerValueTable carries parent-to-child controller property values for binding-source evaluation and child-template type overlays.",
-      "rationale": "External app pressure showed dynamic router href values flowing through child view-model methods and parent-bound callback properties. The right substrate is the binding source/value layer because Aurelia bindable property instructions target child controllers while the source expression belongs to the parent scope. Template-controller overlays can copy a view-model binding context while changing scope ownership, so the table must also recognize unambiguous view-model definition/type ownership rather than relying only on exact controller product handles. Template TypeScript overlays spend the same table by projecting unambiguous parent-bound values into the child root BindingContext, so child templates do not diagnose against placeholder bindable initializers when a parent binding supplies a more precise function/member type. Composed state-class member bindings such as state.handleAction should continue through lazy scope slot target types by spending retained checker member carriers, not by eager-projecting every view-model slot.",
+    "rationale": "External app pressure showed dynamic router href values flowing through child view-model methods and parent-bound callback properties. The right substrate is the binding source/value layer because Aurelia bindable property instructions target child controllers while the source expression belongs to the parent scope. Template-controller overlays can copy a view-model binding context while changing scope ownership, so the table must also recognize unambiguous view-model definition/type ownership rather than relying only on exact controller product handles. Template TypeScript overlays spend the same table by projecting unambiguous parent-bound values into the child root BindingContext, so child templates do not diagnose against placeholder bindable initializers when a parent binding supplies a more precise function/member type. That handoff must keep the child declaration identity separate from the runtime-delivered value type and its optional direct member carrier.",
       "guidance": [
         "Keep router, diagnostics, and authoring inquiries as consumers of this binding-owned value flow; do not add router-local expression shortcuts for parent-to-child bindable values.",
         "Keep RuntimeBoundControllerValueTable in runtime-bound-controller-value.ts as the binding/rendering handoff; RuntimeBindingSourceValueEvaluator should consume it, not own its table-construction policy.",
@@ -516,7 +516,8 @@
         "If multiple call sites bind the same definition property, keep the value open unless a future recursive rendering context can pick the exact call site.",
         "Treat remaining dynamic state/service boundaries after this handoff as evaluator or DI/state-store pressure, not as missing router semantics.",
         "Child resource template overlays should use parent-bound controller slots when the table gives a single source slot or evaluated type; do not suppress TS2554/TS2345 locally when root alias typing is missing.",
-        "When parent-bound values flow through composed state such as state.handleAction, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily from the checker member carrier, then preserve the reached member product for importable overlay aliases.",
+      "When a direct parent-bound value flows through composed state such as state.actions, scope construction should use bindingContextSlotTargetTypeShape(...) to materialize the slot target type lazily, retain the child bindable as declaration identity, and record the reached parent member only in targetTypeSourceProductHandle for importable overlay aliases.",
+      "Value converters are not provenance-transparent. Their evaluated toView return type owns the child slot's current value type even when its display matches the pre-converter source member; do not carry that source member into targetTypeSourceProductHandle merely to obtain a convenient type spelling.",
         "When a source expression itself names a slot, use bindingContextSlotDraftForExpressionAccess(...) after the binding-source lifecycle projection selects the correct source scope. That helper owns AccessScope/AccessThis/AccessMember slot walking for bound-controller root slots, overlays, and future cursor/reference consumers.",
         "When parent-bound values flow through source-scope-changing binding behaviors such as `& state`, child root slot source lookup must spend RuntimeBindingExpressionScopeProjector before chasing AccessScope/AccessMember identity. The source slot and evaluated type should agree instead of letting overlays compensate for a source-less child bindable type.",
         "RuntimeBoundControllerValueTable crosses from parent resource analysis into child resource analysis. Carry parent authored source address, strict mode, and binding-behavior lifecycle on the table entry; do not reread the parent RuntimeBinding from the child's RuntimeRenderingEmission.",
@@ -558,11 +559,17 @@
           "symbolName": "bindingContextSlotTargetTypeShape",
           "summary": "Lazy slot-target type materialization for composed state member access."
         },
-        {
-          "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
-          "symbolName": "bindingContextSlotDraftForExpressionAccess",
-          "summary": "Shared AccessScope/AccessThis/AccessMember source-expression-to-slot projection after the source scope is selected."
+      {
+        "kind": "source",
+        "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
+        "symbolName": "bindingContextSlotTargetTypeSourceMember",
+        "summary": "Resolves the optional current-type member carrier without replacing slot declaration identity."
+      },
+      {
+        "kind": "source",
+        "filePath": "packages/semantic-runtime/src/configuration/binding-scope-slot-projector.ts",
+        "symbolName": "bindingContextSlotDraftForExpressionAccess",
+        "summary": "Shared AccessScope/AccessThis/AccessMember source-expression-to-slot projection through type-transparent wrappers after the source scope is selected."
         },
         {
           "kind": "source",
@@ -608,7 +615,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-24"
+    "updatedAt": "2026-07-09"
     },
     {
       "id": "frontier:proxy-observable-domain-modeling",

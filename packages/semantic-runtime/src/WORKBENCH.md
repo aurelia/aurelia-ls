@@ -724,6 +724,10 @@ Binding assignment diagnostics distinguish TypeScript strictness from runtime no
 `astAssign` falls through for unsupported assignment target shapes outside the explicit throw cases, so
 `runtime-expression-unassignable` is authoring guidance (`binding-source-assignment-runtime-noop` plus
 `use-assignable-expression`) rather than a framework-grounded error.
+Framework-managed scope slots form a separate authoring-policy class. Repeat owns every repeat contextual, including
+the internally mutable `$index` and `$length`; their runtime descriptor shape is not evidence that template writeback
+should be allowed. Those writes report `binding-source-assignment-framework-managed`, not TypeScript strictness or a
+framework runtime no-op.
 Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. Weak-owner rows remain
 `semantic-authoring-policy`, while TypeScript strictness rows from binding assignment are `semantic-runtime-product`
 because data-flow has enough observer/value-channel/writeback/source assignability evidence to make the earlier static

@@ -55,6 +55,12 @@ export function sourceAssignmentForDataFlow(input: {
         reason: sourceWriteCapability.reason,
         reasonKinds: compactReasonKinds([sourceWriteCapability.reasonKind]),
       };
+    case SourceWriteCapabilityKind.FrameworkManagedReadOnly:
+      return {
+        kind: RuntimeBindingDataFlowSourceAssignmentKind.FrameworkManagedReadOnly,
+        reason: sourceWriteCapability.reason,
+        reasonKinds: compactReasonKinds([sourceWriteCapability.reasonKind]),
+      };
     case SourceWriteCapabilityKind.Open:
       return {
         kind: RuntimeBindingDataFlowSourceAssignmentKind.Open,

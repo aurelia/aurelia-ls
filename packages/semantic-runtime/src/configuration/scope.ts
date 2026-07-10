@@ -19,7 +19,6 @@ export const enum BindingScopeOwnerKind {
   CustomElementController = 'custom-element-controller',
   CustomAttributeController = 'custom-attribute-controller',
   SyntheticView = 'synthetic-view',
-  LetElement = 'let-element',
   RepeatedItem = 'repeated-item',
   StateBinding = 'state-binding',
 }
@@ -32,7 +31,6 @@ export const enum BindingScopeCreatorKind {
   TemplateControllerCondition = 'template-controller-condition',
   TemplateControllerBranch = 'template-controller-branch',
   TemplateControllerValueScope = 'template-controller-value-scope',
-  TemplateControllerPromiseResult = 'template-controller-promise-result',
 }
 
 export const enum BindingScopeConditionPolarity {
@@ -51,8 +49,12 @@ export class BindingScopeCreator {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Conditional branch polarity when the creator replays a template-controller condition. */
     readonly conditionPolarity: BindingScopeConditionPolarity | null = null,
-    /** Names introduced by a runtime assignment scope, when the creator can name them precisely. */
+    /** Names introduced into the runtime Scope by this creator. */
     readonly introducedSlotNames: readonly string[] = [],
+    /** Names written by a runtime assignment, including updates to existing slots. */
+    readonly assignedSlotNames: readonly string[] = [],
+    /** Runtime context lane that received the assigned names. */
+    readonly assignedContextKind: BindingContextKind | null = null,
   ) {}
 }
 
@@ -71,7 +73,8 @@ export type BindingContextField =
   | 'source';
 
 export type BindingScopeField =
-  | 'parent'
+  | 'runtimeParent'
+  | 'predecessor'
   | 'bindingContext'
   | 'overrideContext'
   | 'isBoundary'
@@ -81,7 +84,15 @@ export type BindingContextSlotField =
   | 'name'
   | 'target'
   | 'targetType'
+  | 'targetTypeSource'
+  | 'assignmentAccess'
   | 'source';
+
+/** Template-author assignment authority for a modeled runtime scope slot. */
+export const enum BindingContextSlotAssignmentAccessKind {
+  Writable = 'writable',
+  FrameworkManagedReadOnly = 'framework-managed-read-only',
+}
 
 /** Type refinement for a member of a runtime-created scope slot. */
 export class BindingContextSlotMemberType {
@@ -150,6 +161,10 @@ export class BindingContextSlot {
     readonly staticValue: EvaluationValue | null = null,
     /** Member-level type refinements supplied by framework/template semantics. */
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
+    /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
+    readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null = null,
+    /** Member product that supplied the current target type when it differs from the declaration reached by this name. */
+    readonly targetTypeSourceProductHandle: ProductHandle | null = null,
   ) {}
 }
 
@@ -177,6 +192,10 @@ export class BindingContextSlotDraft {
     readonly staticValue: EvaluationValue | null = null,
     /** Member-level type refinements supplied by framework/template semantics. */
     readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
+    /** Assignment authority when framework construction, rather than TypeScript, owns the slot. */
+    readonly assignmentAccessKind: BindingContextSlotAssignmentAccessKind | null = null,
+    /** Member product that supplied the current target type when it differs from the declaration reached by this name. */
+    readonly targetTypeSourceProductHandle: ProductHandle | null = null,
   ) {}
 
   static fromSlot(slot: BindingContextSlot): BindingContextSlotDraft {
@@ -189,6 +208,8 @@ export class BindingContextSlotDraft {
       slot.fieldProvenance,
       slot.staticValue,
       slot.memberTypes,
+      slot.assignmentAccessKind,
+      slot.targetTypeSourceProductHandle,
     );
   }
 
@@ -202,6 +223,8 @@ export class BindingContextSlotDraft {
       this.fieldProvenance,
       this.staticValue,
       this.memberTypes,
+      this.assignmentAccessKind,
+      this.targetTypeSourceProductHandle,
     );
   }
 }
@@ -217,8 +240,8 @@ export class BindingScopeConstructionRequest {
     readonly ownerProductHandle: ProductHandle | null,
     /** Identity that owns the scope, when already materialized. */
     readonly ownerIdentityHandle: IdentityHandle | null,
-    /** Parent scope used by runtime Scope lookup. */
-    readonly parent: BindingScope | null,
+    /** Parent Scope traversed by Aurelia `$parent` and ordinary fallback lookup. */
+    readonly runtimeParent: BindingScope | null,
     /** Binding-context lane for normal name lookup. */
     readonly bindingContextKind: RuntimeBindingContextKind,
     /** Static type of the binding context object itself, if known through the TypeChecker substrate. */
@@ -235,6 +258,8 @@ export class BindingScopeConstructionRequest {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Runtime products and framework semantics that directly caused this Scope to be created. */
     readonly scopeCreators: readonly BindingScopeCreator[] = [],
+    /** Prior immutable product state for the same runtime Scope, when this is a same-level derivation. */
+    readonly predecessor: BindingScope | null = null,
   ) {}
 }
 
@@ -365,8 +390,8 @@ export class BindingScope {
     readonly productHandle: ProductHandle,
     /** Identity for this modeled Scope. */
     readonly identityHandle: IdentityHandle,
-    /** Parent scope used by `$parent` and ordinary lexical fallback. */
-    readonly parent: BindingScope | null,
+    /** Parent Scope traversed by Aurelia `$parent` and ordinary fallback lookup. */
+    readonly runtimeParent: BindingScope | null,
     /** Binding context used for normal view-model/property lookup. */
     readonly bindingContext: BindingContext,
     /** Override context used for template locals and contextual names. */
@@ -381,7 +406,29 @@ export class BindingScope {
     readonly fieldProvenance: readonly FieldProvenance<BindingScopeField>[] = [],
     /** Runtime products and framework semantics that directly caused this Scope to be created. */
     readonly scopeCreators: readonly BindingScopeCreator[] = [],
-  ) {}
+    /** Prior immutable product state for this same runtime Scope. Never used for `$parent` lookup. */
+    readonly predecessor: BindingScope | null = null,
+  ) {
+    if (overrideContext.ownerProductHandle !== productHandle) {
+      throw new Error(`Binding scope '${productHandle}' must own override context '${overrideContext.productHandle}'.`);
+    }
+    if (predecessor == null) {
+      return;
+    }
+    const sameRuntimeParentIdentity = runtimeParent?.identityHandle === predecessor.runtimeParent?.identityHandle;
+    if (
+      identityHandle !== predecessor.identityHandle
+      || bindingContext.identityHandle !== predecessor.bindingContext.identityHandle
+      || bindingContext.contextKind !== predecessor.bindingContext.contextKind
+      || bindingContext.ownerProductHandle !== predecessor.bindingContext.ownerProductHandle
+      || overrideContext.identityHandle !== predecessor.overrideContext.identityHandle
+      || !sameRuntimeParentIdentity
+      || isBoundary !== predecessor.isBoundary
+      || ownerKind !== predecessor.ownerKind
+    ) {
+      throw new Error(`Binding scope '${productHandle}' is not a valid derived state of '${predecessor.productHandle}'.`);
+    }
+  }
 
   /** Runtime `Scope.fromParent` shape for repeat-item contexts. */
   static fromRepeatedItem(input: {
@@ -471,6 +518,8 @@ export class BindingScope {
     readonly ownerProductHandle: ProductHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly base: BindingScope;
+    /** New state of the same runtime parent identity, when an ancestor write advanced that parent. */
+    readonly runtimeParent?: BindingScope | null;
     readonly bindingContextSlots?: readonly BindingContextSlotDraft[];
     readonly overrideContextSlots?: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
@@ -478,10 +527,10 @@ export class BindingScope {
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
-      BindingScopeOwnerKind.SyntheticView,
+      input.base.ownerKind,
       input.ownerProductHandle,
       input.ownerIdentityHandle,
-      input.base.parent,
+      input.runtimeParent === undefined ? input.base.runtimeParent : input.runtimeParent,
       input.base.bindingContext.contextKind,
       input.base.bindingContext.contextType,
       mergeBindingContextSlotDrafts(
@@ -495,16 +544,17 @@ export class BindingScope {
       ),
       input.base.isBoundary,
       input.sourceAddressHandle,
-      mergeBindingScopeCreators(input.base.scopeCreators, input.scopeCreators ?? []),
+      input.scopeCreators ?? [],
+      input.base,
     );
   }
 
-  /** Runtime `Scope.fromParent` shape for `let`-introduced context and override-context slots. */
+  /** Same-runtime-Scope state after a `let` binding updates one of its context objects. */
   static fromLetBindings(input: {
     readonly localKey: string;
     readonly ownerProductHandle: ProductHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
-    readonly parent: BindingScope;
+    readonly base: BindingScope;
     readonly bindingContextSlots: readonly BindingContextSlotDraft[];
     readonly overrideContextSlots: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
@@ -512,24 +562,25 @@ export class BindingScope {
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
-      BindingScopeOwnerKind.LetElement,
+      input.base.ownerKind,
       input.ownerProductHandle,
       input.ownerIdentityHandle,
-      input.parent,
-      input.parent.bindingContext.contextKind,
-      input.parent.bindingContext.contextType,
-      [
-        ...input.parent.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
-        ...input.bindingContextSlots,
-      ],
-      input.parent.overrideContext.contextType,
-      [
-        ...input.parent.overrideContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
-        ...input.overrideContextSlots,
-      ],
-      input.parent.isBoundary,
+      input.base.runtimeParent,
+      input.base.bindingContext.contextKind,
+      input.base.bindingContext.contextType,
+      mergeBindingContextSlotDrafts(
+        input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+        input.bindingContextSlots,
+      ),
+      input.base.overrideContext.contextType,
+      mergeBindingContextSlotDrafts(
+        input.base.overrideContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+        input.overrideContextSlots,
+      ),
+      input.base.isBoundary,
       input.sourceAddressHandle,
       input.scopeCreators ?? [],
+      input.base,
     );
   }
 
@@ -543,7 +594,7 @@ export class BindingScope {
     if (ancestor > 0) {
       while (ancestor > 0 && current != null) {
         ancestor--;
-        current = current.parent;
+        current = current.runtimeParent;
       }
 
       if (current == null) {
@@ -574,7 +625,7 @@ export class BindingScope {
       && current.overrideContext.lookup(name) == null
       && current.bindingContext.lookup(name) == null
     ) {
-      current = current.parent;
+      current = current.runtimeParent;
     }
 
     if (current == null) {
@@ -613,7 +664,7 @@ export class BindingScope {
 
     while (ancestor > 0 && current != null) {
       ancestor--;
-      current = current.parent;
+      current = current.runtimeParent;
     }
 
     if (current == null) {
@@ -632,7 +683,7 @@ export class BindingScope {
   locateBoundary(): BindingScope | null {
     let current: BindingScope | null = this;
     while (current != null && !current.isBoundary) {
-      current = current.parent;
+      current = current.runtimeParent;
     }
     return current;
   }
@@ -665,17 +716,6 @@ export function mergeBindingContextSlotDrafts(
   return [...byName.values()];
 }
 
-export function mergeBindingScopeCreators(
-  base: readonly BindingScopeCreator[],
-  overlay: readonly BindingScopeCreator[],
-): readonly BindingScopeCreator[] {
-  const byKey = new Map<string, BindingScopeCreator>();
-  for (const creator of [...base, ...overlay]) {
-    byKey.set(bindingScopeCreatorKey(creator), creator);
-  }
-  return [...byKey.values()];
-}
-
 /** Stable equality key for framework/runtime facts that directly created or transformed a modeled Scope. */
 export function bindingScopeCreatorKey(creator: BindingScopeCreator): string {
   return [
@@ -683,5 +723,7 @@ export function bindingScopeCreatorKey(creator: BindingScopeCreator): string {
     creator.productHandle,
     creator.conditionPolarity ?? '',
     creator.introducedSlotNames.join(','),
+    creator.assignedSlotNames.join(','),
+    creator.assignedContextKind ?? '',
   ].join('|');
 }

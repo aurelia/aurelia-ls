@@ -6,6 +6,7 @@ import { TypeScriptDeclarationIdentity } from '../kernel/identity.js';
 import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
+  BindingContextKind,
   BindingScope,
   BindingScopeConditionPolarity,
   BindingScopeCreatorKind,
@@ -13,6 +14,7 @@ import {
   type BindingContextSlot,
   type BindingScopeCreator,
 } from '../configuration/scope.js';
+import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeMemberKind,
@@ -30,7 +32,6 @@ import {
   TypeSystemOverlaySourceBuilder,
   type TypeSystemOverlaySource,
 } from '../type-system/overlay.js';
-import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
@@ -46,6 +47,7 @@ import {
 } from '../type-system/value-converter-call-surface.js';
 import {
   appendTemplateTypeSystemOverlayScopeBlock,
+  TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS,
   templateTypeSystemOverlayQuotedStringLiteral,
   templateTypeSystemOverlayIdentifierName,
   type TemplateTypeSystemOverlayConditionLayer,
@@ -53,7 +55,7 @@ import {
   type TemplateTypeSystemOverlayEventMemberType,
   type TemplateTypeSystemOverlayExpressionPart,
   type TemplateTypeSystemOverlayLetEffect,
-  type TemplateTypeSystemOverlayPromiseResultLayer,
+  type TemplateTypeSystemOverlayRepeatLayer,
   type TemplateTypeSystemOverlayRuntimeAssignmentLocal,
   type TemplateTypeSystemOverlayScopeAlias,
   type TemplateTypeSystemOverlayScopeLayer,
@@ -76,6 +78,7 @@ import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
 import {
   IteratorBindingScopeEffect,
   LetBindingScopeEffect,
+  LetBindingTargetContext,
 } from './runtime-binding.js';
 import { TemplateProductDetails } from './product-details.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
@@ -105,6 +108,7 @@ import {
 import { templateControllerSwitchCaseBranch } from './template-controller-switch-branch.js';
 import {
   bindingScopesForTemplateExpressionParse,
+  bindingBehaviorEvaluationForTemplateExpression,
   RuntimeBindingSourceContextProjectionSelectionKind,
   runtimeExpressionBindingsForTemplateExpressionParse,
   runtimeExpressionBindingsForTemplateExpressionParseInScope,
@@ -171,7 +175,10 @@ interface SwitchCaseBranchExpressions {
 
 export interface TemplateTypeSystemOverlayExpressionProbe {
   readonly localName: string;
-  readonly expressionText: string;
+  /** Exact authored expression text before Aurelia-specific overlay lowering. */
+  readonly authoredExpressionText: string | null;
+  /** Generated TypeScript expression text emitted into the overlay. */
+  readonly overlayExpressionText: string;
   readonly semanticProductHandle: ProductHandle | null;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly sourceStart: number | null;
@@ -224,23 +231,43 @@ interface TemplateTypeSystemOverlayBuildFrame {
 
 class TemplateTypeSystemOverlayAliasReplayCursor {
   private currentBindingContextAlias: string | null = '$this';
+  private currentOverrideContextLocals: string[] = [];
   private currentParentBindingContextAlias: string | null = null;
+  private currentParentNamedLookupAlias: string | null = null;
 
   parentAlias(): TemplateTypeSystemOverlayScopeAlias | null {
-    return this.currentBindingContextAlias == null
+    const bindingContextExpression = this.currentBindingContextAlias;
+    const namedLookupExpression = this.currentScopeNamedLookupAlias();
+    return bindingContextExpression == null || namedLookupExpression == null
       ? null
       : {
-        name: '$parent',
-        expression: this.currentBindingContextAlias,
-        parentExpression: this.currentParentBindingContextAlias,
+        bindingContextExpression,
+        namedLookupExpression,
+        parentBindingContextExpression: this.currentParentBindingContextAlias,
+        parentNamedLookupExpression: this.currentParentNamedLookupAlias,
       };
   }
 
-  enterBindingContextAlias(alias: string | null): void {
+  enterBindingContextAlias(alias: string | null, overrideContextLocals: readonly string[] = []): void {
     this.currentParentBindingContextAlias = this.currentBindingContextAlias == null
       ? null
       : '$parent';
+    this.currentParentNamedLookupAlias = this.currentScopeNamedLookupAlias() == null
+      ? null
+      : TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS;
     this.currentBindingContextAlias = alias;
+    this.currentOverrideContextLocals = [...overrideContextLocals];
+  }
+
+  replaceBindingContextAlias(alias: string | null): void {
+    this.currentBindingContextAlias = alias;
+  }
+
+  addOverrideContextAliases(names: readonly string[]): void {
+    this.currentOverrideContextLocals = [...new Set([
+      ...this.currentOverrideContextLocals,
+      ...names.filter(isIdentifierName),
+    ])];
   }
 
   enterSyntheticView(scope: BindingScope): void {
@@ -248,6 +275,29 @@ class TemplateTypeSystemOverlayAliasReplayCursor {
       this.enterBindingContextAlias('$this');
     }
   }
+
+  private currentScopeNamedLookupAlias(): string | null {
+    return namedScopeLookupAliasExpression(
+      this.currentBindingContextAlias,
+      this.currentOverrideContextLocals,
+    );
+  }
+}
+
+function namedScopeLookupAliasExpression(
+  bindingContextAlias: string | null,
+  overrideContextLocals: readonly string[],
+): string | null {
+  if (bindingContextAlias == null) {
+    return null;
+  }
+  if (overrideContextLocals.length === 0) {
+    return bindingContextAlias;
+  }
+  const overrideType = `{ ${overrideContextLocals
+    .map((name) => `readonly ${name}: typeof ${name}`)
+    .join('; ')} }`;
+  return `(${bindingContextAlias} as unknown as Omit<typeof ${bindingContextAlias}, keyof ${overrideType}> & ${overrideType})`;
 }
 
 /**
@@ -336,7 +386,7 @@ export class TemplateTypeSystemOverlayBuilder {
   ): void {
     let index = 0;
     for (const parse of templateExpressionParsesForResource(frame.resource)) {
-      if (this.expressionParseIsTemplateControllerLocalTarget(frame.resource, parse)) {
+      if (this.expressionParseIsTargetToSourceOnlyBindingTarget(frame.resource, parse)) {
         continue;
       }
       for (const expressionSpan of expressionSpansForOverlay(parse)) {
@@ -373,6 +423,7 @@ export class TemplateTypeSystemOverlayBuilder {
     index: number,
   ): number {
     const expression = this.copyRuntimeSourceExpression(
+      frame.resource,
       expressionSpan.ast,
       parse.productHandle,
       scope,
@@ -425,7 +476,8 @@ export class TemplateTypeSystemOverlayBuilder {
     }
     frame.probes.push({
       localName,
-      expressionText: expression.text,
+      authoredExpressionText: this.expressions.sourceSlice(expressionSpan.span, parse.productHandle)?.text ?? null,
+      overlayExpressionText: expression.text,
       semanticProductHandle: projectionSemanticProductHandle(expression),
       sourceAddressHandle: projectionSourceAddressHandle(expression, expressionSpan.span),
       sourceStart: projectionSourceStart(expression, expressionSpan.span),
@@ -447,26 +499,13 @@ export class TemplateTypeSystemOverlayBuilder {
       .appendLine('__au_template.call($vm);');
   }
 
-  private expressionParseIsTemplateControllerLocalTarget(
+  private expressionParseIsTargetToSourceOnlyBindingTarget(
     resource: TemplateResourceRuntimeAnalysisEmission,
     parse: TemplateExpressionParse,
   ): boolean {
     const binding = templateInstructionForExpressionParse(resource, parse);
-    if (!(binding instanceof PropertyBindingInstruction) || binding.bindingMode !== TemplateBindingMode.FromView) {
-      return false;
-    }
-    const owner = templateControllerInstructionOwningBinding(resource, binding.productHandle);
-    if (owner == null) {
-      return false;
-    }
-    const ownerSemantics = frameworkTemplateControllerSemanticsForName(owner.controllerName);
-    if (
-      ownerSemantics?.flowKind !== BuiltInTemplateControllerFlowKind.PromiseFulfilled
-      && ownerSemantics?.flowKind !== BuiltInTemplateControllerFlowKind.PromiseRejected
-    ) {
-      return false;
-    }
-    return binding.targetProperty === templateControllerValueProperty(owner);
+    return binding instanceof PropertyBindingInstruction
+      && binding.bindingMode === TemplateBindingMode.FromView;
   }
 
   private appendRootAliases(
@@ -490,7 +529,7 @@ export class TemplateTypeSystemOverlayBuilder {
     slot: BindingContextSlot,
     overlayFileName: string,
   ): string | null {
-    const member = this.runtimeAssignmentTargetMember(slot);
+    const member = bindingContextSlotTargetTypeSourceMember(this.store, slot);
     if (member != null) {
       return checkerMemberValueTypeExpression(member, { generatedFileName: overlayFileName });
     }
@@ -600,6 +639,7 @@ export class TemplateTypeSystemOverlayBuilder {
   }
 
   private copyRuntimeSourceExpression(
+    resource: TemplateResourceRuntimeAnalysisEmission,
     expression: ExpressionAstNode,
     expressionProductHandle: ProductHandle,
     ambientScope: BindingScope,
@@ -623,6 +663,11 @@ export class TemplateTypeSystemOverlayBuilder {
       localKey,
       sourceScope: ambientScope,
       sourceExpressions: projectors.sourceExpressions,
+      bindingBehaviorForBinding: (binding) => bindingBehaviorEvaluationForTemplateExpression(
+        resource,
+        expressionProductHandle,
+        binding,
+      ),
     });
     if (selection.kind === RuntimeBindingSourceContextProjectionSelectionKind.Open) {
       return TemplateTypeSystemOverlayExpressionProjection.unsupported(
@@ -663,6 +708,7 @@ export class TemplateTypeSystemOverlayBuilder {
   }
 
   private copyRuntimeSourceExpressionForBinding(
+    resource: TemplateResourceRuntimeAnalysisEmission,
     expression: ExpressionAstNode,
     expressionProductHandle: ProductHandle,
     ambientScope: BindingScope,
@@ -673,6 +719,7 @@ export class TemplateTypeSystemOverlayBuilder {
     localKey: string,
   ): TemplateTypeSystemOverlayExpressionProjection {
     return this.copyRuntimeSourceExpression(
+      resource,
       expression,
       expressionProductHandle,
       ambientScope,
@@ -713,17 +760,30 @@ export class TemplateTypeSystemOverlayBuilder {
 
     const parts: TemplateTypeSystemOverlayExpressionPart[] = [textPart('(() => {\n')];
     let parentDepth = this.expressionScopeAliases(ambientScope).parentBindingContextDepth;
+    let currentNamedLookupExpression = namedScopeLookupAliasExpression(
+      '$this',
+      ambientScope.overrideContext.slots.map((slot) => slot.name).filter(isIdentifierName),
+    ) ?? '$this';
     relation.tail.forEach((scope, index) => {
       const parentLocal = `__au_source_parent_${index}`;
+      const parentLookupLocal = `__au_source_parent_lookup_${index}`;
       const parentParentLocal = parentDepth > 0 ? `__au_source_parent_${index}_parent` : null;
+      const parentParentLookupLocal = parentDepth > 0 ? `__au_source_parent_lookup_${index}_parent` : null;
       parts.push(textPart(`const ${parentLocal} = $this;\n`));
+      parts.push(textPart(`const ${parentLookupLocal} = ${currentNamedLookupExpression};\n`));
       if (parentParentLocal != null) {
         parts.push(textPart(`const ${parentParentLocal} = $parent;\n`));
+      }
+      if (parentParentLookupLocal != null) {
+        parts.push(textPart(`const ${parentParentLookupLocal} = ${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS};\n`));
       }
       parts.push(textPart('{\n'));
       parts.push(textPart(parentParentLocal == null
         ? `const $parent = ${parentLocal};\n`
         : `const $parent = ${parentLocal} as typeof ${parentLocal} & { readonly $parent: typeof ${parentParentLocal} };\n`));
+      parts.push(textPart(parentParentLookupLocal == null
+        ? `const ${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS} = ${parentLookupLocal};\n`
+        : `const ${TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS} = ${parentLookupLocal} as typeof ${parentLookupLocal} & { readonly $parent: typeof ${parentParentLookupLocal} };\n`));
       const locals = this.typedBindingContextLocals(scope, overlayFileName);
       for (const local of locals) {
         parts.push(textPart(local.typeExpression == null
@@ -733,6 +793,7 @@ export class TemplateTypeSystemOverlayBuilder {
       parts.push(textPart(locals.length === 0
         ? 'const $this = {};\n'
         : `const $this = { ${locals.map((local) => local.name).join(', ')} };\n`));
+      currentNamedLookupExpression = '$this';
       parentDepth += 1;
     });
     parts.push(textPart('return '), ...expression.parts, textPart(';\n'));
@@ -779,6 +840,25 @@ export class TemplateTypeSystemOverlayBuilder {
     const layers: TemplateTypeSystemOverlayScopeLayer[] = [];
     const aliases = new TemplateTypeSystemOverlayAliasReplayCursor();
     for (const current of templateScopeReplayChain(scope)) {
+      if (current.predecessor != null) {
+        const stateLayers = this.creatorLayersForScope(
+          resource,
+          current,
+          skipped,
+          parse,
+          baseExpressionContext,
+          projectors,
+          overlayFileName,
+          aliases.parentAlias(),
+        );
+        if (stateLayers == null) {
+          return null;
+        }
+        layers.push(...stateLayers);
+        this.updateAliasesForDerivedState(aliases, stateLayers);
+        continue;
+      }
+
       if (current.ownerKind === BindingScopeOwnerKind.RepeatedItem) {
         const effect = repeatEffectForScope(resource, current);
         if (effect == null) {
@@ -793,7 +873,7 @@ export class TemplateTypeSystemOverlayBuilder {
         const repeat = this.repeatSource(
           resource,
           effect,
-          current.parent,
+          current.runtimeParent,
           projectors,
           baseExpressionContext,
           overlayFileName,
@@ -813,53 +893,27 @@ export class TemplateTypeSystemOverlayBuilder {
           kind: 'repeat',
           declaration: repeat.declaration,
           iterable: repeat.iterable,
+          previousKind: repeatPreviousOverlayKind(current),
           currentAliasExpression,
           parentAlias: aliases.parentAlias(),
         });
-        aliases.enterBindingContextAlias(currentAliasExpression);
         const overrideLocals = overlayContextSlotLocals(current, this.store, overlayFileName);
-        if (overrideLocals.length > 0) {
+        const separatelyDeclaredOverrideLocals = overrideLocals.filter((local) => local.name !== '$previous');
+        if (separatelyDeclaredOverrideLocals.length > 0) {
           layers.push({
             kind: 'context-slots',
-            locals: overrideLocals,
+            locals: separatelyDeclaredOverrideLocals,
           });
         }
-        continue;
-      }
-
-      if (current.ownerKind === BindingScopeOwnerKind.LetElement) {
-        const effects = this.letEffectsForScope(resource, current);
-        if (effects.length === 0) {
-          skipped.push(skippedTemplateTypeSystemOverlayExpression(
-            TemplateTypeSystemOverlaySkippedReason.MissingLetScopeEffect,
-            parse.productHandle,
-            current.sourceAddressHandle,
-            'Let scope did not retain the let binding scope effects that created it.',
-          ));
-          return null;
-        }
-        const letEffects = this.letSources(
-          resource,
-          effects,
-          skipped,
-          parse,
-          current.parent,
-          projectors,
-          baseExpressionContext,
-          overlayFileName,
+        aliases.enterBindingContextAlias(
+          currentAliasExpression == null ? null : '$this',
+          overrideLocals.map((local) => local.name),
         );
-        if (letEffects == null) {
-          return null;
-        }
-        layers.push({
-          kind: 'let',
-          effects: letEffects,
-        });
         continue;
       }
 
       if (current.ownerKind === BindingScopeOwnerKind.SyntheticView) {
-        const syntheticLayers = this.syntheticViewLayers(
+        const syntheticLayers = this.creatorLayersForScope(
           resource,
           current,
           skipped,
@@ -894,6 +948,36 @@ export class TemplateTypeSystemOverlayBuilder {
     return layers;
   }
 
+  private updateAliasesForDerivedState(
+    aliases: TemplateTypeSystemOverlayAliasReplayCursor,
+    layers: readonly TemplateTypeSystemOverlayScopeLayer[],
+  ): void {
+    for (const layer of layers) {
+      if (layer.kind === 'let') {
+        if (layer.effects.some((effect) => effect.targetContext === LetBindingTargetContext.BindingContext)) {
+          aliases.replaceBindingContextAlias('$this');
+        }
+        aliases.addOverrideContextAliases(layer.effects
+          .filter((effect) => effect.targetContext === LetBindingTargetContext.OverrideContext)
+          .map((effect) => effect.target));
+        continue;
+      }
+      if (layer.kind === 'typed-binding-context') {
+        aliases.replaceBindingContextAlias('$this');
+        continue;
+      }
+      if (layer.kind === 'runtime-assignment') {
+        if (layer.bindingContextLocalNames.length > 0) {
+          aliases.replaceBindingContextAlias('$this');
+        }
+        const bindingContextNames = new Set(layer.bindingContextLocalNames);
+        aliases.addOverrideContextAliases(layer.locals
+          .map((local) => local.name)
+          .filter((name) => !bindingContextNames.has(name)));
+      }
+    }
+  }
+
   private repeatSource(
     resource: TemplateResourceRuntimeAnalysisEmission,
     effect: IteratorBindingScopeEffect,
@@ -918,6 +1002,7 @@ export class TemplateTypeSystemOverlayBuilder {
       ? null
       : resource.runtimeAnalysis.runtimeRendering.readBinding(effect.binding.productHandle);
     const iterable = this.copyRuntimeSourceExpressionForBinding(
+      resource,
       parse.result.ast.iterable,
       parse.productHandle,
       ambientScope,
@@ -994,6 +1079,7 @@ export class TemplateTypeSystemOverlayBuilder {
       result.push({
         target: effect.target,
         expression,
+        targetContext: effect.targetContext,
       });
     }
     return result;
@@ -1008,7 +1094,9 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayExpressionPart[] | null {
     if (effect.expressionProductHandle == null) {
-      return null;
+      return effect.literalValue == null
+        ? null
+        : [textPart(templateTypeSystemOverlayQuotedStringLiteral(effect.literalValue))];
     }
     const parse = readTemplateExpressionParse(this.store, effect.expressionProductHandle);
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
@@ -1018,6 +1106,7 @@ export class TemplateTypeSystemOverlayBuilder {
     const source = ast == null
       ? null
       : this.copyRuntimeSourceExpressionForBinding(
+          resource,
           ast,
           effect.expressionProductHandle,
           ambientScope,
@@ -1030,7 +1119,7 @@ export class TemplateTypeSystemOverlayBuilder {
     return source == null ? null : overlayExpressionParts(source);
   }
 
-  private syntheticViewLayers(
+  private creatorLayersForScope(
     resource: TemplateResourceRuntimeAnalysisEmission,
     scope: BindingScope,
     skipped: TemplateTypeSystemOverlaySkippedExpression[],
@@ -1060,12 +1149,22 @@ export class TemplateTypeSystemOverlayBuilder {
       }
       layers.push(...creator);
     }
+    if (
+      layers.length === 0
+      && scope.scopeCreators.length > 0
+      && scope.scopeCreators.every((creator) =>
+        creator.creatorKind === BindingScopeCreatorKind.RuntimeAssignment
+        && creator.assignedSlotNames.length === 0
+      )
+    ) {
+      return [];
+    }
     if (layers.length === 0) {
       skipped.push(skippedTemplateTypeSystemOverlayExpression(
         TemplateTypeSystemOverlaySkippedReason.MissingSyntheticScopeCreator,
         parse.productHandle,
         scope.sourceAddressHandle,
-        'Synthetic-view scope did not retain representable creator products.',
+        'Binding scope state did not retain representable creator products.',
       ));
       return null;
     }
@@ -1084,7 +1183,7 @@ export class TemplateTypeSystemOverlayBuilder {
     overlayFileName: string,
     parentAlias: TemplateTypeSystemOverlayScopeAlias | null,
   ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
-    const parentScope = scope.parent ?? resource.runtimeAnalysis.scopes.rootScope;
+    const parentScope = scope.predecessor ?? scope.runtimeParent ?? resource.runtimeAnalysis.scopes.rootScope;
     // Source effects create same-level scope facts; later controller branches may read them, but effects cannot read themselves.
     switch (creator.creatorKind) {
       case BindingScopeCreatorKind.RuntimeBindingScopeEffect:
@@ -1144,19 +1243,6 @@ export class TemplateTypeSystemOverlayBuilder {
           overlayFileName,
           parentAlias,
         );
-      case BindingScopeCreatorKind.TemplateControllerPromiseResult:
-        return this.templateControllerPromiseResultCreatorLayer(
-          resource,
-          scope,
-          creator,
-          skipped,
-          parse,
-          parentScope,
-          projectors,
-          baseExpressionContext,
-          overlayFileName,
-          sourceAddressHandle,
-        );
     }
 
     skipped.push(skippedTemplateTypeSystemOverlayExpression(
@@ -1173,11 +1259,16 @@ export class TemplateTypeSystemOverlayBuilder {
     creator: BindingScopeCreator,
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayScopeLayer[] {
-    return creator.introducedSlotNames.length === 0
-      ? []
-      : [{
+    if (creator.assignedSlotNames.length === 0) {
+      return [];
+    }
+    const locals = this.runtimeAssignmentLocals(scope, creator, overlayFileName);
+    return [{
         kind: 'runtime-assignment',
-        locals: this.runtimeAssignmentLocals(scope, creator, overlayFileName),
+        locals,
+        bindingContextLocalNames: creator.assignedContextKind === BindingContextKind.Override
+          ? []
+          : locals.map((local) => local.name),
       }];
   }
 
@@ -1295,33 +1386,6 @@ export class TemplateTypeSystemOverlayBuilder {
     }];
   }
 
-  private templateControllerPromiseResultCreatorLayer(
-    resource: TemplateResourceRuntimeAnalysisEmission,
-    scope: BindingScope,
-    creator: BindingScopeCreator,
-    skipped: TemplateTypeSystemOverlaySkippedExpression[],
-    parse: TemplateExpressionParse,
-    ambientScope: BindingScope | null,
-    projectors: OverlayExpressionSourceProjectors,
-    baseExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
-    overlayFileName: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): readonly TemplateTypeSystemOverlayScopeLayer[] | null {
-    const layer = this.templateControllerPromiseResultLayer(
-      resource,
-      scope,
-      creator,
-      skipped,
-      parse,
-      ambientScope,
-      projectors,
-      baseExpressionContext,
-      overlayFileName,
-      sourceAddressHandle,
-    );
-    return layer == null ? null : [layer];
-  }
-
   private runtimeBindingScopeEffectCreatorLayer(
     resource: TemplateResourceRuntimeAnalysisEmission,
     scope: BindingScope,
@@ -1360,9 +1424,24 @@ export class TemplateTypeSystemOverlayBuilder {
         kind: 'repeat',
         declaration: repeat.declaration,
         iterable: repeat.iterable,
+        previousKind: repeatPreviousOverlayKind(scope),
         currentAliasExpression: templateRepeatScopeCurrentAliasExpression(scope),
-        parentAlias: { name: '$parent', expression: '$this', parentExpression: null },
-      }, ...contextSlotLayersForScope(scope, this.store, overlayFileName)];
+        parentAlias: {
+          bindingContextExpression: '$this',
+          namedLookupExpression: namedScopeLookupAliasExpression(
+            '$this',
+            ambientScope?.overrideContext.slots.map((slot) => slot.name).filter(isIdentifierName) ?? [],
+          ) ?? '$this',
+          parentBindingContextExpression: ambientScope != null
+            && this.expressionScopeAliases(ambientScope).parentBindingContextDepth > 0
+            ? '$parent'
+            : null,
+          parentNamedLookupExpression: ambientScope != null
+            && this.expressionScopeAliases(ambientScope).parentBindingContextDepth > 0
+            ? TEMPLATE_TYPE_SYSTEM_OVERLAY_PARENT_NAMED_LOOKUP_ALIAS
+            : null,
+        },
+      }, ...contextSlotLayersForScope(scope, this.store, overlayFileName, ['$previous'])];
     }
     if (scopeEffect instanceof LetBindingScopeEffect) {
       const letEffects = this.letSources(
@@ -1438,17 +1517,13 @@ export class TemplateTypeSystemOverlayBuilder {
       }];
     }
     if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.Promise) {
-      return scope.scopeCreators.some((candidate) =>
-        candidate.creatorKind === BindingScopeCreatorKind.TemplateControllerPromiseResult
-      )
-        ? []
-        : [{
-          kind: 'binding-context',
-          expression: null,
-          nonNullishExpression: false,
-          locals: [],
-          parentAlias,
-        }];
+      return [{
+        kind: 'binding-context',
+        expression: null,
+        nonNullishExpression: false,
+        locals: [],
+        parentAlias,
+      }];
     }
     skipped.push(skippedTemplateTypeSystemOverlayExpression(
       TemplateTypeSystemOverlaySkippedReason.UnsupportedSyntheticScope,
@@ -1613,89 +1688,6 @@ export class TemplateTypeSystemOverlayBuilder {
     };
   }
 
-  private templateControllerPromiseResultLayer(
-    resource: TemplateResourceRuntimeAnalysisEmission,
-    scope: BindingScope,
-    creator: BindingScopeCreator,
-    skipped: TemplateTypeSystemOverlaySkippedExpression[],
-    parse: TemplateExpressionParse,
-    ambientScope: BindingScope | null,
-    projectors: OverlayExpressionSourceProjectors,
-    baseExpressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
-    overlayFileName: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): TemplateTypeSystemOverlayPromiseResultLayer | null {
-    const instruction = templateInstructionForProductHandle(resource, creator.productHandle);
-    if (!(instruction instanceof HydrateTemplateControllerInstruction)) {
-      skipped.push(skippedTemplateTypeSystemOverlayExpression(
-        TemplateTypeSystemOverlaySkippedReason.UnsupportedSyntheticScope,
-        parse.productHandle,
-        creator.sourceAddressHandle ?? sourceAddressHandle,
-        `Promise-result scope creator '${creator.productHandle}' did not resolve to a hydrate-template-controller instruction.`,
-      ));
-      return null;
-    }
-    const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
-    const resultKind = semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseFulfilled
-      ? 'fulfilled'
-      : semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseRejected
-        ? 'rejected'
-        : null;
-    if (resultKind == null) {
-      skipped.push(skippedTemplateTypeSystemOverlayExpression(
-        TemplateTypeSystemOverlaySkippedReason.UnsupportedSyntheticScope,
-        parse.productHandle,
-        instruction.sourceAddressHandle,
-        `Template-controller '${instruction.controllerName}' is not representable as a promise result yet.`,
-      ));
-      return null;
-    }
-    const promiseInstruction = this.promiseValueScopeInstruction(resource, scope);
-    const promise = promiseInstruction == null
-      ? null
-      : ambientScope == null
-        ? null
-        : this.templateControllerValueSource(
-            resource,
-            promiseInstruction,
-            ambientScope,
-            projectors,
-            baseExpressionContext,
-            overlayFileName,
-          );
-    if (promise == null) {
-      skipped.push(skippedTemplateTypeSystemOverlayExpression(
-        TemplateTypeSystemOverlaySkippedReason.MissingSyntheticScopeCondition,
-        parse.productHandle,
-        instruction.sourceAddressHandle,
-        `Promise-result template-controller '${instruction.controllerName}' did not have a readable parent promise expression.`,
-      ));
-      return null;
-    }
-    return {
-      kind: 'promise-result',
-      promise,
-      resultKind,
-      locals: templateScopeBindingContextLocalNames(scope),
-    };
-  }
-
-  private promiseValueScopeInstruction(
-    resource: TemplateResourceRuntimeAnalysisEmission,
-    scope: BindingScope,
-  ): HydrateTemplateControllerInstruction | null {
-    const creator = scope.scopeCreators.find((candidate) =>
-      candidate.creatorKind === BindingScopeCreatorKind.TemplateControllerValueScope
-    ) ?? null;
-    if (creator == null) {
-      return null;
-    }
-    const instruction = templateInstructionForProductHandle(resource, creator.productHandle);
-    return instruction instanceof HydrateTemplateControllerInstruction
-      ? instruction
-      : null;
-  }
-
   private templateControllerConditionSource(
     resource: TemplateResourceRuntimeAnalysisEmission,
     instruction: HydrateTemplateControllerInstruction,
@@ -1718,6 +1710,7 @@ export class TemplateTypeSystemOverlayBuilder {
       return null;
     }
     const source = ast == null ? null : this.copyRuntimeSourceExpression(
+      resource,
       ast,
       expressionProductHandle,
       ambientScope,
@@ -1884,29 +1877,32 @@ export class TemplateTypeSystemOverlayBuilder {
     creator: BindingScopeCreator,
     overlayFileName: string,
   ): readonly TemplateTypeSystemOverlayRuntimeAssignmentLocal[] {
-    const introduced = new Set(creator.introducedSlotNames);
-    return creator.introducedSlotNames
+    const assigned = new Set(creator.assignedSlotNames);
+    return creator.assignedSlotNames
       .filter(isIdentifierName)
       .map((name) => ({
         name,
-        typeExpression: this.runtimeAssignmentTypeExpression(scope, name, introduced, overlayFileName),
+        typeExpression: this.runtimeAssignmentTypeExpression(scope, creator, name, assigned, overlayFileName),
       }));
   }
 
   private runtimeAssignmentTypeExpression(
     scope: BindingScope,
+    creator: BindingScopeCreator,
     name: string,
-    introduced: ReadonlySet<string>,
+    assigned: ReadonlySet<string>,
     overlayFileName: string,
   ): string | null {
-    const slot = scope.bindingContext.lookup(name) ?? scope.overrideContext.lookup(name);
+    const slot = creator.assignedContextKind === BindingContextKind.Override
+      ? scope.overrideContext.lookup(name)
+      : scope.bindingContext.lookup(name);
     if (slot?.targetType == null) {
       return null;
     }
     for (const candidate of templateScopeVisibleSlots(scope)) {
       if (
         candidate.name !== name
-        && !introduced.has(candidate.name)
+        && !assigned.has(candidate.name)
         && isIdentifierName(candidate.name)
         && candidate.targetType != null
         && sameCheckerTypeReference(candidate.targetType, slot.targetType)
@@ -1915,7 +1911,7 @@ export class TemplateTypeSystemOverlayBuilder {
         return `typeof ${candidate.name}`;
       }
     }
-    const targetMember = this.runtimeAssignmentTargetMember(slot);
+    const targetMember = bindingContextSlotTargetTypeSourceMember(this.store, slot);
     if (targetMember != null) {
       return checkerMemberValueTypeExpression(targetMember, { generatedFileName: overlayFileName });
     }
@@ -1951,12 +1947,6 @@ export class TemplateTypeSystemOverlayBuilder {
           name: member.name,
           typeExpression: checkerMemberValueTypeExpression(member, { generatedFileName: overlayFileName }),
         }));
-  }
-
-  private runtimeAssignmentTargetMember(slot: BindingContextSlot): CheckerTypeMember | null {
-    return slot.targetProductHandle == null
-      ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
   }
 
   private viewModelImport(
@@ -2107,21 +2097,14 @@ function contextSlotLayersForScope(
   scope: BindingScope,
   store: KernelStore,
   overlayFileName: string,
+  excludedNames: readonly string[] = [],
 ): readonly TemplateTypeSystemOverlayScopeLayer[] {
-  const locals = overlayContextSlotLocals(scope, store, overlayFileName);
+  const excluded = new Set(excludedNames);
+  const locals = overlayContextSlotLocals(scope, store, overlayFileName)
+    .filter((local) => !excluded.has(local.name));
   return locals.length === 0
     ? []
     : [{ kind: 'context-slots', locals }];
-}
-
-function templateControllerInstructionOwningBinding(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  bindingProductHandle: ProductHandle,
-): HydrateTemplateControllerInstruction | null {
-  return resource.compilation.compiledTemplate.instructions.find((candidate) =>
-    candidate instanceof HydrateTemplateControllerInstruction
-    && candidate.bindingInstructionProductHandles.includes(bindingProductHandle)
-  ) as HydrateTemplateControllerInstruction | undefined ?? null;
 }
 
 function overlayContextSlotLocals(
@@ -2178,6 +2161,16 @@ function repeatOverrideSlotValueKind(
     default:
       return null;
   }
+}
+
+function repeatPreviousOverlayKind(
+  scope: BindingScope,
+): TemplateTypeSystemOverlayRepeatLayer['previousKind'] {
+  const previous = scope.overrideContext.lookup('$previous');
+  if (previous?.targetType?.display === 'undefined') {
+    return 'undefined';
+  }
+  return previous?.targetType == null ? 'unknown' : 'element-or-undefined';
 }
 
 function isIdentifierName(value: string): boolean {

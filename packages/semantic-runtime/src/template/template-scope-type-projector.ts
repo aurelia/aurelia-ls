@@ -4,6 +4,7 @@ import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js
 import type { SourceSpan } from '../expression/source-span.js';
 import {
   BindingContextSlotMemberType,
+  BindingContextSlotAssignmentAccessKind,
   BindingContextSlotDraft,
   BindingScope,
 } from '../configuration/scope.js';
@@ -63,11 +64,10 @@ import { TemplateProductDetails } from './product-details.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
 import { readTemplateExpressionParse } from './expression-parse-product.js';
 import {
-  TemplateControllerPromiseResultKind,
+  TemplateControllerPromiseSettlementKind,
   type TemplateControllerPromiseState,
 } from './template-controller-flow-state.js';
 import {
-  type TemplateControllerValueTarget,
   templateControllerValueExpressionProductHandle,
   templateControllerStaticValue,
 } from './template-controller-value.js';
@@ -85,6 +85,8 @@ import {
   resolveCheckerDomNodeType,
 } from '../type-system/dom-node-type.js';
 import { checkerPrimitiveLiteralType } from '../type-system/checker-primitive-types.js';
+import { CheckerExpressionTypeSynthesizer } from '../type-system/expression-type-synthesis.js';
+import { checkerBackedUnionTypeForReferences } from '../type-system/checker-type-union.js';
 
 interface TemplateEventScopeInstruction {
   readonly node: HtmlNodeReference;
@@ -116,12 +118,14 @@ export class TemplateIteratorScopeProjection {
 
 export class TemplateScopeTypeProjector {
   private readonly asyncTypeProjector: CheckerAsyncTypeProjector;
+  private readonly typeSynthesizer: CheckerExpressionTypeSynthesizer;
 
   constructor(
     private readonly store: KernelStore,
     private readonly typeProjector: CheckerTypeProjector,
   ) {
     this.asyncTypeProjector = new CheckerAsyncTypeProjector(store, typeProjector);
+    this.typeSynthesizer = new CheckerExpressionTypeSynthesizer(typeProjector);
   }
 
   readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
@@ -142,24 +146,79 @@ export class TemplateScopeTypeProjector {
       [],
       null,
       this.listenerEventMemberTypes(input, instruction, localSuffix),
+      BindingContextSlotAssignmentAccessKind.Writable,
     );
   }
 
   repeatOverrideSlots(
     input: TemplateScopeConstructionRequest,
+    localSuffix: string,
     sourceAddressHandle: AddressHandle | null,
     elementType: CheckerTypeReference | null,
+    contextual: boolean | null,
   ): readonly BindingContextSlotDraft[] {
     return [
-      new BindingContextSlotDraft('$index', null, null, this.primitiveReference(input, 'number', '$index', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$odd', null, null, this.primitiveReference(input, 'boolean', '$odd', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$even', null, null, this.primitiveReference(input, 'boolean', '$even', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$first', null, null, this.primitiveReference(input, 'boolean', '$first', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$middle', null, null, this.primitiveReference(input, 'boolean', '$middle', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$last', null, null, this.primitiveReference(input, 'boolean', '$last', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$length', null, null, this.primitiveReference(input, 'number', '$length', sourceAddressHandle), sourceAddressHandle),
-      new BindingContextSlotDraft('$previous', null, null, elementType, sourceAddressHandle),
+      new BindingContextSlotDraft('$index', null, null, this.primitiveReference(input, localSuffix, 'number', '$index', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$odd', null, null, this.primitiveReference(input, localSuffix, 'boolean', '$odd', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$even', null, null, this.primitiveReference(input, localSuffix, 'boolean', '$even', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$first', null, null, this.primitiveReference(input, localSuffix, 'boolean', '$first', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$middle', null, null, this.primitiveReference(input, localSuffix, 'boolean', '$middle', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$last', null, null, this.primitiveReference(input, localSuffix, 'boolean', '$last', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft('$length', null, null, this.primitiveReference(input, localSuffix, 'number', '$length', sourceAddressHandle), sourceAddressHandle, [], null, [], BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly),
+      new BindingContextSlotDraft(
+        '$previous',
+        null,
+        null,
+        this.repeatPreviousType(input, localSuffix, elementType, contextual, sourceAddressHandle),
+        sourceAddressHandle,
+        [],
+        null,
+        [],
+        BindingContextSlotAssignmentAccessKind.FrameworkManagedReadOnly,
+      ),
     ];
+  }
+
+  private repeatPreviousType(
+    input: TemplateScopeConstructionRequest,
+    localSuffix: string,
+    elementType: CheckerTypeReference | null,
+    contextual: boolean | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const undefinedType = this.literalTypeReference(
+      input,
+      undefined,
+      `${input.localKey}:scope:${localSuffix}:repeat:$previous:undefined`,
+      sourceAddressHandle,
+    );
+    if (contextual === false || elementType == null) {
+      return contextual === false ? undefinedType : elementType;
+    }
+    if (undefinedType == null) {
+      return elementType;
+    }
+    const checkerUnion = checkerBackedUnionTypeForReferences(this.store, [elementType, undefinedType]);
+    if (checkerUnion != null) {
+      return this.typeProjector.ensureProjection({
+        localKey: `${input.localKey}:scope:${localSuffix}:repeat:$previous:checker-union`,
+        checker: checkerUnion.checker,
+        type: checkerUnion.type,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
+        sourceAddressHandle,
+        display: checkerUnion.checker.typeToString(checkerUnion.type),
+        memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+      } satisfies CheckerTypeProjectionRequest).toReference();
+    }
+    const elementShape = readCheckerTypeShape(this.store, elementType);
+    const undefinedShape = readCheckerTypeShape(this.store, undefinedType);
+    return elementShape == null || undefinedShape == null
+      ? elementType
+      : this.typeSynthesizer.unionType(
+          [elementShape, undefinedShape],
+          `${input.localKey}:scope:${localSuffix}:repeat:$previous`,
+          sourceAddressHandle,
+        ).toReference();
   }
 
   iteratorElementType(
@@ -306,7 +365,14 @@ export class TemplateScopeTypeProjector {
     const parse = this.readParse(effect.expressionProductHandle);
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     if (ast == null) {
-      return null;
+      return effect.literalValue == null
+        ? null
+        : this.literalTypeReference(
+            input,
+            effect.literalValue,
+            `let:${effect.productHandle}:${effect.target}:literal`,
+            effect.sourceAddressHandle,
+          );
     }
     const context = this.evaluationContextForRuntimeBinding(
       ast,
@@ -404,31 +470,14 @@ export class TemplateScopeTypeProjector {
       );
   }
 
-  promiseResultSlotDraft(
+  promiseSettlementValueType(
     input: TemplateScopeConstructionRequest,
     instruction: HydrateTemplateControllerInstruction,
     promiseState: TemplateControllerPromiseState,
-    resultKind: TemplateControllerPromiseResultKind,
-    localSuffix: string,
-    target: TemplateControllerValueTarget,
-  ): BindingContextSlotDraft {
-    return new BindingContextSlotDraft(
-      target.name,
-      null,
-      null,
-      this.promiseResultSlotType(input, instruction, promiseState, resultKind, localSuffix),
-      target.sourceAddressHandle ?? instruction.sourceAddressHandle,
-    );
-  }
-
-  private promiseResultSlotType(
-    input: TemplateScopeConstructionRequest,
-    instruction: HydrateTemplateControllerInstruction,
-    promiseState: TemplateControllerPromiseState,
-    resultKind: TemplateControllerPromiseResultKind,
+    settlementKind: TemplateControllerPromiseSettlementKind,
     localSuffix: string,
   ): CheckerTypeReference | null {
-    return resultKind === TemplateControllerPromiseResultKind.Fulfilled
+    return settlementKind === TemplateControllerPromiseSettlementKind.Fulfilled
       ? this.promiseFulfilledValueType(input, promiseState, `${localSuffix}:fulfilled`)
       : this.asyncTypeProjector.unknownTypeReference(
         `${input.localKey}:scope:template-controller:${localSuffix}:rejected:unknown`,
@@ -694,6 +743,7 @@ export class TemplateScopeTypeProjector {
 
   private primitiveReference(
     input: TemplateScopeConstructionRequest,
+    localSuffix: string,
     primitive: 'number' | 'boolean',
     name: string,
     sourceAddressHandle: AddressHandle | null,
@@ -704,7 +754,7 @@ export class TemplateScopeTypeProjector {
     const checker = input.typeSystem.checker;
     const type = primitive === 'number' ? checker.getNumberType() : checker.getBooleanType();
     return this.typeProjector.ensureProjection({
-      localKey: `${input.localKey}:scope:repeat-context:${name}`,
+      localKey: `${input.localKey}:scope:${localSuffix}:repeat-context:${name}`,
       checker,
       type,
       origin: CheckerTypeProjectionOrigin.TypeChecker,

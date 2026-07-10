@@ -60,6 +60,7 @@ import {
   type CheckerTypeMemberVisibilityKind,
   checkerIndexedAccessSupportsString,
   checkerTypeMemberReachableIdentityHandle,
+  sameCheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
   checkerTypeMemberVisibilityKind,
@@ -89,7 +90,6 @@ import type {
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
-import { camelCaseAttributeName } from '../template/attribute-mapper.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -106,6 +106,7 @@ import {
   templateScopeRangeAddressHandle,
   templateValueSitesForResource,
 } from '../template/template-expression-selection.js';
+import { templateScopeChain } from '../template/template-scope-replay.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
 } from '../observation/runtime-binding-source-expression-context.js';
@@ -467,7 +468,12 @@ class TemplateCompletionCursorContextBuilder {
     const multiBindingSegment = this.multiBindingSegmentForTargetOffset(offset);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
-    const bindingScope = bindingScopeForCursor(
+    const declarationSelection = sourceBackedScopeSlotDeclarationForCursor(
+      this.store,
+      this.input.resource,
+      offset,
+    );
+    const bindingScope = declarationSelection?.scope ?? bindingScopeForCursor(
       this.store,
       this.input.resource,
       this.expressionWorld,
@@ -477,14 +483,11 @@ class TemplateCompletionCursorContextBuilder {
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
     const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment);
     const selectedScopeSlot = selectedScopeSlotForCursor(
-      this.store,
       siteKind,
       expressionResult,
       offset,
       bindingScope,
-      activeElement,
-      htmlAttribute,
-      syntax,
+      declarationSelection?.slot ?? null,
     );
     const missingInputs: string[] = [];
     const memberOwnerType = this.memberOwnerType(
@@ -644,15 +647,15 @@ function selectedMemberNameForCursor(
 }
 
 function selectedScopeSlotForCursor(
-  store: KernelStore,
   siteKind: TemplateCompletionSiteKind,
   expressionResult: ExpressionParseResult | null,
   offset: number,
   bindingScope: BindingScope | null,
-  activeElement: HtmlElement | null,
-  htmlAttribute: HtmlAttribute | null,
-  syntax: AttributeSyntax | null,
+  declarationSlot: BindingContextSlot | null,
 ): BindingContextSlot | null {
+  if (declarationSlot != null) {
+    return declarationSlot;
+  }
   if (bindingScope == null) {
     return null;
   }
@@ -668,51 +671,95 @@ function selectedScopeSlotForCursor(
       : bindingScope.locate(bindingIdentifier.name.name, 0).slot;
   }
 
-  return selectedLetTargetScopeSlotForCursor(store, siteKind, offset, bindingScope, activeElement, htmlAttribute, syntax);
+  return null;
 }
 
-function selectedLetTargetScopeSlotForCursor(
+interface SourceBackedScopeSlotDeclarationSelection {
+  readonly scope: BindingScope;
+  readonly slot: BindingContextSlot;
+  readonly contextKind: BindingContextKind;
+  readonly sourceSpan: SourceSpanAddress;
+}
+
+function sourceBackedScopeSlotDeclarationForCursor(
   store: KernelStore,
-  siteKind: TemplateCompletionSiteKind,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   offset: number,
-  bindingScope: BindingScope,
-  activeElement: HtmlElement | null,
-  htmlAttribute: HtmlAttribute | null,
-  syntax: AttributeSyntax | null,
-): BindingContextSlot | null {
-  if (
-    siteKind !== TemplateCompletionSiteKind.AttributeName
-    || activeElement?.tagName.toLowerCase() !== 'let'
-    || htmlAttribute == null
-    || syntax == null
-    || htmlAttribute.rawName === 'to-binding-context'
-    || !cursorTouchesAttributeSyntaxTarget(store, htmlAttribute, syntax, offset)
-  ) {
+): SourceBackedScopeSlotDeclarationSelection | null {
+  const templateSourceHandle = sourceSpanFor(
+    store,
+    resource.compilation.unit.templateSource.sourceAddressHandle,
+  )?.fileHandle ?? null;
+  if (templateSourceHandle == null) {
     return null;
   }
-  const slot = bindingScope.locate(camelCaseAttributeName(syntax.target), 0).slot;
-  return cursorTouchesSpan(sourceSpanFor(store, slot?.sourceAddressHandle ?? null), offset)
-    ? slot
-    : null;
+  const candidates: SourceBackedScopeSlotDeclarationSelection[] = [];
+  for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
+    for (const [contextKind, slots] of [
+      [scope.bindingContext.contextKind, scope.bindingContext.slots],
+      [BindingContextKind.Override, scope.overrideContext.slots],
+    ] as const) {
+      for (const slot of slots) {
+        const span = sourceSpanFor(store, slot.sourceAddressHandle);
+        if (
+          span?.fileHandle !== templateSourceHandle
+          || !cursorTouchesSpan(span, offset)
+          || predecessorHasScopeSlot(scope.predecessor, contextKind, slot)
+        ) {
+          continue;
+        }
+        candidates.push({ scope, slot, contextKind, sourceSpan: span });
+      }
+    }
+  }
+  const minimumSpanLength = Math.min(...candidates.map((candidate) => spanLength(candidate.sourceSpan)));
+  const narrowest = candidates.filter((candidate) => spanLength(candidate.sourceSpan) === minimumSpanLength);
+  if (narrowest.length === 0 || !scopeSlotDeclarationCandidatesConverge(narrowest)) {
+    return null;
+  }
+  return [...narrowest].sort((left, right) =>
+    left.scope.productHandle.localeCompare(right.scope.productHandle)
+  )[0] ?? null;
 }
 
-function cursorTouchesAttributeSyntaxTarget(
-  store: KernelStore,
-  attribute: HtmlAttribute,
-  syntax: AttributeSyntax,
-  offset: number,
+function predecessorHasScopeSlot(
+  predecessor: BindingScope | null,
+  contextKind: BindingContextKind,
+  slot: BindingContextSlot,
 ): boolean {
-  const span = sourceSpanFor(store, attribute.nameAddressHandle);
-  if (span == null) {
+  const slots = contextKind === BindingContextKind.Override
+    ? predecessor?.overrideContext.slots ?? []
+    : predecessor?.bindingContext.slots ?? [];
+  return slots.some((candidate) =>
+    candidate.name === slot.name
+    && candidate.sourceAddressHandle === slot.sourceAddressHandle
+  );
+}
+
+function scopeSlotDeclarationCandidatesConverge(
+  candidates: readonly SourceBackedScopeSlotDeclarationSelection[],
+): boolean {
+  const first = candidates[0];
+  if (first == null) {
     return false;
   }
-  const targetStart = syntax.rawName.toLowerCase().indexOf(syntax.target.toLowerCase());
-  if (targetStart < 0) {
-    return false;
-  }
-  const start = span.start + targetStart;
-  const end = start + syntax.target.length;
-  return start <= offset && offset <= end;
+  return candidates.every((candidate) =>
+    candidate.contextKind === first.contextKind
+    && candidate.slot.name === first.slot.name
+    && candidate.slot.sourceAddressHandle === first.slot.sourceAddressHandle
+    && candidate.slot.targetIdentityHandle === first.slot.targetIdentityHandle
+    && candidate.slot.targetProductHandle === first.slot.targetProductHandle
+    && sameNullableCheckerTypeReference(candidate.slot.targetType, first.slot.targetType)
+  );
+}
+
+function sameNullableCheckerTypeReference(
+  left: CheckerTypeReference | null,
+  right: CheckerTypeReference | null,
+): boolean {
+  return left == null || right == null
+    ? left === right
+    : sameCheckerTypeReference(left, right);
 }
 
 /** Answer template and expression completion candidates from already-materialized product details. */
@@ -1860,18 +1907,18 @@ function scopeCandidates(
     if (current.isBoundary) {
       break;
     }
-    current = current.parent;
+    current = current.runtimeParent;
     depth++;
   }
 
-  if (scope.parent != null) {
+  if (scope.runtimeParent != null) {
     candidates.push(new TemplateCompletionCandidate(
       TemplateCompletionCandidateKind.ScopeKeyword,
       '$parent',
       TemplateCompletionCandidateSourceKind.BindingScope,
-      scope.parent.productHandle,
-      scope.parent.identityHandle,
-      scope.parent.sourceAddressHandle,
+      scope.runtimeParent.productHandle,
+      scope.runtimeParent.identityHandle,
+      scope.runtimeParent.sourceAddressHandle,
       'Runtime scope parent traversal keyword.',
     ));
   }
@@ -2453,11 +2500,6 @@ function bindingScopeForCursor(
   offset: number,
   expressionParse: TemplateExpressionParse | null,
 ): BindingScope | null {
-  const iteratorDeclarationScope = bindingScopeForIteratorDeclarationCursor(store, resource, offset, expressionParse);
-  if (iteratorDeclarationScope != null) {
-    return iteratorDeclarationScope;
-  }
-
   const instructionScope = expressionParse == null
     ? null
     : bindingSourceScopeForTemplateExpressionParse(store, resource, expressionWorld, expressionParse, offset)
@@ -2467,18 +2509,6 @@ function bindingScopeForCursor(
   }
 
   return bestBindingScopeForOffset(store, resource, offset) ?? resource.runtimeAnalysis.scopes.rootScope;
-}
-
-function bindingScopeForIteratorDeclarationCursor(
-  store: KernelStore,
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  offset: number,
-  expressionParse: TemplateExpressionParse | null,
-): BindingScope | null {
-  return expressionParse?.result.kind === ExpressionParseResultKind.IteratorSuccess
-    && expressionSpanContainsOffset(expressionParse.result.ast.declaration.span, offset)
-    ? bestBindingScopeForOffset(store, resource, offset)
-    : null;
 }
 
 function bestBindingScopeForOffset(
@@ -2520,13 +2550,7 @@ function bindingSourceScopeForTemplateExpressionParse(
 }
 
 function scopeDepth(scope: BindingScope): number {
-  let depth = 0;
-  let current = scope.parent;
-  while (current != null) {
-    depth++;
-    current = current.parent;
-  }
-  return depth;
+  return templateScopeChain(scope).length - 1;
 }
 
 function selectedDefinitionForCursor(

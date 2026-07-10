@@ -466,18 +466,26 @@ classification, expression parsing, and instruction lowering converge on the sam
   construction shapes; the materializer only preserves template-order effects and commits records.
   It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names,
   `with.bind` non-nullish object binding-context rule, branch-local `if.bind`/`else` narrowing, switch/case branch
-  scope creators, promise result locals, and let-binding target-context rule so expression inquiry can use the same
+  scope creators, promise settlement assignments, and let-binding target-context rule so expression inquiry can use the same
   scope substrate as runtime-shaped compilation.
+  Repeat declaration locals are author-writable scope names. Repeat contextuals (`$index`, `$length`, `$odd`, `$even`,
+  `$first`, `$middle`, `$last`, and `$previous`) are framework-managed and author-read-only. The runtime represents
+  `$index` and `$length` as mutable data properties because `Repeat` updates them, while deriving several other
+  contextuals through getters for hot-path efficiency; that descriptor choice is not template-author assignment
+  authority and must not leak into source-write policy.
   Listener and state-dispatch event scopes keep `$event` as the DOM event type, then attach member-type refinements for
   `$event.currentTarget` and native form-control `$event.target` through the authored host element. This preserves normal
   event members while letting form payload expressions such as `$event.target.value` close through the same DOM
   tag-name-map substrate as observer lookup.
-  It also models target-to-source bindable assignments that create runtime-only binding-context names for the binding
-  expression itself and for later template expressions. A two-way/from-view bindable can write a previously undeclared
-  scope name; the source expression that names the slot should be analyzed with that runtime-assignment slot already
-  visible, and later sibling/descendant expressions should see the same name after the instruction that wrote it. The
-  slot stays runtime-only for assignment policy, but can retain the bindable's TypeChecker member as a type carrier so
-  repeat locals and member completions degrade to the actual target type instead of to a missing-slot-type seam. When
+  It also models target-to-source bindable assignments as immutable state transitions on the runtime Scope selected by
+  Aurelia `Scope.getContext`. An assignment can update an existing override-context slot, an existing binding-context or
+  view-model member, an explicit ancestor, or the nearest boundary binding context for an unresolved name. Descendant
+  scopes are rebased onto the updated ancestor state without confusing state predecessors with runtime-parent ancestry.
+  The source expression is analyzed with that post-assignment state visible, and later sibling/descendant expressions
+  see the same write. Scope slots keep declaration identity (`targetProductHandle`) separate from the member that
+  supplied their current value type (`targetTypeSourceProductHandle`). A runtime-only slot can therefore use a target
+  bindable member as an indexed-access type carrier without claiming that the authored scope name denotes that
+  bindable. Existing slots keep their declaration identity and source while their value type is refined. When
   a value converter participates in target-to-source writeback, scope construction spends the same
   `projectRuntimeAssignmentValueConverterWriteback(...)` helper as binding data-flow before typing the synthetic local;
   the target member is kept as an indexed-access type carrier only when that converted source-local type is still the
@@ -666,10 +674,12 @@ root view-model slot aliases, nested `repeat.for` scope blocks, `let` scope decl
 built-in `if`/`else` condition blocks, including fallback branches where the checker could not narrow but Aurelia
 still created a conditional child view, repeat override locals such as `$index`/`$odd`/`$length`, listener-event layers for `$event`
 expressions, `with.bind` non-nullish binding-context layers, `portal` pass-through child views, `promise`
-pending/result context layers, switch/case branch layers with a named `__au_switch_case(...)` helper, state binding
+  parent value scopes plus generic settlement-assignment layers, switch/case branch layers with a named
+  `__au_switch_case(...)` helper, state binding
 scope layers,
 importable value-converter `toView(...)` call surfaces, and runtime-assignment slots introduced by from-view/two-way
-bindable flows. Runtime-assignment slots may reuse an already-visible in-scope alias when the
+  bindable flows. Runtime-assignment layers retain whether the write reached the binding or override context, shadow the
+  assigned lexical name, and refine `$this`/`$parent` aliases only for binding-context writes. Slots may reuse an already-visible in-scope alias when the
 materialized slot and alias carry the same checker reference; otherwise they use an importable target-member
 indexed-access type when the target bindable member is known. The overlay
 must not stringify projected display types as a shortcut. Unsupported owner kinds, non-importable view-models, and
@@ -756,22 +766,26 @@ and direct `AccessMember` equality-domain refinements instead of carrying separa
 overlay helper spends the shared DOM event-map vocabulary from `dom-node-type.ts` for the base event object and
 consumes `TemplateScopeTypeProjector` member refinements for `currentTarget`/`target` when the
 materialized `$event` slot exposes simple checker-visible target types. Keep further event precision in that
-scope-projection handoff rather than adding local HTML tag switches. `$this`, `$parent`, and boundary `this` source
-tokens now copy into TypeScript only when generated aliases can be derived from `BindingScope` replay or the
-resource-template function boundary: root `$this` points at the function `this`, repeat scopes declare `$parent` plus a
-current `$this` object synthesized from replayed binding-context slots
-such as `{ item }` or `{ key, entry }`, and nested repeat parent aliases carry a typed `$parent` chain so
-`$parent.$parent.*` follows Aurelia ancestor lookup without rewriting authored text. Non-replayed binding-pattern
+scope-projection handoff rather than adding local HTML tag switches. Bare `$this`, bare `$parent`, and boundary `this`
+source tokens copy into TypeScript only when aliases can be derived from `BindingScope` replay or the resource-template
+function boundary. Direct `$this.member` / `$this.method()` syntax lowers to the same ancestor-zero, override-first named
+lookup as ordinary `member` / `method()` because the framework parser emits `AccessScope(name, 0)` / `CallScope(name, 0)`;
+the preserved syntax origin is source provenance, not a binding-context-only lookup policy. Repeat scopes still declare
+`$parent` plus a current `$this` object synthesized from replayed binding-context slots such as `{ item }` or
+`{ key, entry }`, and nested repeat parent aliases carry a typed `$parent` chain so `$parent.$parent.*` follows Aurelia
+ancestor lookup. Non-replayed binding-pattern
 context shapes remain explicit skips rather than hidden generated-TypeScript name-resolution diagnostics. The parser
-preserves lowered `AccessScope`/`CallScope` scope-special origin through `ScopeExpressionRootKind`; overlay projection
+preserves lowered `AccessScope`/`CallScope` scope-special origin through `ScopeExpressionSyntaxOrigin`; overlay projection
 should spend that fact before copying or lowering source text, especially in non-strict call-scope lowering. `with.bind`
 captures the outer `$this`, evaluates the source expression once, casts the generated binding context through
 `NonNullable<typeof source>`, and then projects ordinary local declarations such as `label` from the materialized
 binding-context slots; listener-event scopes nested under that value scope retain the generated `$parent` alias so
-`$parent` targets the outer component rather than the value object. Promise `then`/`catch` target expressions are
-promise-result scope declarations, not standalone expression probes. Promise `then` locals use the awaited parent
-promise type, promise `catch` locals use `unknown`, and state binding scopes use the modeled state context member
-expressions from `StateBindingScope` rather than searching by raw local names.
+`$parent` targets the outer component rather than the value object. Promise `then`/`catch` values are from-view
+assignment targets, not standalone read probes or Promise-owned declarations. They use the same runtime-assignment
+transition as every other target-to-source binding: `then` supplies the awaited parent promise type, `catch` supplies
+`unknown`, and ordinary scope lookup decides whether the write refines a let slot, a root member, an explicit ancestor,
+or a new boundary-context slot. A valueless `then` uses the binding command's implicit `then` target. State binding scopes
+use the modeled state context member expressions from `StateBindingScope` rather than searching by raw local names.
 `runtime-expression-source-address.ts` is the bridge between parser-local `SourceSpan` values and kernel source
 addresses. Semantic-runtime-created parse contexts put the kernel source-file address handle in `SourceFileRef.id`;
 overlay, scope, and bound-controller consumers should use `sourceAddressHandleForRuntimeExpressionSpan(...)` instead
@@ -783,7 +797,7 @@ wishlist: add a skip reason only when the builder can actually emit it and the o
 Binding behaviors are value-transparent for overlay expression checking: framework `astEvaluate` returns the wrapped
 expression, while bind-time behavior effects and diagnostics are owned by `runtime-binding-behavior-materializer.ts`.
 `template-type-system-overlay-prelude.ts` contains only emitted helper declarations, each with an owner and emitted-name
-inventory. Promise result locals, `$this`/`$parent` aliases, and temporary scope locals are generated layer facts rather
+inventory. Runtime-assignment locals, `$this`/`$parent` aliases, and temporary scope locals are generated layer facts rather
 than prelude helpers, so do not add empty prelude rows for constructs that emit no reusable declaration.
 `template-type-system-overlay-expression-support.ts` is the compact ownership matrix for every semantic-runtime
 expression AST kind. Read that table before adding another `UnsupportedSyntax` branch: ordinary TypeScript-shaped
@@ -815,6 +829,12 @@ records property bindings that render against child controller view-models while
 Scope construction projects unambiguous table entries into the child custom-element root `BindingContext`, and the
 overlay aliases those slots with importable member types when possible. This is what lets a child template type-check a
 parent-bound callback bindable against the parent's function type instead of the child class's placeholder initializer.
+The child bindable declaration remains the slot's identity and source for references, rename, and assignment policy.
+When direct value flow retains a parent member's type, only `targetTypeSourceProductHandle` points at that parent member
+as the current type carrier. A value converter is not transparent for this purpose: its `toView` return supplies the
+current type even when the printed signature happens to equal the input member. Do not make one product handle serve
+both roles or carry provenance through a transforming wrapper; either mistake turns a value-flow fact into a false
+declaration/type-source relationship.
 The table is the resource-boundary carrier: once a child template is being analyzed, the parent `RuntimeBinding` is not
 available through the child's runtime rendering emission, so strict mode and binding-behavior lifecycle must travel on
 the table entry rather than being rediscovered downstream.
@@ -882,6 +902,9 @@ Generated overlay scope locals must spend the type facts already materialized on
 slots such as `$previous`, runtime-assignment locals, and other context-slot layers should emit a checker-visible type
 when scope construction supplied one; otherwise they should degrade to `unknown`, not `any`. The overlay contract
 checks the generated overlay text for accidental `undefined as any` holes across the current canaries.
+`$previous` is derived directly from the typed `__au_repeat(...)` iterable used by the generated loop. Do not re-spell
+its type from a compressed slot display: map/tuple element unions can have no retained checker carrier, and generic
+array carriers require instantiated type arguments that a bare declaration name loses.
 
 Repeat locals produced from synthetic array methods also depend on hydrated related type references. A checker-backed
 inner array can expose its element only as a compact `iteratedValueType` reference; `CheckerTypeShapeAccess` must hydrate

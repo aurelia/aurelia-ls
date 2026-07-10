@@ -5,6 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ExpressionType } from '../expression/ast.js';
+import { sourceSpanFromBounds } from '../expression/source-span.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
@@ -46,6 +47,7 @@ import {
   TranslationParametersBindingInstruction,
 } from './instruction-ir.js';
 import { authoredTemplateAttributeText } from './authored-template-source.js';
+import { parseInlineMultiBindingSegments } from './multi-binding-segments.js';
 
 const bindingCommandKey = (name: string): string => `au:resource:binding-command:${name}`;
 
@@ -142,7 +144,7 @@ function buildFixedPropertyBinding(
       info.node,
       info.attribute,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
       instructionSource(info),
@@ -172,7 +174,7 @@ function buildDefaultPropertyBinding(
       info.node,
       info.attribute,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       mode,
       bindingCommandReference(command),
       instructionSource(info),
@@ -197,7 +199,7 @@ function buildAttributeBinding(
       info.attribute,
       attr,
       target,
-      context.parsePropertyExpression(expression, info),
+      context.parsePropertyExpression(expression, info, null),
       instructionSource(info),
     ),
   ]);
@@ -871,20 +873,26 @@ export class ForBindingCommand {
     const rawTailText = iterator.rawTailText;
 
     if (rawTailText != null && rawTailText !== '') {
-      const tailParts = rawTailText.split(';');
-      for (let index = 0; index < tailParts.length; index += 1) {
-        const tailPart = tailParts[index]!;
-        const colonIndex = tailPart.indexOf(':');
-        if (colonIndex < 0) {
-          continue;
-        }
-
-        const rawName = tailPart.slice(0, colonIndex).trim();
-        const rawValue = tailPart.slice(colonIndex + 1).trim();
+      for (const segment of parseInlineMultiBindingSegments(rawTailText)) {
+        const index = segment.segmentIndex;
+        const rawName = segment.rawName.trim();
+        const rawValue = segment.rawValue.trimEnd();
         const tailSyntax = context.parseAttributeSyntax(rawName, rawValue, info);
         if (tailSyntax == null) {
           continue;
         }
+
+        const valueSpan = iterator.tailSpan == null
+          ? null
+          : sourceSpanFromBounds(
+              iterator.tailSpan.start + segment.valueStart,
+              iterator.tailSpan.start + segment.valueStart + rawValue.length,
+              iterator.tailSpan.file ?? null,
+            );
+        const expressionProductHandle = tailSyntax.command === 'bind'
+          && (tailSyntax.target === 'key' || tailSyntax.target === 'contextual')
+          ? context.parsePropertyExpression(rawValue, info, valueSpan)
+          : null;
 
         const allocation = allocateInstruction(context, info, TemplateInstructionKind.MultiAttr, `${this.name}:tail:${index}`);
         tailInstructionProductHandles.push(allocation.productHandle);
@@ -896,7 +904,7 @@ export class ForBindingCommand {
           tailSyntax.target,
           tailSyntax.command,
           rawValue,
-          null,
+          expressionProductHandle,
           instructionSource(info),
         ));
       }
@@ -948,7 +956,7 @@ export class RefBindingCommand {
         info.node,
         info.attribute,
         info.syntax.target,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         instructionSource(info),
       ),
     ]);
@@ -1157,7 +1165,7 @@ export class SpreadValueBindingCommand {
         info.attribute,
         info.syntax.target as '$bindables' | '$element',
         info.syntax.rawValue,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         instructionSource(info),
       ),
     ]);
@@ -1228,7 +1236,7 @@ export class TranslationBindBindingCommand {
         allocation.identityHandle,
         info.node,
         info.attribute,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
         instructionSource(info),
       ),
@@ -1264,7 +1272,7 @@ export class TranslationParametersBindingCommand {
         allocation.identityHandle,
         info.node,
         info.attribute,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         targetForPropertyBinding(info, context),
         instructionSource(info),
       ),
@@ -1342,7 +1350,7 @@ export class DispatchBindingCommand {
         info.syntax.target,
         info.syntax.rawValue,
         info.syntax.parts[0] ?? null,
-        context.parsePropertyExpression(info.syntax.rawValue, info),
+        context.parsePropertyExpression(info.syntax.rawValue, info, null),
         instructionSource(info),
       ),
     ]);

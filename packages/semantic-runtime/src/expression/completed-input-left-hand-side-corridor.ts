@@ -307,7 +307,7 @@ export class CompletedInputLeftHandSideCorridor {
         args,
         expr.ancestor,
         optional,
-        expr.rootKind,
+        expr.syntaxOrigin,
       );
     }
 

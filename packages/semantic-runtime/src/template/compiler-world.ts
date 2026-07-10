@@ -32,6 +32,7 @@ import type {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   IteratorBindingInstruction,
+  nestedInstructionProductHandlesForInstructions,
   SpreadElementPropBindingInstruction,
   type SpreadTransferedBindingInstruction,
   TemplateInstructionKind,
@@ -1086,14 +1087,11 @@ function renderingInstructionIndex(
   instructions: readonly TemplateInstruction[],
 ): TemplateRenderingInstructionIndex {
   const instructionsByProduct = new Map<ProductHandle, TemplateInstruction>();
-  const nestedInstructionProductHandles = new Set<ProductHandle>();
+  const nestedInstructionProductHandles = new Set(
+    nestedInstructionProductHandlesForInstructions(instructions),
+  );
   for (const instruction of instructions) {
     instructionsByProduct.set(instruction.productHandle, instruction);
-    if (instruction instanceof IteratorBindingInstruction) {
-      for (const handle of instruction.tailInstructionProductHandles) {
-        nestedInstructionProductHandles.add(handle);
-      }
-    }
   }
   return new TemplateRenderingInstructionIndex(instructionsByProduct, nestedInstructionProductHandles);
 }

@@ -261,19 +261,31 @@ static type surfaces rather than hydrated runtime values.
   receives the target value type as contextual type, so callback and function-valued bindables can type arrow
   parameters when the target bindable exposes a callable signature. If the target type is `unknown`, `any`, or
   index-signature-only, the data-flow row stays honest instead of manufacturing members.
-  Runtime-assignment locals created by from-view/two-way bindable assignments, such as
-  `display-data.bind: $displayData`, are treated as runtime-assignable only when scope construction materializes a
-  `BindingScopeCreatorKind.RuntimeAssignment` slot for the authored name. The slot target type is used as the
-  assignment type for later scope analysis. A `$` prefix by itself is not evidence of a synthetic local; ordinary
+  Runtime assignments performed by from-view/two-way bindables, such as `display-data.bind: $displayData` or Promise
+  `then="result"`, are treated as runtime-assignable only when scope construction materializes a
+  `BindingScopeCreatorKind.RuntimeAssignment` state for the authored name and selected context lane. Scope construction
+  spends ordinary `Scope.getContext` lookup, preserves existing slot identity/source facts, and creates an unresolved
+  name on the nearest boundary binding context. The assigned value type is used for later scope analysis. A `$` prefix
+  by itself is not evidence of a synthetic local; ordinary
   unresolved names such as `$ghostLocal` still fall through the same context-type and TypeScript strictness policy as
   other unresolved access-scope writes. `$host` is reserved by Aurelia runtime and is excluded from this
   runtime-assignment lane: missing `$host` reads report `AUR0105`, while `astAssign` throws `ast_no_assign_$host`
-  before ordinary scope lookup, so data-flow reports `AUR0106` as an exact framework assignment diagnostic. Other
-  runtime-only scope slots can still report TypeScript strictness pressure when the product cannot prove a real
+  before ordinary scope lookup, so data-flow reports `AUR0106` as an exact framework assignment diagnostic.
+  Data-flow checks source-write authority against the assignment input state. If scope construction already projected
+  the same instruction as a refinement of an existing slot, the check follows the immutable `predecessor` state so the
+  new value type cannot mask an authored readonly/getter-only declaration. A genuinely new framework-created name uses
+  the post-assignment state because that creation is itself the evidence that the runtime can write it. This is state
+  history, not `$parent` ancestry; only `runtimeParent` participates in Aurelia scope traversal. Other runtime-only
+  scope slots can still report TypeScript strictness pressure when the product cannot prove a real
   TypeChecker member. A
   runtime-created slot may still carry the target bindable's TypeMember product as a type carrier for expression
   analysis; assignment policy should not treat that carrier as proof that the scope name is an authored view-model
-  member. Target bindable members are projected on demand because resource target type shapes are allowed to stay
+  member. Public binding-data-flow rows retain both the exact authored assignment-token occurrence and the declaration
+  source reached by lookup; references and rename consume that pair rather than manufacturing observed reads for writes.
+  `BindingContextSlot.assignmentAccessKind` is likewise authoring policy, not a mirror of JavaScript property
+  descriptors. All repeat contextuals are framework-managed and author-read-only, including `$index` and `$length`:
+  their runtime mutability belongs to `Repeat`, not to template bindings.
+  Target bindable members are projected on demand because resource target type shapes are allowed to stay
   summary-first until a consumer asks for their member surface. Member-expression writes should spend `CheckerTypeShapeAccess` before reporting owner-member pressure: the
   type-system layer resolves projected members, retained checker/apparent properties, and string index-signature
   writeability, while observation only maps that result into Aurelia `astAssign` policy. Only after those fail should

@@ -1,5 +1,8 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import type { SourceSpanAddress } from '../kernel/address.js';
+import {
+  SourceSpanRole,
+  type SourceSpanAddress,
+} from '../kernel/address.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -25,6 +28,7 @@ import type {
   ExpressionType,
 } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import type {
   ExpressionParseResult,
   IteratorParseResult,
@@ -102,6 +106,7 @@ import {
 } from './value-site-publication.js';
 import {
   runtimeExpressionParseContextForSourceSpanAddress,
+  sourceAddressForRuntimeExpressionSpan,
 } from './runtime-expression-source-address.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
@@ -499,27 +504,29 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
   parsePropertyExpression(
     expression: string,
     info: BindingCommandBuildInfo,
+    sourceSpan: SourceSpan | null,
   ): ProductHandle | null {
-    return this.parseExpression(expression, 'IsProperty', info).parse.productHandle;
+    return this.parseExpression(expression, 'IsProperty', info, sourceSpan).parse.productHandle;
   }
 
   parseFunctionExpression(
     expression: string,
     info: BindingCommandBuildInfo,
   ): ProductHandle | null {
-    return this.parseExpression(expression, 'IsFunction', info).parse.productHandle;
+    return this.parseExpression(expression, 'IsFunction', info, null).parse.productHandle;
   }
 
   parseIteratorExpression(
     expression: string,
     info: BindingCommandBuildInfo,
   ): BindingCommandIteratorParse {
-    const publication = this.parseExpression(expression, 'IsIterator', info);
+    const publication = this.parseExpression(expression, 'IsIterator', info, null);
     const result = publication.result as IteratorParseResult;
     return new BindingCommandIteratorParse(
       publication.parse.productHandle,
       iteratorLocalNames(result),
       iteratorRawTailText(result),
+      iteratorTailSpan(result),
     );
   }
 
@@ -553,11 +560,20 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     expression: string,
     entryFamily: ExpressionType,
     info: BindingCommandBuildInfo,
+    sourceSpan: SourceSpan | null,
   ): CommandParsePublication {
     const index = this.expressionIndex++;
     const siteLocal = `${this.local}:value-site:${index}`;
     const parseLocal = `${this.local}:expression-parse:${index}`;
-    const addressHandle = info.expressionSourceAddressHandle;
+    const expressionSource = sourceSpan == null
+      ? { handle: info.expressionSourceAddressHandle, records: [] }
+      : sourceAddressForRuntimeExpressionSpan(
+          this.store,
+          `${parseLocal}:source`,
+          info.expressionSourceAddressHandle,
+          sourceSpan,
+          SourceSpanRole.Value,
+        );
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       siteLocal,
       parseLocal,
@@ -572,18 +588,18 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
       this.classification,
       this.commandReference,
       this.bindable,
-      addressHandle,
+      expressionSource.handle,
       this.classification.identityHandle,
       `${this.command.name}:${entryFamily}`,
       info.buildInputProductHandle,
       (result) => `${this.command.name}:${result.kind}`,
-      this.expressionParseContext,
+      sourceSpan == null ? this.expressionParseContext : { baseSpan: sourceSpan },
     ));
     if (publication.parse == null || publication.result == null) {
       throw new Error('Binding command expression parsing must publish an expression parse.');
     }
     this.claims.push(...publication.claims);
-    this.records.push(...publication.records);
+    this.records.push(...expressionSource.records, ...publication.records);
     const { site, parse, result } = publication;
     this.sites.push(site);
     this.parses.push(parse);
@@ -1386,6 +1402,17 @@ function iteratorRawTailText(result: IteratorParseResult): string | null {
     case ExpressionParseResultKind.IteratorDegradedPublication:
     case ExpressionParseResultKind.IteratorFrontierPublication:
       return result.trailingSplit?.rawTailText ?? null;
+    case ExpressionParseResultKind.CompleteInputParseError:
+      return null;
+  }
+}
+
+function iteratorTailSpan(result: IteratorParseResult): SourceSpan | null {
+  switch (result.kind) {
+    case ExpressionParseResultKind.IteratorSuccess:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return result.trailingSplit?.tailSpan ?? null;
     case ExpressionParseResultKind.CompleteInputParseError:
       return null;
   }

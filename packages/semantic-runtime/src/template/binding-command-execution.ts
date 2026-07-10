@@ -7,6 +7,7 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 import type { TemplateValueSiteReference } from './value-site.js';
@@ -116,6 +117,7 @@ export class BindingCommandIteratorParse {
     readonly expressionProductHandle: ProductHandle | null,
     readonly localNames: readonly string[],
     readonly rawTailText: string | null,
+    readonly tailSpan: SourceSpan | null,
   ) {}
 }
 
@@ -167,6 +169,7 @@ export interface BindingCommandBuildContext {
   parsePropertyExpression(
     expression: string,
     info: BindingCommandBuildInfo,
+    sourceSpan: SourceSpan | null,
   ): ProductHandle | null;
 
   parseFunctionExpression(

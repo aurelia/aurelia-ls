@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import {
   createSemanticRuntime,
   readSemanticAppQueryCatalog,
@@ -54,8 +55,7 @@ const AURELIA_DOMAINS = new Set([
 
 const COVERAGE_INTENTS = new Set([
   'boundary-contract',
-  'domain-canary',
-  'known-gap-witness',
+  'domain-contract',
   'regression-contract',
 ]);
 
@@ -208,6 +208,7 @@ async function runAssertion(assertion) {
     fixture: assertion.fixture ?? null,
     requirement: assertion.requirement ?? null,
     assertionKind: assertion.assertionKind,
+    queryKinds: queryKindsForAssertion(assertion),
     failureBucket: knownGap?.failureBucket ?? null,
     knownGap,
     rawOutcome,
@@ -215,6 +216,33 @@ async function runAssertion(assertion) {
     failures,
     notes,
   };
+}
+
+function queryKindsForAssertion(assertion) {
+  if (assertion.assertionKind === 'query-expectations') {
+    return [...new Set((assertion.expectations ?? [])
+      .map((expectation) => expectation.query?.kind)
+      .filter((kind) => typeof kind === 'string' && kind.length > 0))];
+  }
+  switch (assertion.assertionKind) {
+    case 'source-precision-agreement':
+      return [
+        SemanticAppQueryKind.TemplateCursorInfo,
+        SemanticAppQueryKind.TemplateReferences,
+        SemanticAppQueryKind.TemplateRename,
+        SemanticAppQueryKind.TemplateSemanticTokens,
+      ];
+    case 'line-character-cursor-parity':
+      return [SemanticAppQueryKind.TemplateReferences, SemanticAppQueryKind.TemplateRename];
+    case 'candidate-honesty':
+      return [SemanticAppQueryKind.TemplateReferences];
+    case 'diagnostic-provenance-agreement':
+      return [SemanticAppQueryKind.TemplateDiagnostics, SemanticAppQueryKind.AppDiagnostics];
+    case 'edit-plan-old-text':
+      return [SemanticAppQueryKind.TemplateCodeActions];
+    default:
+      return [];
+  }
 }
 
 async function assertSourcePrecisionAgreement(assertion, failures, notes) {
@@ -550,7 +578,7 @@ function rowMatchesExpectation(row, rowExpectation, context) {
     return false;
   }
   for (const [pathExpression, expectedValue] of Object.entries(rowExpectation.fields ?? {})) {
-    if (!Object.is(valueAtPath(row, pathExpression), expectedValue)) {
+    if (!isDeepStrictEqual(valueAtPath(row, pathExpression), expectedValue)) {
       return false;
     }
   }
@@ -989,7 +1017,7 @@ function expectOldTextMatchesSource(edit, fixtureRoot, failures) {
 }
 
 function expectEqual(actual, expected, label, failures) {
-  expect(Object.is(actual, expected), `${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`, failures);
+  expect(isDeepStrictEqual(actual, expected), `${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`, failures);
 }
 
 function valueAtPath(value, pathExpression) {
@@ -1057,6 +1085,11 @@ function printSummary(summary, results, filters) {
   console.log(`Domains: ${formatCounts(countBy(results, (result) => result.domainAxis))}`);
   console.log(`Coverage intents: ${formatCounts(countBy(results, (result) => result.coverageIntent))}`);
   console.log(`Capabilities: ${formatCounts(countBy(results, (result) => result.capability))}`);
+  console.log(`Behavior query kinds: ${formatCounts(countManyBy(results, (result) => result.queryKinds))}`);
+  for (const [aureliaDomain, domainResults] of groupBy(results, (result) => result.aureliaDomain)) {
+    const queryKinds = countManyBy(domainResults, (result) => result.queryKinds);
+    console.log(`Behavior query kinds (${aureliaDomain}): ${queryKinds.size === 0 ? '<none>' : formatCounts(queryKinds)}`);
+  }
   for (const result of results) {
     const marker = result.conformanceOutcome === 'passed'
       ? 'PASS'
@@ -1098,6 +1131,27 @@ function countBy(values, readKey) {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
+}
+
+function countManyBy(values, readKeys) {
+  const counts = new Map();
+  for (const value of values) {
+    for (const key of new Set(readKeys(value) ?? [])) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function groupBy(values, readKey) {
+  const groups = new Map();
+  for (const value of values) {
+    const key = readKey(value) ?? '<none>';
+    const group = groups.get(key) ?? [];
+    group.push(value);
+    groups.set(key, group);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
 }
 
 function formatCounts(counts) {

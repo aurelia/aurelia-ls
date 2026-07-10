@@ -1,5 +1,4 @@
-import type { ExpressionAstNode } from '../expression/ast.js';
-import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   HydrateTemplateControllerInstruction,
@@ -8,19 +7,33 @@ import {
   SetPropertyInstruction,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
-import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
-import { readTemplateExpressionParse } from './expression-parse-product.js';
 import { frameworkTemplateControllerSemanticsForName } from './template-controller-semantics.js';
-
-export interface TemplateControllerValueTarget {
-  readonly name: string;
-  readonly sourceAddressHandle: AddressHandle | null;
-}
 
 export function templateControllerValueExpressionProductHandle(
   store: KernelStore,
   instruction: HydrateTemplateControllerInstruction,
 ): ProductHandle | null {
+  const propertyBinding = templateControllerValuePropertyBinding(store, instruction);
+  if (propertyBinding != null) {
+    return propertyBinding.expressionProductHandle;
+  }
+  const valueProperty = templateControllerValueProperty(instruction);
+  if (valueProperty == null) {
+    return null;
+  }
+  for (const productHandle of instruction.bindingInstructionProductHandles) {
+    const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
+    if (binding instanceof InterpolationInstruction && binding.target === valueProperty) {
+      return binding.expressionProductHandles[0] ?? null;
+    }
+  }
+  return null;
+}
+
+export function templateControllerValuePropertyBinding(
+  store: KernelStore,
+  instruction: HydrateTemplateControllerInstruction,
+): PropertyBindingInstruction | null {
   const valueProperty = templateControllerValueProperty(instruction);
   if (valueProperty == null) {
     return null;
@@ -28,10 +41,7 @@ export function templateControllerValueExpressionProductHandle(
   for (const productHandle of instruction.bindingInstructionProductHandles) {
     const binding = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
     if (binding instanceof PropertyBindingInstruction && binding.targetProperty === valueProperty) {
-      return binding.expressionProductHandle;
-    }
-    if (binding instanceof InterpolationInstruction && binding.target === valueProperty) {
-      return binding.expressionProductHandles[0] ?? null;
+      return binding;
     }
   }
   return null;
@@ -80,31 +90,6 @@ export function staticTemplateControllerBooleanProperty(
     }
   }
   return sawTarget ? null : fallback;
-}
-
-export function templateControllerValueTarget(
-  store: KernelStore,
-  instruction: HydrateTemplateControllerInstruction,
-): TemplateControllerValueTarget | null {
-  const productHandle = templateControllerValueExpressionProductHandle(store, instruction);
-  const parse = readTemplateExpressionParse(store, productHandle);
-  const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
-  const name = expression == null ? null : accessScopeTargetName(expression);
-  return name == null
-    ? null
-    : {
-      name,
-      sourceAddressHandle: parse?.sourceAddressHandle ?? null,
-    };
-}
-
-export function accessScopeTargetName(expression: ExpressionAstNode): string | null {
-  if (expression.$kind === 'AccessScope' && expression.ancestor === 0) {
-    return expression.name.name;
-  }
-  return expression.$kind === 'Paren'
-    ? accessScopeTargetName(expression.expression)
-    : null;
 }
 
 export function templateControllerValueProperty(

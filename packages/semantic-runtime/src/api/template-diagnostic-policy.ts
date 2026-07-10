@@ -159,6 +159,8 @@ export function bindingSourceAssignmentDiagnosticKind(
       return 'binding-source-assignment-strictness';
     case RuntimeBindingDataFlowSourceAssignmentKind.RuntimeUnassignable:
       return 'binding-source-assignment-runtime-noop';
+    case RuntimeBindingDataFlowSourceAssignmentKind.FrameworkManagedReadOnly:
+      return 'binding-source-assignment-framework-managed';
     default:
       return null;
   }
@@ -182,6 +184,7 @@ export function bindingSourceAssignmentDiagnostic(
   const primaryReasonKind = reasonKinds[0]
     ?? RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceUnresolved;
   const runtimeNoop = diagnosticKind === 'binding-source-assignment-runtime-noop';
+  const frameworkManaged = diagnosticKind === 'binding-source-assignment-framework-managed';
   const frameworkErrorCode = bindingSourceAssignmentFrameworkErrorCode(reasonKinds);
   const frameworkRuntimeError = frameworkErrorCode != null;
   const ownerType = dataFlow.sourceAssignmentTargetType ?? dataFlow.sourceType ?? null;
@@ -198,6 +201,7 @@ export function bindingSourceAssignmentDiagnostic(
     ownerSource,
     reasonKinds,
     runtimeNoop,
+    frameworkManaged,
     valueTypeDisplay,
   );
 
@@ -205,12 +209,14 @@ export function bindingSourceAssignmentDiagnostic(
     diagnosticKind,
     diagnosticAuthority: frameworkRuntimeError
       ? 'framework-error-code'
+      : frameworkManaged
+      ? 'semantic-authoring-policy'
       : runtimeNoop
       ? 'framework-runtime-behavior'
       : 'semantic-runtime-product',
     frameworkErrorCode,
     severity: frameworkRuntimeError ? 'error' : 'warning',
-    summary: bindingSourceAssignmentSummary(dataFlow, runtimeNoop),
+    summary: bindingSourceAssignmentSummary(dataFlow, runtimeNoop, frameworkManaged),
     missingInput: `binding-source-assignment:${primaryReasonKind}`,
     missingInputs: reasonKinds.map((reasonKind) => `binding-source-assignment:${reasonKind}`),
     source,
@@ -1290,8 +1296,18 @@ function bindingSourceAssignmentSuggestion(
   ownerSource: SemanticSourceReference | null,
   reasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[],
   runtimeNoop: boolean,
+  frameworkManaged: boolean,
   valueTypeDisplay: string | null,
 ): BindingSourceAssignmentSuggestionPolicy {
+  if (frameworkManaged) {
+    return {
+      suggestionKind: 'use-assignable-expression',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, dataFlow.sourceName, null),
+      summary: 'Bind writeback to an app-owned writable member instead of Aurelia-managed contextual state.',
+      valueTypeSource: null,
+    };
+  }
   if (runtimeNoop) {
     if (reasonKinds.includes(RuntimeBindingDataFlowSourceAssignmentReasonKind.NullishAssignment)) {
       return {
@@ -1602,9 +1618,12 @@ function noMembersOwnerTypeIsWeak(ownerTypeShapeKind: CheckerTypeShapeKind): boo
 function bindingSourceAssignmentSummary(
   dataFlow: RuntimeBindingDataFlow,
   runtimeNoop: boolean,
+  frameworkManaged: boolean,
 ): string {
   return dataFlow.sourceAssignmentReason
-    ?? (runtimeNoop
+    ?? (frameworkManaged
+      ? 'The binding source is framework-managed contextual state and is not an author-owned assignment target.'
+      : runtimeNoop
       ? 'Aurelia runtime assignment does not update the binding source for this expression shape.'
       : 'Binding assignment is accepted by Aurelia runtime semantics, but TypeScript cannot prove the source write.');
 }

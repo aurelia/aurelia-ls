@@ -181,6 +181,7 @@ export const enum RuntimeBindingDataFlowSourceAssignmentKind {
   RuntimeAssignable = 'runtime-assignable',
   RuntimeAssignableWithTypeScriptStrictness = 'runtime-assignable-with-typescript-strictness',
   RuntimeUnassignable = 'runtime-unassignable',
+  FrameworkManagedReadOnly = 'framework-managed-read-only',
   Open = 'open',
 }
 
@@ -190,6 +191,7 @@ export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
   ScopeSlotMissingTypeCheckerMember = 'scope-slot-missing-typechecker-member',
   ScopeSlotTypeCheckerMemberUnavailable = 'scope-slot-typechecker-member-unavailable',
   ScopeSlotRuntimeOnly = 'scope-slot-runtime-only',
+  ScopeSlotFrameworkManaged = 'scope-slot-framework-managed',
   OwnerTypeOpen = 'owner-type-open',
   /** Key expression type could not be projected far enough to prove keyed source write policy. */
   KeyTypeOpen = 'key-type-open',

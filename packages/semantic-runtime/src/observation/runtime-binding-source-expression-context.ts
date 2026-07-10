@@ -103,8 +103,17 @@ export class RuntimeBindingSourceExpressionContextProjector {
   projectSource(
     input: RuntimeBindingSourceExpressionProjectionRequest,
   ): RuntimeBindingSourceExpressionProjection {
+    return this.projectSourceWithBindingBehavior(
+      input,
+      bindingBehaviorEvaluationForRuntimeBindingSource(input.binding),
+    );
+  }
+
+  projectSourceWithBindingBehavior(
+    input: RuntimeBindingSourceExpressionProjectionRequest,
+    bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
+  ): RuntimeBindingSourceExpressionProjection {
     const strictBinding = this.strictBinding(input.binding);
-    const bindingBehavior = bindingBehaviorEvaluationForRuntimeBindingSource(input.binding);
     const instructionScope = input.sourceScope
       ?? this.instructionScopes.scopeForBinding(this.runtimeBindings, input.binding);
     if (instructionScope == null) {
@@ -128,8 +137,17 @@ export class RuntimeBindingSourceExpressionContextProjector {
   projectSourceExpressions(
     input: RuntimeBindingSourceExpressionProjectionRequest,
   ): readonly RuntimeBindingSourceExpressionProjection[] {
+    return this.projectSourceExpressionsWithBindingBehavior(
+      input,
+      bindingBehaviorEvaluationForRuntimeBindingSource(input.binding),
+    );
+  }
+
+  projectSourceExpressionsWithBindingBehavior(
+    input: RuntimeBindingSourceExpressionProjectionRequest,
+    bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
+  ): readonly RuntimeBindingSourceExpressionProjection[] {
     const strictBinding = this.strictBinding(input.binding);
-    const bindingBehavior = bindingBehaviorEvaluationForRuntimeBindingSource(input.binding);
     const instructionScope = input.sourceScope
       ?? this.instructionScopes.scopeForBinding(this.runtimeBindings, input.binding);
     if (instructionScope == null) {

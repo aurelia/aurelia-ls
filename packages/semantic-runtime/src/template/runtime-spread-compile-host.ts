@@ -8,6 +8,7 @@ import { CustomAttributeDefinition } from '../resources/custom-attribute-definit
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { ExpressionType } from '../expression/ast.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { camelCaseAttributeName } from './attribute-mapper.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
@@ -612,7 +613,7 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
     return this.host.allocateInstruction(this.request, this.syntax, kind, local);
   }
 
-  parsePropertyExpression(expression: string, _info: BindingCommandBuildInfo): ProductHandle | null {
+  parsePropertyExpression(expression: string, _info: BindingCommandBuildInfo, _sourceSpan: SourceSpan | null): ProductHandle | null {
     return this.host.publishExpressionParse(this.request, this.syntax, this.targetNode, expression, 'IsProperty', this.command, this.bindable).productHandle;
   }
 
@@ -622,7 +623,7 @@ class RuntimeSpreadCommandBuildContext implements BindingCommandBuildContext {
 
   parseIteratorExpression(expression: string, _info: BindingCommandBuildInfo): BindingCommandIteratorParse {
     const parse = this.host.publishExpressionParse(this.request, this.syntax, this.targetNode, expression, 'IsIterator', this.command, this.bindable);
-    return new BindingCommandIteratorParse(parse.productHandle, [], null);
+    return new BindingCommandIteratorParse(parse.productHandle, [], null, null);
   }
 
   parseAttributeSyntax(_rawName: string, _rawValue: string, _info: BindingCommandBuildInfo): BindingCommandTailSyntax | null {

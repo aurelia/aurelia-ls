@@ -53,38 +53,50 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/runtime-html-view-factory-provider-errors/src/runtime-html-view-factory-provider-errors-app.html": [
-        {
-          "newText": "view-factory-panel",
-          "range": {
-            "end": {
-              "character": 26,
-              "line": 1
-            },
-            "start": {
-              "character": 5,
-              "line": 1
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "view-factory-panel",
+            "range": {
+              "end": {
+                "character": 26,
+                "line": 1
+              },
+              "start": {
+                "character": 5,
+                "line": 1
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/runtime-html-view-factory-provider-errors/src/runtime-html-view-factory-provider-errors-app.html",
+          "version": 1
         }
-      ],
-      "fixtures://pressure/runtime-html-view-factory-provider-errors/src/runtime-html-view-factory-provider-errors-app.ts": [
-        {
-          "newText": "view-factory-panel",
-          "range": {
-            "end": {
-              "character": 30,
-              "line": 28
-            },
-            "start": {
-              "character": 9,
-              "line": 28
+      },
+      {
+        "edits": [
+          {
+            "newText": "view-factory-panel",
+            "range": {
+              "end": {
+                "character": 30,
+                "line": 28
+              },
+              "start": {
+                "character": 9,
+                "line": 28
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/runtime-html-view-factory-provider-errors/src/runtime-html-view-factory-provider-errors-app.ts",
+          "version": null
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -128,7 +140,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -145,7 +157,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 28
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]

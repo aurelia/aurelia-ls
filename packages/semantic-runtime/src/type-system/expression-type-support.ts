@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import type { BindingContextSlot, BindingScope } from '../configuration/scope.js';
+import { bindingContextSlotTargetTypeSourceMember } from '../configuration/binding-scope-slot-projector.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -25,7 +26,7 @@ import {
   CheckerExpressionTypeSynthesizer,
   commonTypeReference,
 } from './expression-type-synthesis.js';
-import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemProductDetails } from './product-details.js';
 import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -98,7 +99,7 @@ export class CheckerExpressionTypeSupport {
           return slotChecker;
         }
       }
-      current = current.parent;
+      current = current.runtimeParent;
     }
     return null;
   }
@@ -126,9 +127,7 @@ export class CheckerExpressionTypeSupport {
       return checkerTypeReferenceWithSource(reference, reference.sourceAddressHandle ?? slot.sourceAddressHandle);
     }
 
-    const member = slot.targetProductHandle == null
-      ? null
-      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    const member = bindingContextSlotTargetTypeSourceMember(this.store, slot);
     if (member?.carrier?.valueType == null) {
       return reference;
     }

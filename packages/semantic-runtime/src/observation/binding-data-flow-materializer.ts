@@ -5,12 +5,10 @@ import {
 import type {
   ExpressionAstNode,
 } from '../expression/ast.js';
+import { runtimeAssignmentTargetAstForExpression } from '../expression/runtime-assignment.js';
 import {
   BindingScope,
 } from '../configuration/scope.js';
-import {
-  ConfigurationProductDetails,
-} from '../configuration/product-details.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -59,6 +57,7 @@ import {
   CheckerExpressionTypeOpenKind,
 } from '../type-system/expression-type-evaluation.js';
 import {
+  CheckerExpressionTypeBindingBehaviorEvaluation,
   CheckerExpressionTypeEvaluationContext,
 } from '../type-system/expression-type-context.js';
 import {
@@ -83,13 +82,15 @@ import {
 } from '../type-system/checker-type-shape-access.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
+  IteratorBindingInstruction,
+  MultiAttrInstruction,
   TemplateBindingMode,
 } from '../template/instruction-ir.js';
 import {
-  BuiltInTemplateControllerFlowKind,
-  frameworkTemplateControllerSemanticsForName,
-} from '../template/template-controller-semantics.js';
-import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
+  bindingExpressionAstForProduct,
+  readTemplateExpressionParse,
+} from '../template/expression-parse-product.js';
+import { TemplateProductDetails } from '../template/product-details.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
   PropertyBinding,
@@ -152,7 +153,6 @@ import type { RuntimeBindingValueChannelEmission } from './binding-value-channel
 import {
   sourceAddressForRuntimeExpressionBounds,
 } from '../template/runtime-expression-source-address.js';
-import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type {
   TemplateScopeConstructionEmission,
 } from '../template/template-controller-scope-materializer.js';
@@ -171,6 +171,7 @@ import {
 } from '../template/runtime-binding-mode-behavior.js';
 import {
   BindingDataFlowSourceWriteCapabilityProjector,
+  runtimeAssignmentInputScopeForAccessScope,
 } from './binding-source-write-capability.js';
 import {
   BindingDataFlowSourceInfoProjector,
@@ -308,6 +309,8 @@ class BindingDataFlowMaterializationFrame {
 
 type BindingDataFlowContext = {
   readonly evaluator: CheckerExpressionTypeEvaluator;
+  readonly runtimeBindings: RuntimeRenderingEmission;
+  readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   readonly sourceExpressionContexts: RuntimeBindingSourceExpressionContextProjector;
   readonly resourceScope: TemplateResourceScope | null;
@@ -323,6 +326,20 @@ type ObservedDependencyInput = {
   readonly scope: BindingScope;
   readonly checkerContext: CheckerExpressionTypeEvaluationContext;
   readonly dependencies: readonly RuntimeObservedDependencyDraft[];
+};
+
+type ObservedExpressionSite = {
+  readonly expressionProductHandle: ProductHandle | null;
+  readonly expression: ExpressionAstNode;
+  readonly scope: BindingScope | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  /** Null means the ordinary runtime-binding source lifecycle owns this expression. */
+  readonly bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation | null;
+};
+
+type ObservedExpressionDependencyInput = {
+  readonly site: ObservedExpressionSite;
+  readonly input: ObservedDependencyInput;
 };
 
 type DataFlowTarget = {
@@ -477,6 +494,8 @@ export class RuntimeBindingDataFlowMaterializer {
     const bindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld);
     return new BindingDataFlowMaterializationFrame(source, instructionScopes, {
       evaluator,
+      runtimeBindings: input.runtimeBindings,
+      instructionScopes,
       bindingExpressionScopes,
       sourceExpressionContexts: new RuntimeBindingSourceExpressionContextProjector(
         input.runtimeBindings,
@@ -626,60 +645,28 @@ export class RuntimeBindingDataFlowMaterializer {
     if (draft.ast == null || !bindingDataFlowDirectionIncludesSourceEvaluation(draft.direction)) {
       return [];
     }
-    const ast = draft.ast;
-    const observedDependencyInputs: readonly ObservedDependencyInput[] = scope == null
-      ? [{
-          expression: ast,
-          scope: null,
-          checkerContext: null,
-          dependencies: distinctRuntimeObservedDependencyDrafts(
-            collectRuntimeConnectableObservedDependencyDrafts(ast, null),
-          ),
-        }]
-      : context.sourceExpressionContexts.projectSourceExpressions({
-          binding,
-          expression: ast,
-          localKey: `${local}:observed-dependency:source-expression`,
-          sourceScope: scope,
-        }).map((projection, segmentIndex): ObservedDependencyInput => {
-          if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
-            return {
-              expression: ast,
-              scope: null,
-              checkerContext: null,
-              dependencies: distinctRuntimeObservedDependencyDrafts(
-                collectRuntimeConnectableObservedDependencyDrafts(ast, null),
-              ),
-            };
-          }
-          const checkerContext = checkerContextForRuntimeBindingSourceExpressionProjection(projection, true);
-          const canUseRuntimeArrayMethod = this.templateArrayMethodPolicy(
-            context.evaluator,
-            checkerContext,
-          );
-          return {
-            expression: projection.expression,
-            scope: projection.scope,
-            checkerContext,
-            dependencies: distinctRuntimeObservedDependencyDrafts([
-              ...collectRuntimeConnectableObservedDependencyDrafts(projection.expression, canUseRuntimeArrayMethod),
-              ...collectRuntimeTrackableMethodObservedDependencyDrafts({
-                checkerContext,
-                store: this.store,
-                evaluator: context.evaluator,
-              }),
-            ]),
-          };
-        });
+    const observedDependencyInputs = this.observedExpressionSites(
+      binding,
+      scope,
+      draft,
+      context,
+    ).flatMap((site, siteIndex) =>
+      this.observedDependencyInputsForExpressionSite(
+        binding,
+        site,
+        `${local}:observed-dependency:source-expression:${siteIndex}`,
+        context,
+      ).map((input): ObservedExpressionDependencyInput => ({ site, input }))
+    );
     let dependencyIndex = 0;
-    return observedDependencyInputs.flatMap((input) =>
+    return observedDependencyInputs.flatMap(({ site, input }) =>
       input.dependencies.map((dependency) => {
         const index = dependencyIndex++;
         const dependencyLocal = `${local}:observed-dependency:${index}`;
         const dependencySource = sourceAddressForRuntimeExpressionBounds(
           this.store,
           dependencyLocal,
-          binding.sourceAddressHandle,
+          site.sourceAddressHandle,
           dependency.spanStart,
           dependency.spanEnd,
         );
@@ -701,7 +688,7 @@ export class RuntimeBindingDataFlowMaterializer {
           this.store.handles.identity(dependencyLocal),
           binding.toReference(),
           dataFlow.productHandle,
-          draft.expressionProductHandle,
+          site.expressionProductHandle,
           input.scope?.toReference() ?? null,
           dependency.dependencyKind,
           dependency.expressionKind,
@@ -723,6 +710,110 @@ export class RuntimeBindingDataFlowMaterializer {
         );
       })
     );
+  }
+
+  private observedExpressionSites(
+    binding: RuntimeDataFlowBinding,
+    scope: BindingScope | null,
+    draft: DataFlowDraft,
+    context: BindingDataFlowContext,
+  ): readonly ObservedExpressionSite[] {
+    const primaryParse = readTemplateExpressionParse(this.store, draft.expressionProductHandle);
+    const sites: ObservedExpressionSite[] = [{
+      expressionProductHandle: draft.expressionProductHandle,
+      expression: draft.ast!,
+      scope,
+      sourceAddressHandle: primaryParse?.sourceAddressHandle ?? binding.sourceAddressHandle,
+      bindingBehavior: null,
+    }];
+    const instruction = this.store.productDetails.read(
+      TemplateProductDetails.Instruction,
+      binding.instructionProductHandle,
+    );
+    if (!(instruction instanceof IteratorBindingInstruction)) {
+      return sites;
+    }
+    const controllerProductHandle = context.runtimeBindings
+      .readRenderContextForBinding(binding.productHandle)
+      ?.renderingController.productHandle ?? null;
+    for (const handle of instruction.tailInstructionProductHandles) {
+      const tail = this.store.productDetails.read(TemplateProductDetails.Instruction, handle);
+      if (!(tail instanceof MultiAttrInstruction)
+        || tail.command !== 'bind'
+        || tail.expressionProductHandle == null) {
+        continue;
+      }
+      const expression = bindingExpressionAstForProduct(this.store, tail.expressionProductHandle);
+      if (expression == null) {
+        continue;
+      }
+      const parse = readTemplateExpressionParse(this.store, tail.expressionProductHandle);
+      sites.push({
+        expressionProductHandle: tail.expressionProductHandle,
+        expression,
+        scope: context.instructionScopes.scopeForInstruction(tail.productHandle, controllerProductHandle),
+        sourceAddressHandle: parse?.sourceAddressHandle ?? tail.sourceAddressHandle,
+        // Repeat invokes astEvaluate directly for key/contextual expressions; it never astBinds these auxiliary ASTs.
+        bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation.AstEvaluateOnly,
+      });
+    }
+    return sites;
+  }
+
+  private observedDependencyInputsForExpressionSite(
+    binding: RuntimeDataFlowBinding,
+    site: ObservedExpressionSite,
+    local: string,
+    context: BindingDataFlowContext,
+  ): readonly ObservedDependencyInput[] {
+    if (site.scope == null) {
+      return [this.openObservedDependencyInput(site.expression)];
+    }
+    const request = {
+      binding,
+      expression: site.expression,
+      localKey: local,
+      sourceScope: site.scope,
+    };
+    const projections = site.bindingBehavior == null
+      ? context.sourceExpressionContexts.projectSourceExpressions(request)
+      : context.sourceExpressionContexts.projectSourceExpressionsWithBindingBehavior(request, site.bindingBehavior);
+    return projections.map((projection): ObservedDependencyInput => {
+      if (projection.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
+        return this.openObservedDependencyInput(site.expression);
+      }
+      const checkerContext = checkerContextForRuntimeBindingSourceExpressionProjection(projection, true);
+      const canUseRuntimeArrayMethod = this.templateArrayMethodPolicy(
+        context.evaluator,
+        checkerContext,
+      );
+      return {
+        expression: projection.expression,
+        scope: projection.scope,
+        checkerContext,
+        dependencies: distinctRuntimeObservedDependencyDrafts([
+          ...collectRuntimeConnectableObservedDependencyDrafts(projection.expression, canUseRuntimeArrayMethod),
+          ...collectRuntimeTrackableMethodObservedDependencyDrafts({
+            checkerContext,
+            store: this.store,
+            evaluator: context.evaluator,
+          }),
+        ]),
+      };
+    });
+  }
+
+  private openObservedDependencyInput(
+    expression: ExpressionAstNode,
+  ): ObservedDependencyInput {
+    return {
+      expression,
+      scope: null,
+      checkerContext: null,
+      dependencies: distinctRuntimeObservedDependencyDrafts(
+        collectRuntimeConnectableObservedDependencyDrafts(expression, null),
+      ),
+    };
   }
 
   private templateArrayMethodPolicy(
@@ -1062,19 +1153,21 @@ class BindingDataFlowSourceProjector {
     expressionFacts: DataFlowExpressionFacts,
     targetTypes: DataFlowTargetTypes,
   ): DataFlowSourceProjection {
-    const templateControllerAlias = templateControllerResultAlias(
-      this.store,
-      binding,
-      target.targetAccess,
-      expressionFacts.ast,
-    );
-    const expressionSite = templateControllerAlias != null || scope == null || expressionFacts.ast == null
+    const assignmentTarget = expressionFacts.ast == null
+      ? null
+      : runtimeAssignmentTargetAstForExpression(expressionFacts.ast);
+    const sourceScope = scope != null
+      && needsSourceWriteCapability
+      && assignmentTarget?.$kind === 'AccessScope'
+      ? runtimeAssignmentInputScopeForAccessScope(assignmentTarget, binding.instructionProductHandle, scope)
+      : scope;
+    const expressionSite = sourceScope == null || expressionFacts.ast == null
       ? null
       : sourceExpressionContexts.projectSource({
         binding,
         expression: expressionFacts.ast,
         localKey: `${expressionFacts.expressionTypeLocal}:source`,
-        sourceScope: scope,
+        sourceScope,
       });
     const sourceInfo = this.dataFlowSourceInfo(
       binding,
@@ -1082,11 +1175,9 @@ class BindingDataFlowSourceProjector {
       evaluator,
       needsSourceWriteCapability,
       expressionFacts,
-      templateControllerAlias,
       targetTypes.targetValueType,
     );
-    const sourceEvaluation = templateControllerAlias != null
-      || expressionSite == null
+    const sourceEvaluation = expressionSite == null
       || expressionSite.kind === RuntimeBindingSourceExpressionProjectionKind.Open
       ? null
       : evaluator.evaluate(checkerContextForRuntimeBindingSourceExpressionProjection(
@@ -1097,9 +1188,7 @@ class BindingDataFlowSourceProjector {
     const evaluatedSourceType = sourceInfo.sourceTypeHint
       ?? (sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Type
         ? sourceEvaluation.typeReference
-        : templateControllerAlias != null
-          ? targetTypes.targetValueType
-          : null);
+        : null);
     const sourceType = targetTypes.spreadTargetProperty == null
       ? evaluatedSourceType
       : this.typeAccess.memberType(evaluatedSourceType, targetTypes.spreadTargetProperty);
@@ -1136,9 +1225,7 @@ class BindingDataFlowSourceProjector {
         : spreadSourceInfo(sourceInfo, targetTypes.spreadTargetProperty),
       sourceScope: expressionSite?.kind === RuntimeBindingSourceExpressionProjectionKind.Context
         ? expressionSite.scope
-        : templateControllerAlias != null
-          ? scope
-          : null,
+        : null,
       sourceType,
       sourceTypeOpenReason,
       sourceTypeOpenKind,
@@ -1155,12 +1242,8 @@ class BindingDataFlowSourceProjector {
     evaluator: CheckerExpressionTypeEvaluator,
     needsSourceWriteCapability: boolean,
     expressionFacts: DataFlowExpressionFacts,
-    templateControllerAlias: string | null,
     targetValueType: CheckerTypeReference | null,
   ): SourceExpressionInfo {
-    if (templateControllerAlias != null) {
-      return this.sourceInfo.templateControllerAlias(templateControllerAlias, needsSourceWriteCapability);
-    }
     if (expressionFacts.ast == null
       || expressionSite == null
       || expressionSite.kind === RuntimeBindingSourceExpressionProjectionKind.Open) {
@@ -1302,39 +1385,6 @@ function dataFlowTargetsForBinding(
     sourceOperation: sourceOperations[0] ?? null,
     valueChannel: valueChannels[0] ?? null,
   }];
-}
-
-function templateControllerResultAlias(
-  store: KernelStore,
-  binding: RuntimeDataFlowBinding,
-  targetAccess: RuntimeBindingTargetAccess | null,
-  ast: ExpressionAstNode | null,
-): string | null {
-  if (!(binding instanceof PropertyBinding)
-    || binding.bindingMode !== TemplateBindingMode.FromView
-    || binding.target !== 'value'
-    || targetAccess?.targetControllerProductHandle == null
-    || ast == null) {
-    return null;
-  }
-  const unwrapped = unwrapExpressionAstNodeParens(ast);
-  if (unwrapped.$kind !== 'AccessScope' || unwrapped.ancestor !== 0) {
-    return null;
-  }
-  const controller = store.productDetails.read(
-    ConfigurationProductDetails.Controller,
-    targetAccess.targetControllerProductHandle,
-  );
-  const controllerName = controller == null || !('name' in controller)
-    ? null
-    : controller.name;
-  const semantics = controllerName == null
-    ? null
-    : frameworkTemplateControllerSemanticsForName(controllerName);
-  return semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseFulfilled
-    || semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseRejected
-    ? unwrapped.name.name
-    : null;
 }
 
 function openReasonForDataFlow(input: {

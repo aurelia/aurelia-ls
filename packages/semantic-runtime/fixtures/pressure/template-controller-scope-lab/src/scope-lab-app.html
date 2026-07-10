@@ -16,14 +16,32 @@
     <span class="let-local">${localTask.name}</span>
     <let hostTitle.bind="task.name" to-binding-context></let>
     <span class="let-binding-context">${hostTitle}</span>
+    <let first-label.bind="task.name" upper-label.bind="firstLabel.toUpperCase()" to-binding-context></let>
+    <span class="let-sequential-label">${upperLabel}</span>
+    <let latest-value.bind="task"></let>
+    <let latest-value.bind="task.name"></let>
+    <span class="let-latest-value">${latestValue.toUpperCase()}</span>
+    <let dual-name.bind="task"></let>
+    <let dual-name.bind="task.name" to-binding-context></let>
+    <span class="let-dual-name">${dualName.name}</span>
+    <let is-ready.bind="task.name" to-binding-context></let>
+    <span class="let-current-is-ready">${isReady.toUpperCase()}</span>
+    <span class="let-runtime-parent-is-ready">${$parent.isReady ? 'ready' : 'waiting'}</span>
 
     <ul>
       <li repeat.for="child of task.children">
         <span class="child-name">${child.name}</span>
         <span class="parent-task-name">${task.name}</span>
         <span class="parent-host-title">${$parent.hostTitle}</span>
+        <span class="parent-let-is-ready">${$parent.isReady.toUpperCase()}</span>
+        <span class="grandparent-root-is-ready">${$parent.$parent.isReady ? 'ready' : 'waiting'}</span>
       </li>
     </ul>
+
+    <let selected-label.bind="task.name" literal-label="literal" interpolated-label="${task.name}"></let>
+    <span class="let-selected-label">${selectedLabel}</span>
+    <span class="let-literal-label">${literalLabel}</span>
+    <span class="let-interpolated-label">${interpolatedLabel}</span>
   </section>
 
   <section with.bind="selectedTask">
@@ -34,6 +52,7 @@
   </section>
 
   <section promise.bind="loadTask()">
+    <let resolved-task.bind="selectedTask" load-error.bind="null"></let>
     <p pending>${hostTitle}</p>
     <p then="resolvedTask">${resolvedTask.name}</p>
     <p catch="loadError">${loadError.message}</p>
@@ -47,6 +66,27 @@
 
   <section portal="target: body; position: beforeend">
     <span class="portal-title">${hostTitle}</span>
+  </section>
+
+  <section repeat.for="orderedTask of tasks" if.bind="orderedTask.done">
+    <span class="ordered-task">${orderedTask.name}</span>
+  </section>
+
+  <section if.bind="lateTask.done" repeat.for="lateTask of tasks">
+    <span class="late-task">${lateTask.name}</span>
+  </section>
+
+  <section repeat.for="windowTask of taskWindow">
+    <span class="window-task">${windowTask.name}</span>
+  </section>
+
+  <section repeat.for="customWindowTask of customTaskWindow">
+    <span class="custom-window-task">${customWindowTask.name}</span>
+  </section>
+
+  <section context-scope.bind="selectedTask">
+    <span class="custom-scope-name">${name}</span>
+    <span class="custom-scope-parent">${$parent.hostTitle}</span>
   </section>
 
   <section surface-gate.bind="isReady"></section>

@@ -24,9 +24,10 @@ Matrix metadata is operational:
 - `coverageIntent` explains why the row exists, and can be filtered with `--intent`;
 - `assertionKind`, `fixture`, and assertion id fragments can be filtered with `--assertion-kind`, `--fixture`, and `--id`.
 
-The runner prints grouped counts for Aurelia domains, semantic pressure domains, coverage intents, and capabilities.
-That is deliberate: these fields are not tags for decoration. Unknown values are rejected so the matrix does not grow
-parallel taxonomies by accident.
+The runner prints grouped counts for Aurelia domains, semantic pressure domains, coverage intents, capabilities, and
+the behavior query kinds actually exercised by each Aurelia domain. Query-kind coverage is derived from expectation
+data rather than duplicated as metadata. That is deliberate: these fields are not tags for decoration. Unknown values
+are rejected so the matrix does not grow parallel taxonomies by accident.
 Unknown CLI flags are rejected for the same reason.
 
 Focused examples:
@@ -34,7 +35,7 @@ Focused examples:
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --subdomain template-controller-scope
 pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --domain plugin-capabilities
-pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --intent domain-canary
+pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --intent domain-contract
 pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --capability template-diagnostics
 ```
 
@@ -52,10 +53,13 @@ Aurelia domain vocabulary:
 
 Coverage intents:
 
-- `domain-canary`: an Aurelia-domain or semantic-runtime pressure case meant to expose unknowns and data-loss seams;
+- `domain-contract`: durable Aurelia-domain or semantic-runtime behavior, including pressure cases that originally
+  exposed unknowns or data-loss seams;
 - `regression-contract`: a known behavior or migrated focused contract that should stay stable;
 - `boundary-contract`: public API or catalog vocabulary that other consumers use to choose safe calls;
-- `known-gap-witness`: a stable requirement that currently fails and is tracked in `known-gaps.json`.
+
+Coverage intent is durable. Whether a requirement currently fails is recorded only in `known-gaps.json`; resolving a
+gap must not require changing the requirement's intent.
 
 Transient verdict state lives in `known-gaps.json`:
 

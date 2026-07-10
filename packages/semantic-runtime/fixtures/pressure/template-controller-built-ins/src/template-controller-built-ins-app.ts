@@ -67,10 +67,21 @@ export class TemplateControllerBuiltInsApp {
     ['second', this.products[1]!],
   ]);
   readonly productSet = new Set(this.products);
+  readonly productTriples: readonly (readonly [string, string, BuiltInProduct])[] = [
+    ['first', 'primary', this.products[0]!],
+    ['second', 'secondary', this.products[1]!],
+  ];
+  readonly nestedProducts: readonly (readonly BuiltInProduct[])[] = [this.products];
+  readonly nullableProducts: readonly BuiltInProduct[] | null = this.products;
   readonly repeatCount = 2;
+  readonly contextualEnabled = true;
 
   readonly selectedProduct: BuiltInProduct | null = this.products[0]!;
+  readonly maybeProduct: BuiltInProduct | null = this.products[0]!;
+  readonly absentProduct: undefined = undefined;
   readonly productPromise = Promise.resolve(this.products[1]!);
+  resolvedProduct: BuiltInProduct | undefined;
+  rejectedReason: unknown;
   readonly statusMessage = 'Loading product';
   readonly fallbackMessage = 'Nothing selected';
   readonly listTitle = 'List view';
@@ -80,6 +91,11 @@ export class TemplateControllerBuiltInsApp {
     kind: 'book',
     title: 'Typed branch',
     pages: 184,
+  };
+  readonly secondaryItem: CatalogItem = {
+    kind: 'service',
+    title: 'Nested branch',
+    hourlyRate: 135,
   };
   readonly probedItem: CatalogItem = {
     kind: 'service',
@@ -93,6 +109,7 @@ export class TemplateControllerBuiltInsApp {
   mode: 'list' | 'detail' | 'other' = 'detail';
   modeGroup: 'list' | 'detail' | 'other' = 'list';
   fallMode: 'list' | 'detail' | 'other' = 'list';
+  overlapMode: 'a' | 'b' | 'c' | 'd' | 'other' = 'b';
 
   selectProduct(id: string): boolean {
     return this.products.some((product) => product.id === id);
@@ -120,6 +137,14 @@ export class TemplateControllerBuiltInsApp {
 
   notBookOnly(item: ServiceCatalogItem | ArchivedCatalogItem): string {
     return item.title;
+  }
+
+  serviceOnly(item: ServiceCatalogItem): string {
+    return item.hourlyRate.toFixed();
+  }
+
+  archivedOnly(item: ArchivedCatalogItem): string {
+    return item.archivedAt;
   }
 
   stringOnly(value: string): string {

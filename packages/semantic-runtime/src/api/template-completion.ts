@@ -261,6 +261,8 @@ export function readSemanticTemplateCursorInfo(
   }
   const read = readTemplateCursorInfoValue(
     store,
+    workspaceRootDir,
+    projectRootDir,
     emission,
     readContext,
     detail === SemanticRuntimeDetail.Handles,
@@ -279,6 +281,8 @@ export function readSemanticTemplateCursorInfo(
 
 function readTemplateCursorInfoValue(
   store: KernelStore,
+  workspaceRootDir: string,
+  projectRootDir: string,
   emission: AureliaAppWorldProjectEmission,
   readContext: TemplateCompletionReadContext,
   includeHandles: boolean,
@@ -297,174 +301,23 @@ function readTemplateCursorInfoValue(
   const missingInputs = [...new Set(cursorContext.missingInputs)];
   const cursorOffset = readContext.locus.cursor.offset;
   const baseValue = templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs);
-  const bindingSourceAssignmentDiagnostics = bindingSourceAssignmentCursorDiagnostics(
-    store,
-    readContext.selection,
-    cursorOffset,
-  );
+  const diagnostics = cursorOffset == null
+    ? []
+    : readTemplateDiagnosticRows(
+        store,
+        workspaceRootDir,
+        projectRootDir,
+        emission,
+        { filePath: readContext.locus.cursor.filePath },
+        includeHandles,
+        diagnosticProjection,
+      ).filter((diagnostic) =>
+        semanticSourceReferenceContainsOffset(diagnostic.source, cursorOffset)
+      );
   return {
     missingInputs,
-    value: withCursorDiagnostics(
-      baseValue,
-      [
-        ...templateOverlayTypeCursorDiagnostics(
-          store,
-          emission,
-          readContext.selection,
-          cursorOffset,
-          includeHandles,
-          diagnosticProjection,
-          [
-            ...baseValue.diagnostics,
-            ...bindingSourceAssignmentDiagnostics,
-          ],
-        ),
-        ...bindingSourceAssignmentDiagnostics,
-        ...runtimeObservedDependencyRootCursorDiagnostics(store, emission, readContext.selection, cursorOffset),
-        ...frameworkCapabilityDemandCursorDiagnostics(store, emission, readContext.selection, cursorOffset),
-        ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
-        ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
-      ],
-    ),
+    value: withCursorDiagnostics(baseValue, diagnostics),
   };
-}
-
-function templateOverlayTypeCursorDiagnostics(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  selection: TemplateCompletionResourceSelection,
-  cursorOffset: number | null,
-  includeHandles: boolean,
-  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined,
-  existingDiagnostics: readonly SemanticTemplateCursorDiagnosticRow[],
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (
-    cursorOffset == null
-    || normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection) !== SemanticDiagnosticProjectionPolicy.TypeProjection
-    || !semanticAppAnalysisDepthSatisfies(emission.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
-  ) {
-    return [];
-  }
-  const originKey = templateOverlayOriginKey(selection.resource);
-  const cache = templateOverlayDiagnosticCache(store, emission);
-  const semanticAgreementRows = new Set(existingDiagnostics.flatMap((diagnostic) => {
-    const source = diagnostic.source;
-    if (source == null) {
-      return [];
-    }
-    const key = semanticTemplateDiagnosticAgreementKey(diagnostic, source);
-    return key == null ? [] : [key];
-  }));
-  return cache.diagnostics.flatMap((diagnostic) => {
-    if (diagnostic.overlayOriginKey !== originKey) {
-      return [];
-    }
-    const source = sourceReferenceForOverlayDiagnostic(store, diagnostic);
-    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
-      return [];
-    }
-    const agreementKey = templateOverlayDiagnosticAgreementKey(diagnostic, source);
-    if (agreementKey != null && semanticAgreementRows.has(agreementKey)) {
-      return [];
-    }
-    return [templateOverlayDiagnosticRow(store, selection, diagnostic, source, includeHandles)];
-  });
-}
-
-function bindingSourceAssignmentCursorDiagnostics(
-  store: KernelStore,
-  selection: TemplateCompletionResourceSelection,
-  cursorOffset: number | null,
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (cursorOffset == null) {
-    return [];
-  }
-  return resourceLocalBindingDataFlows(store, selection.resource).flatMap((dataFlow) => {
-    const span = sourceSpanForHandle(store, dataFlow.sourceAddressHandle);
-    if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
-      return [];
-    }
-    const source = bindingDataFlowDiagnosticSource(store, dataFlow)
-      ?? describeAddress(store, dataFlow.sourceAddressHandle);
-    if (source == null) {
-      return [];
-    }
-    return bindingDataFlowDiagnostics(store, dataFlow, source);
-  });
-}
-
-function runtimeObservedDependencyRootCursorDiagnostics(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  selection: TemplateCompletionResourceSelection,
-  cursorOffset: number | null,
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (cursorOffset == null) {
-    return [];
-  }
-  return runtimeObservedDependencyRootDiagnosticCandidates(store, emission, selection)
-    .filter((candidate) => semanticSourceReferenceContainsOffset(candidate.source, cursorOffset))
-    .map((candidate) => candidate.diagnostic);
-}
-
-function templateCompilerIssueCursorDiagnostics(
-  store: KernelStore,
-  selection: TemplateCompletionResourceSelection,
-  cursorOffset: number | null,
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (cursorOffset == null) {
-    return [];
-  }
-  return templateCompilerIssues(selection.resource).flatMap((issue) => {
-    const source = describeAddress(store, issue.sourceAddressHandle);
-    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
-      return [];
-    }
-    return [templateCompilerErrorDiagnostic(
-      issue.message,
-      issue.frameworkErrorCode,
-      source,
-      issue.severity,
-    )];
-  });
-}
-
-function frameworkCapabilityDemandCursorDiagnostics(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  selection: TemplateCompletionResourceSelection,
-  cursorOffset: number | null,
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (cursorOffset == null) {
-    return [];
-  }
-  return frameworkCapabilityDemandsForSelection(emission, selection).flatMap((demand) => {
-    if (demand.admissionState === FrameworkCapabilityAdmissionState.Admitted) {
-      return [];
-    }
-    const source = describeAddress(store, demand.sourceAddressHandle);
-    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
-      return [];
-    }
-    return [frameworkCapabilityDemandDiagnostic(demand, source)];
-  });
-}
-
-function routerIssueCursorDiagnostics(
-  store: KernelStore,
-  emission: AureliaAppWorldProjectEmission,
-  cursorOffset: number | null,
-): readonly SemanticTemplateCursorDiagnosticRow[] {
-  if (cursorOffset == null) {
-    return [];
-  }
-  return routerIssues(emission).flatMap((issue) => {
-    const source = sourceReferenceForRouterIssue(store, issue);
-    if (source == null || !semanticSourceReferenceContainsOffset(source, cursorOffset)) {
-      return [];
-    }
-    return [routerIssueDiagnostic(issue, source)];
-  });
 }
 
 function routerIssues(
@@ -1242,6 +1095,7 @@ function semanticTemplateDiagnosticAgreementKey(
     case 'missing-expression-member':
       return templateTypeRelationshipAgreementKey(source, 'missing-member');
     case 'binding-source-assignment-strictness':
+    case 'binding-source-assignment-framework-managed':
     case 'binding-source-assignment-runtime-noop':
       return templateTypeRelationshipAgreementKey(source, 'binding-assignment');
     default:

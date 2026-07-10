@@ -74,6 +74,12 @@ export function checkerTypeReferenceTypeExpression(
   if (structuralTypeExpression != null) {
     return structuralTypeExpression;
   }
+  const compoundTypeExpression = shape == null
+    ? null
+    : checkerCompoundCarrierTypeExpression(shape, context);
+  if (compoundTypeExpression != null) {
+    return compoundTypeExpression;
+  }
   return primitiveCheckerTypeExpression(reference);
 }
 
@@ -142,6 +148,67 @@ function checkerStructuralTypeExpression(
     }
   }
   return null;
+}
+
+/** Emits checker-created unions/intersections whose constituents still have stable source-level spellings. */
+function checkerCompoundCarrierTypeExpression(
+  typeShape: CheckerTypeShape,
+  context: GeneratedTypeScriptSourceContext,
+): string | null {
+  const carrier = typeShape.carrier;
+  if (carrier == null || !carrier.type.isUnionOrIntersection()) {
+    return null;
+  }
+  return checkerCompoundTypeExpression(
+    carrier.checker,
+    carrier.type,
+    context,
+    new Set(),
+  );
+}
+
+function checkerCompoundTypeExpression(
+  checker: ts.TypeChecker,
+  type: ts.UnionOrIntersectionType,
+  context: GeneratedTypeScriptSourceContext,
+  seen: Set<ts.Type>,
+): string | null {
+  if (seen.has(type)) {
+    return null;
+  }
+  seen.add(type);
+  const expressions = type.types.map((part) => checkerCarrierConstituentTypeExpression(checker, part, context, seen));
+  seen.delete(type);
+  if (expressions.some((expression) => expression == null)) {
+    return null;
+  }
+  return expressions.join(type.isUnion() ? ' | ' : ' & ');
+}
+
+function checkerCarrierConstituentTypeExpression(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  context: GeneratedTypeScriptSourceContext,
+  seen: Set<ts.Type>,
+): string | null {
+  if (type.isUnionOrIntersection()) {
+    const expression = checkerCompoundTypeExpression(checker, type, context, seen);
+    return expression == null ? null : `(${expression})`;
+  }
+  const display = checker.typeToString(type);
+  if (primitiveDisplayIsSafeTypeExpression(display) || /^(['"]).*\1$/u.test(display)) {
+    return display;
+  }
+  const symbol = type.aliasSymbol ?? type.symbol ?? null;
+  const resolved = symbol != null && (symbol.flags & ts.SymbolFlags.Alias) !== 0
+    ? checker.getAliasedSymbol(symbol)
+    : symbol;
+  const declaration = namedExportedTypeDeclarationFromDeclarations(resolved?.declarations ?? []);
+  if (declaration != null) {
+    return typeExpressionForExportedDeclaration(declaration, context.generatedFileName);
+  }
+  const name = resolved?.getName() ?? symbol?.getName() ?? display;
+  return isKnownGlobalTypeReference(name, resolved) ? name : null;
 }
 
 function checkerTypeNodeExpression(

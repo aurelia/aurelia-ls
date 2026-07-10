@@ -281,6 +281,8 @@ export class LetBindingInstruction {
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework compiler `PrimitiveLiteralExpression` value when an unbound let attribute has no interpolation. */
+    readonly literalValue: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly targetSourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -623,12 +625,13 @@ export function expressionProductHandlesForInstruction(
       return productHandleArray(instruction.expressionProductHandle);
     case TemplateInstructionKind.IteratorBinding:
       return productHandleArray(instruction.iterableExpressionProductHandle);
+    case TemplateInstructionKind.MultiAttr:
+      return productHandleArray(instruction.expressionProductHandle);
     case TemplateInstructionKind.Interpolation:
       return instruction.expressionProductHandles;
     case TemplateInstructionKind.HydrateElement:
     case TemplateInstructionKind.HydrateAttribute:
     case TemplateInstructionKind.HydrateTemplateController:
-    case TemplateInstructionKind.MultiAttr:
     case TemplateInstructionKind.SetProperty:
     case TemplateInstructionKind.SetAttribute:
     case TemplateInstructionKind.SetClassAttribute:
@@ -639,6 +642,17 @@ export function expressionProductHandlesForInstruction(
     case TemplateInstructionKind.TranslationBinding:
       return [];
   }
+}
+
+/** Instruction products owned by another lowered instruction rather than dispatched as siblings. */
+export function nestedInstructionProductHandlesForInstructions(
+  instructions: readonly TemplateInstruction[],
+): readonly ProductHandle[] {
+  return instructions.flatMap((instruction) =>
+    instruction instanceof IteratorBindingInstruction
+      ? instruction.tailInstructionProductHandles
+      : []
+  );
 }
 
 function productHandleArray(handle: ProductHandle | null): readonly ProductHandle[] {

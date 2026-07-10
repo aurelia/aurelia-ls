@@ -24,9 +24,6 @@ import type {
 import {
   projectRuntimeAssignmentValueConverterWriteback,
 } from '../type-system/value-converter-writeback.js';
-import type {
-  BindingScope,
-} from '../configuration/scope.js';
 import {
   checkerContextForRuntimeBindingSourceExpressionProjection,
   type RuntimeBindingSourceExpressionContextProjection,
@@ -38,10 +35,8 @@ import {
 import {
   type BindingDataFlowSourceWriteCapabilityProjector,
   type SourceWriteCapability,
-  runtimeAssignmentScopeSlotForAccessScope,
   sourceWriteCapabilityOpen,
   sourceWriteCapabilityRuntimeUnassignable,
-  sourceWriteCapabilityWritable,
 } from './binding-source-write-capability.js';
 
 /** Source descriptor facts used by binding data-flow before row publication. */
@@ -75,15 +70,6 @@ export class BindingDataFlowSourceInfoProjector {
     };
   }
 
-  templateControllerAlias(alias: string, needsSourceWriteCapability: boolean): SourceExpressionInfo {
-    return {
-      sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
-      sourceName: alias,
-      sourceRootName: alias,
-      sourceWriteCapability: needsSourceWriteCapability ? sourceWriteCapabilityWritable() : null,
-    };
-  }
-
   forExpression(
     expressionSite: RuntimeBindingSourceExpressionContextProjection,
     evaluator: CheckerExpressionTypeEvaluator,
@@ -109,7 +95,6 @@ export class BindingDataFlowSourceInfoProjector {
       sourceWriteCapability: needsSourceWriteCapability
         ? this.sourceWriteCapabilityForRuntimeAssignmentTarget(unwrapped, checkerContext, evaluator)
         : null,
-      ...runtimeAssignmentSourceTypeHint(unwrapped, needsSourceWriteCapability, checkerContext.scope),
       ...writeback,
     };
   }
@@ -219,22 +204,6 @@ function bindingDataFlowSourceRootNameForRuntimeAssignmentTarget(
   expression: ExpressionAstNode,
 ): string | null {
   return expression.$kind === 'AccessThis' ? '$this' : expressionSourceRootName(expression);
-}
-
-function runtimeAssignmentSourceTypeHint(
-  expression: ExpressionAstNode,
-  needsSourceWriteCapability: boolean,
-  scope: BindingScope,
-): Pick<SourceExpressionInfo, 'sourceTypeHint'> | Record<string, never> {
-  if (expression.$kind !== 'AccessScope') {
-    return {};
-  }
-  const slot = needsSourceWriteCapability
-    ? runtimeAssignmentScopeSlotForAccessScope(expression, scope)
-    : null;
-  return {
-    sourceTypeHint: slot?.targetType ?? null,
-  };
 }
 
 /** Retargets a spread binding source descriptor to the concrete property being spread into. */

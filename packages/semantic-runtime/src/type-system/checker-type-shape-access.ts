@@ -34,6 +34,7 @@ import {
   checkerIterableElementType,
   checkerNumberIndexValueType,
   checkerNullishType,
+  checkerTupleElementType,
   checkerTypeNullishPresence,
   CheckerTypeNullishPresence,
 } from './checker-related-types.js';
@@ -409,6 +410,21 @@ export class CheckerTypeShapeAccess {
 
     const checker = ownerType.carrier?.checker ?? null;
     const type = ownerType.carrier?.type ?? null;
+    const tupleElementType = checker == null || type == null
+      ? null
+      : checkerTupleElementType(checker, type, index);
+    if (checker != null && tupleElementType != null) {
+      return this.projector.ensureProjection({
+        localKey: `${localKey}:checker-tuple-index`,
+        checker,
+        type: tupleElementType,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
+        sourceAddressHandle,
+        display: checker.typeToString(tupleElementType),
+        memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+      } satisfies CheckerTypeProjectionRequest);
+    }
+
     const property = checker == null || type == null
       ? null
       : checkerPropertySymbol(checker, type, String(index));

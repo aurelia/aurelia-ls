@@ -466,6 +466,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** One immutable product state was derived from an earlier state of the same runtime Scope. */
+    BindingScopeDerivedFromScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope-derived-from-scope',
+      'One immutable binding Scope product state was derived from an earlier state of the same runtime Scope identity.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+
     /** A runtime binding scope uses its binding context for ordinary name lookup. */
     BindingScopeUsesBindingContext: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -1168,6 +1179,17 @@ export const KernelClaimPredicates = {
       KernelVocabularyNamespace.Binding,
       'scope-effect-creates-binding-scope',
       'A binding scope effect produced a modeled runtime Scope.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.ScopeEffect),
+        productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+
+    /** A binding scope effect updated the contexts of an existing modeled runtime Scope. */
+    ScopeEffectUpdatesBindingScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'scope-effect-updates-binding-scope',
+      'A binding scope effect updated an existing runtime Scope context and produced a new immutable Scope product state.',
       claimSignature(
         productEndpoint(KernelProductKinds.Binding.ScopeEffect),
         productEndpoint(KernelProductKinds.Configuration.BindingScope),

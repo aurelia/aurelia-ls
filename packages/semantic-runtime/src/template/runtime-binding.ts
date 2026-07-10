@@ -204,6 +204,7 @@ export type RuntimeBindingScopeEffectField =
   | 'binding'
   | 'ownerInstruction'
   | 'target'
+  | 'value'
   | 'targetContext'
   | 'localNames'
   | 'iterable'
@@ -305,6 +306,8 @@ export class LetBindingScopeEffect {
     readonly ownerInstructionProductHandle: ProductHandle,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework-compiled primitive string source when no expression product exists. */
+    readonly literalValue: string | null,
     readonly targetContext: LetBindingTargetContext,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly targetSourceAddressHandle: AddressHandle | null = null,
@@ -722,6 +725,8 @@ export class LetBinding {
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
+    /** Framework-compiled primitive string source when no expression product exists. */
+    readonly literalValue: string | null,
     readonly targetContext: LetBindingTargetContext,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,

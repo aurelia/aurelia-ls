@@ -163,13 +163,13 @@ export class AccessBoundaryExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessBoundary' as const;
 }
 
-export enum ScopeExpressionRootKind {
-  /** Ordinary scope lookup, such as `title`. */
-  BindingContext = 'binding-context',
-  /** Authored `$this.member` or `$this.method()` before parser lowering. */
-  CurrentBindingContext = 'current-binding-context',
-  /** Authored `$parent.member` / `$parent.$parent.member` before parser lowering. */
-  AncestorBindingContext = 'ancestor-binding-context',
+export enum ScopeExpressionSyntaxOrigin {
+  /** Ordinary authored scope lookup, such as `title`. */
+  Ordinary = 'ordinary-scope-lookup',
+  /** Authored `$this.member` or `$this.method()` before framework-shaped lowering to ancestor-zero named lookup. */
+  CurrentBindingContext = 'current-binding-context-syntax',
+  /** Authored `$parent.member` / `$parent.$parent.member` before lowering to explicit-ancestor named lookup. */
+  AncestorBindingContext = 'ancestor-binding-context-syntax',
 }
 
 @auLink('expression-parser:AccessScopeExpression')
@@ -180,7 +180,7 @@ export class AccessScopeExpression extends ExpressionNodeBase {
     span: SourceSpan,
     readonly name: Identifier,
     readonly ancestor: number,
-    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
+    readonly syntaxOrigin: ScopeExpressionSyntaxOrigin = ScopeExpressionSyntaxOrigin.Ordinary,
   ) {
     super(span);
   }
@@ -258,16 +258,16 @@ export class CallScopeExpression extends ExpressionNodeBase {
     readonly args: IsAssign[],
     readonly ancestor: number,
     readonly optional: boolean,
-    readonly rootKind: ScopeExpressionRootKind = ScopeExpressionRootKind.BindingContext,
+    readonly syntaxOrigin: ScopeExpressionSyntaxOrigin = ScopeExpressionSyntaxOrigin.Ordinary,
   ) {
     super(span);
   }
 }
 
-export function scopeExpressionUsesCurrentBindingContextRoot(
+export function scopeExpressionWasAuthoredFromCurrentBindingContext(
   expression: AccessScopeExpression | CallScopeExpression,
 ): boolean {
-  return expression.rootKind === ScopeExpressionRootKind.CurrentBindingContext;
+  return expression.syntaxOrigin === ScopeExpressionSyntaxOrigin.CurrentBindingContext;
 }
 
 @auLink('expression-parser:CallMemberExpression')

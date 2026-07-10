@@ -53,51 +53,63 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "queryText",
-          "range": {
-            "end": {
-              "character": 63,
-              "line": 7
-            },
-            "start": {
-              "character": 53,
-              "line": 7
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "queryText",
+            "range": {
+              "end": {
+                "character": 12,
+                "line": 7
+              },
+              "start": {
+                "character": 2,
+                "line": 7
+              }
+            }
+          },
+          {
+            "newText": "queryText",
+            "range": {
+              "end": {
+                "character": 33,
+                "line": 15
+              },
+              "start": {
+                "character": 23,
+                "line": 15
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts": [
-        {
-          "newText": "queryText",
-          "range": {
-            "end": {
-              "character": 12,
-              "line": 7
-            },
-            "start": {
-              "character": 2,
-              "line": 7
+      },
+      {
+        "edits": [
+          {
+            "newText": "queryText",
+            "range": {
+              "end": {
+                "character": 63,
+                "line": 7
+              },
+              "start": {
+                "character": 53,
+                "line": 7
+              }
             }
           }
-        },
-        {
-          "newText": "queryText",
-          "range": {
-            "end": {
-              "character": 33,
-              "line": 15
-            },
-            "start": {
-              "character": 23,
-              "line": 15
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -140,7 +152,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 7
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -157,7 +169,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 7
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -174,7 +186,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "line": 15
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -368,51 +380,63 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "inStockOnly",
-          "range": {
-            "end": {
-              "character": 68,
-              "line": 10
-            },
-            "start": {
-              "character": 57,
-              "line": 10
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "inStockOnly",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 8
+              },
+              "start": {
+                "character": 2,
+                "line": 8
+              }
+            }
+          },
+          {
+            "newText": "inStockOnly",
+            "range": {
+              "end": {
+                "character": 27,
+                "line": 18
+              },
+              "start": {
+                "character": 16,
+                "line": 18
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts": [
-        {
-          "newText": "inStockOnly",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 8
-            },
-            "start": {
-              "character": 2,
-              "line": 8
+      },
+      {
+        "edits": [
+          {
+            "newText": "inStockOnly",
+            "range": {
+              "end": {
+                "character": 68,
+                "line": 10
+              },
+              "start": {
+                "character": 57,
+                "line": 10
+              }
             }
           }
-        },
-        {
-          "newText": "inStockOnly",
-          "range": {
-            "end": {
-              "character": 27,
-              "line": 18
-            },
-            "start": {
-              "character": 16,
-              "line": 18
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -455,7 +479,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 10
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -472,7 +496,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 8
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -489,7 +513,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 18
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -683,51 +707,63 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "filteredItems",
-          "range": {
-            "end": {
-              "character": 56,
-              "line": 24
-            },
-            "start": {
-              "character": 44,
-              "line": 24
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "filteredItems",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 14
+              },
+              "start": {
+                "character": 6,
+                "line": 14
+              }
+            }
+          },
+          {
+            "newText": "filteredItems",
+            "range": {
+              "end": {
+                "character": 28,
+                "line": 28
+              },
+              "start": {
+                "character": 16,
+                "line": 28
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/state/catalog-state.ts": [
-        {
-          "newText": "filteredItems",
-          "range": {
-            "end": {
-              "character": 18,
-              "line": 14
-            },
-            "start": {
-              "character": 6,
-              "line": 14
+      },
+      {
+        "edits": [
+          {
+            "newText": "filteredItems",
+            "range": {
+              "end": {
+                "character": 56,
+                "line": 24
+              },
+              "start": {
+                "character": 44,
+                "line": 24
+              }
             }
           }
-        },
-        {
-          "newText": "filteredItems",
-          "range": {
-            "end": {
-              "character": 28,
-              "line": 28
-            },
-            "start": {
-              "character": 16,
-              "line": 28
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -770,7 +806,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 24
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -787,7 +823,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 14
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -804,7 +840,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 28
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -998,36 +1034,42 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "entry",
-          "range": {
-            "end": {
-              "character": 28,
-              "line": 24
-            },
-            "start": {
-              "character": 24,
-              "line": 24
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "entry",
+            "range": {
+              "end": {
+                "character": 28,
+                "line": 24
+              },
+              "start": {
+                "character": 24,
+                "line": 24
+              }
+            }
+          },
+          {
+            "newText": "entry",
+            "range": {
+              "end": {
+                "character": 36,
+                "line": 25
+              },
+              "start": {
+                "character": 32,
+                "line": 25
+              }
             }
           }
-        },
-        {
-          "newText": "entry",
-          "range": {
-            "end": {
-              "character": 36,
-              "line": 25
-            },
-            "start": {
-              "character": 32,
-              "line": 25
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -1069,7 +1111,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 24
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1086,7 +1128,7 @@ diff --git a/src/state/catalog-state.ts b/src/state/catalog-state.ts
           "line": 25
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -1251,153 +1293,159 @@ _No in-memory diff._
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html": [
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 11,
-              "line": 3
-            },
-            "start": {
-              "character": 7,
-              "line": 3
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 3
+              },
+              "start": {
+                "character": 7,
+                "line": 3
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 25,
+                "line": 4
+              },
+              "start": {
+                "character": 21,
+                "line": 4
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 14,
+                "line": 5
+              },
+              "start": {
+                "character": 10,
+                "line": 5
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 6
+              },
+              "start": {
+                "character": 9,
+                "line": 6
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 9
+              },
+              "start": {
+                "character": 12,
+                "line": 9
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 11
+              },
+              "start": {
+                "character": 12,
+                "line": 11
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 13
+              },
+              "start": {
+                "character": 12,
+                "line": 13
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 15
+              },
+              "start": {
+                "character": 12,
+                "line": 15
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 17
+              },
+              "start": {
+                "character": 12,
+                "line": 17
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 62,
+                "line": 21
+              },
+              "start": {
+                "character": 58,
+                "line": 21
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 88,
+                "line": 21
+              },
+              "start": {
+                "character": 84,
+                "line": 21
+              }
             }
           }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 25,
-              "line": 4
-            },
-            "start": {
-              "character": 21,
-              "line": 4
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 14,
-              "line": 5
-            },
-            "start": {
-              "character": 10,
-              "line": 5
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 6
-            },
-            "start": {
-              "character": 9,
-              "line": 6
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 9
-            },
-            "start": {
-              "character": 12,
-              "line": 9
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 11
-            },
-            "start": {
-              "character": 12,
-              "line": 11
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 13
-            },
-            "start": {
-              "character": 12,
-              "line": 13
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 15
-            },
-            "start": {
-              "character": 12,
-              "line": 15
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 17
-            },
-            "start": {
-              "character": 12,
-              "line": 17
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 62,
-              "line": 21
-            },
-            "start": {
-              "character": 58,
-              "line": 21
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 88,
-              "line": 21
-            },
-            "start": {
-              "character": 84,
-              "line": 21
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -1439,7 +1487,7 @@ _No in-memory diff._
           "line": 3
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1456,7 +1504,7 @@ _No in-memory diff._
           "line": 4
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1473,7 +1521,7 @@ _No in-memory diff._
           "line": 5
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1490,7 +1538,7 @@ _No in-memory diff._
           "line": 6
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1507,7 +1555,7 @@ _No in-memory diff._
           "line": 9
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1524,7 +1572,7 @@ _No in-memory diff._
           "line": 11
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1541,7 +1589,7 @@ _No in-memory diff._
           "line": 13
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1558,7 +1606,7 @@ _No in-memory diff._
           "line": 15
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1575,7 +1623,7 @@ _No in-memory diff._
           "line": 17
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1592,7 +1640,7 @@ _No in-memory diff._
           "line": 21
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1609,7 +1657,7 @@ _No in-memory diff._
           "line": 21
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -1707,153 +1755,159 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html": [
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 11,
-              "line": 3
-            },
-            "start": {
-              "character": 7,
-              "line": 3
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 11,
+                "line": 3
+              },
+              "start": {
+                "character": 7,
+                "line": 3
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 25,
+                "line": 4
+              },
+              "start": {
+                "character": 21,
+                "line": 4
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 14,
+                "line": 5
+              },
+              "start": {
+                "character": 10,
+                "line": 5
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 6
+              },
+              "start": {
+                "character": 9,
+                "line": 6
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 9
+              },
+              "start": {
+                "character": 12,
+                "line": 9
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 11
+              },
+              "start": {
+                "character": 12,
+                "line": 11
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 13
+              },
+              "start": {
+                "character": 12,
+                "line": 13
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 15
+              },
+              "start": {
+                "character": 12,
+                "line": 15
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 17
+              },
+              "start": {
+                "character": 12,
+                "line": 17
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 62,
+                "line": 21
+              },
+              "start": {
+                "character": 58,
+                "line": 21
+              }
+            }
+          },
+          {
+            "newText": "detailItem",
+            "range": {
+              "end": {
+                "character": 88,
+                "line": 21
+              },
+              "start": {
+                "character": 84,
+                "line": 21
+              }
             }
           }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 25,
-              "line": 4
-            },
-            "start": {
-              "character": 21,
-              "line": 4
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 14,
-              "line": 5
-            },
-            "start": {
-              "character": 10,
-              "line": 5
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 6
-            },
-            "start": {
-              "character": 9,
-              "line": 6
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 9
-            },
-            "start": {
-              "character": 12,
-              "line": 9
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 11
-            },
-            "start": {
-              "character": 12,
-              "line": 11
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 13
-            },
-            "start": {
-              "character": 12,
-              "line": 13
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 15
-            },
-            "start": {
-              "character": 12,
-              "line": 15
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 17
-            },
-            "start": {
-              "character": 12,
-              "line": 17
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 62,
-              "line": 21
-            },
-            "start": {
-              "character": 58,
-              "line": 21
-            }
-          }
-        },
-        {
-          "newText": "detailItem",
-          "range": {
-            "end": {
-              "character": 88,
-              "line": 21
-            },
-            "start": {
-              "character": 84,
-              "line": 21
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-detail-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -1895,7 +1949,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 3
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1912,7 +1966,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 4
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1929,7 +1983,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 5
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1946,7 +2000,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 6
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1963,7 +2017,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 9
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1980,7 +2034,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 11
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -1997,7 +2051,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 13
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2014,7 +2068,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 15
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2031,7 +2085,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 17
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2048,7 +2102,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 21
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2065,7 +2119,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 21
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -2163,209 +2217,227 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.html": [
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 23,
-              "line": 0
-            },
-            "start": {
-              "character": 19,
-              "line": 0
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 16,
+                "line": 12
+              },
+              "start": {
+                "character": 12,
+                "line": 12
+              }
             }
           }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 45,
-              "line": 1
-            },
-            "start": {
-              "character": 41,
-              "line": 1
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 76,
-              "line": 1
-            },
-            "start": {
-              "character": 72,
-              "line": 1
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 111,
-              "line": 1
-            },
-            "start": {
-              "character": 107,
-              "line": 1
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 149,
-              "line": 1
-            },
-            "start": {
-              "character": 145,
-              "line": 1
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 14,
-              "line": 2
-            },
-            "start": {
-              "character": 10,
-              "line": 2
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 3
-            },
-            "start": {
-              "character": 9,
-              "line": 3
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 4
-            },
-            "start": {
-              "character": 9,
-              "line": 4
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 13,
-              "line": 5
-            },
-            "start": {
-              "character": 9,
-              "line": 5
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 31,
-              "line": 6
-            },
-            "start": {
-              "character": 27,
-              "line": 6
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 34,
-              "line": 11
-            },
-            "start": {
-              "character": 30,
-              "line": 11
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 62,
-              "line": 12
-            },
-            "start": {
-              "character": 58,
-              "line": 12
-            }
-          }
-        },
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 88,
-              "line": 12
-            },
-            "start": {
-              "character": 84,
-              "line": 12
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts": [
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 16,
-              "line": 12
-            },
-            "start": {
-              "character": 12,
-              "line": 12
+      },
+      {
+        "edits": [
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 23,
+                "line": 0
+              },
+              "start": {
+                "character": 19,
+                "line": 0
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 45,
+                "line": 1
+              },
+              "start": {
+                "character": 41,
+                "line": 1
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 76,
+                "line": 1
+              },
+              "start": {
+                "character": 72,
+                "line": 1
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 111,
+                "line": 1
+              },
+              "start": {
+                "character": 107,
+                "line": 1
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 149,
+                "line": 1
+              },
+              "start": {
+                "character": 145,
+                "line": 1
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 14,
+                "line": 2
+              },
+              "start": {
+                "character": 10,
+                "line": 2
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 3
+              },
+              "start": {
+                "character": 9,
+                "line": 3
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 4
+              },
+              "start": {
+                "character": 9,
+                "line": 4
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 13,
+                "line": 5
+              },
+              "start": {
+                "character": 9,
+                "line": 5
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 31,
+                "line": 6
+              },
+              "start": {
+                "character": 27,
+                "line": 6
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 34,
+                "line": 11
+              },
+              "start": {
+                "character": 30,
+                "line": 11
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 62,
+                "line": 12
+              },
+              "start": {
+                "character": 58,
+                "line": 12
+              }
+            }
+          },
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 88,
+                "line": 12
+              },
+              "start": {
+                "character": 84,
+                "line": 12
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.html",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "product",
-          "range": {
-            "end": {
-              "character": 25,
-              "line": 25
-            },
-            "start": {
-              "character": 21,
-              "line": 25
+      },
+      {
+        "edits": [
+          {
+            "newText": "product",
+            "range": {
+              "end": {
+                "character": 25,
+                "line": 25
+              },
+              "start": {
+                "character": 21,
+                "line": 25
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -2409,7 +2481,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 0
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2426,7 +2498,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2443,7 +2515,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2460,7 +2532,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2477,7 +2549,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 1
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2494,7 +2566,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 2
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2511,7 +2583,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 3
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2528,7 +2600,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 4
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2545,7 +2617,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 5
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2562,7 +2634,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 6
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2579,7 +2651,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 11
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2596,7 +2668,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 12
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2613,7 +2685,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 12
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2630,7 +2702,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 12
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2647,7 +2719,7 @@ diff --git a/src/routes/item-detail-route.html b/src/routes/item-detail-route.ht
           "line": 25
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -2792,51 +2864,63 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts": [
-        {
-          "newText": "product-card",
-          "range": {
-            "end": {
-              "character": 18,
-              "line": 6
-            },
-            "start": {
-              "character": 9,
-              "line": 6
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "product-card",
+            "range": {
+              "end": {
+                "character": 18,
+                "line": 6
+              },
+              "start": {
+                "character": 9,
+                "line": 6
+              }
             }
           }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/components/item-card.ts",
+          "version": null
         }
-      ],
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "product-card",
-          "range": {
-            "end": {
-              "character": 20,
-              "line": 25
-            },
-            "start": {
-              "character": 11,
-              "line": 25
+      },
+      {
+        "edits": [
+          {
+            "newText": "product-card",
+            "range": {
+              "end": {
+                "character": 20,
+                "line": 25
+              },
+              "start": {
+                "character": 11,
+                "line": 25
+              }
+            }
+          },
+          {
+            "newText": "product-card",
+            "range": {
+              "end": {
+                "character": 49,
+                "line": 25
+              },
+              "start": {
+                "character": 40,
+                "line": 25
+              }
             }
           }
-        },
-        {
-          "newText": "product-card",
-          "range": {
-            "end": {
-              "character": 49,
-              "line": 25
-            },
-            "start": {
-              "character": 40,
-              "line": 25
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -2880,7 +2964,7 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
           "line": 6
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2897,7 +2981,7 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
           "line": 25
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -2914,7 +2998,7 @@ diff --git a/src/routes/item-list-route.html b/src/routes/item-list-route.html
           "line": 25
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]
@@ -3110,49 +3194,55 @@ _No in-memory diff._
 {
   "outcome": "result",
   "result": {
-    "changes": {
-      "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html": [
-        {
-          "newText": "badgeOption",
-          "range": {
-            "end": {
-              "character": 35,
-              "line": 16
-            },
-            "start": {
-              "character": 30,
-              "line": 16
+    "documentChanges": [
+      {
+        "edits": [
+          {
+            "newText": "badgeOption",
+            "range": {
+              "end": {
+                "character": 35,
+                "line": 16
+              },
+              "start": {
+                "character": 30,
+                "line": 16
+              }
+            }
+          },
+          {
+            "newText": "badgeOption",
+            "range": {
+              "end": {
+                "character": 82,
+                "line": 16
+              },
+              "start": {
+                "character": 77,
+                "line": 16
+              }
+            }
+          },
+          {
+            "newText": "badgeOption",
+            "range": {
+              "end": {
+                "character": 91,
+                "line": 16
+              },
+              "start": {
+                "character": 86,
+                "line": 16
+              }
             }
           }
-        },
-        {
-          "newText": "badgeOption",
-          "range": {
-            "end": {
-              "character": 82,
-              "line": 16
-            },
-            "start": {
-              "character": 77,
-              "line": 16
-            }
-          }
-        },
-        {
-          "newText": "badgeOption",
-          "range": {
-            "end": {
-              "character": 91,
-              "line": 16
-            },
-            "start": {
-              "character": 86,
-              "line": 16
-            }
-          }
+        ],
+        "textDocument": {
+          "uri": "fixtures://pressure/app-pattern-routed-catalog-storefront/src/routes/item-list-route.html",
+          "version": 1
         }
-      ]
-    }
+      }
+    ]
   }
 }
 ```
@@ -3194,7 +3284,7 @@ _No in-memory diff._
           "line": 16
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -3211,7 +3301,7 @@ _No in-memory diff._
           "line": 16
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     },
     {
@@ -3228,7 +3318,7 @@ _No in-memory diff._
           "line": 16
         }
       },
-      "source": "changes",
+      "source": "documentChanges",
       "status": "ok"
     }
   ]

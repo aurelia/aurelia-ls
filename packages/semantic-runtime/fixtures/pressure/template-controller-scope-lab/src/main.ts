@@ -1,7 +1,7 @@
-import Aurelia from 'aurelia';
-import { ScopeLabApp, SurfaceGate } from './scope-lab-app';
+import Aurelia, { ArrayLikeHandler } from 'aurelia';
+import { ContextScope, ScopeLabApp, SurfaceGate, TaskWindowHandler } from './scope-lab-app';
 
 Aurelia
-  .register(SurfaceGate)
+  .register(SurfaceGate, ContextScope, ArrayLikeHandler, TaskWindowHandler)
   .app(ScopeLabApp)
   .start();

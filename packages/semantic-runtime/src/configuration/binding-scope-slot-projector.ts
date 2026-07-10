@@ -8,6 +8,7 @@ import {
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
 import { checkerTypeReferenceWithSource } from '../type-system/type-shape.js';
+import { sameCheckerTypeReference } from '../type-system/type-shape.js';
 import { CheckerTypeMemberProjectionPolicy, CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
@@ -92,6 +93,39 @@ export function bindingContextSlotDraftForTypeMember(
   );
 }
 
+export function bindingContextSlotDraftForContextTypeMember(
+  store: KernelStore,
+  contextType: BindingScopeConstructionRequest['bindingContextType'],
+  memberName: string,
+): BindingContextSlotDraft | null {
+  const typeShape = contextType?.productHandle == null
+    ? null
+    : store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
+  const member = typeShape == null
+    ? null
+    : readOrProjectCheckerTypeMembers(store, typeShape, typeShape.productHandle)
+      .find((candidate) => candidate.name === memberName) ?? null;
+  return member == null ? null : bindingContextSlotDraftForTypeMember(store, member);
+}
+
+export function bindingContextSlotTargetTypeSourceMember(
+  store: KernelStore,
+  slot: BindingContextSlot | BindingContextSlotDraft,
+): CheckerTypeMember | null {
+  const sourceProductHandle = slot.targetTypeSourceProductHandle ?? slot.targetProductHandle;
+  const member = sourceProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, sourceProductHandle);
+  if (member == null || slot.targetTypeSourceProductHandle != null) {
+    return member;
+  }
+  return slot.targetType == null
+    || member.valueType == null
+    || sameCheckerTypeReference(slot.targetType, member.valueType)
+    ? member
+    : null;
+}
+
 export function bindingContextSlotTargetTypeShape(
   store: KernelStore,
   projector: CheckerTypeProjector,
@@ -104,9 +138,7 @@ export function bindingContextSlotTargetTypeShape(
   if (typeShape != null) {
     return typeShape;
   }
-  const member = slot.targetProductHandle == null
-    ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+  const member = bindingContextSlotTargetTypeSourceMember(store, slot);
   if (member?.carrier?.valueType == null) {
     return null;
   }
@@ -123,7 +155,7 @@ export function bindingContextSlotTargetTypeShape(
   });
 }
 
-/** Projects an Aurelia source expression to the exact binding-context slot it names, when the path is statically slot-shaped. */
+/** Projects an Aurelia source expression to the exact slot-shaped value it preserves through transparent wrappers. */
 export function bindingContextSlotDraftForExpressionAccess(
   store: KernelStore,
   projector: CheckerTypeProjector,

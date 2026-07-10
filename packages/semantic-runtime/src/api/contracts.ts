@@ -3459,6 +3459,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'router-framework-error'
   | 'binding-target-access-framework-error'
   | 'binding-source-assignment-strictness'
+  | 'binding-source-assignment-framework-managed'
   | 'binding-source-assignment-runtime-noop'
   | 'binding-source-runtime-branch-open';
 
@@ -4390,6 +4391,8 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
   readonly sourceAssignmentTargetType: string | null;
+  /** Exact authored token that receives a target-to-source write. */
+  readonly sourceAssignmentOccurrenceSource: SemanticSourceReference | null;
   readonly sourceAssignmentTargetSource: SemanticSourceReference | null;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;

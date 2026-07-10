@@ -24,27 +24,6 @@
       "rationale": "Declare-view-model-member code action edits target a zero-length TypeScript insertion span but publish oldText as null, while other insertion edit plans publish empty-string oldText for all-or-nothing validation."
     },
     {
-      "assertionId": "template-controller-scope-lab/promise-then-declaration-local",
-      "status": "known-gap",
-      "failureBucket": "template-controller-branch-local-declaration-dispatch",
-      "firstObserved": "2026-07-09",
-      "rationale": "The then-branch local declaration value is materialized as a source-backed binding-context slot for usages, but cursor dispatch at the declaration value selects the built-in controller/bindable surface instead of the local slot, so references and rename miss the declaration locus."
-    },
-    {
-      "assertionId": "template-controller-scope-lab/promise-catch-declaration-local",
-      "status": "known-gap",
-      "failureBucket": "template-controller-branch-local-declaration-dispatch",
-      "firstObserved": "2026-07-09",
-      "rationale": "The catch-branch local declaration value is materialized as a source-backed binding-context slot for usages, but cursor dispatch at the declaration value selects the built-in controller/bindable surface instead of the local slot, so references and rename miss the declaration locus."
-    },
-    {
-      "assertionId": "template-controller-scope-lab/let-parent-overlay-does-not-report-false-missing-member",
-      "status": "known-gap",
-      "failureBucket": "template-overlay-let-binding-context-parent-alias",
-      "firstObserved": "2026-07-09",
-      "rationale": "Cursor info, references, and rename resolve nested $parent.hostTitle to the <let to-binding-context> binding-context slot, matching Aurelia Scope.getContext semantics, but the TypeScript overlay still reports TS2339 at that same token."
-    },
-    {
       "assertionId": "resource-registration-lab/primary-resource-rename-does-not-collapse-alias-usages",
       "status": "known-gap",
       "failureBucket": "resource-alias-rename-policy",
@@ -85,6 +64,48 @@
       "failureBucket": "inline-multi-binding-segment-source-projection",
       "firstObserved": "2026-07-09",
       "rationale": "MultiBindingSegment preserves each target and raw command-bearing name, but TemplateSemanticTokens projects only the enclosing custom attribute plus segment value expressions, omitting all authored segment target and command tokens."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/registered-array-like-repeat-handler",
+      "status": "known-gap",
+      "failureBucket": "repeat-handler-admission-not-spent",
+      "firstObserved": "2026-07-09",
+      "rationale": "The app registers Aurelia's exported ArrayLikeHandler and the TypeChecker knows ArrayLike<ScopeTask>, but repeatability projection consults only the built-in resolver categories, emits a false AUR0777, and degrades the repeat local to unknown."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/app-owned-template-controller-scope-effect",
+      "status": "known-gap",
+      "failureBucket": "app-template-controller-scope-effect-not-modeled",
+      "firstObserved": "2026-07-09",
+      "rationale": "The project-local context-scope controller explicitly activates its view with Scope.fromParent(parent, value), but semantic-runtime treats app-owned template controllers as pass-through: the child value binding context is missing and the valid explicit parent lookup silently resolves no symbol, with no open-scope seam."
+    },
+    {
+      "assertionId": "template-controller-scope-lab/app-registered-repeat-handler-honesty",
+      "status": "known-gap",
+      "failureBucket": "repeat-handler-admission-not-spent",
+      "firstObserved": "2026-07-09",
+      "rationale": "The app registers an IRepeatableHandler for TaskWindow, but repeat projection ignores the open registration fact, emits a confident AUR0777 and downstream TS18046, and reports complete closure instead of preserving an admitted source with unknown element type."
+    },
+    {
+      "assertionId": "template-controller-built-ins/unsupported-object-binding-pattern-is-diagnosed",
+      "status": "known-gap",
+      "failureBucket": "repeat-runtime-unsupported-syntax-diagnostic",
+      "firstObserved": "2026-07-09",
+      "rationale": "The parser emits ObjectBindingPattern for repeat.for object syntax, while the checked-in Repeat controller only materializes ArrayDestructuring/ObjectDestructuring and therefore creates no locals. Semantic-runtime currently accepts and types the non-working syntax without a diagnostic."
+    },
+    {
+      "assertionId": "template-controller-built-ins/repeat-source-rejection-and-cascade-policy",
+      "status": "known-gap",
+      "failureBucket": "diagnostic-cascade-policy",
+      "firstObserved": "2026-07-09",
+      "rationale": "Once AUR0777 establishes that a repeat source cannot produce runtime rows, child member diagnostics are derivative noise. The diagnostic presentation policy currently publishes both root-cause and downstream local-member failures."
+    },
+    {
+      "assertionId": "template-controller-built-ins/with-null-binding-context-is-diagnosed",
+      "status": "known-gap",
+      "failureBucket": "with-null-runtime-hazard",
+      "firstObserved": "2026-07-09",
+      "rationale": "Framework With substitutes an empty object only for undefined; null becomes the child binding context and later scope lookup can throw. Semantic-runtime erases null with getNonNullableType and reports the reachable runtime hazard as clean."
     },
     {
       "assertionId": "bindable-contract-metadata-depth/coercion-nullability-policy-is-preserved",
