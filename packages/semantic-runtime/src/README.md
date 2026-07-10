@@ -1,6 +1,6 @@
 # Aurelia Semantic Runtime
 
-This source tree is the Aurelia 2 semantic substrate for the language server, Atlas, IDE features, and future compiler or analysis work. Treat the Aurelia runtime as the semantic source of truth, and treat this package as the product model that makes that truth queryable.
+This source tree is the Aurelia 2 semantic substrate for the language server, Atlas, IDE features, and future compiler or analysis work. Treat Aurelia's externally observable framework contract as the semantic source of truth, and treat this package as the product model that makes that truth queryable.
 
 The package is intentionally architecture-first. Build durable substrate layers, then wire recognizers, materializers, and runtime emulators around those layers once the model has enough shape to avoid shims.
 
@@ -12,7 +12,9 @@ Correctness and explanation quality matter before latency while the architecture
 
 ## Runtime Grounding
 
-Aurelia runtime behavior is the grounding authority. Product models may be more granular than runtime classes when tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise than runtime semantics.
+Aurelia's externally observable framework contract is the grounding authority. Establish that contract by triangulating framework documentation, framework tests, compiler lowering, runtime behavior, and logical ownership. Individual implementation shapes remain evidence, but optimized hot paths, private mutability, compatibility tolerance, and fallback behavior do not automatically define author-facing semantics.
+
+Product models may be more granular than runtime classes when tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise than framework semantics. Tooling may enforce a stricter authoring rule when the framework is incidentally permissive only when that rule is well-grounded, low-noise, and actionable; otherwise preserve uncertainty as an open seam.
 
 Known semantic behavior exceptions should be called out directly. Attribute patterns and binding commands are the current example: runtime stores them through different mechanisms so attribute parsing can be fast, but the intended application semantics are a configured, app-global, effectively frozen syntax surface.
 
@@ -100,6 +102,8 @@ watchpoints, and current shape:
 Queryable cross-package intent lives in [../../atlas/memory](../../atlas/memory/README.md). When a workbench note becomes durable enough that future Codex should find it by domain, path, symbol, or lens, add an Atlas memory record and keep the README/workbench as the explanatory backing.
 
 When text starts repeating across files, prefer linking to the owner and keeping only the local consequence.
+
+Inline comments own local invariants that would otherwise be lost beside the implementation. Git history is archaeological evidence rather than a current contract: when history recovers an intention that still survives scrutiny, promote it into the owning code, README, or queryable Atlas decision record.
 
 ## Rebuild Discipline
 
