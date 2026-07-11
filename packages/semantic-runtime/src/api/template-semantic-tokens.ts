@@ -25,6 +25,7 @@ import type {
 import type {
   ExpressionParseResult,
 } from '../expression/parse-result-algebra.js';
+import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import {
   ResourceDefinitionKind,
 } from '../resources/resource-kind.js';
@@ -599,7 +600,7 @@ function sliceExpressionSpan(
 function expressionRoot(
   result: ExpressionParseResult,
 ): ExpressionAstNode | null {
-  return 'ast' in result ? result.ast : null;
+  return ExpressionParseResultInspector.hasCanonicalAst(result) ? result.ast : null;
 }
 
 function modifiersForScopeName(

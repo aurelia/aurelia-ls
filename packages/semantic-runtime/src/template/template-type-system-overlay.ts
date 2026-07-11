@@ -1999,7 +1999,7 @@ function expressionSpansForOverlay(parse: TemplateExpressionParse): readonly Ove
     case ExpressionParseResultKind.ExpressionSuccess:
     case ExpressionParseResultKind.EmptyExpressionSuccess:
     case ExpressionParseResultKind.OpaqueSuccess:
-      return 'ast' in parse.result ? [{ span: parse.result.ast.span, ast: parse.result.ast }] : [];
+      return [{ span: parse.result.ast.span, ast: parse.result.ast }];
     case ExpressionParseResultKind.InterpolationSuccess:
       return parse.result.ast.expressions.map((expression) => ({ span: expression.span, ast: expression }));
     default:

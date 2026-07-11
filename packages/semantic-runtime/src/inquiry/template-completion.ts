@@ -10,6 +10,7 @@ import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import {
   ExpressionParseResultInspector,
+  type ExpressionObjectLiteralKeyContext,
 } from '../expression/parse-result-inspection.js';
 import { expressionSpanContainsOffset } from '../expression/source-span.js';
 import type {
@@ -22,6 +23,7 @@ import type {
 import { SourceSpanAddress } from '../kernel/address.js';
 import type { MaterializedProduct } from '../kernel/materialization.js';
 import type { KernelStore } from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -71,9 +73,11 @@ import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-typ
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   RouteConfigKind,
+  type EndpointModel,
   type RouteConfigModel,
 } from '../router/model.js';
 import { RouterProductDetails } from '../router/product-details.js';
+import type { RouteParameterEndpointPlan } from '../router/route-instruction-materialization.js';
 import {
   checkerTypeDeclaresRouteViewModel,
   routerViewModelHookKindForName,
@@ -173,6 +177,7 @@ export const enum TemplateCompletionCandidateKind {
   BindableAttribute = 'bindable-attribute',
   AttributeValue = 'attribute-value',
   RouterRoute = 'router-route',
+  RouterRouteParameter = 'router-route-parameter',
   I18nTranslationKey = 'i18n-translation-key',
   ValueConverter = 'value-converter',
   BindingBehavior = 'binding-behavior',
@@ -295,6 +300,8 @@ export class TemplateCompletionQuery {
     readonly projection: InquiryProjection = new InquiryProjection(InquiryProjectionKind.Compact),
     /** Router route configs visible to this app/template context, when route-aware value completion is requested. */
     readonly routeConfigProductHandles: readonly ProductHandle[] = [],
+    /** Route-recognizer endpoints selected for the active router params object. */
+    readonly routeParameterEndpointProductHandles: readonly ProductHandle[] = [],
     /** Static i18n translation keys visible to this app/template context. */
     readonly i18nTranslationKeyProductHandles: readonly ProductHandle[] = [],
   ) {}
@@ -312,6 +319,7 @@ export class TemplateCompletionQuery {
       this.valueSiteProductHandle,
       this.projection,
       this.routeConfigProductHandles,
+      this.routeParameterEndpointProductHandles,
       this.i18nTranslationKeyProductHandles,
     );
   }
@@ -329,6 +337,7 @@ export class TemplateCompletionQuery {
       this.valueSiteProductHandle,
       this.projection,
       this.routeConfigProductHandles,
+      this.routeParameterEndpointProductHandles,
       this.i18nTranslationKeyProductHandles,
     );
   }
@@ -345,6 +354,8 @@ export interface TemplateCompletionCursorContextRequest {
   readonly projection?: InquiryProjection;
   /** Router route configs visible to the app/template context. */
   readonly routeConfigProductHandles?: readonly ProductHandle[];
+  /** Endpoint plans keyed by the exact authored router-resource attribute product. */
+  readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
   /** Static i18n translation keys visible to the app/template context. */
   readonly i18nTranslationKeyProductHandles?: readonly ProductHandle[];
   /** Hot expression-evaluation world shared by broader cursor/file scans. */
@@ -458,6 +469,7 @@ class TemplateCompletionCursorContextBuilder {
         null,
         this.projection,
         this.input.routeConfigProductHandles ?? [],
+        [],
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
       null,
@@ -482,9 +494,12 @@ class TemplateCompletionCursorContextBuilder {
     const expressionResult = expressionParse == null
       ? null
       : cursorFocusedExpressionResult(this.store, expressionParse, offset);
+    const expressionFrontier = expressionResult == null
+      ? null
+      : expressionCompletionFrontier(expressionResult);
     const syntax = this.syntaxForCursorAttribute(htmlAttribute);
     const classification = this.classificationForCursorSyntax(syntax);
-    const multiBindingSegment = this.multiBindingSegmentForTargetOffset(offset);
+    const multiBindingSegment = this.multiBindingSegmentForCursor(offset, valueSite);
     const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
     const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
     const declarationSelection = sourceBackedScopeSlotDeclarationForCursor(
@@ -517,6 +532,13 @@ class TemplateCompletionCursorContextBuilder {
       declarationSelection?.slot ?? null,
     );
     const missingInputs: string[] = [];
+    const routeParameterEndpointProductHandles = this.routeParameterEndpointProductHandles(
+      multiBindingSegment,
+      siteKind,
+      expressionResult,
+      offset,
+      missingInputs,
+    );
     const memberOwnerType = this.memberOwnerType(
       offset,
       siteKind,
@@ -542,6 +564,7 @@ class TemplateCompletionCursorContextBuilder {
         valueSite?.productHandle ?? null,
         this.projection,
         this.input.routeConfigProductHandles ?? [],
+        routeParameterEndpointProductHandles,
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
       htmlNode?.productHandle ?? null,
@@ -551,11 +574,38 @@ class TemplateCompletionCursorContextBuilder {
       selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
       selectedMemberName,
-      expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
+      expressionFrontier,
       memberOwnerType.openSubject,
       memberOwnerType.sourceAddressHandle,
       uniqueValues(missingInputs),
     );
+  }
+
+  private routeParameterEndpointProductHandles(
+    segment: MultiBindingSegment | null,
+    siteKind: TemplateCompletionSiteKind,
+    expressionResult: ExpressionParseResult | null,
+    offset: number,
+    missingInputs: string[],
+  ): readonly ProductHandle[] {
+    if (
+      segment?.bindable?.reference.name !== 'params'
+      || objectLiteralKeyCompletionContext(siteKind, expressionResult, offset) == null
+    ) {
+      return [];
+    }
+    const attributeProductHandle = segment.attribute.productHandle;
+    const plan = attributeProductHandle == null
+      ? null
+      : this.input.routeParameterEndpointPlans.get(attributeProductHandle) ?? null;
+    if (plan == null) {
+      missingInputs.push('router-route-parameter-endpoints');
+      return [];
+    }
+    if (plan.isOpen) {
+      missingInputs.push('router-route-parameter-endpoints-open');
+    }
+    return plan.endpointProductHandles;
   }
 
   private htmlNodeForOffset(offset: number): HtmlIrNode | null {
@@ -566,12 +616,51 @@ class TemplateCompletionCursorContextBuilder {
     );
   }
 
-  private multiBindingSegmentForTargetOffset(offset: number): MultiBindingSegment | null {
-    return smallestContaining(
+  private multiBindingSegmentForCursor(
+    offset: number,
+    valueSite: TemplateValueSite | null,
+  ): MultiBindingSegment | null {
+    const targetSegment = smallestContaining(
       this.input.resource.compilation.bindingCommandLowering.multiBindingSegments,
       offset,
       (segment) => sourceSpanFor(this.store, segment.targetSourceAddressHandle),
     );
+    if (targetSegment != null || valueSite == null) {
+      return targetSegment;
+    }
+    for (const claimHandle of this.store.readClaimsForObject(valueSite.productHandle)) {
+      const claim = this.store.readClaim(claimHandle);
+      if (claim?.predicateKey !== KernelVocabulary.Template.SelectsValueSite.key) {
+        continue;
+      }
+      const segment = this.multiBindingSegmentForValueOwner(claim.subjectHandle as ProductHandle);
+      if (segment != null) {
+        return segment;
+      }
+    }
+    return null;
+  }
+
+  private multiBindingSegmentForValueOwner(productHandle: ProductHandle): MultiBindingSegment | null {
+    const product = this.store.readProduct(productHandle);
+    if (product?.productKindKey === KernelVocabulary.Compiler.MultiBindingSegment.key) {
+      return this.store.productDetails.read(TemplateProductDetails.MultiBindingSegment, productHandle);
+    }
+    if (product?.productKindKey !== KernelVocabulary.Compiler.BindingCommandBuildInput.key) {
+      return null;
+    }
+    for (const claimHandle of this.store.readClaimsForObject(productHandle)) {
+      const claim = this.store.readClaim(claimHandle);
+      if (claim?.predicateKey !== KernelVocabulary.Compiler.BuildsCommandInput.key) {
+        continue;
+      }
+      const segmentHandle = claim.subjectHandle as ProductHandle;
+      const segmentProduct = this.store.readProduct(segmentHandle);
+      if (segmentProduct?.productKindKey === KernelVocabulary.Compiler.MultiBindingSegment.key) {
+        return this.store.productDetails.read(TemplateProductDetails.MultiBindingSegment, segmentHandle);
+      }
+    }
+    return null;
   }
 
   private htmlAttributeForOffset(offset: number): HtmlAttribute | null {
@@ -847,10 +936,51 @@ function collectTemplateCompletionCandidates(
   frame: TemplateCompletionAnswerFrame,
 ): void {
   collectBindingScopeCandidates(frame);
+  collectRouterRouteParameterCandidates(frame);
   collectResourceScopeCandidates(frame);
   collectBindableCandidates(frame);
   collectExpressionMemberCandidates(frame);
   collectAttributeValueDomainCandidates(frame);
+}
+
+function collectRouterRouteParameterCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  const objectContext = objectLiteralKeyCompletionContext(
+    frame.query.siteKind,
+    frame.expressionResult,
+    frame.query.locus.kind === InquiryLocusKind.SourceCursor
+      ? frame.query.locus.cursor.offset
+      : null,
+  );
+  if (objectContext == null || frame.query.routeParameterEndpointProductHandles.length === 0) {
+    return;
+  }
+  const occupiedKeys = new Set(objectContext.keys
+    .filter((key) => key !== objectContext.activeKey)
+    .map(String));
+  frame.candidates.push(...routerRouteParameterCandidates(
+    frame.store,
+    frame.query.routeParameterEndpointProductHandles,
+    occupiedKeys,
+    frame.missingInputs,
+  ));
+}
+
+function objectLiteralKeyCompletionContext(
+  siteKind: TemplateCompletionSiteKind,
+  result: ExpressionParseResult | null,
+  offset: number | null,
+): ExpressionObjectLiteralKeyContext | null {
+  return siteKind === TemplateCompletionSiteKind.Expression && result != null && offset != null
+    ? routeParameterObjectKeyContext(ExpressionParseResultInspector.objectLiteralKeyContextAtOffset(result, offset))
+    : null;
+}
+
+function routeParameterObjectKeyContext(
+  context: ExpressionObjectLiteralKeyContext | null,
+): ExpressionObjectLiteralKeyContext | null {
+  return context?.objectDepth === 0 ? context : null;
 }
 
 function collectBindingScopeCandidates(
@@ -1348,6 +1478,51 @@ function routerResourceRouteCandidates(
   );
 }
 
+function routerRouteParameterCandidates(
+  store: KernelStore,
+  endpointProductHandles: readonly ProductHandle[],
+  occupiedKeys: ReadonlySet<string>,
+  missingInputs: string[],
+): readonly TemplateCompletionCandidate[] {
+  const candidates: TemplateCompletionCandidate[] = [];
+  for (const productHandle of endpointProductHandles) {
+    const endpoint = store.productDetails.read(RouterProductDetails.Endpoint, productHandle);
+    if (endpoint == null) {
+      missingInputs.push('router-route-parameter-endpoint');
+      continue;
+    }
+    candidates.push(...endpoint.parameters
+      .filter((parameter) => !occupiedKeys.has(parameter.name))
+      .map((parameter) => routerRouteParameterCandidate(endpoint, parameter)));
+  }
+  const seen = new Set<string>();
+  return candidates
+    .filter((candidate) => {
+      if (seen.has(candidate.name)) {
+        return false;
+      }
+      seen.add(candidate.name);
+      return true;
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function routerRouteParameterCandidate(
+  endpoint: EndpointModel,
+  parameter: EndpointModel['parameters'][number],
+): TemplateCompletionCandidate {
+  const shape = parameter.isStar ? 'star' : parameter.isOptional ? 'optional' : 'required';
+  return new TemplateCompletionCandidate(
+    TemplateCompletionCandidateKind.RouterRouteParameter,
+    parameter.name,
+    TemplateCompletionCandidateSourceKind.Router,
+    endpoint.productHandle,
+    endpoint.identityHandle,
+    endpoint.sourceAddressHandle,
+    `${shape[0]!.toUpperCase()}${shape.slice(1)} parameter accepted by route endpoint '${endpoint.path}'.`,
+  );
+}
+
 function routerResourcePrimaryValueHasOpenEndedDomain(
   site: TemplateValueSite,
 ): boolean {
@@ -1596,7 +1771,7 @@ function deriveMemberOwnerTypeForCursorExpression(
   }
 
   const evaluator = expressionWorld.evaluator(resourceScope);
-  const evaluation = result != null && 'ast' in result
+  const evaluation = result != null && ExpressionParseResultInspector.hasCanonicalAst(result)
     ? evaluator.evaluateMemberOwnerAtOffset(context, offset)
     : evaluateMemberOwnerFrontierAtOffset(
       evaluator,
@@ -1710,19 +1885,30 @@ function missingDerivedMemberOwnerType(): DerivedMemberOwnerType {
 function expressionCompletionFrontier(
   result: ExpressionParseResult,
 ): TemplateExpressionCompletionFrontier | null {
-  if ('frontierKind' in result) {
-    return new TemplateExpressionCompletionFrontier(
-      result.frontierKind,
-      result.expectedContinuationClasses,
-    );
+  switch (result.kind) {
+    case ExpressionParseResultKind.PropertyLikeDegradedPublication:
+    case ExpressionParseResultKind.PropertyLikeFrontierPublication:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return new TemplateExpressionCompletionFrontier(
+        result.frontierKind,
+        result.expectedContinuationClasses,
+      );
+    case ExpressionParseResultKind.InterpolationDegradedPublication:
+    case ExpressionParseResultKind.InterpolationFrontierPublication:
+      return new TemplateExpressionCompletionFrontier(
+        result.activeHole.frontierKind,
+        result.activeHole.expectedContinuationClasses,
+      );
+    case ExpressionParseResultKind.ExpressionSuccess:
+    case ExpressionParseResultKind.EmptyExpressionSuccess:
+    case ExpressionParseResultKind.IteratorSuccess:
+    case ExpressionParseResultKind.InterpolationSuccess:
+    case ExpressionParseResultKind.InterpolationAbsent:
+    case ExpressionParseResultKind.OpaqueSuccess:
+    case ExpressionParseResultKind.CompleteInputParseError:
+      return null;
   }
-  if ('activeHole' in result) {
-    return new TemplateExpressionCompletionFrontier(
-      result.activeHole.frontierKind,
-      result.activeHole.expectedContinuationClasses,
-    );
-  }
-  return null;
 }
 
 function shouldOfferBindingScopeCandidates(
@@ -2417,16 +2603,22 @@ function expressionTailCompletionSiteForOffset(
   result: ExpressionParseResult,
   offset: number,
 ): TemplateCompletionSiteKind | null {
-  if ('ast' in result) {
+  if (ExpressionParseResultInspector.hasCanonicalAst(result)) {
     return expressionTailCompletionSiteForNodeOffset(result.ast, offset);
   }
-  if ('activeHole' in result) {
-    return expressionTailCompletionSiteForNodeRefs(result.activeHole.closedSubtreeRefs, offset);
+  switch (result.kind) {
+    case ExpressionParseResultKind.InterpolationDegradedPublication:
+    case ExpressionParseResultKind.InterpolationFrontierPublication:
+      return expressionTailCompletionSiteForNodeRefs(result.activeHole.closedSubtreeRefs, offset);
+    case ExpressionParseResultKind.PropertyLikeDegradedPublication:
+    case ExpressionParseResultKind.PropertyLikeFrontierPublication:
+      return expressionTailCompletionSiteForNodeRefs(result.closedSubtreeRefs, offset);
+    case ExpressionParseResultKind.InterpolationAbsent:
+    case ExpressionParseResultKind.CompleteInputParseError:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return null;
   }
-  if ('closedSubtreeRefs' in result) {
-    return expressionTailCompletionSiteForNodeRefs(result.closedSubtreeRefs, offset);
-  }
-  return null;
 }
 
 function expressionTailCompletionSiteForNodeRefs(

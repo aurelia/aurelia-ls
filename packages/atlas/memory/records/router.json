@@ -394,6 +394,8 @@
         "Closed primitive router-resource values that cannot be route strings, routeable components, or viewport instructions are TypedNavigationInstruction creation issues with instrInvalid / AUR3400 authority. Do not spend this code on classes/functions/promises that are valid framework routeable lanes but currently under-modeled.",
         "Object-form router resource values belong to RouteConfigContext eager path generation before they re-enter the RouteExpression instruction-tree lane. Missing required params for RouteConfig/class components are RouterIssue rows with exact AUR3166 authority; string route ids are framework non-throwing and should not spend that code. Closed instruction children recurse through the generated component RouteConfigContext and preserve child viewport suffixes before lowering back into the static instruction-tree lane.",
         "Inline load multi-bindings with `route` plus object-shaped `params` follow LoadCustomAttribute's component+params branch, not plain RouteExpression parsing. Route-only strings remain RouteExpression input; route+params becomes an eager instruction before static path recognition. Binding-scope param values may use dynamic placeholders when the parameter key is static, but never reuse the route id as the parameter value. Treat `context.bind` as a route-context replacement boundary and keep it open until semantic-runtime models that owning context.",
+        "Endpoint selection and parameter substitution are separate phases of eager path generation. RouteInstructionMaterializationProjectPass evaluates each load route value once, selects candidate endpoints before missing params can block path generation, and retains RouteParameterEndpointPlan rows by exact authored HTML-attribute product handle for completion consumers.",
+        "Route-parameter completion must consume the retained endpoint plan and Endpoint typed details. Do not reparse a sibling route segment, repeat source-value evaluation, or pool parameter names from app-wide route configs; dynamic or context-open routes keep the completion answer open.",
         "Object-form router resource values may arrive as syntactic object literals or equivalent binding-source values such as state/getter-owned instruction arrays. Keep those reads in RuntimeBindingSourceValueEvaluator and consume the closed object here instead of adding router-local expression shortcuts.",
         "`routerSourceExpressionEvaluationFrame(...)` is the route-instruction bridge from a rendered router-resource site into RuntimeBindingSourceValueEvaluationContext or an explicit open source-value row. It now spends `projectRuntimeBindingSourceValueContextInScope(...)` with the rendered binding table and binding-expression scope projector; if this starts growing, improve source-value projection/context primitives rather than reintroducing router-local expression evaluation or a router-owned source-expression projector.",
         "`route-instruction-source.ts` is the source companion for router resource attributes. Source producers should use it for `load` and `href` so generated simple and inline multi-binding forms stay aligned with LoadCustomAttribute and HrefCustomAttribute instead of becoming app-builder-local string templates.",
@@ -428,6 +430,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "RouteParameterEndpointPlan",
+          "summary": "Pre-substitution endpoint selection retained by exact router-resource attribute identity for authoring queries."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-instruction-source.ts",
           "symbolName": "routerLoadAttributeSourceText",
           "summary": "Product-free source serializer for router load/href custom-attribute forms."
@@ -456,7 +464,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-recognition-materialization-project-pass",

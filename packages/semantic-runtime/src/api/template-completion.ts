@@ -56,6 +56,7 @@ import type { RuntimeValueConverterIssue } from '../template/runtime-value-conve
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import type { RouterIssueModel } from '../router/model.js';
+import type { RouteParameterEndpointPlan } from '../router/route-instruction-materialization.js';
 import {
   FrameworkCapabilityAdmissionState,
   FrameworkCapabilityDemandSiteKind,
@@ -214,6 +215,7 @@ interface TemplateCompletionAnswerContext {
 interface TemplateDiagnosticsScanContext {
   readonly includeHandles: boolean;
   readonly routeConfigProductHandles: readonly ProductHandle[];
+  readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>;
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
@@ -296,6 +298,7 @@ function readTemplateCursorInfoValue(
     resource: readContext.selection.resource,
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const missingInputs = [...new Set(cursorContext.missingInputs)];
@@ -599,6 +602,7 @@ function readTemplateCompletion(
     resource: readContext.selection.resource,
     page,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const answer = answerTemplateCompletion(store, cursorContext.query);
@@ -999,6 +1003,7 @@ function templateDiagnosticsScanContext(
   return {
     includeHandles,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
+    routeParameterEndpointPlans: emission.routeInstructions.readRouteParameterEndpointPlans(),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.sourceTextProvider),
     seenRows: new Set(),
@@ -1052,6 +1057,7 @@ function templateDiagnosticRowsForMemberSpan(
     resource: selection.resource,
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: context.routeConfigProductHandles,
+    routeParameterEndpointPlans: context.routeParameterEndpointPlans,
     i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
@@ -1976,10 +1982,20 @@ function templateCompletionReadResult(
 ): TemplateCompletionReadResult {
   const rows = answer.value.candidates.map((candidate) => templateCompletionCandidateRow(candidate, includeHandles));
   const page = semanticTemplateCompletionPage(answer.page, rows.length);
-  const outcome = semanticOutcomeForInquiry(answer.outcome);
+  const missingInputs = [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])];
+  const inquiryOutcome = semanticOutcomeForInquiry(answer.outcome);
+  const outcome = missingInputs.length > 0 && (
+    inquiryOutcome === SemanticRuntimeAnswerOutcome.Hit
+    || inquiryOutcome === SemanticRuntimeAnswerOutcome.Miss
+  )
+    ? SemanticRuntimeAnswerOutcome.Partial
+    : inquiryOutcome;
+  const inquiryClosure = semanticClosureForInquiry(answer.outcome);
   const closure = page?.nextCursor != null
     ? SemanticRuntimeAnswerClosure.Paged
-    : semanticClosureForInquiry(answer.outcome);
+    : missingInputs.length > 0 && inquiryClosure === SemanticRuntimeAnswerClosure.Complete
+      ? SemanticRuntimeAnswerClosure.Open
+      : inquiryClosure;
   const value: Omit<SemanticTemplateCompletionResult, 'displayText'> = {
     siteKind: answer.value.siteKind,
     candidates: rows,
@@ -1989,7 +2005,7 @@ function templateCompletionReadResult(
         frontierKind: answer.value.expressionFrontier.frontierKind,
         expectedContinuationClasses: answer.value.expressionFrontier.expectedContinuationClasses,
       },
-    missingInputs: [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])],
+    missingInputs,
     template: {
       compilationLane: context.selection.lane,
       source: describeAddress(store, context.selection.sourceAddressHandle),

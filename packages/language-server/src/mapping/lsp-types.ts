@@ -397,6 +397,7 @@ const COMPLETION_KIND_BY_SEMANTIC_RUNTIME_CANDIDATE: Readonly<Record<string, Com
   "bindable-attribute": CompletionItemKind.Field,
   "attribute-value": CompletionItemKind.Value,
   "router-route": CompletionItemKind.Reference,
+  "router-route-parameter": CompletionItemKind.Property,
   "i18n-translation-key": CompletionItemKind.Value,
   "value-converter": CompletionItemKind.Function,
   "binding-behavior": CompletionItemKind.Function,

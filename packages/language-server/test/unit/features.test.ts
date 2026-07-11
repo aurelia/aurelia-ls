@@ -738,17 +738,25 @@ describe("handleCompletion", () => {
     const ctx = createMockCompletionContext({
       completions: [
         { name: "message", candidateKind: "binding-context-slot", detail: "Name visible in current view-model.", typeDisplay: "string" },
+        { name: "productId", candidateKind: "router-route-parameter", sourceKind: "router", detail: "Required route parameter." },
       ],
     });
 
     const result = await handleCompletion(ctx as never, params, testRequestGuard);
     expect(result.isIncomplete).toBe(false);
-    expect(result.items).toHaveLength(1);
+    expect(result.items).toHaveLength(2);
     expect(result.items[0]).toEqual(
       expect.objectContaining({
         label: "message",
         kind: CompletionItemKind.Property,
         detail: "binding-context-slot | string | public",
+      }),
+    );
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        label: "productId",
+        kind: CompletionItemKind.Property,
+        documentation: "Required route parameter.",
       }),
     );
   });

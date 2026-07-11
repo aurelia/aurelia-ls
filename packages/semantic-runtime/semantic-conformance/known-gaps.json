@@ -220,13 +220,6 @@
       "rationale": "TemplateInlayHints ignores MultiBindingSegment target/raw-name sources and anchors every segment hint to the enclosing custom-attribute name, causing multiple unrelated hints to stack at one position."
     },
     {
-      "assertionId": "router-instruction-closure-surfaces/route-params-key-completions-use-selected-route-parameters",
-      "status": "known-gap",
-      "failureBucket": "router-instruction-param-completion-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "The route instruction and route-pattern substrate can close load=\"route: product-detail\" to the product-detail route and its productId parameter, but template completions inside params.bind fall back to binding-scope members instead of projecting route-parameter key candidates."
-    },
-    {
       "assertionId": "router-diagnostic-repair-projection/instruction-no-fallback-suggestion-survives-app-aggregation",
       "status": "known-gap",
       "failureBucket": "router-diagnostic-repair-projection-data-loss",

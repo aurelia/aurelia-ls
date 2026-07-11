@@ -181,7 +181,7 @@ interface RouteInstructionMaterializationState {
   readonly routeContextsByIdentity: ReadonlyMap<IdentityHandle, RouteContextModel>;
   readonly routeConfigContextsByIdentity: ReadonlyMap<IdentityHandle, RouteConfigContextModel>;
   readonly routeConfigContextsByRouteConfigIdentity: ReadonlyMap<IdentityHandle, RouteConfigContextModel>;
-  readonly useEagerLoading: boolean;
+  readonly routeParameterEndpointPlans: Map<ProductHandle, MutableRouteParameterEndpointPlan>;
   readonly emissions: RouteInstructionEmission[];
   readonly issues: RouterIssueModel[];
   readonly issueRecords: KernelStoreRecord[];
@@ -190,6 +190,16 @@ interface RouteInstructionMaterializationState {
 }
 
 type RouteInstructionTemplateResource = TemplateCompilationProjectEmission['resources'][number];
+
+export interface RouteParameterEndpointPlan {
+  readonly endpointProductHandles: readonly ProductHandle[];
+  readonly isOpen: boolean;
+}
+
+interface MutableRouteParameterEndpointPlan {
+  readonly endpointProductHandles: Set<ProductHandle>;
+  isOpen: boolean;
+}
 
 /** Router instruction products created before route-tree transition compilation. */
 export class RouteInstructionMaterializationProjectResult {
@@ -200,6 +210,7 @@ export class RouteInstructionMaterializationProjectResult {
     readonly viewportInstructionTrees: readonly ViewportInstructionTreeModel[],
     readonly issues: readonly RouterIssueModel[],
     readonly openSeams: readonly OpenSeam[],
+    readonly routeParameterEndpointPlans: ReadonlyMap<ProductHandle, RouteParameterEndpointPlan>,
   ) {}
 
   readTypedNavigationInstructions(): readonly TypedNavigationInstructionModel[] {
@@ -216,6 +227,10 @@ export class RouteInstructionMaterializationProjectResult {
 
   readIssues(): readonly RouterIssueModel[] {
     return this.issues;
+  }
+
+  readRouteParameterEndpointPlans(): ReadonlyMap<ProductHandle, RouteParameterEndpointPlan> {
+    return this.routeParameterEndpointPlans;
   }
 }
 
@@ -258,6 +273,7 @@ export class RouteInstructionMaterializationProjectPass {
       state.emissions.map((emission) => emission.viewportInstructionTree),
       state.issues,
       state.openSeams,
+      routeParameterEndpointPlans(state.routeParameterEndpointPlans),
     );
   }
 
@@ -304,13 +320,8 @@ export class RouteInstructionMaterializationProjectPass {
     const closed = closeRouterResourceInstruction(
       store,
       site,
-      state.sourceValueEvaluator,
+      state,
       routerOptions,
-      state.resourceIndex,
-      state.openSeams,
-      state.openRecords,
-      state.issues,
-      state.issueRecords,
     );
     if (closed == null) {
       return;
@@ -366,13 +377,72 @@ function createRouteInstructionMaterializationState(
         return identityHandle == null ? [] : [[identityHandle, routeConfigContext] as const];
       }),
     ),
-    useEagerLoading: routeConfigContexts.useEagerLoading,
+    routeParameterEndpointPlans: new Map(),
     emissions: [],
     issues: [],
     issueRecords: [],
     openSeams: [],
     openRecords: [],
   };
+}
+
+function recordRouteParameterEndpointPlan(
+  site: RouterResourceInstructionSite,
+  routeValue: StaticRouterResourceValue | null,
+  state: RouteInstructionMaterializationState,
+): void {
+  if (site.kind !== RouterResourceInstructionKind.Load) {
+    return;
+  }
+  const attributeProductHandle = site.instruction.attribute.productHandle;
+  if (attributeProductHandle == null) {
+    return;
+  }
+  const plan = state.routeParameterEndpointPlans.get(attributeProductHandle) ?? {
+    endpointProductHandles: new Set<ProductHandle>(),
+    isOpen: false,
+  };
+  state.routeParameterEndpointPlans.set(attributeProductHandle, plan);
+
+  const routeConfigContextIdentity = site.routeContext?.routeConfigContext?.identityHandle ?? null;
+  const routeConfigContext = routeConfigContextIdentity == null
+    ? null
+    : state.routeConfigContextsByIdentity.get(routeConfigContextIdentity) ?? null;
+  if (routeConfigContext == null) {
+    plan.isOpen = true;
+    return;
+  }
+
+  if (routeValue?.state !== 'route-expression') {
+    plan.isOpen = true;
+    return;
+  }
+
+  const selection = state.eagerPathGeneration.selectEndpointCandidates(routeConfigContext, {
+    kind: EagerRouteComponentKind.String,
+    value: routeValue.value,
+    localName: routeValue.value,
+  });
+  if (selection.kind !== 'selected') {
+    plan.isOpen = true;
+    return;
+  }
+  for (const candidate of selection.candidates) {
+    plan.endpointProductHandles.add(candidate.endpoint.productHandle);
+  }
+  plan.isOpen ||= selection.errors.length > 0;
+}
+
+function routeParameterEndpointPlans(
+  plans: ReadonlyMap<ProductHandle, MutableRouteParameterEndpointPlan>,
+): ReadonlyMap<ProductHandle, RouteParameterEndpointPlan> {
+  return new Map([...plans].map(([attributeProductHandle, plan]) => [
+    attributeProductHandle,
+    {
+      endpointProductHandles: [...plan.endpointProductHandles].sort((left, right) => left.localeCompare(right)),
+      isOpen: plan.isOpen,
+    },
+  ]));
 }
 
 function routeContextsByContainerIdentity(
@@ -510,13 +580,8 @@ function routeContextsFromContainerAncestry(
 function closeRouterResourceInstruction(
   store: KernelStore,
   site: RouterResourceInstructionSite,
-  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  state: RouteInstructionMaterializationState,
   routerOptions: RouterOptionsMaterializationProjectResult,
-  resourceIndex: ResourceDefinitionIndex,
-  openSeams: OpenSeam[],
-  records: KernelStoreRecord[],
-  issues: RouterIssueModel[],
-  issueRecords: KernelStoreRecord[],
 ): ClosedRouterResourceInstruction | null {
   if (site.kind === RouterResourceInstructionKind.Href && hrefHostHasExplicitExternalMarker(store, site.host)) {
     return null;
@@ -528,33 +593,67 @@ function closeRouterResourceInstruction(
       'Router resource instruction needs an owning RouteContext before relative ViewportInstructionTree creation can close.',
       [OpenSeamReasonKind.RouterInstructionNeedsRouteContext],
       [],
-      openSeams,
-      records,
+      state.openSeams,
+      state.openRecords,
     );
     return null;
   }
   const property = site.kind === RouterResourceInstructionKind.Load
     ? RouterLoadBindableName.Route
     : RouterHrefBindableName.Value;
-  const activeSourceValueEvaluator = sourceValueEvaluator.withDefaultActiveContainer(
+  const activeSourceValueEvaluator = state.sourceValueEvaluator.withDefaultActiveContainer(
     activeContainerForRouterInstructionSite(site),
   );
-  const value = site.kind === RouterResourceInstructionKind.Load
-    ? staticLoadRouterResourceValue(
+  if (site.kind === RouterResourceInstructionKind.Load) {
+    const contextOverrideSourceAddressHandle = routerInstructionBindableSourceAddressHandle(
+      store,
+      site,
+      RouterLoadBindableName.Context,
+    );
+    if (contextOverrideSourceAddressHandle != null) {
+      recordRouteParameterEndpointPlan(site, null, state);
+      recordOpenSeam(
         store,
         site,
-        activeSourceValueEvaluator,
-        resourceIndex,
-        openSeams,
-        records,
-      )
-    : staticRouterResourceValue(
+        'Load router resource has a context override; semantic-runtime does not yet remap router instruction ownership across dynamic IRouteContext values.',
+        [OpenSeamReasonKind.RouterInstructionNeedsRouteContext],
+        [{
+          reasonKind: OpenSeamReasonKind.RouterInstructionNeedsRouteContext,
+          summary: 'The load.context bindable can replace the owning IRouteContext before ViewportInstructionTree creation.',
+          addressHandle: contextOverrideSourceAddressHandle,
+        }],
+        state.openSeams,
+        state.openRecords,
+        contextOverrideSourceAddressHandle,
+      );
+      return null;
+    }
+  }
+  let value: StaticRouterResourceValue | null;
+  if (site.kind === RouterResourceInstructionKind.Load) {
+    const routeValue = staticRouterResourceValue(
+      store,
+      site,
+      RouterLoadBindableName.Route,
+      activeSourceValueEvaluator,
+      state.resourceIndex,
+    );
+    recordRouteParameterEndpointPlan(site, routeValue, state);
+    value = staticLoadRouterResourceValue(
+      store,
+      site,
+      activeSourceValueEvaluator,
+      routeValue,
+    );
+  } else {
+    value = staticRouterResourceValue(
         store,
         site,
         RouterHrefBindableName.Value,
         activeSourceValueEvaluator,
-        resourceIndex,
-      );
+        state.resourceIndex,
+    );
+  }
   if (value == null) {
     return null;
   }
@@ -583,13 +682,13 @@ function closeRouterResourceInstruction(
         dynamicRouterInstructionSummary(store, site, routerOptions, property, value.reason),
         dynamicRouterInstructionReasonKinds(store, site, routerOptions, value.reasonKinds),
         dynamicRouterInstructionReasonSources(store, site, routerOptions, value.sourceAddressHandle, value.reasonKinds),
-        openSeams,
-        records,
+        state.openSeams,
+        state.openRecords,
         value.sourceAddressHandle,
       );
       return null;
     case 'invalid-instruction':
-      recordInvalidInstructionIssue(store, site, value, issues, issueRecords);
+      recordInvalidInstructionIssue(store, site, value, state.issues, state.issueRecords);
       return null;
     case 'missing':
       recordOpenSeam(
@@ -598,8 +697,8 @@ function closeRouterResourceInstruction(
         `${site.kind} router resource did not expose a '${property}' value instruction.`,
         [OpenSeamReasonKind.RouterInstructionMissingValue],
         [],
-        openSeams,
-        records,
+        state.openSeams,
+        state.openRecords,
       );
       return null;
   }
@@ -690,7 +789,6 @@ function materializeEagerInstructionTree(
 
   const result = state.eagerPathGeneration.generate(
     routeConfigContext,
-    state.useEagerLoading,
     closed.instruction,
   );
   switch (result.kind) {
@@ -803,7 +901,6 @@ function generatedEagerRouteExpression(
     }
     const childResult = state.eagerPathGeneration.generate(
       childRouteContext,
-      state.useEagerLoading,
       child,
       result.endpoint.path,
     );
@@ -1410,44 +1507,12 @@ function staticLoadRouterResourceValue(
   store: KernelStore,
   site: RouterResourceInstructionSite,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
-  resourceIndex: ResourceDefinitionIndex,
-  openSeams: OpenSeam[],
-  records: KernelStoreRecord[],
+  routeValue: StaticRouterResourceValue,
 ): StaticRouterResourceValue | null {
-  const contextOverrideSourceAddressHandle = routerInstructionBindableSourceAddressHandle(
-    store,
-    site,
-    RouterLoadBindableName.Context,
-  );
-  if (contextOverrideSourceAddressHandle != null) {
-    recordOpenSeam(
-      store,
-      site,
-      'Load router resource has a context override; semantic-runtime does not yet remap router instruction ownership across dynamic IRouteContext values.',
-      [OpenSeamReasonKind.RouterInstructionNeedsRouteContext],
-      [{
-        reasonKind: OpenSeamReasonKind.RouterInstructionNeedsRouteContext,
-        summary: 'The load.context bindable can replace the owning IRouteContext before ViewportInstructionTree creation.',
-        addressHandle: contextOverrideSourceAddressHandle,
-      }],
-      openSeams,
-      records,
-      contextOverrideSourceAddressHandle,
-    );
-    return null;
-  }
-
   const params = loadRouteParameters(
     store,
     site,
     sourceValueEvaluator,
-  );
-  const routeValue = staticRouterResourceValue(
-    store,
-    site,
-    RouterLoadBindableName.Route,
-    sourceValueEvaluator,
-    resourceIndex,
   );
   if (params.state === 'missing') {
     return routeValue;

@@ -372,6 +372,7 @@ export class ObjectLiteralExpression extends ExpressionNodeBase {
   constructor(
     span: SourceSpan,
     readonly keys: (number | string)[],
+    readonly keySpans: SourceSpan[],
     readonly values: IsAssign[],
   ) {
     super(span);

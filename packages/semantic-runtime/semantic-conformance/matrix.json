@@ -9745,6 +9745,218 @@
       ]
     },
     {
+      "id": "router-parameter-key-completion",
+      "fixture": "fixtures/pressure/router-parameter-completion",
+      "aureliaDomain": "router-composition",
+      "capability": "router-instruction-parameter-completion",
+      "domainAxis": "query-contract",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/routes/parameter-workspace.html",
+      "requirement": "Router params object-key completion spends the owning route context and shared eager endpoint requirements before substitution, unions valid multi-path names, omits already-authored keys, remains ordinary expression completion outside object-key loci, and stays open for dynamic or context-replaced routes.",
+      "cases": [
+        {
+          "id": "filled-multi-path-route-offers-the-endpoint-parameter-union",
+          "cursor": { "marker": "route: product-detail; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "category", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "locale" }, "absent": true },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "path" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "next-key-position-omits-already-authored-parameters",
+          "cursor": { "marker": "productId: 'coffee',  ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "category", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "empty-params-object-still-offers-required-keys",
+          "cursor": { "marker": "route: product-detail; params.bind:{ ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "category", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "optional-route-parameters-remain-authorable-keys",
+          "cursor": { "marker": "route: localized-detail; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "locale", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "star-route-parameter-remains-an-authorable-key",
+          "cursor": { "marker": "route: files; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "path", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "$$residue" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bound-literal-route-reuses-evaluated-endpoint-selection",
+          "cursor": { "marker": "route.bind: 'product-detail'; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "category", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "state-reduced-route-reuses-evaluated-endpoint-selection",
+          "cursor": { "marker": "route.bind: productRoute; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "category", "sourceKind": "router" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter", "name": "productId", "sourceKind": "router" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bound-params-expression-keeps-ordinary-expression-completion",
+          "cursor": { "marker": "params.bind: routeParams", "token": "routeParams" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "routeParams" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "parameter-value-position-keeps-ordinary-expression-completion",
+          "cursor": { "marker": "params.bind: { productId: ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "selectedRoute" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-object-key-does-not-reenter-route-parameter-completion",
+          "cursor": { "marker": "productId: { nested: selectedRoute", "token": "nested" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "incomplete-nested-object-frontier-does-not-reenter-route-parameter-completion",
+          "cursor": { "marker": "productId: {  ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "context-override-does-not-borrow-lexical-route-parameters",
+          "cursor": { "marker": "context.bind: alternateContext; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "outcomes": [ "partial" ],
+              "closure": "open",
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "alternateContext" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dynamic-route-target-does-not-pool-global-parameter-names",
+          "cursor": { "marker": "route.bind: selectedRoute; params.bind: { ", "position": "after-marker" },
+          "expectations": [
+            {
+              "name": "template completions",
+              "query": { "kind": "template-completions", "options": { "page": { "size": 50 } } },
+              "outcomes": [ "partial" ],
+              "closure": "open",
+              "equals": { "value.siteKind": "expression" },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "binding-context-slot", "name": "selectedRoute" } },
+                { "rowPath": "value.candidates", "fields": { "candidateKind": "router-route-parameter" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "router-resource-instruction-closure",
       "fixture": "fixtures/pressure/router-dynamic-pattern",
       "aureliaDomain": "router-composition",

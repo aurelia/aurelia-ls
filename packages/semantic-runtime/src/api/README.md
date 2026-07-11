@@ -556,12 +556,16 @@ inline template references, generated template addresses, and HTML node/value pr
 different authored spans. The API selection path therefore matches the source file and offset against the resource's
 authored HTML span set and prefers the narrowest matching span. The pressure script compares this public API answer with
 the lower-level inquiry answer so wrapper/source-selection drift is visible without printing app source details.
-The API also threads the app emission's modeled `RouteConfig` product handles into the completion inquiry. This lets
-`load="|"` answer from router facts as `router-route` candidates instead of treating the value as an open string or
-re-scanning source for route-like names.
+The API also threads the app emission's modeled `RouteConfig` product handles and router-instruction parameter endpoint
+plans into the completion inquiry. This lets `load="|"` answer from router facts as `router-route` candidates and lets
+`params.bind="{ | }"` answer from selected endpoints as `router-route-parameter` candidates without re-scanning source
+or re-evaluating the route expression.
 Completion answers own compact `displayText` with site kind, candidate count, template lane/path, frontier/missing-input
 state, and a small candidate preview. Public clients should forward that instead of turning candidate rows into prose in
 the adapter.
+Cursor-derived and inquiry-derived missing inputs share one honesty boundary: if either remains, a non-paged completion
+answer is `partial` with `closure: open`. Do not merge missing inputs into the value after computing a `hit`/`complete`
+envelope; that produces a self-contradictory public answer.
 `TemplateCursorInfo` uses the same cursor-to-template selection and value-site classification path, but returns the
 semantic site under the cursor rather than completion candidates: site kind, HTML node/attribute, active value site,
 selected definition, selected bindable, selected expression member, member-owner type, parser frontier, and template

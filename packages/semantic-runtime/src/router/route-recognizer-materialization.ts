@@ -33,6 +33,7 @@ import {
   type RouteConfigContextModel,
   type RouteConfigModel,
 } from './model.js';
+import { RouterProductDetails } from './product-details.js';
 import {
   parseConfigurableRoutePath,
   ROUTE_RECOGNIZER_RESIDUE_PARAMETER,
@@ -129,7 +130,7 @@ export class RouteRecognizerMaterializationProjectPass {
     if (records.length > 0) {
       store.commit(new KernelStoreBatch(records, `route-recognizer:${project.projectKey}`));
     }
-    return new RouteRecognizerMaterializationProjectResult(
+    const result = new RouteRecognizerMaterializationProjectResult(
       project,
       routeEmissions.map((emission) => emission.configurableRoute),
       routeEmissions.flatMap((emission) => emission.endpoints),
@@ -139,6 +140,8 @@ export class RouteRecognizerMaterializationProjectPass {
         ...stateGraphs.flatMap((stateGraph) => stateGraph.issues),
       ],
     );
+    store.productDetails.addAll(RouterProductDetails.Endpoint, result.readEndpoints());
+    return result;
   }
 
   private materializeRouteConfigContext(

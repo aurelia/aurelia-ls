@@ -50,6 +50,12 @@ open seams, or inquiry answers.
   `AwaitingMemberName` and `AwaitingChainSegment` can retain a member receiver; the latter covers optional-chain and
   `$parent.` scope-path frontiers. Consumers must spend the published continuation algebra rather than discard those
   receivers and recreate incomplete-syntax policy.
+- `ObjectLiteralExpression.keys`, `keySpans`, and `values` are index-aligned. Key spans preserve authored identifier,
+  string, and numeric key tokens even though Aurelia's runtime AST only needs decoded key values. Cursor consumers use
+  `ExpressionParseResultInspector.objectLiteralKeyContextAtOffset(...)` to distinguish key slots from value expressions
+  and to identify already-authored keys; they must not rescan expression text for object punctuation. Incomplete nested
+  objects recover their depth from the companion publication's matched-delimiter stack rather than treating every
+  object-key frontier as a root object.
 
 ## Core Design Decisions
 
@@ -110,6 +116,11 @@ open seams, or inquiry answers.
 - `parse-result-inspection.ts`
   Stable family/outcome inspection helpers for consumers. Member-owner and member-name reads share one AST traversal
   primitive so new expression kinds do not require parallel recursive switches in cursor, diagnostic, and hover paths.
+  Object-literal key-context inspection is parser-owned for the same reason: nested objects, shorthand keys, companion
+  prefixes, and key/value source boundaries should not be reconstructed by completion lanes.
+  Parse-result consumers narrow the closed result algebra through `ExpressionParseResultKind` or inspector type guards,
+  never by probing for incidental fields such as `ast`, `activeHole`, or `frontierKind`. Use `instanceof` only for a
+  nominal nested carrier that has no discriminator of its own and remains inside the parser process.
 - `runtime-assignment.ts`
   Expression-level `astAssign` target and value-converter chain helpers. Binding data-flow, template scope
   construction, overlays, and diagnostics should share these transparent-wrapper rules instead of rediscovering

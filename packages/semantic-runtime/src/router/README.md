@@ -216,14 +216,22 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   consumes evaluator-local class instances, receiver-aware object-method calls, and tagged-template/function results
   when those reduce to the same object or route-string shape, instead of requiring route-instruction materialization to
   learn those AST forms.
+- Keep endpoint selection separate from parameter substitution inside that same eager path-generation index. Router
+  instruction materialization evaluates each `load` route value once, selects candidate endpoints before missing params
+  can prevent path generation, and retains a plan keyed by the exact authored HTML-attribute product. Template
+  parameter-key completion consumes those endpoint products; it must not reparse the sibling `route` segment, repeat
+  binding-source evaluation, or pool parameter names from unrelated route configs. Literal, statically reduced,
+  aliased, optional, and star routes therefore share one closure path, while a dynamic route keeps completion open.
+  The expression parser's object-key context is the admission boundary: params variables and property-value positions
+  remain ordinary expression completion sites, and completed keys are not suggested again at a later key slot.
 - Resolve the owning router-resource `RouteContext` through modeled controller/container ancestry before falling back to
   route-config component-definition matching. `load` and `href` resolve `IContextRouter` / `IRouteContext` from the
   custom-attribute controller's container chain; ordinary child components inside a routed component can therefore
   inherit the route context even when their own definition is not a routeable component. Root route contexts also publish
   a root-container fallback, mirroring the framework's extra root `IContextRouter` registration.
-- Publish `RouteConfig` typed product details after committing route-config products. Inquiry surfaces such as
-  template completion should consume these details by product handle when they need route-authoring domains; they should
-  not rescan source files for route-like strings or reach through API row projections.
+- Publish `RouteConfig` and route-recognizer `Endpoint` typed product details after committing their products. Inquiry
+  surfaces such as template completion should consume these details by product handle when they need route-authoring
+  domains; they should not rescan source files for route-like strings or reach through API row projections.
 - Walk static string instruction paths through the owning `RouteConfigContext` recognizer after instruction-tree
   creation. `RecognizedRoute` products are emitted from the same candidate-chain rules as
   `RouteRecognizer.recognize(...)`: state traversal uses the forward `State.nextStates` graph, candidate selection

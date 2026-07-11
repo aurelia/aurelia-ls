@@ -245,6 +245,14 @@ pressure evidence and app-builder pressure fixtures, not reusable generated-code
   `ComponentAgent` projection, closed static query parameter inclusion with duplicate query keys, fragment propagation,
   and active route-node parameter value projection without making recommendable generators prefer ambiguous
   repeated parameter names.
+- `router-parameter-completion` isolates router-resource authoring pressure before navigation can close. A routed
+  workspace supplies multi-path aliases with different parameter sets, optional and star parameters, filled and empty
+  `params.bind` object literals, later key slots, params variables, value positions, and complete/incomplete nested
+  object values, plus bound-literal and state-reduced route values, a context override, and a dynamic route binding.
+  Completion must spend the selected route context and
+  endpoint requirements even when missing params prevent `ViewportInstructionTree` or `RecognizedRoute` publication;
+  context-replaced and dynamic routes remain open instead of receiving app-wide parameter names, while non-key loci
+  retain ordinary expression completion.
 - `repeat-keyed-iterables` captures nested `repeat.for` locals whose iterable comes from nullable arrays and finite
   keyed records such as `Record<'one' | 'two', Item[]>`. It preserves the TypeChecker handoff needed for public plugin
   and app templates where a repeat local indexes a mapped record before a deeper child repeat reads item members.

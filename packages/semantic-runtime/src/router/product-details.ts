@@ -1,6 +1,7 @@
 import { defineProductDetailSlot } from '../kernel/product-details.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type {
+  EndpointModel,
   RouteContextParameterReadModel,
   RouteConfigContributionModel,
   RouteConfigModel,
@@ -17,6 +18,11 @@ export const RouterProductDetails = {
     KernelVocabulary.Router.RouteConfig.key,
     'router.route-config',
     'Effective RouteConfig definition or applied child use with configured fields, closure, and child route references.',
+  ),
+  Endpoint: defineProductDetailSlot<EndpointModel>(
+    KernelVocabulary.RouteRecognizer.Endpoint.key,
+    'router.endpoint',
+    'Route-recognizer endpoint with its configurable route, authored parameter requirements, and residual relationship.',
   ),
   RouteContextParameterRead: defineProductDetailSlot<RouteContextParameterReadModel>(
     KernelVocabulary.Router.RouteContextParameterRead.key,

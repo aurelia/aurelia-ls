@@ -79,6 +79,7 @@ export class CompletedInputPrefixRefBuilder {
   objectLiteral(
     start: number,
     keys: readonly (number | string)[],
+    keySpans: readonly SourceSpan[],
     values: readonly IsAssign[],
   ): ClosedSubtreeRef | null {
     if (values.length === 0) {
@@ -88,6 +89,7 @@ export class CompletedInputPrefixRefBuilder {
     const prefix = new ObjectLiteralExpression(
       this.host.span(start, this.host.localEnd(values[values.length - 1]!)),
       [...keys],
+      [...keySpans],
       [...values],
     );
     return this.root(prefix);

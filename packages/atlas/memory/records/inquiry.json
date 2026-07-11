@@ -16,6 +16,10 @@
       "guidance": [
         "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
         "The product-handle completion answer should spend supplied handles and report missing inputs; cursor member-owner derivation belongs in TemplateCompletionCursorContextBuilder where runtime-analysis expression world and rendered binding source context are available.",
+        "Inline multi-binding value cursors should follow SelectsValueSite and BuildsCommandInput claims back to MultiBindingSegment instead of reconstructing ownership from source overlap. Router params completion then spends the exact attribute-keyed RouteParameterEndpointPlan and Endpoint typed details.",
+        "Domain-specific object-key completion must use ExpressionParseResultInspector.objectLiteralKeyContextAtOffset and parser-retained ObjectLiteralExpression.keySpans. Incomplete nested objects retain depth through the companion matched-delimiter stack. Do not admit key candidates at params variables, property-value positions, or nested frontiers, and do not rescan expression source to infer punctuation or occupied keys.",
+        "Expression parse results and AST nodes are closed data algebras: narrow them with ExpressionParseResultKind, $kind, or parser-owned type guards, never incidental property-presence probes. Reserve instanceof for nominal in-process carriers that do not expose their own discriminator.",
+        "Cursor-context missing inputs and inquiry-answer missing inputs share one public honesty boundary. A non-paged completion carrying either must project partial/open rather than merging the missing inputs after a hit/complete envelope was computed.",
         "Top-level template completion candidates should reuse BindingContextSlot target handles and TypeMember hot details for member kind, visibility, readonly/optional, and known Aurelia hook-category metadata. Do not add a completion-local TypeChecker member enumeration path for this.",
         "`$this.` member-access completion is covered for the parser-owned awaiting-member-name frontier by using the frontier owner expression when no completed binding AST exists. If a similar completion reports missing `expression-member-owner` or `member-owner-type`, route through shared cursor/member-owner projection and binding-scope selection rather than inventing lookup in the answer mapper.",
         "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
@@ -29,6 +33,18 @@
           "symbolName": "TemplateCompletionCursorContextBuilder",
           "line": 335,
           "summary": "Template cursor-to-completion-query context builder."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "templateCompletionReadResult",
+          "summary": "Public completion envelope assembly that must preserve cursor and inquiry missing-input honesty."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector.objectLiteralKeyContextAtOffset",
+          "summary": "Parser-owned authored object-key locus and occupied-key inspection for completion consumers."
         },
         {
           "kind": "lens",
@@ -52,7 +68,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "intent:lsp-edit-affordance-substrate",

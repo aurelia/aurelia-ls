@@ -266,6 +266,16 @@ expected-empty completion sites rather than missing finite domains. Remaining cu
 custom template-controller grammars still report bucketed value-domain gaps until their domain has a real candidate
 lane.
 
+Router `params` object-key completion is narrower than primary route-value completion. The router instruction pass
+retains candidate endpoint products by the exact `load` attribute after spending binding-command lowering, source-value
+evaluation, the owning route context, and eager endpoint selection. The cursor adapter follows the active commanded
+value site's kernel claims back to its `MultiBindingSegment`, then uses that segment's authored attribute handle to read
+the plan. Candidate assembly expands endpoint parameter models as `router-route-parameter` rows. This keeps plain,
+bound-literal, and state-reduced routes on the same path and preserves an open answer when route evaluation or one owning
+context stays open; inquiry must not infer the sibling route from raw segment text. Candidates are admitted only when
+the parser inspector proves an object-literal key locus. Value expressions and params variables keep ordinary scope
+completion, and already-authored keys are omitted unless the cursor is editing that key's exact token span.
+
 `templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler/runtime path. It consumes a
 materialized `TemplateResourceRuntimeAnalysisEmission`, picks the smallest HTML/value/scope products around the cursor,
 classifies the site, returns the same product-handle `TemplateCompletionQuery` used by the answer, and carries the

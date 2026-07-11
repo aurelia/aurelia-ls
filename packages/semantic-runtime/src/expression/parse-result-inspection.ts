@@ -6,11 +6,15 @@ import type {
   CallMemberExpression,
   ExpressionAstNode,
   ExpressionType,
+  ObjectLiteralExpression,
 } from './ast.js';
 import {
+  ExpressionCompanionFrameKind,
   ExpressionExpectedContinuationClass,
   ExpressionParseResultFlags,
   ExpressionParseResultKind,
+  InterpolationActiveHoleCompanion,
+  MatchedDelimiterKind,
   hasExpressionParseResultKindFlag,
 } from './parse-result-algebra.js';
 import {
@@ -30,7 +34,10 @@ import type {
   InterpolationParseResult,
   IteratorSuccess,
   IteratorParseResult,
+  MatchedDelimiterEntry,
   OpaqueSuccess,
+  PropertyLikeDegradedPublication,
+  PropertyLikeFrontierPublication,
   PropertyLikeParseResult,
 } from './parse-result-algebra.js';
 
@@ -117,60 +124,37 @@ export class ExpressionParseResultInspector {
   }
 
   static memberOwner(result: ExpressionParseResult): ExpressionAstNode | null {
-    if (
-      'frontierKind' in result
-      && 'closedSubtreeRefs' in result
-      && frontierExpectsMemberName(result)
-    ) {
-      return result.closedSubtreeRefs.at(-1)?.node ?? null;
+    const frontier = activePropertyOrInterpolationFrontier(result);
+    if (frontier != null && frontierExpectsMemberName(frontier)) {
+      return frontier.closedSubtreeRefs.at(-1)?.node ?? null;
     }
 
-    if (
-      'activeHole' in result
-      && frontierExpectsMemberName(result.activeHole)
-    ) {
-      return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
+    const ast = this.hasCanonicalAst(result) ? result.ast : null;
+    if (ast?.$kind === 'AccessMember') {
+      return ast.object;
     }
 
-    if ('ast' in result && result.ast.$kind === 'AccessMember') {
-      return result.ast.object;
-    }
-
-    if ('ast' in result) {
-      return firstMemberOwnerExpression(result.ast);
-    }
-
-    return null;
+    return ast == null ? null : firstMemberOwnerExpression(ast);
   }
 
   static memberOwnerAtOffset(
     result: ExpressionParseResult,
     offset: number,
   ): ExpressionAstNode | null {
-    if ('ast' in result) {
+    if (this.hasCanonicalAst(result)) {
       return memberAccessExpressionForNodeOffset(result.ast, offset, isMemberOwnerOffset)?.object ?? null;
     }
-    if (
-      'activeHole' in result
-      && frontierExpectsMemberName(result.activeHole)
-    ) {
-      return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
-    }
-    if (
-      'frontierKind' in result
-      && 'closedSubtreeRefs' in result
-      && frontierExpectsMemberName(result)
-    ) {
-      return result.closedSubtreeRefs.at(-1)?.node ?? null;
-    }
-    return null;
+    const frontier = activePropertyOrInterpolationFrontier(result);
+    return frontier != null && frontierExpectsMemberName(frontier)
+      ? frontier.closedSubtreeRefs.at(-1)?.node ?? null
+      : null;
   }
 
   static memberNameAtOffset(
     result: ExpressionParseResult,
     offset: number,
   ): string | null {
-    return 'ast' in result
+    return this.hasCanonicalAst(result)
       ? memberAccessExpressionForNodeOffset(result.ast, offset, isMemberNameOffset)?.name.name ?? null
       : null;
   }
@@ -195,7 +179,7 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): ScopeAccessExpression | null {
-    return 'ast' in result
+    return this.hasCanonicalAst(result)
       ? scopeAccessExpressionForNodeOffset(result.ast, offset)
       : null;
   }
@@ -204,10 +188,86 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
     offset: number,
   ): BindingIdentifier | null {
-    return 'ast' in result
+    return this.hasCanonicalAst(result)
       ? bindingIdentifierForNodeOffset(result.ast, offset)
       : null;
   }
+
+  static objectLiteralKeyContextAtOffset(
+    result: ExpressionParseResult,
+    offset: number,
+  ): ExpressionObjectLiteralKeyContext | null {
+    for (const expression of stableExpressionRoots(result)) {
+      const context = objectLiteralKeyContextForExpression(expression, offset, 0);
+      if (context != null) {
+        return context;
+      }
+    }
+
+    const frontier = activePropertyOrInterpolationFrontier(result);
+    if (
+      frontier?.surroundingFrameKind !== ExpressionCompanionFrameKind.ObjectLiteral
+      || !frontier.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.ObjectLiteralKey)
+    ) {
+      return null;
+    }
+    const prefix = [...frontier.closedSubtreeRefs]
+      .reverse()
+      .find((reference) => reference.node.$kind === 'ObjectLiteral')?.node;
+    const matchedDelimiterStack = activeFrontierMatchedDelimiterStack(frontier);
+    const objectDepth = Math.max(
+      0,
+      matchedDelimiterStack.filter((entry) =>
+        entry.kind === MatchedDelimiterKind.Brace && entry.closeSpan == null
+      ).length - 1,
+    );
+    return prefix?.$kind === 'ObjectLiteral'
+      ? objectLiteralKeyContext(prefix, offset, objectDepth)
+      : { keys: [], keySpans: [], activeKey: null, objectDepth };
+  }
+}
+
+export interface ExpressionObjectLiteralKeyContext {
+  readonly keys: readonly (number | string)[];
+  readonly keySpans: readonly SourceSpan[];
+  readonly activeKey: number | string | null;
+  readonly objectDepth: number;
+}
+
+type ActivePropertyOrInterpolationFrontier =
+  | PropertyLikeDegradedPublication
+  | PropertyLikeFrontierPublication
+  | InterpolationActiveHoleCompanion;
+
+function activePropertyOrInterpolationFrontier(
+  result: ExpressionParseResult,
+): ActivePropertyOrInterpolationFrontier | null {
+  switch (result.kind) {
+    case ExpressionParseResultKind.PropertyLikeDegradedPublication:
+    case ExpressionParseResultKind.PropertyLikeFrontierPublication:
+      return result;
+    case ExpressionParseResultKind.InterpolationDegradedPublication:
+    case ExpressionParseResultKind.InterpolationFrontierPublication:
+      return result.activeHole;
+    case ExpressionParseResultKind.ExpressionSuccess:
+    case ExpressionParseResultKind.EmptyExpressionSuccess:
+    case ExpressionParseResultKind.IteratorSuccess:
+    case ExpressionParseResultKind.InterpolationSuccess:
+    case ExpressionParseResultKind.InterpolationAbsent:
+    case ExpressionParseResultKind.OpaqueSuccess:
+    case ExpressionParseResultKind.CompleteInputParseError:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return null;
+  }
+}
+
+function activeFrontierMatchedDelimiterStack(
+  frontier: ActivePropertyOrInterpolationFrontier,
+): readonly MatchedDelimiterEntry[] {
+  return frontier instanceof InterpolationActiveHoleCompanion
+    ? frontier.bodyMatchedDelimiterStack
+    : frontier.matchedDelimiterStack;
 }
 
 function frontierExpectsMemberName(
@@ -250,6 +310,55 @@ function stableExpressionRoots(result: ExpressionParseResult): readonly Expressi
     case ExpressionParseResultKind.CompleteInputParseError:
       return [];
   }
+}
+
+function objectLiteralKeyContextForExpression(
+  expression: ExpressionAstNode,
+  offset: number,
+  objectDepth: number,
+): ExpressionObjectLiteralKeyContext | null {
+  if (!expressionSpanContainsOffset(expression.span, offset)) {
+    return null;
+  }
+  const childObjectDepth = expression.$kind === 'ObjectLiteral' ? objectDepth + 1 : objectDepth;
+  const nested = findInExpressionChildren(expression, (child) =>
+    objectLiteralKeyContextForExpression(child, offset, childObjectDepth)
+  );
+  if (nested != null) {
+    return nested;
+  }
+  return expression.$kind === 'ObjectLiteral'
+    ? objectLiteralKeyContext(expression, offset, objectDepth)
+    : null;
+}
+
+function objectLiteralKeyContext(
+  expression: ObjectLiteralExpression,
+  offset: number,
+  objectDepth: number,
+): ExpressionObjectLiteralKeyContext | null {
+  const activeKeyIndex = expression.keySpans.findIndex((span) => expressionSpanContainsOffset(span, offset));
+  if (activeKeyIndex >= 0) {
+    return {
+      keys: expression.keys,
+      keySpans: expression.keySpans,
+      activeKey: expression.keys[activeKeyIndex] ?? null,
+      objectDepth,
+    };
+  }
+  for (let index = 0; index < expression.values.length; index += 1) {
+    const keySpan = expression.keySpans[index] ?? null;
+    const value = expression.values[index] ?? null;
+    if (keySpan != null && value != null && keySpan.end < offset && offset <= value.span.end) {
+      return null;
+    }
+  }
+  return {
+    keys: expression.keys,
+    keySpans: expression.keySpans,
+    activeKey: null,
+    objectDepth,
+  };
 }
 
 function collectMemberAccessSpans(

@@ -54,6 +54,22 @@ export interface EagerPathGenerationInstruction {
   readonly children: readonly EagerPathGenerationInstruction[];
 }
 
+export interface EagerPathEndpointCandidate {
+  readonly path: string;
+  readonly endpoint: EndpointModel;
+}
+
+export type EagerPathEndpointSelection =
+  | {
+      readonly kind: 'selected';
+      readonly component: string | null;
+      readonly routeConfig: RouteConfigModel;
+      readonly candidates: readonly EagerPathEndpointCandidate[];
+      readonly errors: readonly string[];
+      readonly throwOnFailure: boolean;
+    }
+  | Extract<EagerPathGenerationResult, { readonly kind: 'not-eager' | 'open' | 'failed' }>;
+
 export type EagerPathGenerationResult =
   | {
       readonly kind: 'generated';
@@ -90,6 +106,7 @@ interface EagerRouteCandidate {
 export class RouteEagerPathGenerationIndex {
   private readonly routeConfigsByIdentity: ReadonlyMap<IdentityHandle, RouteConfigModel>;
   private readonly endpointsByRecognizerAndPath: ReadonlyMap<string, EndpointModel>;
+  private readonly useEagerLoading: boolean;
 
   constructor(
     routeContexts: RouteConfigContextMaterializationProjectResult,
@@ -106,44 +123,24 @@ export class RouteEagerPathGenerationIndex {
           : [[endpointKey(recognizerIdentity, endpoint.path), endpoint] as const];
       }),
     );
+    this.useEagerLoading = routeContexts.usesEagerLoading();
   }
 
   generate(
     routeConfigContext: RouteConfigContextModel,
-    useEagerLoading: boolean,
     instruction: EagerPathGenerationInstruction,
     parentRoutePath: string | null = null,
   ): EagerPathGenerationResult {
-    const candidate = this.candidateFor(routeConfigContext, instruction.component);
-    if (candidate == null) {
-      return {
-        kind: 'not-eager',
-        component: componentLabel(instruction.component),
-      };
+    const selection = this.selectEndpointCandidates(routeConfigContext, instruction.component, parentRoutePath);
+    if (selection.kind !== 'selected') {
+      return selection;
     }
-
-    const normalizedParentPath = normalizeParentRoutePath(
-      routeConfigContext,
-      this.routeConfigsByIdentity,
-      useEagerLoading,
-      parentRoutePath,
-    );
-    if (normalizedParentPath.kind === 'open') {
-      return {
-        kind: 'open',
-        component: componentLabel(instruction.component),
-        reason: normalizedParentPath.reason,
-      };
-    }
-
-    const errors: string[] = [];
+    const errors = [...selection.errors];
     let result: PathGenerationCandidateResult | null = null;
     let maxScore = 0;
-    for (const path of candidate.paths) {
-      const generated = this.generateForPath(
-        routeConfigContext,
-        path,
-        normalizedParentPath.value,
+    for (const candidate of selection.candidates) {
+      const generated = this.generateForEndpoint(
+        candidate,
         instruction.params,
         errors,
       );
@@ -164,27 +161,18 @@ export class RouteEagerPathGenerationIndex {
     }
 
     if (result == null) {
-      return candidate.throwOnFailure
+      return selection.throwOnFailure
         ? {
             kind: 'failed',
-            component: componentLabel(instruction.component),
-            routeConfig: candidate.routeConfig,
-            path: firstPath(candidate.paths),
+            component: selection.component,
+            routeConfig: selection.routeConfig,
+            path: firstPath(selection.routeConfig.paths),
             errors,
           }
         : {
             kind: 'not-eager',
-            component: componentLabel(instruction.component),
+            component: selection.component,
           };
-    }
-    if (candidate.routeConfig == null) {
-      return {
-        kind: 'failed',
-        component: componentLabel(instruction.component),
-        routeConfig: null,
-        path: firstPath(candidate.paths),
-        errors,
-      };
     }
 
     return {
@@ -193,7 +181,72 @@ export class RouteEagerPathGenerationIndex {
       query: result.query,
       consumed: result.consumed,
       endpoint: result.endpoint,
+      routeConfig: selection.routeConfig,
+    };
+  }
+
+  selectEndpointCandidates(
+    routeConfigContext: RouteConfigContextModel,
+    component: EagerRouteComponent,
+    parentRoutePath: string | null = null,
+  ): EagerPathEndpointSelection {
+    const componentName = componentLabel(component);
+    const candidate = this.candidateFor(routeConfigContext, component);
+    if (candidate == null) {
+      return { kind: 'not-eager', component: componentName };
+    }
+    if (candidate.routeConfig == null) {
+      return {
+        kind: 'failed',
+        component: componentName,
+        routeConfig: null,
+        path: firstPath(candidate.paths),
+        errors: [],
+      };
+    }
+
+    const normalizedParentPath = normalizeParentRoutePath(
+      routeConfigContext,
+      this.routeConfigsByIdentity,
+      this.useEagerLoading,
+      parentRoutePath,
+    );
+    if (normalizedParentPath.kind === 'open') {
+      return {
+        kind: 'open',
+        component: componentName,
+        reason: normalizedParentPath.reason,
+      };
+    }
+
+    const candidates: EagerPathEndpointCandidate[] = [];
+    const errors: string[] = [];
+    const recognizerIdentity = routeConfigContext.recognizer.identityHandle;
+    if (recognizerIdentity == null) {
+      return {
+        kind: 'open',
+        component: componentName,
+        reason: `RouteConfigContext '${routeConfigContext.identityHandle}' does not expose a materialized RouteRecognizer identity.`,
+      };
+    }
+    for (const path of candidate.paths) {
+      const endpointPath = (normalizedParentPath.value?.length ?? 0) > 0
+        ? `${normalizedParentPath.value}/${path}`
+        : path;
+      const endpoint = this.endpointsByRecognizerAndPath.get(endpointKey(recognizerIdentity, endpointPath)) ?? null;
+      if (endpoint == null) {
+        errors.push(`No endpoint found for the path: '${path}'.`);
+      } else {
+        candidates.push({ path, endpoint });
+      }
+    }
+    return {
+      kind: 'selected',
+      component: componentName,
       routeConfig: candidate.routeConfig,
+      candidates,
+      errors,
+      throwOnFailure: candidate.throwOnFailure,
     };
   }
 
@@ -254,28 +307,13 @@ export class RouteEagerPathGenerationIndex {
     });
   }
 
-  private generateForPath(
-    routeConfigContext: RouteConfigContextModel,
-    path: string,
-    parentRoutePath: string | null,
+  private generateForEndpoint(
+    candidate: EagerPathEndpointCandidate,
     params: EagerRouteParameters,
     errors: string[],
   ): PathGenerationCandidateResult {
-    const recognizerIdentity = routeConfigContext.recognizer.identityHandle;
-    if (recognizerIdentity == null) {
-      return {
-        kind: 'open',
-        reason: `RouteConfigContext '${routeConfigContext.identityHandle}' does not expose a materialized RouteRecognizer identity.`,
-      };
-    }
-    const endpointPath = (parentRoutePath?.length ?? 0) > 0 ? `${parentRoutePath}/${path}` : path;
-    const endpoint = this.endpointsByRecognizerAndPath.get(endpointKey(recognizerIdentity, endpointPath)) ?? null;
-    if (endpoint == null) {
-      errors.push(`No endpoint found for the path: '${path}'.`);
-      return { kind: 'failed' };
-    }
-
-    let generatedPath = path;
+    const { endpoint, path } = candidate;
+    let generatedPath = candidate.path;
     const consumed = new Map<string, string>();
     for (const parameter of endpoint.parameters) {
       const parameterValue = params.values.get(parameter.name) ?? null;
