@@ -283,8 +283,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   query values per active route node because the framework writes the same `ViewportInstructionTree.queryParams` onto
   every node before `RouteContext.getRouteParameters(...)` walks the context chain.
 - Materialize source-backed `RouteContext.getRouteParameters(...)` read products. These rows use the TypeChecker to
-  identify the framework method declaration, read the call's declared parameter shape, then correlate the enclosing
-  routed component with recognized route-config path parameters. This keeps route-param authoring honest: a view-model
+  identify the framework method declaration, read the call's declared parameter shape, then resolve the enclosing
+  class through its module-local custom-element definition and join effective route configs by resource target
+  identity. Class names remain presentation facts rather than ownership keys, so same-named routeables in different
+  modules cannot lend each other route paths or parameter keys. This keeps route-param authoring honest: a view-model
   can declare query values, but the API separately reports which keys are backed by `:path` segments.
 - Preserve the framework RouteExpression tree shape, not only flattened viewport instructions. Redirect parameter
   migration in `RouteTree.createConfiguredNode(...)` accepts only `Segment` / slash-scoped `Segment` chains; sibling

@@ -8835,6 +8835,39 @@
       ]
     },
     {
+      "id": "router-route-context-parameter-identity",
+      "fixture": "fixtures/pressure/router-route-context-parameter-identity",
+      "aureliaDomain": "router-composition",
+      "capability": "router-route-context-parameter-identity",
+      "domainAxis": "query-contract",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-route-context-parameter-identity-app.ts",
+      "requirement": "RouteContext parameter reads join to effective route configurations by resource target identity, so same-named routeable classes in different modules cannot lend each other route paths or parameter keys.",
+      "cases": [
+        {
+          "id": "same-named-cross-module-routeables-remain-isolated",
+          "expectations": [
+            {
+              "name": "route context parameter reads",
+              "query": { "kind": "route-context-parameter-reads", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 2 },
+              "rows": [
+                {
+                  "fields": { "componentClassName": "SharedRoute", "component.resolvedName": "first-shared-route", "declaredParameterNames": ["firstId"], "routePathParameterNames": ["firstId"], "missingRoutePathParameterNames": [], "declaredNonPathParameterNames": [], "alignment": "aligned" },
+                  "source": { "sourceFile": "src/routes/first/shared-route.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ firstId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ firstId: string }>()" }
+                },
+                {
+                  "fields": { "componentClassName": "SharedRoute", "component.resolvedName": "second-shared-route", "declaredParameterNames": ["secondId"], "routePathParameterNames": ["secondId"], "missingRoutePathParameterNames": [], "declaredNonPathParameterNames": [], "alignment": "aligned" },
+                  "source": { "sourceFile": "src/routes/second/shared-route.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ secondId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ secondId: string }>()" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "router-routecontext-topology-lab",
       "fixture": "fixtures/pressure/router-routecontext-topology-lab",
       "aureliaDomain": "router-composition",

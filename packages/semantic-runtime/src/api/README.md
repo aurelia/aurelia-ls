@@ -1372,7 +1372,9 @@ sources. Open bound values remain null plus structured field state and open seam
 framework defaults.
 `RouteContextParameterReads` specifically reports source-backed `RouteContext.getRouteParameters(...)` calls, the
 declared parameter keys on the TypeScript call, the route-config paths for the owning routed component, the recognized
-path parameter names, and whether declared non-path keys are only query/open parameters.
+path parameter names, and whether declared non-path keys are only query/open parameters. Ownership joins through the
+module-local custom-element target identity carried by effective route configs; `componentClassName` is display data,
+not a semantic key.
 `RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed. Synthetic root tree/node rows use
 `realizationStage: potential`; context-relative transition rows use `realizationStage: planned` and are compiled from closed static
 `ViewportInstructionTree` products when their recognized routes point at non-redirect route configs. Rows carry
