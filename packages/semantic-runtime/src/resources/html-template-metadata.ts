@@ -1,4 +1,5 @@
-import { TemplateSourceOffsetMap } from './custom-element-definition.js';
+import { stripTemplateSourceRanges } from './template-source-text.js';
+import type { TemplateSourceOffsetMap } from './custom-element-definition.js';
 
 export class HtmlTemplateMetadataImport {
   constructor(
@@ -66,7 +67,7 @@ export function readHtmlTemplateMetadata(rawMarkup: string): HtmlTemplateMetadat
     }
   }
 
-  const stripped = stripRanges(rawMarkup, removedRanges);
+  const stripped = stripTemplateSourceRanges(rawMarkup, removedRanges);
   return new HtmlTemplateMetadata(
     stripped.markup,
     stripped.sourceMap,
@@ -162,70 +163,6 @@ function readAttributes(markup: string, start: number, end: number): readonly Ht
     attributes.push(new HtmlMetadataAttribute(name, value, attributeStart, cursor));
   }
   return attributes;
-}
-
-function stripRanges(
-  markup: string,
-  ranges: readonly (readonly [number, number])[],
-): { readonly markup: string; readonly sourceMap: TemplateSourceOffsetMap | null } {
-  if (ranges.length === 0) {
-    return { markup, sourceMap: null };
-  }
-
-  const normalized = normalizeRanges(ranges, markup.length);
-  const pieces: string[] = [];
-  const offsets: number[] = [];
-  let cursor = 0;
-  for (const [start, end] of normalized) {
-    appendKeptRange(markup, cursor, start, pieces, offsets);
-    cursor = end;
-  }
-  appendKeptRange(markup, cursor, markup.length, pieces, offsets);
-  offsets.push(markup.length);
-
-  const stripped = pieces.join('');
-  return {
-    markup: stripped,
-    sourceMap: new TemplateSourceOffsetMap(stripped.length, offsets),
-  };
-}
-
-function appendKeptRange(
-  markup: string,
-  start: number,
-  end: number,
-  pieces: string[],
-  offsets: number[],
-): void {
-  if (end <= start) {
-    return;
-  }
-  pieces.push(markup.slice(start, end));
-  for (let index = start; index < end; index++) {
-    offsets.push(index);
-  }
-}
-
-function normalizeRanges(
-  ranges: readonly (readonly [number, number])[],
-  textLength: number,
-): readonly (readonly [number, number])[] {
-  const sorted = ranges
-    .map(([start, end]) => [Math.max(0, start), Math.min(textLength, end)] as const)
-    .filter(([start, end]) => end > start)
-    .sort(([leftStart, leftEnd], [rightStart, rightEnd]) =>
-      leftStart - rightStart || leftEnd - rightEnd
-    );
-  const result: Array<readonly [number, number]> = [];
-  for (const [start, end] of sorted) {
-    const previous = result[result.length - 1] ?? null;
-    if (previous == null || start > previous[1]) {
-      result.push([start, end]);
-      continue;
-    }
-    result[result.length - 1] = [previous[0], Math.max(previous[1], end)];
-  }
-  return result;
 }
 
 function importAliases(tag: HtmlMetadataTag): ReadonlyMap<string, string> {

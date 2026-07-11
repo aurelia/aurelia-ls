@@ -19,6 +19,7 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   TemplateCompilerIssue,
+  type TemplateCompilerIssueRelatedInformation,
   type TemplateCompilerIssueKind,
   type TemplateCompilerIssuePhase,
   type TemplateCompilerIssueSeverity,
@@ -47,6 +48,7 @@ export class TemplateCompilerIssuePublisher {
     frameworkErrorCode: string | null,
     sourceAddressHandle: AddressHandle | null,
     severity: TemplateCompilerIssueSeverity = 'error',
+    relatedInformation: readonly TemplateCompilerIssueRelatedInformation[] = [],
   ): TemplateCompilerIssuePublication {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
@@ -60,6 +62,7 @@ export class TemplateCompilerIssuePublisher {
       sourceAddressHandle,
       [],
       severity,
+      relatedInformation,
     );
     return new TemplateCompilerIssuePublication(
       issue,

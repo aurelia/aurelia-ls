@@ -2,6 +2,8 @@ import {
   astTrack,
   computed,
 } from '@aurelia/runtime';
+import { customElement } from '@aurelia/runtime-html';
+import template from './trackable-method-dependencies-app.html';
 
 interface Product {
   readonly id: string;
@@ -9,6 +11,7 @@ interface Product {
   readonly tags: readonly string[];
 }
 
+@customElement({ name: 'trackable-method-dependencies-app', template })
 export class TrackableMethodDependenciesApp {
   products: Product[] = [
     { id: 'p1', name: 'Desk lamp', tags: ['featured', 'lighting'] },

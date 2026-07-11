@@ -12,6 +12,14 @@ export class ResourceTargetObservation {
   ) {}
 }
 
+/** One statically known public alias and its directly authored token, when ownership is provable. */
+export class ResourceAliasObservation {
+  constructor(
+    readonly name: string,
+    readonly node: ts.Node | null,
+  ) {}
+}
+
 /** Resolve the class declaration/expression represented by a resource target node when one is statically visible. */
 export function resourceTargetClassLikeNode(
   target: { readonly node: ts.Node } | null,

@@ -374,14 +374,17 @@
         "resources",
         "evaluation",
         "type-system",
-        "world-construction"
+        "world-construction",
+        "configuration",
+        "tooling"
       ],
-      "summary": "ResourceRecognitionProjectPass remains the project-level orchestration boundary for shared evaluation, linked source admission, source resource recognition, and full-definition convergence.",
-      "rationale": "Resource recognition should not grow its own import resolver or one-source-only pass when external apps and plugins pull resources through linked source modules and assets. This project pass is the orchestration boundary from boot/evaluation into source recognition and convergence.",
+      "summary": "ResourceRecognitionProjectPass remains the project-level orchestration boundary for shared evaluation, linked source and transform admission, source resource recognition, and full-definition convergence.",
+      "rationale": "Resource recognition should not grow its own import resolver, build-tool inference, or one-source-only pass when external apps and plugins pull resources through linked source modules, assets, and admitted transforms. This project pass is the orchestration boundary from boot/evaluation/tooling facts into source recognition and convergence.",
       "guidance": [
-        "Start here when project-level resource recognition, linked source admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
+        "Start here when project-level resource recognition, linked source admission, build-transform admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
         "Keep source-level recognizers and convergence materializers below this pass; this class should orchestrate them rather than learn carrier-specific resource logic.",
-        "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect `StaticModuleGraphEvaluator.evaluateSideEffectImport` before adding a resource-local import walk.",
+        "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect StaticModuleGraphEvaluator.evaluateSideEffectImport before adding a resource-local import walk.",
+        "Convention-derived resources require source-specific transform evidence. Read supported build-tool configuration before recognition and publish an open admission seam when the transform cannot be closed; do not let recognizers infer project-global convention activation.",
         "If imported templates lose exact provenance, inspect this pass and the shared evaluation source admissions before adding template-layer fallbacks.",
         "When convergence follows AST nodes into linked modules, thread ResourceRecognitionContextIndex and ask readNodeContext for the owning source context before evaluating expressions or source spans."
       ],
@@ -390,13 +393,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
           "symbolName": "ResourceRecognitionProjectPass",
-          "line": 96,
-          "summary": "Project-level resource recognition pass."
+          "line": 200,
+          "summary": "Project-level resource recognition and transform-admission pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer",
+          "summary": "Project tooling reader orchestrated before convention recognition."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/README.md",
-          "summary": "Project-level resource recognition and linked-source guidance."
+          "summary": "Project-level recognition, linked-source, and transform-admission guidance."
         }
       ],
       "liveChecks": [
@@ -404,10 +413,17 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
           "symbolName": "ResourceRecognitionProjectPass"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ResourceRecognitionProjectPass",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:resource-definition-index",
@@ -747,6 +763,104 @@
       ],
       "createdAt": "2026-07-08",
       "updatedAt": "2026-07-08"
+    },
+    {
+      "id": "decision:resource-convention-transform-admission",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "configuration",
+        "tooling",
+        "provenance"
+      ],
+      "summary": "Convention-derived resources require source-backed build-transform admission rather than class/file-shape inference.",
+      "rationale": "Aurelia conventions are implemented by build-tool preprocessing that emits resource metadata before runtime registration. A convention-shaped source class is therefore not itself proof of a resource. Semantic-runtime must admit the transform from project tooling, preserve that evidence per matching source, and remain open when configuration cannot be closed statically.",
+      "guidance": [
+        "Do not recognize convention resources from class/file shape alone; ResourceRecognitionProjectPass must supply source-specific transform evidence.",
+        "Read tooling configuration through the shared StaticProjectEvaluationPass with tooling-config roots and narrow host intrinsics; do not build a resource-local AST closure evaluator.",
+        "Carry Vite and Aurelia plugin factory identity through StaticModuleExternalValueResolver and the CommonJS require host boundary; do not reconstruct import identity from local syntax inside the resource adapter.",
+        "Use evaluator executedCallExpressions for plugin-call evidence; syntax-only scans must not turn uninvoked helpers or dead branches into transform admission or open seams.",
+        "Supported static Vite configuration reads @aurelia/vite-plugin admission, enableConventions, and include/exclude source filters through the same evaluator path for ESM imports/exports and CommonJS require/module.exports. Missing tooling or explicit false means the convention resource is absent.",
+        "Dynamic plugin lists, options, or filter expressions publish resource.open-convention-transform-admission instead of minting confident resource definitions.",
+        "Convention admission seams preserve evaluator boundary reason kinds such as host-environment-value instead of replacing known provenance with feature-not-yet-modeled.",
+        "Convention recognition provenance retains the tooling transform evidence and paired-template admission. A derived public resource name remains non-editable until an authored name token exists.",
+        "Webpack-loader, Gulp, Parcel, and ts-jest invoke the same preprocessor through different configuration carriers. Add explicit admission readers and pressure fixtures before claiming those carriers are covered; do not restore a project-global convention fallback.",
+        "Static Vite filters use the same @rollup/pluginutils/createFilter implementation as the framework plugin. Non-static filter values remain open rather than being approximated as closed."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer",
+          "summary": "Reads supported Vite configuration and publishes source-specific transform evidence or open seams."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ConventionToolingEvaluationHost",
+          "summary": "Narrow evaluator host for Vite defineConfig and Aurelia plugin-call identity."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-recognition-project-pass.ts",
+          "symbolName": "ResourceRecognitionProjectPass",
+          "summary": "Orchestrates transform admission before source recognition."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationPass",
+          "summary": "Owns project/module closure for app and explicitly admitted tooling roots."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/named-resource-recognizer.ts",
+          "symbolName": "recognizeConventions",
+          "summary": "Requires admitted transform evidence before publishing convention observations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/README.md",
+          "summary": "Owning doctrine for convention-transform admission and its build-adapter boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/plugin-conventions/src/options.ts",
+          "symbolName": "preprocessOptions",
+          "summary": "Framework tooling defaults conventions on only inside an active preprocessing pipeline."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/plugin-conventions/src/preprocess-resource.ts",
+          "symbolName": "preprocessResource",
+          "summary": "Framework tooling emits resource metadata from convention-shaped source."
+        },
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages-tooling/vite-plugin/src/index.ts",
+          "summary": "Aurelia Vite plugin owns preprocessing and source-filter admission."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ResourceConventionTransformAdmissionMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convention-transform-admission.ts",
+          "symbolName": "ConventionToolingEvaluationHost"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/named-resource-recognizer.ts",
+          "symbolName": "recognizeConventions"
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
     }
   ]
 }

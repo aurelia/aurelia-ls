@@ -1733,6 +1733,7 @@ export interface SemanticResourceIssueRow {
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly message: string;
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly resource: {
     /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
     readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
@@ -1745,6 +1746,7 @@ export interface SemanticResourceIssueRow {
     readonly identityHandle: IdentityHandle;
     readonly ownerDefinitionIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
   };
 }
 
@@ -1768,6 +1770,11 @@ export interface SemanticResourceDefinitionPatternRow {
   readonly source: SemanticSourceReference | null;
 }
 
+export interface SemanticResourceDefinitionAliasRow {
+  readonly name: string;
+  readonly source: SemanticSourceReference | null;
+}
+
 export type SemanticResourceDeclarationMode =
   /** Resource metadata came from an Aurelia decorator. */
   | 'decorator'
@@ -1779,6 +1786,8 @@ export type SemanticResourceDeclarationMode =
   | 'factory-call'
   /** Resource metadata came from the currently modeled conventions plugin rules. */
   | 'convention'
+  /** Resource metadata came from a compiler-local `<template as-custom-element>`. */
+  | 'local-template'
   /** Resource metadata came from a generic header whose more precise carrier is not preserved. */
   | 'header';
 
@@ -1788,7 +1797,7 @@ export interface SemanticResourceDefinitionRow {
   readonly resourceKind: ResourceDefinitionKind;
   readonly declarationModes: readonly SemanticResourceDeclarationMode[];
   readonly name: string | null;
-  readonly aliases: readonly string[];
+  readonly aliases: readonly SemanticResourceDefinitionAliasRow[];
   readonly key: string | null;
   readonly targetName: string | null;
   readonly captureKind: CustomElementCaptureKind | `${CustomElementCaptureKind}` | null;
@@ -3390,15 +3399,19 @@ export interface SemanticTemplateCursorDefinitionRow {
   /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
   readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
   readonly name: string | null;
+  /** Public name selected at the cursor; differs from `name` when an alias was authored. */
+  readonly matchedName: string | null;
   readonly targetName: string | null;
   readonly source: SemanticSourceReference | null;
   readonly nameSource: SemanticSourceReference | null;
+  readonly matchedNameSource: SemanticSourceReference | null;
   readonly targetSource: SemanticSourceReference | null;
   readonly handles?: {
     readonly definitionProductHandle: ProductHandle | null;
     readonly identityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly matchedNameSourceAddressHandle: AddressHandle | null;
     readonly targetAddressHandle: AddressHandle | null;
   };
 }
@@ -3553,6 +3566,7 @@ export interface SemanticTemplateCursorDiagnosticRow {
   readonly missingInput: string | null;
   readonly missingInputs: readonly string[];
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation?: readonly SemanticDiagnosticRelatedInformation[];
   readonly selectedMemberName: string | null;
   readonly ownerTypeDisplay: string | null;
   readonly ownerTypeShapeKind: string | null;
@@ -3626,6 +3640,20 @@ export enum SemanticTemplateReferenceKind {
   TypeScriptUsage = 'typescript-usage',
 }
 
+export enum SemanticTemplateResourceUsageKind {
+  ElementTag = 'element-tag',
+  AttributeTarget = 'attribute-target',
+  AsElementValue = 'as-element-value',
+  ExpressionName = 'expression-name',
+  BindingCommandName = 'binding-command-name',
+  AttributePatternLiteral = 'attribute-pattern-literal',
+}
+
+export enum SemanticTemplateResourceDeclarationKind {
+  PrimaryName = 'primary-name',
+  AliasName = 'alias-name',
+}
+
 export enum SemanticTemplateBindableAttributeSourceKind {
   /** Usage follows the framework default mapping from property name to attribute name. */
   DefaultDerived = 'default-derived',
@@ -3641,6 +3669,10 @@ export interface SemanticTemplateReferenceRow {
   readonly definitionName: string | null;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}` | null;
   readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}` | null;
+  /** Authored resource syntax form, present on resource-usage rows. */
+  readonly resourceUsageKind?: SemanticTemplateResourceUsageKind | `${SemanticTemplateResourceUsageKind}` | null;
+  /** Public-name declaration form, present on resource declaration rows. */
+  readonly resourceDeclarationKind?: SemanticTemplateResourceDeclarationKind | `${SemanticTemplateResourceDeclarationKind}` | null;
   readonly bindableAttributeSourceKind?: SemanticTemplateBindableAttributeSourceKind | `${SemanticTemplateBindableAttributeSourceKind}` | null;
   /** Exact source span for the returned reference/declaration. */
   readonly source: SemanticSourceReference | null;
@@ -3691,8 +3723,11 @@ export enum SemanticTemplateRenameEditKind {
   BindableAttribute = 'bindable-attribute',
   BindableAttributeAliasDeclaration = 'bindable-attribute-alias-declaration',
   ResourceNameDeclaration = 'resource-name-declaration',
+  ResourceAliasDeclaration = 'resource-alias-declaration',
   ResourceElementTag = 'resource-element-tag',
   ResourceAttributeTarget = 'resource-attribute-target',
+  ResourceAsElementValue = 'resource-as-element-value',
+  ResourceExpressionName = 'resource-expression-name',
 }
 
 export interface SemanticTemplateRenameEditRow {
@@ -4187,10 +4222,28 @@ export interface SemanticBindingSourceOperationResult {
   readonly rows: readonly SemanticBindingSourceOperationRow[];
 }
 
+/** Compiler-world resource identity retained by an authored template occurrence. */
+export interface SemanticTemplateResourceReferenceRow {
+  /** Author-facing resource taxonomy; use `registrationResourceKindFor` for framework registration-key joins. */
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
+  /** Canonical runtime lookup name; the authored occurrence name remains on its owning row. */
+  readonly name: string;
+  readonly visibilityKind: TemplateResourceVisibilityKind | `${TemplateResourceVisibilityKind}`;
+  /** Registration, definition, import, or convention source that made the resource visible. */
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly resourceProductHandle: ProductHandle | null;
+    readonly resourceIdentityHandle: IdentityHandle | null;
+    readonly definitionProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
 export interface SemanticBindingBehaviorApplicationRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly behaviorName: string;
+  readonly resource: SemanticTemplateResourceReferenceRow | null;
   readonly phase: RuntimeBindingBehaviorApplicationPhase | `${RuntimeBindingBehaviorApplicationPhase}`;
   readonly argumentCount: number;
   readonly staticArgumentValues: readonly string[];
@@ -4213,6 +4266,7 @@ export interface SemanticValueConverterApplicationRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly converterName: string;
+  readonly resource: SemanticTemplateResourceReferenceRow;
   readonly phase: RuntimeValueConverterApplicationPhase | `${RuntimeValueConverterApplicationPhase}`;
   readonly argumentCount: number;
   readonly source: SemanticSourceReference | null;

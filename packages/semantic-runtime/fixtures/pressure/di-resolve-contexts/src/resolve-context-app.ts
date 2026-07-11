@@ -1,9 +1,12 @@
 import { IContainer, resolve } from '@aurelia/kernel';
+import { customElement } from '@aurelia/runtime-html';
+import template from './resolve-context-app.html';
 
 export class LookupService {
   readonly label = 'lookup';
 }
 
+@customElement({ name: 'resolve-context-app', template })
 export class ResolveContextApp {
   private readonly container = resolve(IContainer);
   readonly fieldLookup = resolve(LookupService);

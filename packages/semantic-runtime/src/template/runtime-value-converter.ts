@@ -17,6 +17,7 @@ import {
 import type {
   RuntimeBindingReference,
 } from './runtime-binding.js';
+import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
 
 export const enum RuntimeValueConverterApplicationPhase {
   ToView = 'to-view',
@@ -25,6 +26,7 @@ export const enum RuntimeValueConverterApplicationPhase {
 
 export type RuntimeValueConverterApplicationField =
   | 'binding'
+  | 'resource'
   | 'phase'
   | 'converterName'
   | 'argumentCount'
@@ -33,6 +35,7 @@ export type RuntimeValueConverterApplicationField =
 export class RuntimeValueConverterApplicationReference {
   constructor(
     readonly converterName: string,
+    readonly resource: TemplateVisibleResourceReference,
     readonly productHandle: ProductHandle | null,
     readonly identityHandle: IdentityHandle | null,
     readonly addressHandle: AddressHandle | null,
@@ -47,6 +50,7 @@ export class RuntimeValueConverterApplication {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
+    readonly resource: TemplateVisibleResourceReference,
     readonly phase: RuntimeValueConverterApplicationPhase,
     readonly converterName: string,
     readonly argumentCount: number,
@@ -57,6 +61,7 @@ export class RuntimeValueConverterApplication {
   toReference(): RuntimeValueConverterApplicationReference {
     return new RuntimeValueConverterApplicationReference(
       this.converterName,
+      this.resource,
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,

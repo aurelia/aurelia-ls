@@ -1,6 +1,8 @@
 import { DI, resolve } from '@aurelia/kernel';
+import { customElement } from '@aurelia/runtime-html';
 import { productVendorUrl } from 'router-pressure-vendor-links';
 import { ProductDetailsRoute } from './product-details-route';
+import template from './products-route.html';
 
 interface ProductSummary {
   readonly id: string;
@@ -19,6 +21,7 @@ export class ProductsRouteState {
 export interface IProductsRouteState extends ProductsRouteState {}
 export const IProductsRouteState = DI.createInterface<IProductsRouteState>('IProductsRouteState');
 
+@customElement({ name: 'products-route', template })
 export class ProductsRoute {
   static routes = [
     {

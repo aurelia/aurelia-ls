@@ -76,5 +76,6 @@ export interface StaticIntrinsicEvaluationHost {
 
 export interface StaticIntrinsicEvaluationCheckpoint {
   readonly openSeamCount: number;
+  readonly executedCallCount: number;
   readonly statementCount: number;
 }

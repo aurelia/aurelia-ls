@@ -46,11 +46,12 @@ import {
   frameworkRegistrationCapabilitiesForKind,
 } from '../registration/framework-registration-manifest.js';
 import { ResourceTargetReference } from '../resources/resource-reference.js';
+import type { AttributePatternDefinition } from '../resources/attribute-pattern-definition.js';
+import type { BindingCommandDefinition } from '../resources/binding-command-definition.js';
 import {
   AttributePatternExecutable,
   AttributePatternExecutionKind,
   CompiledAttributePattern,
-  compileAttributePatternDefinition,
 } from './attribute-syntax.js';
 import {
   BindingCommandExecutable,
@@ -75,6 +76,11 @@ import {
   type BuiltInSyntaxGroup,
 } from './built-in-syntax.js';
 import { TemplateProductDetails } from './product-details.js';
+import type {
+  CompilerAttributePatternResource,
+  CompilerBindingCommandResource,
+} from './syntax-resource-materializer.js';
+import { SyntaxResourceExecutableMaterializer } from './syntax-resource-materializer.js';
 
 export interface BuiltInSyntaxCatalogInput {
   readonly packageId: BuiltInSyntaxPackage;
@@ -100,22 +106,26 @@ class BuiltInSyntaxCatalogHandles {
   ) {}
 }
 
-export class BuiltInAttributePatternEmission {
+export class BuiltInAttributePatternEmission implements CompilerAttributePatternResource {
   constructor(
     /** Built-in syntax catalog product that owns this executable. */
     readonly catalogProductHandle: ProductHandle,
     readonly handler: BuiltInAttributePattern,
     readonly executable: AttributePatternExecutable,
     readonly compiledPatterns: readonly CompiledAttributePattern[],
+    readonly definition: AttributePatternDefinition | null = null,
+    readonly registrationSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
-export class BuiltInBindingCommandEmission {
+export class BuiltInBindingCommandEmission implements CompilerBindingCommandResource {
   constructor(
     /** Built-in syntax catalog product that owns this executable. */
     readonly catalogProductHandle: ProductHandle,
     readonly handler: BuiltInBindingCommand,
     readonly executable: BindingCommandExecutable,
+    readonly definition: BindingCommandDefinition | null = null,
+    readonly registrationSourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -158,27 +168,6 @@ class ConfiguredSyntaxSelectionHandles {
   ) {}
 }
 
-class BuiltInExecutableHandles {
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-  ) {}
-}
-
-class BuiltInCompiledPatternHandles {
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-  ) {}
-}
-
-class BuiltInCompiledPatternEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly product: CompiledAttributePattern,
-  ) {}
-}
-
 class BuiltInSyntaxCatalogPublication {
   constructor(
     readonly records: readonly KernelStoreRecord[],
@@ -190,10 +179,14 @@ class BuiltInSyntaxCatalogPublication {
 
 /** Materializes framework-owned syntax catalogs before compiler-world visibility is decided. */
 export class BuiltInSyntaxCatalogMaterializer {
+  private readonly executables: SyntaxResourceExecutableMaterializer;
+
   constructor(
     /** Hot analysis store that receives built-in syntax records. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.executables = new SyntaxResourceExecutableMaterializer(store);
+  }
 
   materialize(catalogInputs: readonly BuiltInSyntaxCatalogInput[]): BuiltInSyntaxCatalogEmission {
     const records: KernelStoreRecord[] = [];
@@ -412,181 +405,37 @@ export class BuiltInSyntaxCatalogMaterializer {
     readonly executable: AttributePatternExecutable;
     readonly compiledPatterns: readonly CompiledAttributePattern[];
   } {
-    const handles = this.executableHandles(`${local}:executable`);
+    const executableLocal = `${local}:executable`;
+    const executableProductHandle = this.store.handles.product(executableLocal);
+    const executableIdentityHandle = this.store.handles.identity(executableLocal);
     const materializedHandler = materializeAttributePatternHandler(
       handler,
-      handles.productHandle,
-      handles.identityHandle,
+      executableProductHandle,
+      executableIdentityHandle,
       source.addressHandle,
       [],
     );
-    const executable = this.attributePatternExecutableFor(
-      handles,
-      source,
-      materializedHandler,
-    );
-    const compiledPatternEmissions = handler.patterns.map((definition, index) =>
-      this.recordsForCompiledPattern(
-        definition,
-        `${local}:compiled-pattern:${index}`,
-        handles.identityHandle,
-        handles.productHandle,
-        source,
-      )
-    );
-    const compiledPatternClaims = this.claimsForCompiledAttributePatterns(
-      local,
-      handles.productHandle,
-      compiledPatternEmissions.map((emission) => emission.product),
-      source,
-    );
-    const compiledPatterns = compiledPatternEmissions.map((emission) => emission.product);
+    const publication = this.executables.materializeAttributePattern({
+      localKey: executableLocal,
+      ownerIdentityHandle: catalogIdentityHandle,
+      definitionProductHandle: null,
+      target: new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
+      patterns: materializedHandler.patterns,
+      executionKind: AttributePatternExecutionKind.BuiltIn,
+      sourceAddressHandle: source.addressHandle,
+      provenanceHandle: source.provenanceHandle,
+    });
     return {
-      records: [
-        ...this.recordsForAttributePatternExecutable(catalogIdentityHandle, executable, source),
-        ...compiledPatternClaims,
-        ...compiledPatternEmissions.flatMap((emission) => emission.records),
-      ],
+      records: publication.records,
       product: new BuiltInAttributePatternEmission(
         catalogProductHandle,
         materializedHandler,
-        executable,
-        compiledPatterns,
+        publication.executable,
+        publication.compiledPatterns,
       ),
-      executable,
-      compiledPatterns,
+      executable: publication.executable,
+      compiledPatterns: publication.compiledPatterns,
     };
-  }
-
-  private executableHandles(
-    local: string,
-  ): BuiltInExecutableHandles {
-    return new BuiltInExecutableHandles(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-    );
-  }
-
-  private attributePatternExecutableFor(
-    handles: BuiltInExecutableHandles,
-    source: BuiltInSyntaxSourceSet,
-    handler: BuiltInAttributePattern,
-  ): AttributePatternExecutable {
-    return new AttributePatternExecutable(
-      handles.productHandle,
-      handles.identityHandle,
-      null,
-      new ResourceTargetReference(null, source.addressHandle, handler.targetName),
-      handler.patterns,
-      AttributePatternExecutionKind.BuiltIn,
-      source.addressHandle,
-      [],
-    );
-  }
-
-  private claimsForCompiledAttributePatterns(
-    local: string,
-    executableProductHandle: ProductHandle,
-    compiledPatterns: readonly CompiledAttributePattern[],
-    source: BuiltInSyntaxSourceSet,
-  ): readonly SemanticClaim[] {
-    return compiledPatterns.map((pattern, index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
-      executableProductHandle,
-      KernelVocabulary.Compiler.CompilesAttributePattern.key,
-      pattern.productHandle,
-      source.provenanceHandle,
-    ));
-  }
-
-  private recordsForAttributePatternExecutable(
-    catalogIdentityHandle: IdentityHandle,
-    executable: AttributePatternExecutable,
-    source: BuiltInSyntaxSourceSet,
-  ): readonly KernelStoreRecord[] {
-    return [
-      new CompilerIdentity(
-        executable.identityHandle,
-        KernelVocabulary.Compiler.AttributePatternExecutable.key,
-        catalogIdentityHandle,
-        executable.sourceAddressHandle,
-        executable.target?.localName ?? null,
-      ),
-      new MaterializedProduct(
-        executable.productHandle,
-        KernelVocabulary.Compiler.AttributePatternExecutable.key,
-        executable.identityHandle,
-        executable.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-    ];
-  }
-
-  private recordsForCompiledPattern(
-    definition: BuiltInAttributePattern['patterns'][number],
-    local: string,
-    ownerIdentityHandle: IdentityHandle,
-    executableProductHandle: ProductHandle,
-    source: BuiltInSyntaxSourceSet,
-  ): BuiltInCompiledPatternEmission {
-    const handles = this.compiledPatternHandles(local);
-    const compiled = compileAttributePatternDefinition(definition);
-    const product = this.compiledPatternProduct(definition, handles, compiled, executableProductHandle, source);
-    return new BuiltInCompiledPatternEmission(
-      this.recordsForCompiledPatternProduct(definition, product, handles, ownerIdentityHandle, source),
-      product,
-    );
-  }
-
-  private compiledPatternHandles(local: string): BuiltInCompiledPatternHandles {
-    return new BuiltInCompiledPatternHandles(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-    );
-  }
-
-  private compiledPatternProduct(
-    definition: BuiltInAttributePattern['patterns'][number],
-    handles: BuiltInCompiledPatternHandles,
-    compiled: ReturnType<typeof compileAttributePatternDefinition>,
-    executableProductHandle: ProductHandle,
-    source: BuiltInSyntaxSourceSet,
-  ): CompiledAttributePattern {
-    return new CompiledAttributePattern(
-      handles.productHandle,
-      handles.identityHandle,
-      definition,
-      compiled.tokens,
-      compiled.score,
-      compiled.symbols,
-      executableProductHandle,
-      definition.addressHandle ?? source.addressHandle,
-    );
-  }
-
-  private recordsForCompiledPatternProduct(
-    definition: BuiltInAttributePattern['patterns'][number],
-    product: CompiledAttributePattern,
-    handles: BuiltInCompiledPatternHandles,
-    ownerIdentityHandle: IdentityHandle,
-    source: BuiltInSyntaxSourceSet,
-  ): readonly KernelStoreRecord[] {
-    return [
-      new CompilerIdentity(
-        handles.identityHandle,
-        KernelVocabulary.Compiler.CompiledAttributePattern.key,
-        ownerIdentityHandle,
-        product.sourceAddressHandle,
-        definition.pattern,
-      ),
-      new MaterializedProduct(
-        handles.productHandle,
-        KernelVocabulary.Compiler.CompiledAttributePattern.key,
-        handles.identityHandle,
-        product.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-    ];
   }
 
   private recordsForBindingCommand(
@@ -600,71 +449,38 @@ export class BuiltInSyntaxCatalogMaterializer {
     readonly product: BuiltInBindingCommandEmission;
     readonly executable: BindingCommandExecutable;
   } {
-    const handles = this.executableHandles(`${local}:executable`);
+    const executableLocal = `${local}:executable`;
+    const executableProductHandle = this.store.handles.product(executableLocal);
+    const executableIdentityHandle = this.store.handles.identity(executableLocal);
     const materializedHandler = materializeBindingCommandHandler(
       handler,
-      handles.productHandle,
-      handles.identityHandle,
+      executableProductHandle,
+      executableIdentityHandle,
       source.addressHandle,
       [],
     );
-    const executable = this.bindingCommandExecutableFor(
-      handles,
-      source,
-      materializedHandler,
-    );
+    const publication = this.executables.materializeBindingCommand({
+      localKey: executableLocal,
+      ownerIdentityHandle: catalogIdentityHandle,
+      definitionProductHandle: null,
+      target: new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
+      name: materializedHandler.name,
+      aliases: materializedHandler.aliases,
+      key: materializedHandler.key,
+      ignoreAttr: materializedHandler.ignoreAttr,
+      executionKind: BindingCommandExecutionKind.BuiltIn,
+      sourceAddressHandle: source.addressHandle,
+      provenanceHandle: source.provenanceHandle,
+    });
     return {
-      records: this.recordsForBindingCommandExecutable(catalogIdentityHandle, executable, source),
+      records: publication.records,
       product: new BuiltInBindingCommandEmission(
         catalogProductHandle,
         materializedHandler,
-        executable,
+        publication.executable,
       ),
-      executable,
+      executable: publication.executable,
     };
-  }
-
-  private bindingCommandExecutableFor(
-    handles: BuiltInExecutableHandles,
-    source: BuiltInSyntaxSourceSet,
-    handler: BuiltInBindingCommand,
-  ): BindingCommandExecutable {
-    return new BindingCommandExecutable(
-      handles.productHandle,
-      handles.identityHandle,
-      null,
-      new ResourceTargetReference(null, source.addressHandle, handler.targetName),
-      handler.name,
-      handler.aliases,
-      handler.key,
-      handler.ignoreAttr,
-      BindingCommandExecutionKind.BuiltIn,
-      source.addressHandle,
-      [],
-    );
-  }
-
-  private recordsForBindingCommandExecutable(
-    catalogIdentityHandle: IdentityHandle,
-    executable: BindingCommandExecutable,
-    source: BuiltInSyntaxSourceSet,
-  ): readonly KernelStoreRecord[] {
-    return [
-      new CompilerIdentity(
-        executable.identityHandle,
-        KernelVocabulary.Compiler.BindingCommandExecutable.key,
-        catalogIdentityHandle,
-        executable.sourceAddressHandle,
-        executable.name,
-      ),
-      new MaterializedProduct(
-        executable.productHandle,
-        KernelVocabulary.Compiler.BindingCommandExecutable.key,
-        executable.identityHandle,
-        executable.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-    ];
   }
 
   private recordsForSource(

@@ -34,6 +34,7 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   AttributeClassification,
   AttributeClassificationKind,
+  AttributeSyntaxKind,
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
@@ -372,6 +373,9 @@ function classifySyntax(
 
   if (isTemplateSpecialAttributeName(rawName)) {
     return new ClassificationDecision(AttributeClassificationKind.CompilerControl, null, null, null, null);
+  }
+  if (syntax.syntaxKind === AttributeSyntaxKind.Open) {
+    return openDecision();
   }
 
   const commandName = syntax.command?.toLowerCase() ?? null;

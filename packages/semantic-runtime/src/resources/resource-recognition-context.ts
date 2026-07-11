@@ -1,7 +1,7 @@
 import type ts from 'typescript';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, EvidenceHandle } from '../kernel/handles.js';
 import type { StaticModuleEvaluationResult } from '../evaluation/evaluator.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
@@ -54,7 +54,9 @@ export class ResourceRecognitionContext {
     /** Project root used when a semantic read needs to join back to admitted non-TS assets. */
     readonly projectRootDir: string | null = null,
     /** Boot-admitted source files for this project, including HTML/CSS assets not parsed by TS evaluation. */
-    readonly sourceFiles: readonly SourceFileAdmission[] = [],
+    readonly sourceFiles: readonly SourceFileAdmission[],
+    /** Build-tool evidence proving that convention preprocessing applies to this source. */
+    readonly conventionTransformEvidenceHandles: readonly EvidenceHandle[],
     /** Source-local contexts for graph-linked modules reached by the same project pass. */
     readonly contextIndex: ResourceRecognitionContextIndex | null = null,
   ) {

@@ -30,6 +30,14 @@ import {
   ResourceDefinitionConvergenceEmission,
 } from './resource-definition-converger.js';
 import type { FullResourceDefinition } from './resource-definition.js';
+import {
+  NamedResourceDefinitionContributionKind,
+  registrationResourceKindFor,
+} from './resource-kind.js';
+import {
+  ResourceConventionTransformAdmissionIndex,
+  ResourceConventionTransformAdmissionMaterializer,
+} from './resource-convention-transform-admission.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
 export class ResourceRecognitionSourceResult {
@@ -87,11 +95,104 @@ export class ResourceRecognitionProjectResult {
   }
 
   readDefinitions(): readonly FullResourceDefinition[] {
-    return this.sources.flatMap((source) => source.convergence.definitions);
+    return effectiveResourceDefinitions(
+      this.sources.flatMap((source) => source.convergence.definitions),
+    );
   }
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
+  }
+}
+
+function effectiveResourceDefinitions(
+  definitions: readonly FullResourceDefinition[],
+): readonly FullResourceDefinition[] {
+  const selected: FullResourceDefinition[] = [];
+  const selectedIndexByTarget = new Map<string, number>();
+  for (const definition of definitions) {
+    const key = effectiveResourceDefinitionKey(definition);
+    if (key == null) {
+      selected.push(definition);
+      continue;
+    }
+    const selectedIndex = selectedIndexByTarget.get(key);
+    if (selectedIndex == null) {
+      selectedIndexByTarget.set(key, selected.length);
+      selected.push(definition);
+      continue;
+    }
+    const current = selected[selectedIndex]!;
+    if (resourceDefinitionSupersedes(definition, current)) {
+      selected[selectedIndex] = definition;
+    }
+  }
+  return selected;
+}
+
+function effectiveResourceDefinitionKey(definition: FullResourceDefinition): string | null {
+  const registrationKind = registrationResourceKindFor(definition.type);
+  if (registrationKind == null) {
+    return null;
+  }
+  const targetKey = definition.target.targetType?.identityHandle
+    ?? definition.target.identityHandle
+    ?? (definition.target.moduleKey != null && definition.target.localName != null
+      ? `${definition.target.moduleKey}\0${definition.target.localName}`
+      : null);
+  return targetKey == null ? null : `${registrationKind}\0${targetKey}`;
+}
+
+function resourceDefinitionSupersedes(
+  candidate: FullResourceDefinition,
+  current: FullResourceDefinition,
+): boolean {
+  const candidateKind = primaryContributionKind(candidate);
+  const currentKind = primaryContributionKind(current);
+  const candidateRank = resourceDefinitionContributionRank(candidateKind);
+  const currentRank = resourceDefinitionContributionRank(currentKind);
+  if (candidateRank !== currentRank) {
+    return candidateRank > currentRank;
+  }
+  // Direct define calls execute in source order; class decorator initializers execute bottom-up,
+  // making the topmost (first recognized) decorator the final metadata writer.
+  return candidateKind === NamedResourceDefinitionContributionKind.DefinitionObject;
+}
+
+function primaryContributionKind(
+  definition: FullResourceDefinition,
+): NamedResourceDefinitionContributionKind | null {
+  const contributionKind = definition.contributions[0]?.contributionKind;
+  switch (contributionKind) {
+    case NamedResourceDefinitionContributionKind.DefinitionObject:
+    case NamedResourceDefinitionContributionKind.Annotation:
+    case NamedResourceDefinitionContributionKind.TypeStaticProperty:
+    case NamedResourceDefinitionContributionKind.Convention:
+    case NamedResourceDefinitionContributionKind.LocalTemplate:
+    case NamedResourceDefinitionContributionKind.Header:
+      return contributionKind;
+    default:
+      return null;
+  }
+}
+
+function resourceDefinitionContributionRank(
+  kind: NamedResourceDefinitionContributionKind | null,
+): number {
+  switch (kind) {
+    case NamedResourceDefinitionContributionKind.DefinitionObject:
+      return 4;
+    case NamedResourceDefinitionContributionKind.Annotation:
+      return 3;
+    case NamedResourceDefinitionContributionKind.TypeStaticProperty:
+      return 2;
+    case NamedResourceDefinitionContributionKind.Convention:
+      return 1;
+    case NamedResourceDefinitionContributionKind.LocalTemplate:
+      return 0;
+    case NamedResourceDefinitionContributionKind.Header:
+    case null:
+      return 0;
   }
 }
 
@@ -110,7 +211,15 @@ export class ResourceRecognitionProjectPass {
     const sourceFiles = measureResourceRecognitionProjectPhase(phases, 'source-file-selection', () =>
       resourceRecognitionSourceFiles(project, projectEvaluation)
     );
-    const contexts = evaluatedResourceRecognitionContexts(project, projectEvaluation, typeSystem, sourceFiles);
+    const conventionTransforms = new ResourceConventionTransformAdmissionMaterializer()
+      .materializeAndEmit(store, project);
+    const contexts = evaluatedResourceRecognitionContexts(
+      project,
+      projectEvaluation,
+      typeSystem,
+      sourceFiles,
+      conventionTransforms,
+    );
     const sources = projectEvaluation.sources.map((source) => {
       const sourceStarted = performance.now();
       const result = this.recognizeSource(store, recognition, source, contexts);
@@ -179,6 +288,7 @@ function evaluatedResourceRecognitionContexts(
   evaluation: StaticProjectEvaluationResult,
   typeSystem: TypeSystemProject | null,
   sourceFiles: readonly SourceFileAdmission[],
+  conventionTransforms: ResourceConventionTransformAdmissionIndex,
 ): ReadonlyMap<string, ResourceRecognitionContext> {
   const index = new ResourceRecognitionContextIndex();
   const contexts = new Map<string, ResourceRecognitionContext>();
@@ -195,6 +305,7 @@ function evaluatedResourceRecognitionContexts(
       typeSystem,
       project.rootDir,
       sourceFiles,
+      conventionTransforms.evidenceHandlesForSource(source.admission),
       index,
     );
     index.add(context);

@@ -118,7 +118,7 @@ function matchesQuery(definition: SemanticResourceDefinitionRow, query: string):
     definition.name,
     definition.key,
     definition.resourceKind,
-    ...definition.aliases,
+    ...definition.aliases.map((alias) => alias.name),
   ].some((value) => value != null && value.toLowerCase().includes(query));
 }
 

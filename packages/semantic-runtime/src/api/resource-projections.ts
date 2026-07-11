@@ -20,6 +20,7 @@ import {
 } from './source-reference.js';
 import type {
   SemanticResourceDefinitionBindableRow,
+  SemanticResourceDefinitionAliasRow,
   SemanticResourceDefinitionDependencyRow,
   SemanticResourceDeclarationMode,
   SemanticResourceDefinitionPatternRow,
@@ -73,7 +74,7 @@ function resourceDefinitionRow(
     resourceKind: taxonomyResourceKindForDefinition(definition),
     declarationModes: declarationModesForDefinition(definition),
     name: readDefinitionName(definition),
-    aliases: readDefinitionAliases(definition),
+    aliases: readDefinitionAliases(definition, store),
     key: readDefinitionKey(definition),
     targetName: definition.target.localName,
     captureKind: 'capture' in definition ? definition.capture.kind : null,
@@ -145,6 +146,10 @@ function resourceIssueRow(
     severity: issue.severity,
     message: issue.message,
     source: describeAddress(store, issue.sourceAddressHandle),
+    relatedInformation: issue.relatedInformation.map((related) => ({
+      message: related.message,
+      source: describeAddress(store, related.sourceAddressHandle),
+    })),
     resource: {
       resourceKind: definition == null ? null : taxonomyResourceKindForDefinition(definition),
       name: definition == null ? null : readDefinitionName(definition),
@@ -157,6 +162,9 @@ function resourceIssueRow(
         identityHandle: issue.identityHandle,
         ownerDefinitionIdentityHandle: issue.ownerDefinitionIdentityHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
+        relatedSourceAddressHandles: issue.relatedInformation
+          .map((related) => related.sourceAddressHandle)
+          .filter((addressHandle): addressHandle is NonNullable<typeof addressHandle> => addressHandle != null),
       },
     } : {}),
   };
@@ -185,6 +193,8 @@ function declarationModeForContributionKind(kind: string): SemanticResourceDecla
       return 'factory-call';
     case 'convention':
       return 'convention';
+    case 'local-template':
+      return 'local-template';
     case 'header':
       return 'header';
     case 'bindable-metadata':
@@ -203,8 +213,16 @@ function readDefinitionNameSourceAddressHandle(definition: FullResourceDefinitio
   return 'nameSourceAddressHandle' in definition ? definition.nameSourceAddressHandle : null;
 }
 
-function readDefinitionAliases(definition: FullResourceDefinition): readonly string[] {
-  return 'aliases' in definition ? definition.aliases.map((alias) => alias.name) : [];
+function readDefinitionAliases(
+  definition: FullResourceDefinition,
+  store: KernelStore,
+): readonly SemanticResourceDefinitionAliasRow[] {
+  return 'aliases' in definition
+    ? definition.aliases.map((alias) => ({
+        name: alias.name,
+        source: describeAddress(store, alias.addressHandle),
+      }))
+    : [];
 }
 
 function readDefinitionKey(definition: FullResourceDefinition): string | null {

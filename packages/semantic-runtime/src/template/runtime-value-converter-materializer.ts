@@ -193,7 +193,7 @@ export class RuntimeValueConverterMaterializer {
       converter.name.span,
     );
     const applications = valueConverterApplicationPhasesForBinding(this.store, binding, input.resourceScope).map((phase) =>
-      this.applicationProduct(`${local}:phase:${phase}`, binding, converter, phase, expressionSource.handle, source)
+      this.applicationProduct(`${local}:phase:${phase}`, binding, resource, converter, phase, expressionSource.handle, source)
     );
     const toViewApplication = applications.find((application) =>
       application.phase === RuntimeValueConverterApplicationPhase.ToView
@@ -234,6 +234,7 @@ export class RuntimeValueConverterMaterializer {
   private applicationProduct(
     local: string,
     binding: RuntimeBinding,
+    resource: TemplateVisibleResource,
     converter: ValueConverterExpression,
     phase: RuntimeValueConverterApplicationPhase,
     sourceAddressHandle: AddressHandle | null,
@@ -243,6 +244,7 @@ export class RuntimeValueConverterMaterializer {
       this.store.handles.product(local),
       this.store.handles.identity(local),
       binding.toReference(),
+      resource.toReference(),
       phase,
       converter.name.name,
       converter.args.length,

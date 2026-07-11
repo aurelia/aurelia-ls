@@ -78,9 +78,13 @@ export type AttributeSyntaxField =
   | 'rawName'
   | 'rawValue'
   | 'target'
+  | 'targetSource'
   | 'command'
+  | 'commandSource'
   | 'parts'
   | 'pattern'
+  | 'compiledPattern'
+  | 'patternLiterals'
   | 'source';
 
 export type AttributePatternExecutableField =
@@ -131,6 +135,23 @@ export class AttributePatternToken {
     readonly tokenKind: AttributePatternTokenKind,
     /** Literal value for literal tokens; null for dynamic PART tokens. */
     readonly value: string | null,
+  ) {}
+}
+
+/** Relative authored occurrence of one literal token selected by an attribute-pattern match. */
+export class AttributePatternLiteralOccurrence {
+  constructor(
+    readonly tokenIndex: number,
+    readonly value: string,
+    readonly start: number,
+    readonly end: number,
+  ) {}
+}
+
+export class AttributePatternMatch {
+  constructor(
+    readonly parts: readonly string[],
+    readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[],
   ) {}
 }
 
@@ -205,16 +226,28 @@ export function matchAttributePatternTokens(
   tokens: readonly AttributePatternToken[],
   symbols: readonly string[],
 ): readonly string[] | null {
+  return matchAttributePattern(input, tokens, symbols)?.parts ?? null;
+}
+
+function matchAttributePattern(
+  input: string,
+  tokens: readonly AttributePatternToken[],
+  symbols: readonly string[],
+): AttributePatternMatch | null {
   const parts: string[] = [];
+  const literalOccurrences: AttributePatternLiteralOccurrence[] = [];
   const symbolSet = new Set(symbols);
   let pos = 0;
   let currentPart = '';
 
-  for (const token of tokens) {
+  for (const [tokenIndex, token] of tokens.entries()) {
     if (token.tokenKind === AttributePatternTokenKind.Literal) {
       const value = token.value ?? '';
       if (!input.startsWith(value, pos)) {
         return null;
+      }
+      if (value.length > 0) {
+        literalOccurrences.push(new AttributePatternLiteralOccurrence(tokenIndex, value, pos, pos + value.length));
       }
 
       for (const ch of value) {
@@ -243,7 +276,7 @@ export function matchAttributePatternTokens(
   if (currentPart.length > 0) {
     parts.push(currentPart);
   }
-  return pos === input.length ? parts : null;
+  return pos === input.length ? new AttributePatternMatch(parts, literalOccurrences) : null;
 }
 
 /** Runtime CompiledPattern model used by SyntaxInterpreter. */
@@ -271,6 +304,10 @@ export class CompiledAttributePattern {
   tryMatch(input: string): readonly string[] | null {
     return matchAttributePatternTokens(input, this.tokens, this.symbols);
   }
+
+  match(input: string): AttributePatternMatch | null {
+    return matchAttributePattern(input, this.tokens, this.symbols);
+  }
 }
 
 /** Cached result of interpreting one raw attribute name. */
@@ -284,6 +321,8 @@ export class AttributePatternInterpretation {
     readonly parts: readonly string[],
     /** Compiled pattern product that won the match, when any pattern matched. */
     readonly compiledPatternProductHandle: ProductHandle | null,
+    /** Relative literal-token occurrences retained from the winning match. */
+    readonly literalOccurrences: readonly AttributePatternLiteralOccurrence[] = [],
   ) {}
 }
 
@@ -292,17 +331,17 @@ export function interpretCompiledAttributePatterns(
   compiledPatterns: readonly CompiledAttributePattern[],
 ): AttributePatternInterpretation {
   let bestPattern: CompiledAttributePattern | null = null;
-  let bestParts: readonly string[] | null = null;
+  let bestMatch: AttributePatternMatch | null = null;
 
   for (const pattern of compiledPatterns) {
-    const parts = pattern.tryMatch(rawName);
-    if (parts == null) {
+    const match = pattern.match(rawName);
+    if (match == null) {
       continue;
     }
 
     if (bestPattern == null || isBetterAttributePatternScore(pattern.score, bestPattern.score)) {
       bestPattern = pattern;
-      bestParts = parts;
+      bestMatch = match;
     }
   }
 
@@ -311,8 +350,9 @@ export function interpretCompiledAttributePatterns(
     : new AttributePatternInterpretation(
       rawName,
       bestPattern.definition.pattern,
-      bestParts ?? [],
+      bestMatch?.parts ?? [],
       bestPattern.productHandle,
+      bestMatch?.literalOccurrences ?? [],
     );
 }
 
@@ -499,12 +539,20 @@ export class AttributeSyntax {
     readonly rawValue: string,
     /** Attribute parser target part such as `value` in `value.bind`. */
     readonly target: string,
+    /** Exact authored source for the target part. */
+    readonly targetSourceAddressHandle: AddressHandle | null,
     /** Binding command part such as `bind` in `value.bind`, if present. */
     readonly command: string | null,
+    /** Exact authored source for the binding-command part. */
+    readonly commandSourceAddressHandle: AddressHandle | null,
     /** Additional pattern parts in runtime order. */
     readonly parts: readonly string[],
     /** Attribute pattern definition entry that matched this syntax, when known. */
     readonly pattern: AttributePatternDefinitionEntry | null,
+    /** Winning compiled pattern selected by the parser, when one matched. */
+    readonly compiledPatternProductHandle: ProductHandle | null,
+    /** Exact authored non-symbol literal tokens that identify the matched pattern. */
+    readonly patternLiterals: readonly AttributePatternLiteralReference[],
     /** Source attribute reference that produced this syntax. */
     readonly attribute: HtmlAttributeReference,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
@@ -525,6 +573,14 @@ export class AttributeSyntax {
   get sourceAddressHandle(): AddressHandle | null {
     return productDetailAddressHandle(this, AttributeSyntaxDetailKind);
   }
+}
+
+export class AttributePatternLiteralReference {
+  constructor(
+    readonly tokenIndex: number,
+    readonly value: string,
+    readonly sourceAddressHandle: AddressHandle,
+  ) {}
 }
 
 /** Executable attribute-pattern handler visible to IAttributeParser. */

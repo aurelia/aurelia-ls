@@ -1,5 +1,6 @@
-import type { ICallerContext } from '@aurelia/runtime-html';
+import { valueConverter, type ICallerContext } from '@aurelia/runtime-html';
 
+@valueConverter('numberText')
 export class NumberTextValueConverter {
   toView(value: number): string {
     return String(value);
@@ -10,12 +11,14 @@ export class NumberTextValueConverter {
   }
 }
 
+@valueConverter('numberTextReadonly')
 export class NumberTextReadonlyValueConverter {
   toView(value: number): string {
     return String(value);
   }
 }
 
+@valueConverter('contextualNumberText')
 export class ContextualNumberTextValueConverter {
   readonly withContext = true;
 

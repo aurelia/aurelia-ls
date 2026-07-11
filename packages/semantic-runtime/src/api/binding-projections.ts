@@ -10,6 +10,7 @@ import {
   runtimeBindingPrimitiveValueDomainKinds,
 } from '../observation/runtime-binding-primitive-value.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
+import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
 import {
   describeAddress,
   sourceReferenceForParserSpan,
@@ -38,6 +39,7 @@ import type {
   SemanticBindingValueChannelSummaryRow,
   SemanticObservedMemberSourceState,
   SemanticTargetOperationRow,
+  SemanticTemplateResourceReferenceRow,
   SemanticValueConverterApplicationRow,
 } from './contracts.js';
 import {
@@ -181,6 +183,7 @@ export function readBindingBehaviorApplicationRows(
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         behaviorName: application.behaviorName,
+        resource: templateResourceReferenceRow(store, application.resource, handles),
         phase: application.phase,
         argumentCount: application.argumentCount,
         staticArgumentValues: application.staticArgumentValues,
@@ -214,6 +217,7 @@ export function readValueConverterApplicationRows(
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         converterName: application.converterName,
+        resource: templateResourceReferenceRow(store, application.resource, handles)!,
         phase: application.phase,
         argumentCount: application.argumentCount,
         source: describeAddress(store, application.sourceAddressHandle),
@@ -230,6 +234,30 @@ export function readValueConverterApplicationRows(
       `${left.definitionName}:${left.converterName}:${left.phase}:${left.bindingKind}`
         .localeCompare(`${right.definitionName}:${right.converterName}:${right.phase}:${right.bindingKind}`)
     );
+}
+
+function templateResourceReferenceRow(
+  store: KernelStore,
+  resource: TemplateVisibleResourceReference | null,
+  handles: boolean,
+): SemanticTemplateResourceReferenceRow | null {
+  if (resource == null) {
+    return null;
+  }
+  return {
+    resourceKind: resource.resourceKind,
+    name: resource.name,
+    visibilityKind: resource.visibilityKind,
+    source: describeAddress(store, resource.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        resourceProductHandle: resource.resourceProductHandle,
+        resourceIdentityHandle: resource.resourceIdentityHandle,
+        definitionProductHandle: resource.definitionProductHandle,
+        sourceAddressHandle: resource.sourceAddressHandle,
+      },
+    } : {}),
+  };
 }
 
 export function readBindingValueChannelRows(

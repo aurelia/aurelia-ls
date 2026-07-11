@@ -434,6 +434,13 @@ export class Scanner {
   }
 }
 
+/** Whether a complete string is one identifier token accepted by Aurelia's expression grammar. */
+export function isAureliaExpressionIdentifier(value: string): boolean {
+  const scanner = new Scanner(value);
+  return scanner.next().type === TokenType.Identifier
+    && scanner.next().type === TokenType.EOF;
+}
+
 function scanExpressionPunctuationOrOperator(source: string, ch: number, start: number): Token {
   switch (ch) {
     case CharCode.OpenParen:
@@ -805,4 +812,3 @@ function isInRanges(ch: number, ranges: ReadonlyArray<readonly [number, number]>
   }
   return false;
 }
-

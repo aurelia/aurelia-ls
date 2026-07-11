@@ -3537,8 +3537,8 @@
                     "name": "decorator-card",
                     "targetName": "DecoratorCard",
                     "declarationModes.0": "decorator",
-                    "aliases.0": "decorator-card-annotation",
-                    "aliases.1": "decorator-card-alias",
+                    "aliases.0.name": "decorator-card-annotation",
+                    "aliases.1.name": "decorator-card-alias",
                     "key": "au:resource:custom-element:decorator-card"
                   },
                   "sourceField": "nameSource",
@@ -3550,7 +3550,7 @@
                     "name": "static-panel",
                     "targetName": "StaticPanel",
                     "declarationModes.0": "static-property",
-                    "aliases.0": "static-panel-alias",
+                    "aliases.0.name": "static-panel-alias",
                     "key": "au:resource:custom-element:static-panel"
                   },
                   "sourceField": "nameSource",
@@ -3562,7 +3562,7 @@
                     "name": "defined-badge",
                     "targetName": "DefinedBadge",
                     "declarationModes.0": "definition-object",
-                    "aliases.0": "defined-badge-alias",
+                    "aliases.0.name": "defined-badge-alias",
                     "key": "au:resource:custom-element:defined-badge"
                   },
                   "sourceField": "nameSource",
@@ -3570,23 +3570,11 @@
                 },
                 {
                   "fields": {
-                    "resourceKind": "custom-element",
-                    "name": "convention-panel",
-                    "targetName": "ConventionPanel",
-                    "declarationModes.0": "convention",
-                    "key": "au:resource:custom-element:convention-panel",
-                    "nameSource": null
-                  },
-                  "sourceField": "targetSource",
-                  "source": { "sourceFile": "src/convention-panel.ts", "marker": "class ConventionPanel", "token": "ConventionPanel" }
-                },
-                {
-                  "fields": {
                     "resourceKind": "custom-attribute",
                     "name": "decorator-tooltip",
                     "targetName": "DecoratorTooltip",
                     "declarationModes.0": "decorator",
-                    "aliases.0": "decorator-tip",
+                    "aliases.0.name": "decorator-tip",
                     "key": "au:resource:custom-attribute:decorator-tooltip",
                     "isTemplateController": false
                   },
@@ -3599,7 +3587,7 @@
                     "name": "static-flag",
                     "targetName": "StaticFlag",
                     "declarationModes.0": "static-property",
-                    "aliases.0": "flagged",
+                    "aliases.0.name": "flagged",
                     "key": "au:resource:custom-attribute:static-flag",
                     "isTemplateController": false
                   },
@@ -3612,7 +3600,7 @@
                     "name": "defined-accent",
                     "targetName": "DefinedAccent",
                     "declarationModes.0": "definition-object",
-                    "aliases.0": "accented",
+                    "aliases.0.name": "accented",
                     "key": "au:resource:custom-attribute:defined-accent",
                     "isTemplateController": false
                   },
@@ -3625,7 +3613,7 @@
                     "name": "surface-gate",
                     "targetName": "SurfaceGate",
                     "declarationModes.0": "decorator",
-                    "aliases.0": "surface-door",
+                    "aliases.0.name": "surface-door",
                     "key": "au:resource:custom-attribute:surface-gate",
                     "isTemplateController": true
                   },
@@ -3638,7 +3626,7 @@
                     "name": "formatName",
                     "targetName": "FormatNameValueConverter",
                     "declarationModes.0": "decorator",
-                    "aliases.0": "fmtName",
+                    "aliases.0.name": "fmtName",
                     "key": "au:resource:value-converter:formatName"
                   },
                   "sourceField": "nameSource",
@@ -3650,7 +3638,7 @@
                     "name": "staticStatus",
                     "targetName": "StaticStatusValueConverter",
                     "declarationModes.0": "static-property",
-                    "aliases.0": "statusText",
+                    "aliases.0.name": "statusText",
                     "key": "au:resource:value-converter:staticStatus"
                   },
                   "sourceField": "nameSource",
@@ -3662,7 +3650,7 @@
                     "name": "definedCode",
                     "targetName": "DefinedCodeValueConverter",
                     "declarationModes.0": "definition-object",
-                    "aliases.0": "codeText",
+                    "aliases.0.name": "codeText",
                     "key": "au:resource:value-converter:definedCode"
                   },
                   "sourceField": "nameSource",
@@ -3674,7 +3662,7 @@
                     "name": "trackEdit",
                     "targetName": "TrackEditBindingBehavior",
                     "declarationModes.0": "decorator",
-                    "aliases.0": "track",
+                    "aliases.0.name": "track",
                     "key": "au:resource:binding-behavior:trackEdit"
                   },
                   "sourceField": "nameSource",
@@ -3686,7 +3674,7 @@
                     "name": "staticAudit",
                     "targetName": "StaticAuditBindingBehavior",
                     "declarationModes.0": "static-property",
-                    "aliases.0": "audit",
+                    "aliases.0.name": "audit",
                     "key": "au:resource:binding-behavior:staticAudit"
                   },
                   "sourceField": "nameSource",
@@ -3698,12 +3686,63 @@
                     "name": "definedMask",
                     "targetName": "DefinedMaskBindingBehavior",
                     "declarationModes.0": "definition-object",
-                    "aliases.0": "mask",
+                    "aliases.0.name": "mask",
                     "key": "au:resource:binding-behavior:definedMask"
                   },
                   "sourceField": "nameSource",
                   "source": { "sourceFile": "src/resources.ts", "marker": "name: 'definedMask'", "token": "definedMask" }
                 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-aliases-preserve-authored-field-provenance",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "decorator-card-annotation" }, "source": { "sourceFile": "src/resources.ts", "marker": "@alias('decorator-card-annotation')", "token": "decorator-card-annotation" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "decorator-card-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "static-panel-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['static-panel-alias']", "token": "static-panel-alias" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "defined-badge-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['defined-badge-alias']", "token": "defined-badge-alias" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "decorator-tip" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-tip']", "token": "decorator-tip" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "flagged" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['flagged']", "token": "flagged" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "accented" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['accented']", "token": "accented" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "surface-door" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['surface-door']", "token": "surface-door" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "fmtName" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['fmtName']", "token": "fmtName" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "statusText" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['statusText']", "token": "statusText" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "codeText" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['codeText']", "token": "codeText" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "track" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['track']", "token": "track" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "audit" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['audit']", "token": "audit" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "mask" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['mask']", "token": "mask" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-alias-usage-preserves-matched-public-name",
+          "expectations": [
+            {
+              "name": "custom-element alias cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" } },
+              "rows": [
+                { "rowPath": "value.selectedDefinition", "fields": { "name": "decorator-card", "matchedName": "decorator-card-alias" }, "sourceField": "matchedNameSource", "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "custom-attribute alias cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "decorator-tip=\"message.bind: title\"", "token": "decorator-tip" } },
+              "rows": [
+                { "rowPath": "value.selectedDefinition", "fields": { "name": "decorator-tooltip", "matchedName": "decorator-tip" }, "sourceField": "matchedNameSource", "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-tip']", "token": "decorator-tip" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "template-controller alias cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "surface-door.bind=\"isActive\"", "token": "surface-door" } },
+              "rows": [
+                { "rowPath": "value.selectedDefinition", "fields": { "name": "surface-gate", "matchedName": "surface-door" }, "sourceField": "matchedNameSource", "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['surface-door']", "token": "surface-door" }, "count": 1 }
               ]
             }
           ]
@@ -3767,27 +3806,20 @@
           ]
         },
         {
-          "id": "convention-resource-rename-refusal",
+          "id": "convention-resource-requires-transform-admission",
           "cursor": { "marker": "<convention-panel>", "token": "convention-panel" },
           "expectations": [
             {
-              "name": "cursor info",
-              "query": { "kind": "template-cursor-info" },
-              "equals": {
-                "value.selectedDefinition.resourceKind": "custom-element",
-                "value.selectedDefinition.name": "convention-panel",
-                "value.selectedDefinition.nameSource": null
-              }
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "convention-panel", "targetName": "ConventionPanel" }, "absent": true }
+              ]
             },
             {
-              "name": "resource rename",
-              "query": { "kind": "template-rename", "options": { "newName": "renamed-panel" } },
-              "outcomes": [ "miss" ],
-              "equals": {
-                "value.status": "not-available",
-                "value.reason": "resource-name-has-no-authored-source",
-                "value.selectedMemberName": "convention-panel"
-              }
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
             }
           ]
         },
@@ -3818,6 +3850,81 @@
           ]
         },
         {
+          "id": "custom-element-alias-rename-is-name-partitioned",
+          "cursor": { "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" },
+          "expectations": [
+            {
+              "name": "resource alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "alternate-card" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "decorator-card-alias" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-alias-declaration", "newText": "alternate-card" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-card-alias']", "token": "decorator-card-alias" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-element-tag", "newText": "alternate-card" }, "source": { "marker": "<decorator-card-alias label.bind=\"title\">", "token": "decorator-card-alias" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-element-tag", "newText": "alternate-card" }, "source": { "marker": "</decorator-card-alias>", "token": "decorator-card-alias" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-as-element-value", "newText": "alternate-card" }, "source": { "marker": "as-element=\"decorator-card-alias\"", "token": "decorator-card-alias" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "<decorator-card label.bind=\"title\">", "token": "decorator-card" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "custom-attribute-alias-rename-is-name-partitioned",
+          "cursor": { "marker": "decorator-tip=\"message.bind: title\"", "token": "decorator-tip" },
+          "expectations": [
+            {
+              "name": "resource alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "alternate-tip" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "decorator-tip" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-alias-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['decorator-tip']", "token": "decorator-tip" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-attribute-target" }, "source": { "marker": "decorator-tip=\"message.bind: title\"", "token": "decorator-tip" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "decorator-tooltip=\"message.bind: title\"", "token": "decorator-tooltip" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "template-controller-alias-rename-is-name-partitioned",
+          "cursor": { "marker": "surface-door.bind=\"isActive\"", "token": "surface-door" },
+          "expectations": [
+            {
+              "name": "resource alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "alternate-door" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "surface-door" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-alias-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['surface-door']", "token": "surface-door" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-attribute-target" }, "source": { "marker": "surface-door.bind=\"isActive\"", "token": "surface-door" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "surface-gate.bind=\"isActive\"", "token": "surface-gate" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-resource-alias-renames-are-name-partitioned",
+          "expectations": [
+            {
+              "name": "value-converter alias rename",
+              "query": { "kind": "template-rename", "cursor": { "marker": "${title | fmtName}", "token": "fmtName" }, "options": { "newName": "shortFormat" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "fmtName" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-alias-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['fmtName']", "token": "fmtName" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-expression-name" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "${title | formatName}", "token": "formatName" }, "absent": true }
+              ]
+            },
+            {
+              "name": "binding-behavior alias rename",
+              "query": { "kind": "template-rename", "cursor": { "marker": "title & track\"", "token": "track" }, "options": { "newName": "observed" } },
+              "equals": { "value.status": "available", "value.selectedMemberName": "track" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-alias-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['track']", "token": "track" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-expression-name" }, "source": { "marker": "title & track\"", "token": "track" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
           "id": "local-template-resource-dispatch",
           "cursor": { "marker": "<local-chip public-label.bind=\"title\">", "token": "local-chip" },
           "coverageIntent": "domain-contract",
@@ -3843,6 +3950,21 @@
           ]
         },
         {
+          "id": "as-element-lowering-uses-effective-resource-bindables",
+          "expectations": [
+            {
+              "name": "primary as-element bindable cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "as-element=\"decorator-card\" label.bind=\"title\"", "token": "label" } },
+              "equals": { "value.selectedDefinition.name": "decorator-card", "value.selectedBindable.name": "label" }
+            },
+            {
+              "name": "alias as-element bindable cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "as-element=\"decorator-card-alias\" label.bind=\"title\"", "token": "label" } },
+              "equals": { "value.selectedDefinition.name": "decorator-card", "value.selectedBindable.name": "label" }
+            }
+          ]
+        },
+        {
           "id": "as-element-resource-dispatch",
           "cursor": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" },
           "coverageIntent": "domain-contract",
@@ -3862,7 +3984,64 @@
               "equals": { "value.selectedMemberName": "decorator-card" },
               "rows": [
                 { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'decorator-card'", "token": "decorator-card" } },
-                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" } }
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" } },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "as-element=\"decorator-card-alias\"", "token": "decorator-card-alias" } }
+              ]
+            },
+            {
+              "name": "alias as-element cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "as-element=\"decorator-card-alias\"", "token": "decorator-card-alias" } },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "decorator-card" }
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "renamed-card" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-as-element-value" }, "source": { "marker": "as-element=\"decorator-card\"", "token": "decorator-card" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "as-element=\"decorator-card-alias\"", "token": "decorator-card-alias" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-resource-applications-preserve-authored-token-sources",
+          "expectations": [
+            {
+              "name": "value converter applications",
+              "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "formatName" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
+                { "fields": { "converterName": "fmtName" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding behavior applications",
+              "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "trackEdit" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
+                { "fields": { "behaviorName": "track" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "expression-resource-applications-preserve-resolved-identity",
+          "expectations": [
+            {
+              "name": "value converter applications",
+              "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "formatName", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "count": 1 },
+                { "fields": { "converterName": "fmtName", "resource.resourceKind": "value-converter", "resource.name": "formatName" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding behavior applications",
+              "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "trackEdit", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "count": 1 },
+                { "fields": { "behaviorName": "track", "resource.resourceKind": "binding-behavior", "resource.name": "trackEdit" }, "source": { "marker": "title & track\"", "token": "track" }, "count": 1 }
               ]
             }
           ]
@@ -3890,6 +4069,16 @@
                 { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "${title | formatName}", "token": "formatName" } },
                 { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "${title | fmtName}", "token": "fmtName" } }
               ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "renderName" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'formatName'", "token": "formatName" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-expression-name" }, "source": { "marker": "${title | formatName}", "token": "formatName" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "${title | fmtName}", "token": "fmtName" }, "absent": true }
+              ]
             }
           ]
         },
@@ -3916,6 +4105,1523 @@
                 { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" } },
                 { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "title & track\"", "token": "track" } }
               ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "auditEdit" } },
+              "equals": { "value.status": "available" },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-name-declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'trackEdit'", "token": "trackEdit" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "resource-expression-name" }, "source": { "marker": "title & trackEdit", "token": "trackEdit" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "title & track\"", "token": "track" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-registration-effective-definitions",
+      "fixture": "fixtures/pressure/resource-registration-effective-definitions",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-effective-definition-model",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/effective-definitions-app.html",
+      "requirement": "Resource registration projects the framework-effective definition for each target, preserves independent registration key spaces, keeps compiler syntax capabilities app-global and source-honest, and retains exact authored diagnostic and IDE loci.",
+      "cases": [
+        {
+          "id": "annotation-definition-and-type-aliases-converge-once",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "resourceKind": "custom-element",
+                    "name": "alias-carrier",
+                    "aliases.0.name": "annotation-alias",
+                    "aliases.1.name": "object-alias",
+                    "aliases.2.name": "type-alias",
+                    "targetName": "AliasCarrier"
+                  },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'alias-carrier'", "token": "alias-carrier" },
+                  "count": 1
+                },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "annotation-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "@alias('annotation-alias')", "token": "annotation-alias" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "object-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['object-alias']", "token": "object-alias" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "type-alias" }, "source": { "sourceFile": "src/resources.ts", "marker": "static readonly aliases = ['type-alias']", "token": "type-alias" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "decorator-definition-precedes-static-au-on-one-target",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "decorator-effective", "targetName": "DecoratorOverStatic" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@customElement('decorator-effective')", "token": "decorator-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "custom-element", "name": "static-shadowed", "targetName": "DecoratorOverStatic" }, "absent": true },
+                {
+                  "fields": { "resourceKind": "custom-attribute", "name": "decorator-attribute-effective", "targetName": "AttributeOverStatic" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@customAttribute('decorator-attribute-effective')", "token": "decorator-attribute-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "custom-attribute", "name": "static-attribute-shadowed", "targetName": "AttributeOverStatic" }, "absent": true },
+                {
+                  "fields": { "resourceKind": "binding-behavior", "name": "decorator-behavior-effective", "targetName": "BehaviorOverStatic" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "@bindingBehavior('decorator-behavior-effective')", "token": "decorator-behavior-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "binding-behavior", "name": "static-behavior-shadowed", "targetName": "BehaviorOverStatic" }, "absent": true }
+              ]
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "decorator-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-element", "name": "static-shadowed" }, "absent": true },
+                { "fields": { "resourceKind": "custom-attribute", "name": "decorator-attribute-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-attribute", "name": "static-attribute-shadowed" }, "absent": true },
+                { "fields": { "resourceKind": "binding-behavior", "name": "decorator-behavior-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-behavior", "name": "static-behavior-shadowed" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<decorator-effective>", "token": "decorator-effective" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "decorator-effective"
+              }
+            }
+          ]
+        },
+        {
+          "id": "define-call-precedes-decorator-on-one-target",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "define-effective", "targetName": "DefineOverDecorator" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'define-effective'", "token": "define-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "custom-element", "name": "decorator-shadowed", "targetName": "DefineOverDecorator" }, "absent": true },
+                {
+                  "fields": { "resourceKind": "value-converter", "name": "define-converter-effective", "targetName": "ConverterDefineOverDecorator" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "ValueConverter.define('define-converter-effective'", "token": "define-converter-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "value-converter", "name": "decorator-converter-shadowed", "targetName": "ConverterDefineOverDecorator" }, "absent": true },
+                {
+                  "fields": { "resourceKind": "binding-command", "name": "define-command-effective", "targetName": "CommandDefineOverDecorator" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "BindingCommand.define('define-command-effective'", "token": "define-command-effective" },
+                  "count": 1
+                },
+                { "fields": { "resourceKind": "binding-command", "name": "decorator-command-shadowed", "targetName": "CommandDefineOverDecorator" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<define-effective>", "token": "define-effective" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "define-effective"
+              }
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "define-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-element", "name": "decorator-shadowed" }, "absent": true },
+                { "fields": { "resourceKind": "value-converter", "name": "define-converter-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "value-converter", "name": "decorator-converter-shadowed" }, "absent": true },
+                { "fields": { "resourceKind": "binding-command", "name": "define-command-effective" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-command", "name": "decorator-command-shadowed" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "invoked-helper-define-call-is-effective",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "invoked-helper-card", "targetName": "InvokedHelperCard" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "CustomElement.define('invoked-helper-card'", "token": "invoked-helper-card" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "invoked-helper-card" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<invoked-helper-card>", "token": "invoked-helper-card" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "invoked-helper-card"
+              }
+            }
+          ]
+        },
+        {
+          "id": "unexecuted-define-calls-are-not-active-resources",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "uninvoked-helper-card", "targetName": "UninvokedHelperCard" }, "absent": true },
+                { "fields": { "resourceKind": "custom-element", "name": "dead-branch-card", "targetName": "DeadBranchCard" }, "absent": true }
+              ]
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "uninvoked-helper-card" }, "absent": true },
+                { "fields": { "resourceKind": "custom-element", "name": "dead-branch-card" }, "absent": true }
+              ]
+            },
+            {
+              "name": "uninvoked helper cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<uninvoked-helper-card>", "token": "uninvoked-helper-card" } },
+              "equals": { "value.selectedDefinition": null }
+            },
+            {
+              "name": "dead branch cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<dead-branch-card>", "token": "dead-branch-card" } },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        },
+        {
+          "id": "anonymous-custom-element-define-materializes-generated-target",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "anonymous-card", "key": "au:resource:custom-element:anonymous-card", "targetName": "AnonymousCard" },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'anonymous-card'", "token": "anonymous-card" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "anonymous-card", "targetName": "AnonymousCard" },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "export const AnonymousCard", "token": "AnonymousCard" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<anonymous-card>", "token": "anonymous-card" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "anonymous-card"
+              }
+            }
+          ]
+        },
+        {
+          "id": "inline-anonymous-custom-element-define-registers-generated-target",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "inline-anonymous-card", "key": "au:resource:custom-element:inline-anonymous-card", "targetName": null },
+                  "sourceField": "nameSource",
+                  "source": { "sourceFile": "src/main.ts", "marker": "name: 'inline-anonymous-card'", "token": "inline-anonymous-card" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<inline-anonymous-card>", "token": "inline-anonymous-card" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "inline-anonymous-card"
+              }
+            }
+          ]
+        },
+        {
+          "id": "same-spelling-resources-preserve-registration-key-spaces",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "shared", "key": "au:resource:custom-element:shared" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-attribute", "name": "shared", "key": "au:resource:custom-attribute:shared" }, "count": 1 },
+                { "fields": { "resourceKind": "value-converter", "name": "shared", "key": "au:resource:value-converter:shared" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-behavior", "name": "shared", "key": "au:resource:binding-behavior:shared" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-command", "name": "shared", "key": "au:resource:binding-command:shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "shared" }, "count": 1 },
+                { "fields": { "resourceKind": "custom-attribute", "name": "shared" }, "count": 1 },
+                { "fields": { "resourceKind": "value-converter", "name": "shared" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-behavior", "name": "shared" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-command", "name": "shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "element cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<shared shared=", "token": "shared" } },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "shared" }
+            },
+            {
+              "name": "attribute cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "shared=\"message.bind", "token": "shared" } },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-attribute", "value.selectedDefinition.name": "shared" }
+            }
+          ]
+        },
+        {
+          "id": "custom-element-rename-isolated-from-same-spelling-key-spaces",
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": {
+                "kind": "template-rename",
+                "cursor": { "marker": "<shared shared=", "token": "shared" },
+                "options": { "newName": "shared-card" }
+              },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                {
+                  "rowPath": "value.edits",
+                  "fields": { "editKind": "resource-name-declaration", "newText": "shared-card" },
+                  "source": { "sourceFile": "src/resources.ts", "marker": "name: 'shared'", "token": "shared" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "marker": "<shared shared=", "token": "shared" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                {
+                  "rowPath": "value.edits",
+                  "source": { "marker": "</shared>", "token": "shared" },
+                  "oldTextMatchesSource": true,
+                  "count": 1
+                },
+                { "rowPath": "value.edits", "source": { "marker": "shared=\"message.bind", "token": "shared" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "marker": "message | shared", "token": "shared" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "marker": "& shared}", "token": "shared" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "marker": "value.shared=", "token": "shared" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "same-spelling-expression-resources-preserve-kind-specific-identity",
+          "expectations": [
+            {
+              "name": "value converter applications",
+              "query": { "kind": "value-converter-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "converterName": "shared", "resource.resourceKind": "value-converter", "resource.name": "shared" }, "source": { "marker": "message | shared", "token": "shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding behavior applications",
+              "query": { "kind": "binding-behavior-applications", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "behaviorName": "shared", "resource.resourceKind": "binding-behavior", "resource.name": "shared" }, "source": { "marker": "& shared}", "token": "shared" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "syntax-resource-non-decorator-source-forms-converge",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "binding-command", "name": "static-command", "targetName": "StaticBindingCommand", "declarationModes.0": "static-property" }, "sourceField": "nameSource", "source": { "sourceFile": "src/resources.ts", "marker": "name: 'static-command'", "token": "static-command" }, "count": 1 },
+                { "fields": { "resourceKind": "binding-command", "name": "defined-command", "targetName": "DefinedBindingCommand", "declarationModes.0": "definition-object" }, "sourceField": "nameSource", "source": { "sourceFile": "src/resources.ts", "marker": "name: 'defined-command'", "token": "defined-command" }, "count": 1 },
+                { "fields": { "resourceKind": "attribute-pattern", "targetName": "CreatedAttributePattern", "declarationModes.0": "factory-call", "patterns.0.pattern": "PART::created", "patterns.0.symbols": ":" }, "sourceField": "targetSource", "source": { "sourceFile": "src/resources.ts", "marker": "export class CreatedAttributePattern", "token": "CreatedAttributePattern" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "binding-command-aliases-preserve-authored-field-provenance",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "static-cmd" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['static-cmd']", "token": "static-cmd" }, "count": 1 },
+                { "rowPath": "value.rows[].aliases", "fields": { "name": "defined-cmd" }, "source": { "sourceFile": "src/resources.ts", "marker": "aliases: ['defined-cmd']", "token": "defined-cmd" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-owned-binding-command-usage-dispatch",
+          "cursor": { "marker": "value.shared=", "token": "shared" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "shared",
+                "value.selectedDefinition.targetName": "SharedBindingCommand"
+              }
+            },
+            {
+              "name": "static command cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value.static-command=", "token": "static-command" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "static-command",
+                "value.selectedDefinition.targetName": "StaticBindingCommand"
+              }
+            },
+            {
+              "name": "defined command cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value.defined-command=", "token": "defined-command" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "defined-command",
+                "value.selectedDefinition.targetName": "DefinedBindingCommand"
+              }
+            },
+            {
+              "name": "static command alias cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value.static-cmd=", "token": "static-cmd" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "static-command",
+                "value.selectedDefinition.matchedName": "static-cmd",
+                "value.selectedDefinition.targetName": "StaticBindingCommand"
+              }
+            },
+            {
+              "name": "defined command alias cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "value.defined-cmd=", "token": "defined-cmd" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "binding-command",
+                "value.selectedDefinition.name": "defined-command",
+                "value.selectedDefinition.matchedName": "defined-cmd",
+                "value.selectedDefinition.targetName": "DefinedBindingCommand"
+              }
+            },
+            {
+              "name": "decorator command references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "shared" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "@bindingCommand('shared')", "token": "shared" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.shared=", "token": "shared" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "static command references include alias usage",
+              "query": { "kind": "template-references", "cursor": { "marker": "value.static-command=", "token": "static-command" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "static-command" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'static-command'", "token": "static-command" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.static-command=", "token": "static-command" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "binding-command-name" }, "source": { "marker": "value.static-cmd=", "token": "static-cmd" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "binding command rename is explicitly unsupported",
+              "query": { "kind": "template-rename", "options": { "newName": "shared-command" } },
+              "outcomes": ["miss"],
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "unsupported-resource-kind"
+              }
+            }
+          ]
+        },
+        {
+          "id": "app-owned-attribute-pattern-carrier-provenance",
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "attribute-pattern", "targetName": "DataAttributePattern", "declarationModes.0": "decorator", "patterns.0.pattern": "PART.data", "patterns.0.symbols": "." },
+                  "sourceField": "patterns.0.source",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "{ pattern: 'PART.data', symbols: '.' }", "token": "PART.data" },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "attribute-pattern", "targetName": "CreatedAttributePattern", "declarationModes.0": "factory-call", "patterns.0.pattern": "PART::created", "patterns.0.symbols": ":" },
+                  "sourceField": "patterns.0.source",
+                  "source": { "sourceFile": "src/resources.ts", "marker": "{ pattern: 'PART::created', symbols: ':' }", "token": "PART::created" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "app-owned-attribute-pattern-admission-and-dispatch",
+          "cursor": { "marker": "title.data=", "token": "data" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "attribute-pattern", "targetName": "DataAttributePattern", "patterns.0.pattern": "PART.data", "patterns.0.symbols": "." },
+                  "count": 1
+                },
+                {
+                  "fields": { "resourceKind": "attribute-pattern", "targetName": "CreatedAttributePattern", "patterns.0.pattern": "PART::created", "patterns.0.symbols": ":" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "resource visibility",
+              "query": { "kind": "resource-visibility", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "resourceKind": "attribute-pattern", "name": "DataAttributePattern" }, "count": 1 },
+                { "fields": { "resourceKind": "attribute-pattern", "name": "CreatedAttributePattern" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "attribute-pattern",
+                "value.selectedDefinition.targetName": "DataAttributePattern"
+              }
+            },
+            {
+              "name": "factory pattern cursor info",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "title::created=", "token": "created" } },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "attribute-pattern",
+                "value.selectedDefinition.targetName": "CreatedAttributePattern"
+              }
+            },
+            {
+              "name": "decorator pattern references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "DataAttributePattern" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class DataAttributePattern", "token": "DataAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "data" }, "source": { "marker": "title.data=", "token": "data" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "factory pattern references",
+              "query": { "kind": "template-references", "cursor": { "marker": "title::created=", "token": "created" }, "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "CreatedAttributePattern" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "export class CreatedAttributePattern", "token": "CreatedAttributePattern" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage", "resourceUsageKind": "attribute-pattern-literal", "name": "created" }, "source": { "marker": "title::created=", "token": "created" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "attribute pattern rename is explicitly unsupported",
+              "query": { "kind": "template-rename", "options": { "newName": "datum" } },
+              "outcomes": ["miss"],
+              "equals": {
+                "value.status": "not-available",
+                "value.reason": "unsupported-resource-kind"
+              }
+            }
+          ]
+        },
+        {
+          "id": "template-controller-and-custom-attribute-share-collision-key",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "resource-registration", "issueKind": "custom-attribute-already-registered", "frameworkErrorCode": "AUR0154", "resource.key": "au:resource:custom-attribute:shared-control" },
+                  "source": { "sourceFile": "src/main.ts", "marker": "SharedTemplateController,\n    SharedControlAttribute,", "token": "SharedControlAttribute" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-definition-api-errors-have-exact-call-loci",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "resource-definition-api", "issueKind": "custom-element-definition-only-name", "frameworkErrorCode": "AUR0761" },
+                  "source": { "sourceFile": "src/resource-api-errors.ts", "marker": "CustomElementDefinition.create('only-name' as never)", "token": "CustomElementDefinition.create('only-name' as never)" },
+                  "count": 1
+                },
+                {
+                  "fields": { "phase": "resource-definition-api", "issueKind": "custom-element-definition-not-found", "frameworkErrorCode": "AUR0760" },
+                  "source": { "sourceFile": "src/resource-api-errors.ts", "marker": "CustomElement.getDefinition(PlainType)", "token": "CustomElement.getDefinition(PlainType)" },
+                  "count": 1
+                },
+                {
+                  "fields": { "phase": "resource-definition-api", "issueKind": "custom-attribute-definition-not-found", "frameworkErrorCode": "AUR0759" },
+                  "source": { "sourceFile": "src/resource-api-errors.ts", "marker": "CustomAttribute.getDefinition(PlainType)", "token": "CustomAttribute.getDefinition(PlainType)" },
+                  "count": 1
+                },
+                {
+                  "fields": { "phase": "resource-definition-api", "issueKind": "value-converter-definition-not-found", "frameworkErrorCode": "AUR0152" },
+                  "source": { "sourceFile": "src/resource-api-errors.ts", "marker": "ValueConverter.getDefinition(PlainType)", "token": "ValueConverter.getDefinition(PlainType)" },
+                  "count": 1
+                },
+                {
+                  "fields": { "phase": "resource-definition-api", "issueKind": "binding-behavior-definition-not-found", "frameworkErrorCode": "AUR0151" },
+                  "source": { "sourceFile": "src/resource-api-errors.ts", "marker": "BindingBehavior.getDefinition(PlainType)", "token": "BindingBehavior.getDefinition(PlainType)" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-registration-component-scopes",
+      "fixture": "fixtures/pressure/resource-registration-component-scopes",
+      "aureliaDomain": "resource-registration",
+      "capability": "component-resource-scope",
+      "domainAxis": "resources",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/component-scopes-app.html",
+      "requirement": "Component dependencies are compiler-world-local, shadow inherited registration keys only in their owner, do not leak through siblings or transitive child dependencies, and keep references and rename partitioned by the resolved definition identity.",
+      "cases": [
+        {
+          "id": "component-local-resource-shadows-inherited-registration",
+          "expectations": [
+            {
+              "name": "app root cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<scope-card>", "token": "scope-card" } },
+              "equals": { "value.selectedDefinition.name": "scope-card", "value.selectedDefinition.targetName": "GlobalScopeCard" }
+            },
+            {
+              "name": "owner A cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-a.html", "cursor": { "marker": "<scope-card>", "token": "scope-card" } },
+              "equals": { "value.selectedDefinition.name": "scope-card", "value.selectedDefinition.targetName": "OwnerAScopeCard" }
+            },
+            {
+              "name": "owner B cursor",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-b.html", "cursor": { "marker": "<scope-card>", "token": "scope-card" } },
+              "equals": { "value.selectedDefinition.name": "scope-card", "value.selectedDefinition.targetName": "GlobalScopeCard" }
+            }
+          ]
+        },
+        {
+          "id": "direct-component-dependencies-are-visible-to-owner",
+          "expectations": [
+            {
+              "name": "owner A direct dependency",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-a.html", "cursor": { "marker": "<a-only>", "token": "a-only" } },
+              "equals": { "value.selectedDefinition.name": "a-only", "value.selectedDefinition.targetName": "AOnly" }
+            },
+            {
+              "name": "owner B direct dependency",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-b.html", "cursor": { "marker": "<b-only>", "token": "b-only" } },
+              "equals": { "value.selectedDefinition.name": "b-only", "value.selectedDefinition.targetName": "BOnly" }
+            },
+            {
+              "name": "child direct dependency",
+              "query": { "kind": "template-cursor-info", "sourceFile": "src/child-host.html", "cursor": { "marker": "<deep-only>", "token": "deep-only" } },
+              "equals": { "value.selectedDefinition.name": "deep-only", "value.selectedDefinition.targetName": "DeepOnly" }
+            }
+          ]
+        },
+        {
+          "id": "component-dependencies-do-not-leak-across-worlds",
+          "expectations": [
+            { "name": "A-only absent from app root", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<a-only>", "token": "a-only" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "B-only absent from app root", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<b-only>", "token": "b-only" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "child host absent from app root", "query": { "kind": "template-cursor-info", "cursor": { "marker": "<child-host>", "token": "child-host" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "A-only absent from owner B", "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-b.html", "cursor": { "marker": "<a-only>", "token": "a-only" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "B-only absent from owner A", "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-a.html", "cursor": { "marker": "<b-only>", "token": "b-only" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "deep dependency absent from owner A", "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-a.html", "cursor": { "marker": "<deep-only>", "token": "deep-only" } }, "equals": { "value.selectedDefinition": null } },
+            { "name": "deep dependency absent from owner B", "query": { "kind": "template-cursor-info", "sourceFile": "src/owner-b.html", "cursor": { "marker": "<deep-only>", "token": "deep-only" } }, "equals": { "value.selectedDefinition": null } }
+          ]
+        },
+        {
+          "id": "global-resource-references-and-rename-exclude-local-shadow",
+          "cursor": { "marker": "<scope-card>", "token": "scope-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 5 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'scope-card', template: '<template>global", "token": "scope-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<scope-card>", "token": "scope-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/owner-b.html", "marker": "<scope-card>", "token": "scope-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/owner-a.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "global-card" } },
+              "equals": { "value.status": "available", "value.edits.length": 5 },
+              "rows": [
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/owner-a.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-shadow-references-and-rename-stay-in-owner-world",
+          "sourceFile": "src/owner-a.html",
+          "cursor": { "marker": "<scope-card>", "token": "scope-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/resources.ts", "marker": "name: 'scope-card', template: '<template>owner a", "token": "scope-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<scope-card>", "token": "scope-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/component-scopes-app.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "sourceFile": "src/owner-b.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "owner-a-card" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/component-scopes-app.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/owner-b.html", "marker": "<scope-card>", "token": "scope-card" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-registration-local-template-worlds",
+      "fixture": "fixtures/pressure/resource-registration-local-templates",
+      "aureliaDomain": "resource-registration",
+      "capability": "compiler-local-resource-model",
+      "domainAxis": "resources",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/local-templates-app.html",
+      "requirement": "Local template elements materialize compiler-local resource definitions and bindable scopes, shadow inherited resources, remain isolated per owner compiler world, and drive exact IDE and diagnostic projections.",
+      "cases": [
+        {
+          "id": "owner-local-resource-shadows-global-resource",
+          "cursor": { "marker": "<local-chip public-label", "token": "local-chip" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-chip",
+                "value.selectedDefinition.source.path": "src/local-templates-app.html",
+                "value.selectedDefinition.nameSource.path": "src/local-templates-app.html"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "local-chip" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<local-chip public-label", "token": "local-chip" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</local-chip>", "token": "local-chip" }, "count": 1 },
+                { "source": { "sourceFile": "src/global-resources.ts", "marker": "name: 'local-chip'", "token": "local-chip" }, "absent": true },
+                { "source": { "sourceFile": "src/secondary-host.html", "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "absent": true },
+                { "source": { "sourceFile": "src/secondary-host.html", "marker": "<local-chip secondary-label", "token": "local-chip" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "secondary-local-resource-has-independent-identity",
+          "sourceFile": "src/secondary-host.html",
+          "cursor": { "marker": "<local-chip secondary-label", "token": "local-chip" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-chip",
+                "value.selectedDefinition.source.path": "src/secondary-host.html",
+                "value.selectedDefinition.nameSource.path": "src/secondary-host.html"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<local-chip secondary-label", "token": "local-chip" }, "count": 1 },
+                { "source": { "sourceFile": "src/local-templates-app.html", "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "absent": true },
+                { "source": { "sourceFile": "src/global-resources.ts", "marker": "name: 'local-chip'", "token": "local-chip" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "sibling-local-resource-is-visible-inside-local-template",
+          "cursor": { "marker": "<local-icon value.bind", "token": "local-icon" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-icon",
+                "value.selectedDefinition.source.path": "src/local-templates-app.html"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"local-icon\"", "token": "local-icon" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<local-icon value.bind", "token": "local-icon" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</local-icon>", "token": "local-icon" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-local-resource-recurses-under-local-owner-world",
+          "cursor": { "marker": "<nested-local nested-value", "token": "nested-local" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "nested-local",
+                "value.selectedDefinition.source.path": "src/local-templates-app.html",
+                "value.selectedDefinition.nameSource.path": "src/local-templates-app.html"
+              }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "nested-local" },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "as-custom-element=\"nested-local\"", "token": "nested-local" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<nested-local nested-value", "token": "nested-local" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</nested-local>", "token": "nested-local", "occurrence": 1 }, "count": 1 },
+                { "source": { "marker": "<nested-local></nested-local>", "token": "nested-local" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "owner-resource-remains-visible-inside-local-template",
+          "cursor": { "marker": "<local-templates-app if.bind", "token": "local-templates-app" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-templates-app",
+                "value.selectedDefinition.targetName": "LocalTemplatesApp"
+              }
+            }
+          ]
+        },
+        {
+          "id": "nested-local-resource-does-not-escape-parent-local-world",
+          "cursor": { "marker": "<nested-local></nested-local>", "token": "nested-local" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        },
+        {
+          "id": "local-resource-declaration-token-dispatches-to-generated-definition",
+          "cursor": { "marker": "as-custom-element=\"outer-local\"", "token": "outer-local" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "outer-local",
+                "value.selectedDefinition.nameSource.path": "src/local-templates-app.html"
+              }
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "outer-panel" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "source": { "marker": "as-custom-element=\"outer-local\"", "token": "outer-local" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "<outer-local outer-value", "token": "outer-local" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "</outer-local>", "token": "outer-local" }, "oldTextMatchesSource": true, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-bindable-property-references-and-rename-remain-inside-generated-view-model",
+          "cursor": { "marker": "value.bind=\"label\"", "token": "label" },
+          "expectations": [
+            {
+              "name": "property references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "label", "value.rows.length": 4 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "<bindable name=\"label\"", "token": "label" }, "count": 1 },
+                { "source": { "marker": "value.bind=\"label\"", "token": "label" }, "count": 1 },
+                { "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "property rename",
+              "query": { "kind": "template-rename", "options": { "newName": "caption" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "source": { "marker": "<bindable name=\"label\"", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "value.bind=\"label\"", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-bindable-declaration-and-public-attribute-surface",
+          "cursor": { "marker": "public-label.bind=\"message\"", "token": "public-label" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "local-chip",
+                "value.selectedBindable.name": "label",
+                "value.selectedBindable.attribute": "public-label",
+                "value.selectedBindable.mode": "twoWay",
+                "value.selectedBindable.nameSource.path": "src/local-templates-app.html",
+                "value.selectedBindable.attributeSource.path": "src/local-templates-app.html"
+              }
+            },
+            {
+              "name": "alias references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "equals": { "value.selectedMemberName": "public-label", "value.rows.length": 2 },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "marker": "attribute=\"public-label\"", "token": "public-label" }, "count": 1 },
+                { "fields": { "referenceKind": "bindable-attribute", "bindableAttributeSourceKind": "explicit-alias" }, "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "alias rename",
+              "query": { "kind": "template-rename", "options": { "newName": "display-label" } },
+              "equals": { "value.status": "available", "value.edits.length": 2 },
+              "rows": [
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute-alias-declaration", "oldText": "public-label", "newText": "display-label" }, "source": { "marker": "attribute=\"public-label\"", "token": "public-label" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "fields": { "editKind": "bindable-attribute", "oldText": "public-label", "newText": "display-label" }, "source": { "marker": "public-label.bind=\"message\"", "token": "public-label" }, "oldTextMatchesSource": true, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-template-bindable-context-prevents-parent-scope-diagnostics",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "label" }, "source": { "marker": "value.bind=\"label\"", "token": "label" }, "absent": true },
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "label" }, "source": { "marker": "value.bind=\"label\"></global-helper>", "token": "label" }, "absent": true },
+                { "fields": { "diagnosticKind": "missing-expression-member", "selectedMemberName": "value" }, "source": { "marker": "<span>${value}</span>", "token": "value" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "owner-dependencies-remain-visible-inside-local-template",
+          "cursor": { "marker": "<global-helper value.bind", "token": "global-helper" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": {
+                "value.selectedDefinition.resourceKind": "custom-element",
+                "value.selectedDefinition.name": "global-helper",
+                "value.selectedDefinition.targetName": "GlobalHelper"
+              }
+            }
+          ]
+        },
+        {
+          "id": "secondary-local-resource-does-not-escape-owner-world",
+          "cursor": { "marker": "<secondary-only>", "token": "secondary-only" },
+          "expectations": [
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        },
+        {
+          "id": "local-resource-rename-is-scoped-to-owner-world",
+          "cursor": { "marker": "<local-chip public-label", "token": "local-chip" },
+          "expectations": [
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "owner-chip" } },
+              "equals": { "value.status": "available", "value.edits.length": 3 },
+              "rows": [
+                { "rowPath": "value.edits", "source": { "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "<local-chip public-label", "token": "local-chip" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "marker": "</local-chip>", "token": "local-chip" }, "oldTextMatchesSource": true, "count": 1 },
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/global-resources.ts", "marker": "name: 'local-chip'", "token": "local-chip" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/secondary-host.html", "marker": "as-custom-element=\"local-chip\"", "token": "local-chip" }, "absent": true },
+                { "rowPath": "value.edits", "source": { "sourceFile": "src/secondary-host.html", "marker": "<local-chip secondary-label", "token": "local-chip" }, "absent": true }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-registration-local-template-diagnostics",
+      "fixture": "fixtures/pressure/resource-registration-local-template-errors",
+      "aureliaDomain": "resource-registration",
+      "capability": "compiler-local-resource-diagnostics",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "domain-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/root-is-local.html",
+      "requirement": "Every framework local-template compilation failure is projected through TemplateDiagnostics and AppDiagnostics with its framework authority and the narrowest decisive authored syntax locus.",
+      "cases": [
+        {
+          "id": "root-template-cannot-be-local",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0701" }, "source": { "marker": "as-custom-element=\"illegal-root-local\"", "token": "as-custom-element=\"illegal-root-local\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0701", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "as-custom-element=\"illegal-root-local\"", "token": "as-custom-element=\"illegal-root-local\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "only-local-template-content",
+          "sourceFile": "src/only-local-templates.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0708" }, "source": { "startMarker": "<template>", "endMarker": "</template>\n</template>", "offsetDelta": 1 }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0708", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<template>", "endMarker": "</template>\n</template>", "offsetDelta": 1 }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-template-must-be-direct-root-child",
+          "sourceFile": "src/nested-local-template.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0709", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<template as-custom-element=\"nested-local\">", "endMarker": "</template>" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-template-name-cannot-be-empty",
+          "sourceFile": "src/empty-local-name.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0715" }, "source": { "marker": "as-custom-element=\"\"", "token": "as-custom-element=\"\"" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0715", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "as-custom-element=\"\"", "token": "as-custom-element=\"\"" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-local-template-name",
+          "sourceFile": "src/duplicate-local-name.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0716" }, "source": { "marker": "<template as-custom-element=\"duplicate-local\">two", "token": "duplicate-local" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0716", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "<template as-custom-element=\"duplicate-local\">two", "token": "duplicate-local" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-bindable-must-be-direct-template-child",
+          "sourceFile": "src/nested-local-bindable.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0710" }, "source": { "startMarker": "<bindable name=\"value\">", "endMarker": "</bindable>" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0710", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<bindable name=\"value\">", "endMarker": "</bindable>" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-bindable-name-is-required",
+          "sourceFile": "src/missing-local-bindable-name.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0711" }, "source": { "startMarker": "<bindable attribute=\"public-value\">", "endMarker": "</bindable>" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0711", "relatedQueryKind": "template-diagnostics" }, "source": { "startMarker": "<bindable attribute=\"public-value\">", "endMarker": "</bindable>" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-local-bindable-property",
+          "sourceFile": "src/duplicate-local-bindable-property.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0712" }, "source": { "marker": "<bindable name=\"value\" attribute=\"second-value\">", "token": "value" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0712", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "<bindable name=\"value\" attribute=\"second-value\">", "token": "value" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-local-bindable-attribute",
+          "sourceFile": "src/duplicate-local-bindable-attribute.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0712" }, "source": { "marker": "<bindable name=\"secondValue\" attribute=\"public-value\">", "token": "public-value" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0712", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "<bindable name=\"secondValue\" attribute=\"public-value\">", "token": "public-value" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "local-template-surrogate-rejects-template-controller",
+          "sourceFile": "src/local-surrogate-template-controller.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0703" }, "source": { "marker": "as-custom-element=\"surrogate-local\" if.bind=\"true\"", "token": "if" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0703", "relatedQueryKind": "template-diagnostics" }, "source": { "marker": "as-custom-element=\"surrogate-local\" if.bind=\"true\"", "token": "if" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-conventions-enabled",
+      "fixture": "fixtures/pressure/resource-conventions-enabled",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-convention-transform-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/conventions-enabled-app.html",
+      "requirement": "A convention-shaped class becomes a custom element only when project tooling admits the conventions transform; the derived name remains source-honest and non-editable without an explicit authored name.",
+      "cases": [
+        {
+          "id": "explicitly-enabled-convention-resource-admission-and-refusal",
+          "cursor": { "marker": "<convention-card>", "token": "convention-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "convention-card", "targetName": "ConventionCard", "declarationModes.0": "convention", "nameSource": null },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/convention-card.ts", "marker": "class ConventionCard", "token": "ConventionCard" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "convention-card", "value.selectedDefinition.nameSource": null }
+            },
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "<convention-card>", "token": "convention-card" }, "count": 1 },
+                { "fields": { "referenceKind": "resource-usage" }, "source": { "marker": "</convention-card>", "token": "convention-card" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "resource rename",
+              "query": { "kind": "template-rename", "options": { "newName": "renamed-card" } },
+              "outcomes": ["miss"],
+              "equals": { "value.status": "not-available", "value.reason": "resource-name-has-no-authored-source", "value.selectedMemberName": "convention-card" }
+            }
+          ]
+        },
+        {
+          "id": "derived-convention-reference-uses-target-declaration",
+          "cursor": { "marker": "<convention-card>", "token": "convention-card" },
+          "expectations": [
+            {
+              "name": "resource references",
+              "query": { "kind": "template-references", "options": { "includeDeclaration": true, "detail": "handles", "page": { "size": 50 } } },
+              "rows": [
+                { "fields": { "referenceKind": "declaration" }, "source": { "sourceFile": "src/convention-card.ts", "marker": "class ConventionCard", "token": "ConventionCard" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-conventions-commonjs",
+      "fixture": "fixtures/pressure/resource-conventions-commonjs",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-convention-transform-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/conventions-commonjs-app.html",
+      "requirement": "CommonJS Vite configuration spends the same evaluator/module and convention-transform admission path as ESM configuration.",
+      "cases": [
+        {
+          "id": "commonjs-require-and-module-exports-admit-convention-resource",
+          "cursor": { "marker": "<commonjs-card>", "token": "commonjs-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "commonjs-card", "targetName": "CommonjsCard", "declarationModes.0": "convention", "nameSource": null },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/commonjs-card.ts", "marker": "class CommonjsCard", "token": "CommonjsCard" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "commonjs-card" }
+            },
+            {
+              "name": "closed CommonJS tooling seam",
+              "query": {
+                "kind": "open-seam-sites",
+                "sourceFile": "vite.config.cjs",
+                "cursor": false,
+                "fetchAllPages": true,
+                "options": {
+                  "openSeamKindKey": "resource.open-convention-transform-admission",
+                  "page": { "size": 100 }
+                }
+              },
+              "equals": { "value.rows.length": 0 }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-conventions-scoped",
+      "fixture": "fixtures/pressure/resource-conventions-scoped",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-convention-transform-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/conventions-scoped-app.html",
+      "requirement": "Convention transform admission follows the Vite plugin's default-on policy and source filter instead of becoming a project-global resource assumption.",
+      "cases": [
+        {
+          "id": "default-options-admit-matching-source",
+          "cursor": { "marker": "<default-card>", "token": "default-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "resourceKind": "custom-element", "name": "default-card", "targetName": "DefaultCard", "declarationModes.0": "convention", "nameSource": null },
+                  "sourceField": "targetSource",
+                  "source": { "sourceFile": "src/default-card.ts", "marker": "class DefaultCard", "token": "DefaultCard" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition.resourceKind": "custom-element", "value.selectedDefinition.name": "default-card" }
+            }
+          ]
+        },
+        {
+          "id": "explicit-exclude-prevents-source-admission",
+          "cursor": { "marker": "<excluded-card>", "token": "excluded-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "excluded-card", "targetName": "ExcludedCard" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        },
+        {
+          "id": "default-include-does-not-reach-project-root-source",
+          "cursor": { "marker": "<outside-card>", "token": "outside-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "outside-card", "targetName": "OutsideCard" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-conventions-dynamic",
+      "fixture": "fixtures/pressure/resource-conventions-dynamic",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-convention-transform-admission",
+      "domainAxis": "open-honesty",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/conventions-dynamic-app.html",
+      "requirement": "Dynamic convention-transform options do not mint confident resources and remain visible as a source-backed open admission seam.",
+      "cases": [
+        {
+          "id": "dynamic-options-do-not-prove-resource-admission",
+          "cursor": { "marker": "<dynamic-card>", "token": "dynamic-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "dynamic-card", "targetName": "DynamicCard" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
+            }
+          ]
+        },
+        {
+          "id": "dynamic-options-publish-tooling-source-seam",
+          "sourceFile": "vite.config.ts",
+          "expectations": [
+            {
+              "name": "open seam sites",
+              "query": {
+                "kind": "open-seam-sites",
+                "fetchAllPages": true,
+                "options": {
+                  "openSeamKindKey": "resource.open-convention-transform-admission",
+                  "page": { "size": 100 }
+                }
+              },
+              "equals": {
+                "value.rows.length": 1,
+                "value.rows.0.reasonKinds": ["host-environment-value"]
+              },
+              "rows": [
+                { "source": { "marker": "aurelia(conventionOptions)", "token": "aurelia(conventionOptions)" }, "count": 1 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resource-conventions-disabled",
+      "fixture": "fixtures/pressure/resource-conventions-disabled",
+      "aureliaDomain": "resource-registration",
+      "capability": "resource-convention-transform-admission",
+      "domainAxis": "plugin-capabilities",
+      "coverageIntent": "boundary-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/conventions-disabled-app.html",
+      "requirement": "An explicit enableConventions: false tooling configuration prevents convention-shaped classes and paired templates from entering resource recognition or template resource scope.",
+      "cases": [
+        {
+          "id": "explicitly-disabled-convention-resource-is-absent",
+          "cursor": { "marker": "<convention-card>", "token": "convention-card" },
+          "expectations": [
+            {
+              "name": "resource definitions",
+              "query": { "kind": "resource-definitions", "cursor": false, "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "resourceKind": "custom-element", "name": "convention-card", "targetName": "ConventionCard" }, "absent": true }
+              ]
+            },
+            {
+              "name": "cursor info",
+              "query": { "kind": "template-cursor-info" },
+              "equals": { "value.selectedDefinition": null }
             }
           ]
         }
@@ -3930,10 +5636,10 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/resource-registration-duplicates-app.html",
-      "requirement": "Runtime resource registration collisions publish framework-owned resource issue rows with AUR0153-AUR0156 codes and source spans on the duplicate registration carrier.",
+      "requirement": "Registration collisions preserve the framework key space and authority, identify the incoming admission as the primary locus, retain the occupied registration as related evidence, and keep first-wins resource lookup deterministic.",
       "cases": [
         {
-          "id": "duplicate-runtime-resource-issues",
+          "id": "duplicate-runtime-resource-framework-authority",
           "expectations": [
             {
               "name": "resource issues",
@@ -3943,38 +5649,185 @@
                   "fields": {
                     "phase": "resource-registration",
                     "issueKind": "custom-element-already-registered",
-                    "frameworkErrorCode": "AUR0153"
+                    "diagnosticAuthority": "framework-error-code",
+                    "frameworkErrorCode": "AUR0153",
+                    "severity": "warning",
+                    "resource.name": "duplicate-card"
                   },
-                  "source": {
-                    "sourceFile": "src/resources.ts",
-                    "marker": "@customElement({\n  name: 'duplicate-card',\n  template: '<template><span>two</span></template>',\n})",
-                    "token": "@customElement({\n  name: 'duplicate-card',\n  template: '<template><span>two</span></template>',\n})"
-                  }
+                  "count": 1
                 },
                 {
                   "fields": {
                     "phase": "resource-registration",
                     "issueKind": "custom-attribute-already-registered",
-                    "frameworkErrorCode": "AUR0154"
+                    "diagnosticAuthority": "framework-error-code",
+                    "frameworkErrorCode": "AUR0154",
+                    "severity": "warning",
+                    "resource.name": "duplicate-flag"
                   },
-                  "source": { "sourceFile": "src/resources.ts", "marker": "@customAttribute('duplicate-flag')\nexport class DuplicateFlagTwo", "token": "@customAttribute('duplicate-flag')" }
+                  "count": 1
                 },
                 {
                   "fields": {
                     "phase": "resource-registration",
                     "issueKind": "value-converter-already-registered",
-                    "frameworkErrorCode": "AUR0155"
+                    "diagnosticAuthority": "framework-error-code",
+                    "frameworkErrorCode": "AUR0155",
+                    "severity": "warning",
+                    "resource.name": "duplicateFormat"
                   },
-                  "source": { "sourceFile": "src/resources.ts", "marker": "@valueConverter('duplicateFormat')\nexport class DuplicateFormatTwoValueConverter", "token": "@valueConverter('duplicateFormat')" }
+                  "count": 1
                 },
                 {
                   "fields": {
                     "phase": "resource-registration",
                     "issueKind": "binding-behavior-already-registered",
-                    "frameworkErrorCode": "AUR0156"
+                    "diagnosticAuthority": "framework-error-code",
+                    "frameworkErrorCode": "AUR0156",
+                    "severity": "warning",
+                    "resource.name": "duplicateTrack"
                   },
-                  "source": { "sourceFile": "src/resources.ts", "marker": "@bindingBehavior('duplicateTrack')\nexport class DuplicateTrackTwoBindingBehavior", "token": "@bindingBehavior('duplicateTrack')" }
+                  "count": 1
+                },
+                {
+                  "fields": {
+                    "phase": "resource-registration",
+                    "issueKind": "custom-element-already-registered",
+                    "diagnosticAuthority": "framework-error-code",
+                    "frameworkErrorCode": "AUR0153",
+                    "severity": "warning",
+                    "resource.name": "primary-after-alias"
+                  },
+                  "count": 1
                 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-runtime-resource-uses-registration-admission-source",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR0153", "resource.name": "duplicate-card" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCardOne,\n    DuplicateCardTwo", "token": "DuplicateCardTwo" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0154", "resource.name": "duplicate-flag" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateFlagOne,\n    DuplicateFlagTwo", "token": "DuplicateFlagTwo" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0155", "resource.name": "duplicateFormat" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateFormatOneValueConverter,\n    DuplicateFormatTwoValueConverter", "token": "DuplicateFormatTwoValueConverter" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0156", "resource.name": "duplicateTrack" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateTrackOneBindingBehavior,\n    DuplicateTrackTwoBindingBehavior", "token": "DuplicateTrackTwoBindingBehavior" }, "count": 1 },
+                { "fields": { "frameworkErrorCode": "AUR0153", "resource.name": "primary-after-alias" }, "source": { "sourceFile": "src/main.ts", "marker": "AliasBeforePrimary,\n    PrimaryAfterAlias", "token": "PrimaryAfterAlias" }, "count": 1 }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "sourceFile": "src/main.ts", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "resource", "frameworkErrorCode": "AUR0153", "relatedQueryKind": "resource-issues" }, "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCardOne,\n    DuplicateCardTwo", "token": "DuplicateCardTwo" }, "count": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-runtime-resource-preserves-original-registration",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "frameworkErrorCode": "AUR0153", "resource.name": "duplicate-card" },
+                  "sourceField": "relatedInformation.0.source",
+                  "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCardOne,\n    DuplicateCardTwo", "token": "DuplicateCardOne" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-binding-command-uses-command-registry-authority",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "resource-registration", "issueKind": "binding-command-already-registered", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0157", "severity": "warning", "resource.name": "duplicate-command" },
+                  "source": { "sourceFile": "src/main.ts", "marker": "DuplicateCommandOneBindingCommand,\n    DuplicateCommandTwoBindingCommand", "token": "DuplicateCommandTwoBindingCommand" },
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "name": "DI issues",
+              "query": { "kind": "di-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "frameworkErrorCode": "AUR0007", "resourceKey": "au:resource:binding-command:duplicate-command" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duplicate-attribute-pattern-uses-parser-authority",
+          "expectations": [
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "sourceFile": "src/main.ts", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0089", "severity": "error", "relatedQueryKind": "template-diagnostics" },
+                  "source": { "sourceFile": "src/main.ts", "marker": "DuplicatePatternOne,\n    DuplicatePatternTwo", "token": "DuplicatePatternTwo" },
+                  "count": 1
+                },
+                {
+                  "fields": { "diagnosticDomain": "template", "diagnosticKind": "template-compiler-error", "frameworkErrorCode": "AUR0089", "relatedInformation.0.message": "Attribute pattern \"PART::duplicate\" was first registered here." },
+                  "sourceField": "relatedInformation.0.source",
+                  "source": { "sourceFile": "src/main.ts", "marker": "DuplicatePatternOne,\n    DuplicatePatternTwo", "token": "DuplicatePatternOne" },
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-alias-collisions-preserve-first-registration",
+          "expectations": [
+            {
+              "name": "alias versus alias cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<shared-card-alias>", "token": "shared-card-alias" } },
+              "equals": { "value.selectedDefinition.name": "alias-owner-one", "value.selectedDefinition.targetName": "AliasOwnerOne" }
+            },
+            {
+              "name": "primary then alias cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<alias-primary>", "token": "alias-primary" } },
+              "equals": { "value.selectedDefinition.name": "alias-primary", "value.selectedDefinition.targetName": "AliasPrimary" }
+            },
+            {
+              "name": "alias then primary cursor",
+              "query": { "kind": "template-cursor-info", "cursor": { "marker": "<primary-after-alias>", "token": "primary-after-alias" } },
+              "equals": { "value.selectedDefinition.name": "alias-before-primary", "value.selectedDefinition.targetName": "AliasBeforePrimary" }
+            }
+          ]
+        },
+        {
+          "id": "alias-only-collisions-use-semantic-authority",
+          "expectations": [
+            {
+              "name": "resource issues",
+              "query": { "kind": "resource-issues", "fetchAllPages": true, "options": { "detail": "handles", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "phase": "resource-registration", "issueKind": "resource-alias-already-registered", "diagnosticAuthority": "semantic-runtime-product", "frameworkErrorCode": null, "resource.name": "alias-owner-two" },
+                  "source": { "sourceFile": "src/main.ts", "marker": "AliasOwnerOne,\n    AliasOwnerTwo", "token": "AliasOwnerTwo" },
+                  "count": 1
+                },
+                {
+                  "fields": { "phase": "resource-registration", "issueKind": "resource-alias-already-registered", "diagnosticAuthority": "semantic-runtime-product", "frameworkErrorCode": null, "resource.name": "alias-after-primary" },
+                  "source": { "sourceFile": "src/main.ts", "marker": "AliasPrimary,\n    AliasAfterPrimary", "token": "AliasAfterPrimary" },
+                  "count": 1
+                },
+                { "fields": { "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0153", "resource.name": "alias-owner-two" }, "absent": true },
+                { "fields": { "diagnosticAuthority": "framework-error-code", "frameworkErrorCode": "AUR0153", "resource.name": "alias-after-primary" }, "absent": true }
               ]
             }
           ]
@@ -4097,7 +5950,7 @@
                     "missingInput": "template-compiler:AUR0704",
                     "suggestion.actionKind": "rewrite-template-syntax"
                   },
-                  "source": { "marker": "<let item.trigger=\"enabled\"></let>", "token": "item.trigger=\"enabled\"" }
+                  "source": { "marker": "<let item.trigger=\"enabled\"></let>", "token": "trigger" }
                 }
               ]
             }

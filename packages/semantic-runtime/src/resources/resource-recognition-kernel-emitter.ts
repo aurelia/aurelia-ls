@@ -49,6 +49,7 @@ import {
   ResourceRecognitionPublicationSupport,
   ResourceTargetPublication,
 } from './resource-recognition-publication.js';
+import { ResourceCarrierKind } from './resource-kind.js';
 
 export type ResourceRecognitionEmissionPhaseName =
   | 'kernel-emission:observation-records'
@@ -239,6 +240,7 @@ export class ResourceRecognitionKernelEmitter {
     const sourceAddressHandle = this.store.handles.address(`resource-source:${local}`);
     const evidenceHandle = this.store.handles.evidence(`resource-observation:${local}`);
     const provenanceHandle = this.store.handles.provenance(`resource-observation:${local}`);
+    const convention = observation.carrierKind === ResourceCarrierKind.Convention;
     return new ResourceObservationSourceSet(
       [
         new SourceSpanAddress(
@@ -250,14 +252,16 @@ export class ResourceRecognitionKernelEmitter {
         ),
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.SourceObservation,
-          [EvidenceRole.Declaration],
+          convention ? EvidenceKind.Convention : EvidenceKind.SourceObservation,
+          convention
+            ? [EvidenceRole.Declaration, EvidenceRole.TransformOutput]
+            : [EvidenceRole.Declaration],
           `${observation.carrierKind} recognized ${observation.definition?.type ?? 'an open resource kind'}.`,
           sourceAddressHandle,
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          [evidenceHandle],
+          [evidenceHandle, ...observation.supportingEvidenceHandles],
         ),
       ],
       sourceAddressHandle,
@@ -309,6 +313,7 @@ export class ResourceRecognitionKernelEmitter {
         targetReference,
         observation.definition.type,
         lookupNamesForDefinition(observation.definition),
+        resourceIdentities.sourceAddressHandles,
         resourceIdentities.claimHandles,
       ), new MaterializedProduct(
         productHandle,
@@ -343,6 +348,6 @@ function lookupNamesForDefinition(
   }
   return [
     definition.name,
-    ...definition.aliases,
+    ...definition.aliases.map((alias) => alias.name),
   ].filter((name): name is string => name != null);
 }

@@ -7,6 +7,8 @@ import {
 import type { StaticEvaluationImportValues } from './evaluator.js';
 import { EvaluationOpenSeamKind } from './seams.js';
 import {
+  EvaluationBoundaryKind,
+  EvaluationBoundaryValue,
   EvaluationFunctionValue,
   EvaluationUnknownValue,
 } from './values.js';
@@ -77,7 +79,9 @@ function instantiateStaticFunctionDeclaration(
   }
   environment.initializeBinding(
     localName,
-    new EvaluationFunctionValue(statement, environment, statement),
+    hasModifier(statement, ts.SyntaxKind.DeclareKeyword)
+      ? new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, localName, statement)
+      : new EvaluationFunctionValue(statement, environment, statement),
     EvaluationBindingKind.Function,
     false,
     statement,

@@ -213,6 +213,9 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     definitionProductHandle: ProductHandle | null,
     command: SpreadCommandMatch,
   ): SpreadCompileInstructionSet | string {
+    if (command.handler == null) {
+      return `TemplateCompiler.compileSpread reached binding command '${command.executable.name}' whose executable body is not modeled.`;
+    }
     const context = new RuntimeSpreadCommandBuildContext(
       this.world,
       request,
@@ -582,7 +585,7 @@ interface SpreadCommandMatch {
       info: BindingCommandBuildInfo,
       context: BindingCommandBuildContext,
     ): { readonly state: string; readonly instructions: readonly TemplateInstruction[]; readonly message: string | null };
-  };
+  } | null;
 }
 
 interface SpreadCompileInstructionSet {

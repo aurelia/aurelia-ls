@@ -427,6 +427,7 @@ export class RuntimeControllerCreationMaterializer {
           container,
           dependency,
           lookupName,
+          null,
           `${local}:${dependencyIndex}:${nameIndex}`,
           provenanceHandle,
           projectKey,

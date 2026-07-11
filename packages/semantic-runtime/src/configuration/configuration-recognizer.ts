@@ -62,6 +62,7 @@ import {
 import {
   checkerPropertySymbol,
   checkerSymbolValueType,
+  firstSymbolDeclaration,
   symbolForExpression,
 } from '../type-system/checker-node-helpers.js';
 import {
@@ -1615,7 +1616,8 @@ function checkerRegistryValueSource(
     return null;
   }
 
-  const declaration = checkerValueDeclaration(checker, programCurrent);
+  const symbol = symbolForExpression(checker, programCurrent);
+  const declaration = symbol == null ? null : firstSymbolDeclaration(symbol);
   return declaration == null
     ? checkerRegistryExpressionSource(expression)
     : checkerRegistryDeclarationSource(context, expression, declaration);
@@ -1661,31 +1663,6 @@ function checkerTypeHasCallableRegister(
   }
   const registerType = checkerSymbolValueType(checker, register, sourceNode);
   return (registerType?.getCallSignatures().length ?? 0) > 0;
-}
-
-function checkerValueDeclaration(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Declaration | null {
-  const symbol = checkerSymbolForValue(checker, expression);
-  return symbol?.valueDeclaration ?? symbol?.declarations?.find(isValueDeclaration) ?? null;
-}
-
-function checkerSymbolForValue(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Symbol | null {
-  return symbolForExpression(checker, expression);
-}
-
-function isValueDeclaration(declaration: ts.Declaration): boolean {
-  return ts.isVariableDeclaration(declaration)
-    || ts.isClassDeclaration(declaration)
-    || ts.isFunctionDeclaration(declaration)
-    || ts.isEnumDeclaration(declaration)
-    || ts.isImportSpecifier(declaration)
-    || ts.isPropertyDeclaration(declaration)
-    || ts.isPropertySignature(declaration);
 }
 
 function recognizeKnownFrameworkRegistrationGroupSpread(

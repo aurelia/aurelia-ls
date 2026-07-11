@@ -77,6 +77,7 @@ import type { I18nTranslationKey } from '../i18n/model.js';
 import {
   TemplateResourceScope,
 } from '../template/compiler-world.js';
+import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import {
   TemplateVisibleResource,
   type TemplateBindableReference,
@@ -90,6 +91,7 @@ import type {
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
+import { HydrateElementInstruction } from '../template/instruction-ir.js';
 import {
   HtmlAttribute,
   HtmlElement,
@@ -353,6 +355,8 @@ export class TemplateCompletionCursorContext {
     readonly valueSiteProductHandle: ProductHandle | null,
     /** Bindable selected by the cursor's classification or active value site, when one exists. */
     readonly selectedBindable: TemplateBindableReference | null,
+    /** Public resource name matched at this cursor; differs from the canonical name for alias usages. */
+    readonly selectedDefinitionMatchedName: string | null,
     /** Binding-scope slot selected by a root scope access such as `message` or `save()`. */
     readonly selectedScopeSlot: BindingContextSlot | null,
     /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
@@ -393,6 +397,11 @@ interface DerivedMemberOwnerType {
   readonly productHandle: ProductHandle | null;
   readonly openSubject: CheckerExpressionTypeOpenSubject | null;
   readonly sourceAddressHandle: AddressHandle | null;
+}
+
+interface TemplateDefinitionCursorSelection {
+  readonly productHandle: ProductHandle;
+  readonly matchedName: string | null;
 }
 
 /** Resolve a materialized template cursor into the product-handle completion query shape. */
@@ -451,6 +460,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       ['source-offset'],
     );
   }
@@ -480,7 +490,15 @@ class TemplateCompletionCursorContextBuilder {
       offset,
       expressionParse,
     );
-    const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
+    const selectedDefinition = selectedDefinitionForCursor(
+      this.store,
+      this.input.resource,
+      activeElement,
+      syntax,
+      classification,
+      siteKind,
+      offset,
+    );
     const selectedBindable = selectedBindableForCursor(classification, valueSite, multiBindingSegment);
     const selectedScopeSlot = selectedScopeSlotForCursor(
       siteKind,
@@ -509,7 +527,7 @@ class TemplateCompletionCursorContextBuilder {
         this.page,
         bindingScope?.productHandle ?? null,
         this.input.resource.compilation.compilerWorld.resourceScope.productHandle,
-        selectedDefinitionProductHandle,
+        selectedDefinition?.productHandle ?? null,
         siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
         memberOwnerType.productHandle,
         valueSite?.productHandle ?? null,
@@ -521,6 +539,7 @@ class TemplateCompletionCursorContextBuilder {
       htmlAttribute?.productHandle ?? null,
       valueSite?.productHandle ?? null,
       selectedBindable,
+      selectedDefinition?.matchedName ?? null,
       selectedScopeSlot,
       selectedMemberName,
       expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
@@ -2170,7 +2189,7 @@ function classifyTemplateCompletionSite(
   expressionResult: ExpressionParseResult | null,
 ): TemplateCompletionSiteKind {
   if (htmlAttribute != null && cursorTouchesSpan(sourceSpanFor(store, htmlAttribute.nameAddressHandle), offset)) {
-    return isBindingCommandNameOffset(store, offset, htmlAttribute, syntax)
+    return isBindingCommandNameOffset(store, offset, syntax)
       ? TemplateCompletionSiteKind.BindingCommandName
       : TemplateCompletionSiteKind.AttributeName;
   }
@@ -2477,20 +2496,12 @@ function findStartTagEnd(
 function isBindingCommandNameOffset(
   store: KernelStore,
   offset: number,
-  attribute: HtmlAttribute,
   syntax: AttributeSyntax | null,
 ): boolean {
   if (syntax?.command == null) {
     return false;
   }
-  const span = sourceSpanFor(store, attribute.nameAddressHandle);
-  if (span == null) {
-    return false;
-  }
-  const commandStart = attribute.rawName.lastIndexOf(syntax.command);
-  return commandStart >= 0
-    && span.start + commandStart <= offset
-    && offset <= span.start + attribute.rawName.length;
+  return cursorTouchesSpan(sourceSpanFor(store, syntax.commandSourceAddressHandle), offset);
 }
 
 function bindingScopeForCursor(
@@ -2554,13 +2565,124 @@ function scopeDepth(scope: BindingScope): number {
 }
 
 function selectedDefinitionForCursor(
+  store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
+  syntax: AttributeSyntax | null,
   classification: AttributeClassification | null,
-): ProductHandle | null {
-  return classification?.bindable?.reference.ownerDefinitionProductHandle
+  siteKind: TemplateCompletionSiteKind,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  if (
+    siteKind === TemplateCompletionSiteKind.ExpressionValueConverter
+    || siteKind === TemplateCompletionSiteKind.ExpressionBindingBehavior
+  ) {
+    return expressionResourceForCursor(store, resource, siteKind, offset);
+  }
+  if (siteKind === TemplateCompletionSiteKind.BindingCommandName && syntax?.command != null) {
+    const command = findVisibleTemplateResource(
+      resource.compilation.compilerWorld.resourceScope,
+      ResourceDefinitionKind.BindingCommand,
+      syntax.command.toLowerCase(),
+    );
+    if (command?.definitionProductHandle != null) {
+      return { productHandle: command.definitionProductHandle, matchedName: syntax.command };
+    }
+  }
+  const attributePattern = attributePatternDefinitionForCursor(store, syntax, offset);
+  if (attributePattern != null) {
+    return attributePattern;
+  }
+  const elementSelection = definitionForElement(resource, activeElement);
+  const classifiedProductHandle = classification?.bindable?.reference.ownerDefinitionProductHandle
     ?? classification?.resource?.definitionProductHandle
-    ?? definitionForElement(resource, activeElement);
+    ?? null;
+  if (classifiedProductHandle != null) {
+    const matchedName = classification?.resource?.definitionProductHandle === classifiedProductHandle
+      ? classification.resource.resourceKind === ResourceDefinitionKind.CustomElement
+        ? elementSelection?.matchedName ?? classification.resource.name
+        : syntax?.target ?? classification.resource.name
+      : elementSelection?.productHandle === classifiedProductHandle
+        ? elementSelection.matchedName
+        : null;
+    return { productHandle: classifiedProductHandle, matchedName };
+  }
+  return elementSelection ?? definitionForDeclarationCursor(store, resource, offset);
+}
+
+function attributePatternDefinitionForCursor(
+  store: KernelStore,
+  syntax: AttributeSyntax | null,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  if (
+    syntax?.compiledPatternProductHandle == null
+    || !syntax.patternLiterals.some((literal) =>
+      cursorTouchesSpan(sourceSpanFor(store, literal.sourceAddressHandle), offset)
+    )
+  ) {
+    return null;
+  }
+  const compiledPattern = store.productDetails.read(
+    TemplateProductDetails.CompiledAttributePattern,
+    syntax.compiledPatternProductHandle,
+  );
+  const executable = compiledPattern?.executableProductHandle == null
+    ? null
+    : store.productDetails.read(
+        TemplateProductDetails.AttributePatternExecutable,
+        compiledPattern.executableProductHandle,
+      );
+  return executable?.definitionProductHandle == null
+    ? null
+    : {
+        productHandle: executable.definitionProductHandle,
+        matchedName: syntax.pattern?.pattern ?? executable.target?.localName ?? null,
+      };
+}
+
+function definitionForDeclarationCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  const definition = resource.compilation.definition;
+  return definition.productHandle != null
+    && cursorTouchesSpan(sourceSpanFor(store, definition.nameSourceAddressHandle), offset)
+    ? { productHandle: definition.productHandle, matchedName: definition.name }
+    : null;
+}
+
+function expressionResourceForCursor(
+  store: KernelStore,
+  resource: TemplateResourceRuntimeAnalysisEmission,
+  siteKind: TemplateCompletionSiteKind.ExpressionValueConverter | TemplateCompletionSiteKind.ExpressionBindingBehavior,
+  offset: number,
+): TemplateDefinitionCursorSelection | null {
+  if (siteKind === TemplateCompletionSiteKind.ExpressionValueConverter) {
+    const application = smallestContaining(
+      resource.runtimeAnalysis.valueConverter.applications,
+      offset,
+      (application) => sourceSpanFor(store, application.sourceAddressHandle),
+    ) ?? null;
+    const productHandle = application?.resource?.definitionProductHandle
+      ?? application?.resource?.resourceProductHandle
+      ?? null;
+    return application == null || productHandle == null
+      ? null
+      : { productHandle, matchedName: application.converterName };
+  }
+  const application = smallestContaining(
+    resource.runtimeAnalysis.bindingBehavior.applications,
+    offset,
+    (application) => sourceSpanFor(store, application.sourceAddressHandle),
+  ) ?? null;
+  const productHandle = application?.resource?.definitionProductHandle
+    ?? application?.resource?.resourceProductHandle
+    ?? null;
+  return application == null || productHandle == null
+    ? null
+    : { productHandle, matchedName: application.behaviorName };
 }
 
 function selectedBindableForCursor(
@@ -2577,17 +2699,18 @@ function selectedBindableForCursor(
 function definitionForElement(
   resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
-): ProductHandle | null {
+): TemplateDefinitionCursorSelection | null {
   if (activeElement == null) {
     return null;
   }
-  const lookup = activeElement.tagName.toLowerCase();
-  const resourceRow = resource.compilation.compilerWorld.resourceScope.resources.find((candidate) =>
-    candidate.resourceKind === ResourceDefinitionKind.CustomElement
-    && (
-      candidate.name.toLowerCase() === lookup
-      || candidate.aliases.some((alias) => alias.toLowerCase() === lookup)
-    )
+  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
+    candidate instanceof HydrateElementInstruction
+    && candidate.node.productHandle === activeElement.productHandle
   ) ?? null;
-  return resourceRow?.definitionProductHandle ?? resourceRow?.resourceProductHandle ?? null;
+  return instruction instanceof HydrateElementInstruction && instruction.definitionProductHandle != null
+      ? {
+        productHandle: instruction.definitionProductHandle,
+        matchedName: instruction.resourceLookupName,
+      }
+    : null;
 }

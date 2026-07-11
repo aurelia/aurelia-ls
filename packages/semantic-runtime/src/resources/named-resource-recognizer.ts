@@ -9,9 +9,7 @@ import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  conventionalResourceNameForFilePath,
-  hasConventionalTemplatePair,
-  isConventionResourceNameCompatible,
+  readConventionalTemplateAdmission,
   readResourceNameConvention,
 } from './resource-convention.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
@@ -58,7 +56,8 @@ function recognizeNamedResources(
   context: ResourceRecognitionContext,
   resourceKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
-  const defineCallTargets = collectDefineCallTargets(context, resourceKind);
+  const executedCalls = new Set(context.evaluation.executedCallExpressions);
+  const defineCallTargets = collectDefineCallTargets(context, resourceKind, executedCalls);
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
@@ -66,7 +65,7 @@ function recognizeNamedResources(
         observations.push(...recognizeClassCarriers(context, node, resourceKind, defineCallTargets));
       }
     }
-    if (ts.isCallExpression(node)) {
+    if (ts.isCallExpression(node) && executedCalls.has(node)) {
       const observation = recognizeDefineCall(context, node, resourceKind);
       if (observation != null) {
         observations.push(observation);
@@ -83,10 +82,11 @@ function recognizeNamedResources(
 function collectDefineCallTargets(
   context: ResourceRecognitionContext,
   wantedKind: NamedResourceDefinitionKind | null,
+  executedCalls: ReadonlySet<ts.CallExpression>,
 ): ReadonlySet<ts.ClassLikeDeclarationBase> {
   const targets = new Set<ts.ClassLikeDeclarationBase>();
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
+    if (ts.isCallExpression(node) && executedCalls.has(node)) {
       const target = readDefineCallTargetClass(context, node, wantedKind);
       if (target != null) {
         targets.add(target);
@@ -280,6 +280,9 @@ function recognizeConventions(
   wantedKind: NamedResourceDefinitionKind | null,
   defineCallTargets: ReadonlySet<ts.ClassLikeDeclarationBase>,
 ): readonly ResourceRecognitionObservation[] {
+  if (context.conventionTransformEvidenceHandles.length === 0) {
+    return [];
+  }
   if (!ts.isClassDeclaration(classNode) || classNode.name == null || hasDeclareModifier(classNode)) {
     return [];
   }
@@ -294,13 +297,10 @@ function recognizeConventions(
   ) {
     return [];
   }
-  if (
-    convention.resourceKind === ResourceDefinitionKind.CustomElement
-    && (
-      !isConventionResourceNameCompatible(convention.name, conventionalResourceNameForFilePath(context.moduleKey))
-      || !hasConventionalTemplatePair(context, classNode)
-    )
-  ) {
+  const templateAdmission = convention.resourceKind === ResourceDefinitionKind.CustomElement
+    ? readConventionalTemplateAdmission(context, classNode)
+    : null;
+  if (convention.resourceKind === ResourceDefinitionKind.CustomElement && templateAdmission == null) {
     return [];
   }
 
@@ -316,6 +316,11 @@ function recognizeConventions(
         convention.name,
         [],
       ),
+      [],
+      [
+        ...context.conventionTransformEvidenceHandles,
+        ...(templateAdmission == null ? [] : [templateAdmission.evidenceHandle]),
+      ],
     ),
   ];
 }
@@ -357,11 +362,11 @@ function recognizeDefineCall(
   const definitionExpression = call.arguments[0] ?? null;
   const targetExpression = call.arguments[1] ?? null;
   const target = targetExpression == null
-    ? null
-    : readEvaluatedExpressionTarget(targetExpression, context.expressionReader);
+    ? generatedDefineCallTarget(call, resourceKind)
+    : resourceTargetObservation(readEvaluatedExpressionTarget(targetExpression, context.expressionReader));
   const read = readNamedResourceDefinition(
     resourceKind,
-    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    target,
     definitionExpression,
     context.expressionReader,
     call,
@@ -383,6 +388,44 @@ function recognizeDefineCall(
     read.definition,
     openSeams,
   );
+}
+
+function generatedDefineCallTarget(
+  call: ts.CallExpression,
+  resourceKind: NamedResourceDefinitionKind,
+): ResourceTargetObservation | null {
+  if (resourceKind !== ResourceDefinitionKind.CustomElement) {
+    return null;
+  }
+
+  let carrier: ts.Node = call;
+  while (
+    carrier.parent != null
+    && (
+      ts.isAsExpression(carrier.parent)
+      || ts.isTypeAssertionExpression(carrier.parent)
+      || ts.isParenthesizedExpression(carrier.parent)
+      || ts.isNonNullExpression(carrier.parent)
+      || ts.isSatisfiesExpression(carrier.parent)
+    )
+  ) {
+    carrier = carrier.parent;
+  }
+  const declaration = carrier.parent;
+  return declaration != null
+    && ts.isVariableDeclaration(declaration)
+    && declaration.initializer === carrier
+    && ts.isIdentifier(declaration.name)
+    ? new ResourceTargetObservation(declaration.name.text, declaration.name, true)
+    : new ResourceTargetObservation(null, call, false);
+}
+
+function resourceTargetObservation(
+  target: ReturnType<typeof readEvaluatedExpressionTarget>,
+): ResourceTargetObservation | null {
+  return target == null
+    ? null
+    : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration);
 }
 
 function readDefineCallResourceKind(

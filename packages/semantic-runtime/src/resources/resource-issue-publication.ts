@@ -21,6 +21,7 @@ import {
   ResourceIssue,
   type ResourceIssueKind,
   type ResourceIssuePhase,
+  type ResourceIssueRelatedInformation,
   type ResourceIssueSeverity,
 } from './resource-issue.js';
 
@@ -47,6 +48,7 @@ export class ResourceIssuePublisher {
     message: string,
     frameworkErrorCode: string | null,
     sourceAddressHandle: AddressHandle | null,
+    relatedInformation: readonly ResourceIssueRelatedInformation[],
     severity: ResourceIssueSeverity = 'error',
   ): ResourceIssuePublication {
     const productHandle = this.store.handles.product(local);
@@ -61,6 +63,7 @@ export class ResourceIssuePublisher {
       message,
       frameworkErrorCode,
       sourceAddressHandle,
+      relatedInformation,
       [],
       severity,
     );

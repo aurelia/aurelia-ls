@@ -513,6 +513,7 @@ function readControllerWatchInvalidCallbackIssue(
       : `Watch callback '${propertyName}' is not callable on the resource instance.`,
     ResourceFrameworkErrorCode.ControllerWatchInvalidCallback,
     callback.methodName?.target?.addressHandle ?? null,
+    [],
   );
 }
 
@@ -541,6 +542,7 @@ function publishWatchIssueEntry(
     message,
     frameworkErrorCode,
     source?.addressHandle ?? null,
+    [],
   );
   return new WatchEntryRead(
     null,

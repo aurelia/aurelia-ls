@@ -93,7 +93,7 @@ class HtmlParseSourceSet {
   ) {}
 }
 
-class ParsedHtmlAttributeDraft {
+export class ParsedHtmlAttributeDraft {
   constructor(
     readonly rawName: string,
     readonly rawValue: string,
@@ -107,7 +107,7 @@ class ParsedHtmlAttributeDraft {
   ) {}
 }
 
-class ParsedHtmlNodeDraft {
+export class ParsedHtmlNodeDraft {
   constructor(
     readonly nodeKind: HtmlIrNodeKind,
     readonly start: number,
@@ -123,14 +123,14 @@ class ParsedHtmlNodeDraft {
   ) {}
 }
 
-class ParsedHtmlDocumentDraft {
+export class ParsedHtmlDocumentDraft {
   constructor(
     readonly rootNodes: readonly ParsedHtmlNodeDraft[],
     readonly recoveries: readonly HtmlRecoveryDraft[],
   ) {}
 }
 
-class HtmlRecoveryDraft {
+export class HtmlRecoveryDraft {
   constructor(
     readonly recoveryKind: HtmlRecoveryKind,
     readonly summary: string,
@@ -243,7 +243,7 @@ export class HtmlParseMaterializer {
         [new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Template source did not carry closed markup text.', 0, 0)],
       );
     }
-    return new HtmlScanner(input.templateSource.markup, input.parseContext.recoveryPolicy).parseDocument();
+    return parseHtmlDocumentDraft(input.templateSource.markup, input.parseContext.recoveryPolicy);
   }
 
   private documentHandles(input: HtmlParseRequest): HtmlDocumentHandles {
@@ -330,6 +330,14 @@ export class HtmlParseMaterializer {
     ];
     return new HtmlParseSourceSet(records, provenanceHandle, input.templateSource.sourceAddressHandle);
   }
+}
+
+/** Parse source-shaped HTML without allocating kernel products so compiler orchestration can plan source views. */
+export function parseHtmlDocumentDraft(
+  markup: string,
+  recoveryPolicy: TemplateRecoveryPolicy,
+): ParsedHtmlDocumentDraft {
+  return new HtmlScanner(markup, recoveryPolicy).parseDocument();
 }
 
 class HtmlParseTreeMaterializer {

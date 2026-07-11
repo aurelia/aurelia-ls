@@ -116,7 +116,10 @@ export class HydrateElementInstruction {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
+    /** Canonical custom-element definition name used by runtime controller identity. */
     readonly elementName: string,
+    /** Effective compiler lookup name authored by the template, including aliases and `as-element`. */
+    readonly resourceLookupName: string,
     readonly definitionProductHandle: ProductHandle | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly projectionInstructionSequences: readonly HydrateElementProjectionInstructionSequence[],

@@ -142,6 +142,7 @@ export class ResourceDefinitionApiIssueMaterializer {
       issue.message,
       issue.frameworkErrorCode,
       span.handle,
+      [],
     );
     return [
       new ResourceIssuePublication(publication.issue, [

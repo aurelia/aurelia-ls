@@ -144,6 +144,8 @@ export class StaticProjectEvaluationOptions {
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
     /** Module-source resolution completeness/performance policy for project-level graph construction. */
     readonly moduleResolutionPolicy?: EvaluationModuleResolutionPolicy,
+    /** Boot source roles admitted as graph roots for this evaluation pass. */
+    readonly admittedSourceRoles: readonly SourceFileRole[] = [SourceFileRole.AppSource],
   ) {}
 }
 
@@ -227,7 +229,7 @@ class StaticProjectEvaluationFrame {
   }
 
   private evaluateAdmission(admission: SourceFileAdmission): void {
-    if (!isStaticEvaluationAdmission(admission)) {
+    if (!isStaticEvaluationAdmission(admission, this.options.admittedSourceRoles)) {
       return;
     }
 
@@ -560,8 +562,9 @@ export function isStaticEvaluationSource(language: SourceLanguage): boolean {
 
 export function isStaticEvaluationAdmission(
   admission: Pick<SourceFileAdmission, 'language' | 'role'>,
+  admittedSourceRoles: readonly SourceFileRole[] = [SourceFileRole.AppSource],
 ): boolean {
-  return isStaticEvaluationSource(admission.language) && admission.role === SourceFileRole.AppSource;
+  return isStaticEvaluationSource(admission.language) && admittedSourceRoles.includes(admission.role);
 }
 
 export function isEvaluatedProjectSource(

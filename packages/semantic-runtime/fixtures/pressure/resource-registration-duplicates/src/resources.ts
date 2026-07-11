@@ -1,9 +1,13 @@
 import {
+  alias,
+  attributePattern,
   bindingBehavior,
+  bindingCommand,
   customAttribute,
   customElement,
   valueConverter,
 } from 'aurelia';
+import { AttrSyntax } from '@aurelia/template-compiler';
 
 @customElement({
   name: 'duplicate-card',
@@ -54,3 +58,45 @@ export class DuplicateTrackTwoBindingBehavior {
 
   unbind(): void {}
 }
+
+@bindingCommand('duplicate-command')
+export class DuplicateCommandOneBindingCommand {}
+
+@bindingCommand('duplicate-command')
+export class DuplicateCommandTwoBindingCommand {}
+
+@attributePattern({ pattern: 'PART::duplicate', symbols: ':' })
+export class DuplicatePatternOne {
+  'PART::duplicate'(rawName: string, rawValue: string, parts: readonly string[]): AttrSyntax {
+    return new AttrSyntax(rawName, rawValue, parts[0] ?? rawName, 'bind');
+  }
+}
+
+@attributePattern({ pattern: 'PART::duplicate', symbols: ':' })
+export class DuplicatePatternTwo {
+  'PART::duplicate'(rawName: string, rawValue: string, parts: readonly string[]): AttrSyntax {
+    return new AttrSyntax(rawName, rawValue, parts[0] ?? rawName, 'bind');
+  }
+}
+
+@alias('shared-card-alias')
+@customElement({ name: 'alias-owner-one', template: '<template>one</template>' })
+export class AliasOwnerOne {}
+
+@alias('shared-card-alias')
+@customElement({ name: 'alias-owner-two', template: '<template>two</template>' })
+export class AliasOwnerTwo {}
+
+@customElement({ name: 'alias-primary', template: '<template>primary</template>' })
+export class AliasPrimary {}
+
+@alias('alias-primary')
+@customElement({ name: 'alias-after-primary', template: '<template>alias</template>' })
+export class AliasAfterPrimary {}
+
+@alias('primary-after-alias')
+@customElement({ name: 'alias-before-primary', template: '<template>alias first</template>' })
+export class AliasBeforePrimary {}
+
+@customElement({ name: 'primary-after-alias', template: '<template>primary second</template>' })
+export class PrimaryAfterAlias {}

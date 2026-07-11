@@ -3,11 +3,10 @@ import type { AddressHandle } from '../kernel/handles.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
   EvaluationRead,
-  readStaticStringArrayValue,
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
-import { openSeamReasonKindForEvaluationBoundary } from '../evaluation/boundary-open-reason.js';
+import { openSeamReasonKindsForEvaluationValue } from '../evaluation/boundary-open-reason.js';
 import {
   evaluationOpenSeamDefaultReasonKinds,
   type EvaluationOpenSeam,
@@ -91,7 +90,7 @@ export function convergenceReasonKindsForRead(
   return compactConvergenceOpenReasonKinds([
     ...fallbackReasonKinds,
     ...convergenceReasonKindsForEvaluationOpenSeams(read?.openSeams ?? []),
-    ...convergenceReasonKindsForEvaluationValue(read?.value ?? null),
+    ...openSeamReasonKindsForEvaluationValue(read?.value ?? null),
   ]);
 }
 
@@ -111,29 +110,6 @@ function convergenceReasonKindsForEvaluationOpenSeams(
       ? evaluationOpenSeamDefaultReasonKinds(seam.seamKind)
       : seam.reasonKinds
   );
-}
-
-function convergenceReasonKindsForEvaluationValue(
-  value: EvaluationValue | null,
-): readonly OpenSeamReasonKind[] {
-  if (value == null) {
-    return [];
-  }
-  switch (value.kind) {
-    case EvaluationValueKind.BoundaryValue:
-    case EvaluationValueKind.BoundaryObject:
-      return [openSeamReasonKindForEvaluationBoundary(value.boundaryKind)];
-    case EvaluationValueKind.Object:
-      return value.uncertainties.flatMap((uncertainty) =>
-        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
-      );
-    case EvaluationValueKind.Array:
-      return value.uncertainties.flatMap((uncertainty) =>
-        uncertainty.boundaryKind == null ? [] : [openSeamReasonKindForEvaluationBoundary(uncertainty.boundaryKind)]
-      );
-    default:
-      return [];
-  }
 }
 
 function compactConvergenceOpenReasonKinds(
@@ -228,18 +204,6 @@ export function readStringField(
 ): string | null {
   const value = readFieldValue(context, definitionExpression, targetClass, fieldName)?.value;
   return value == null ? null : readStaticStringValue(value);
-}
-
-export function readStaticStringArrayClassProperty(
-  context: ResourceRecognitionContext,
-  targetClass: ts.ClassLikeDeclarationBase | null,
-  fieldName: string,
-): readonly string[] {
-  const value = readStaticClassPropertyValue(context, targetClass, fieldName)?.value;
-  if (value == null) {
-    return [];
-  }
-  return readStaticStringArrayValue(value) ?? [];
 }
 
 export function readObjectString(
@@ -346,21 +310,4 @@ export function openIfPresent(
   return definitionRead == null
     ? convergenceOpenForNode(summary, staticExpression, reasonKinds)
     : convergenceOpenForRead(summary, definitionRead, reasonKinds);
-}
-
-export function mergeAliases(
-  ...aliasLists: readonly (readonly string[])[]
-): readonly string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const aliases of aliasLists) {
-    for (const alias of aliases) {
-      if (seen.has(alias)) {
-        continue;
-      }
-      seen.add(alias);
-      result.push(alias);
-    }
-  }
-  return result;
 }

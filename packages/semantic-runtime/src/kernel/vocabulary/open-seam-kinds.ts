@@ -159,6 +159,14 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Resource definition convergence saw metadata fields it cannot safely materialize yet.',
     ),
+
+    /** Project tooling uses convention preprocessing, but its transform options or source scope stayed dynamic. */
+    OpenConventionTransformAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-convention-transform-admission',
+      KernelVocabularySlot.OpenSeamKind,
+      'Project tooling uses convention preprocessing, but its transform options or source scope could not be closed statically.',
+    ),
   },
   Di: {
     /** DI world construction could not spend a registration admission into concrete container effects. */

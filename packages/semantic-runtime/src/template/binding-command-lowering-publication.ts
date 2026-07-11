@@ -835,9 +835,13 @@ export class BindingCommandLoweringPublisher {
       execution.rawName,
       execution.rawValue,
       execution.target,
+      null,
       execution.command,
+      null,
       execution.parts,
       parse.pattern,
+      parse.interpretation?.compiledPatternProductHandle ?? null,
+      [],
       attribute.toReference(),
       [],
     ), new MaterializedProduct(

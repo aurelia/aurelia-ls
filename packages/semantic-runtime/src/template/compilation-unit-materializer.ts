@@ -76,7 +76,11 @@ export class TemplateCompilationUnitConstructionRequest {
     /** Source address for the template carrier. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Offset map from decoded markup boundaries to authored source boundaries. */
-    readonly sourceMap: TemplateSourceOffsetMap | null = null,
+    readonly sourceMap: TemplateSourceOffsetMap | null,
+    /** Local custom-element names already known for the root context. */
+    readonly localElementNames: readonly string[],
+    /** Local dependency identities already known for the root context. */
+    readonly dependencyIdentityHandles: readonly IdentityHandle[],
     /** Consumer lane that requested this compilation unit. */
     readonly consumer: TemplateParseConsumer = TemplateParseConsumer.Compilation,
     /** Recovery behavior requested for this unit. */
@@ -87,10 +91,6 @@ export class TemplateCompilationUnitConstructionRequest {
       null,
       null,
     ),
-    /** Local custom-element names already known for the root context. */
-    readonly localElementNames: readonly string[] = [],
-    /** Local dependency identities already known for the root context. */
-    readonly dependencyIdentityHandles: readonly IdentityHandle[] = [],
   ) {}
 }
 

@@ -1,4 +1,5 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import './routes/aliased-route';
 
 @route({
@@ -10,4 +11,5 @@ import './routes/aliased-route';
     },
   ],
 })
+@customElement('router-routeable-alias-app')
 export class RouterRouteableAliasApp {}

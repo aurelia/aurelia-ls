@@ -1,7 +1,10 @@
 import { computed } from '@aurelia/runtime';
+import { customElement } from '@aurelia/runtime-html';
+import template from './computed-decorator-contexts-app.html';
 
 const dynamicDependencyKey = 'nested.detail.count';
 
+@customElement({ name: 'computed-decorator-contexts-app', template })
 export class ComputedDecoratorContextsApp {
   value = 1;
   nested = {

@@ -27,12 +27,13 @@ export class SyntaxResourceRecognizer {
 function recognizeAttributePatterns(
   context: ResourceRecognitionContext,
 ): readonly ResourceRecognitionObservation[] {
+  const executedCalls = new Set(context.evaluation.executedCallExpressions);
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
       observations.push(...recognizeAttributePatternDecorators(context, node));
     }
-    if (ts.isCallExpression(node) && isAttributePatternCreateCall(node)) {
+    if (ts.isCallExpression(node) && executedCalls.has(node) && isAttributePatternCreateCall(node)) {
       observations.push(recognizeAttributePatternCreate(context, node));
     }
     ts.forEachChild(node, visit);

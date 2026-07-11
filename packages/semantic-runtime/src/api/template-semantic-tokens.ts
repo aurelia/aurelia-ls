@@ -155,7 +155,7 @@ function classificationSemanticTokenRows(
       continue;
     }
 
-    const commandSource = commandSourceForSyntax(store, attribute, syntax);
+    const commandSource = commandSourceForSyntax(store, syntax);
     if (commandSource != null) {
       rows.push(tokenRow(
         'aureliaCommand',
@@ -169,7 +169,7 @@ function classificationSemanticTokenRows(
     }
 
     const targetType = tokenTypeForClassification(classification);
-    const targetSource = targetSourceForSyntax(store, attribute, syntax);
+    const targetSource = targetSourceForSyntax(store, syntax);
     if (targetType != null && targetSource != null) {
       rows.push(tokenRow(
         targetType,
@@ -402,7 +402,7 @@ function attributeTargetAndCommandRows(
   }
 
   const rows: SemanticTemplateSemanticTokenRow[] = [];
-  const commandSource = commandSourceForSyntax(store, attribute, syntax);
+  const commandSource = commandSourceForSyntax(store, syntax);
   if (commandSource != null) {
     rows.push(tokenRow(
       'aureliaCommand',
@@ -414,7 +414,7 @@ function attributeTargetAndCommandRows(
       handles,
     ));
   }
-  const targetSource = targetSourceForSyntax(store, attribute, syntax);
+  const targetSource = targetSourceForSyntax(store, syntax);
   if (options.targetType != null && targetSource != null) {
     rows.push(tokenRow(
       options.targetType,
@@ -510,50 +510,21 @@ function closingTagNameStart(
 
 function commandSourceForSyntax(
   store: KernelStore,
-  attribute: HtmlAttribute,
   syntax: AttributeSyntax,
 ): SemanticSourceReference | null {
   if (syntax.command == null || syntax.command.length === 0) {
     return null;
   }
-  const nameSource = semanticExactSourceReference(describeAddress(store, attribute.nameAddressHandle));
-  if (nameSource?.start == null) {
-    return null;
-  }
-  const commandStart = commandOffsetForSyntax(syntax);
-  if (commandStart == null) {
-    return null;
-  }
-  return sourceSlice(nameSource, nameSource.start + commandStart, nameSource.start + commandStart + syntax.command.length, 'binding-command');
+  const source = semanticExactSourceReference(describeAddress(store, syntax.commandSourceAddressHandle));
+  return source == null ? null : { ...source, role: 'binding-command' };
 }
 
 function targetSourceForSyntax(
   store: KernelStore,
-  attribute: HtmlAttribute,
   syntax: AttributeSyntax,
 ): SemanticSourceReference | null {
-  const nameSource = semanticExactSourceReference(describeAddress(store, attribute.nameAddressHandle));
-  if (nameSource?.start == null || syntax.target.length === 0) {
-    return null;
-  }
-  const targetStart = syntax.rawName.indexOf(syntax.target);
-  if (targetStart < 0) {
-    return null;
-  }
-  return sourceSlice(nameSource, nameSource.start + targetStart, nameSource.start + targetStart + syntax.target.length, 'attribute-target');
-}
-
-function commandOffsetForSyntax(syntax: AttributeSyntax): number | null {
-  if (syntax.command == null) {
-    return null;
-  }
-  const dotCommand = `.${syntax.command}`;
-  const dotCommandStart = syntax.rawName.indexOf(dotCommand);
-  if (dotCommandStart >= 0) {
-    return dotCommandStart + 1;
-  }
-  const commandStart = syntax.rawName.indexOf(syntax.command);
-  return commandStart >= 0 ? commandStart : null;
+  const source = semanticExactSourceReference(describeAddress(store, syntax.targetSourceAddressHandle));
+  return source == null ? null : { ...source, role: 'attribute-target' };
 }
 
 function pushExpressionToken(

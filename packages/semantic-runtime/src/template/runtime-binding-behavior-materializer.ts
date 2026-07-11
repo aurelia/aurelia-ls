@@ -46,6 +46,7 @@ import { TemplateBindingMode } from './instruction-ir.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from './runtime-controller-bind-materializer.js';
 import type { TemplateResourceScope } from './compiler-world.js';
+import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import {
   AttrBindingBehavior,
   DebounceBindingBehavior,
@@ -267,7 +268,7 @@ export class RuntimeBindingBehaviorMaterializer {
       binding.sourceAddressHandle,
       behavior.name.span,
     );
-    const application = this.applicationProduct(local, binding, targetAccess, behavior, expressionSource.handle, source);
+    const application = this.applicationProduct(local, binding, resource, targetAccess, behavior, expressionSource.handle, source);
     const issueProduct = issue == null
       ? null
       : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, targetAccess, issue, expressionSource.handle, source);
@@ -414,6 +415,7 @@ export class RuntimeBindingBehaviorMaterializer {
   private applicationProduct(
     local: string,
     binding: RuntimeBinding,
+    resource: TemplateVisibleResource | null,
     targetAccess: RuntimeBindingTargetAccess | null,
     behavior: BindingBehaviorExpression,
     sourceAddressHandle: AddressHandle | null,
@@ -423,6 +425,7 @@ export class RuntimeBindingBehaviorMaterializer {
       this.store.handles.product(local),
       this.store.handles.identity(local),
       binding.toReference(),
+      resource?.toReference() ?? null,
       targetAccess?.toReference() ?? null,
       RuntimeBindingBehaviorApplicationPhase.Bind,
       behavior.name.name,

@@ -48,6 +48,7 @@ import {
   type TemplateCompilerWorldEmission,
 } from '../template/compiler-world-materializer.js';
 import {
+  ResourceRegistrationAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import {
@@ -69,6 +70,7 @@ import {
   buildRegistryBodyStepIndex,
   type RegistryBodyStepIndex,
 } from './registry-body-index.js';
+import { RegisteredSyntaxResourceMaterializer } from '../template/registered-syntax-resource-materializer.js';
 
 /**
  * Current app-world composition envelope.
@@ -241,6 +243,7 @@ type DiSourceIssueMaterialization =
 class AppRootCompilerWorldFrame {
   private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
   private readonly registryBodyIndex: RegistryBodyStepIndex;
+  private readonly registeredSyntaxResourceMaterializer: RegisteredSyntaxResourceMaterializer;
 
   constructor(
     store: KernelStore,
@@ -256,6 +259,7 @@ class AppRootCompilerWorldFrame {
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
     this.registryBodyIndex = buildRegistryBodyStepIndex(store, configuration);
+    this.registeredSyntaxResourceMaterializer = new RegisteredSyntaxResourceMaterializer(store);
   }
 
   construct(): readonly TemplateCompilerWorldEmission[] {
@@ -283,14 +287,22 @@ class AppRootCompilerWorldFrame {
       this.resourceDefinitions,
       appRoot,
     );
+    const registeredSyntax = this.registeredSyntaxResourceMaterializer.materialize({
+      localKey: `app-root:${appRoot.productHandle}`,
+      admissions: admissions.filter((admission): admission is ResourceRegistrationAdmission =>
+        admission instanceof ResourceRegistrationAdmission
+      ),
+      visibleResources: resources,
+      resourceDefinitions: this.resourceDefinitions,
+    });
     return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
       `app-root:${appRoot.productHandle}`,
       TemplateCompilerWorldKind.AppRoot,
       container,
       appRoot,
       resources,
-      syntax.attributePatterns,
-      syntax.bindingCommands,
+      [...syntax.attributePatterns, ...registeredSyntax.attributePatterns],
+      [...syntax.bindingCommands, ...registeredSyntax.bindingCommands],
       runtimeRenderers,
       TemplateResourceVisibilityKind.Configured,
       appRoot.sourceAddressHandle,

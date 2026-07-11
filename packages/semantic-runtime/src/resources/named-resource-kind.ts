@@ -13,14 +13,17 @@ import {
   ResourceDefinitionKind,
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
-import type { ResourceTargetObservation } from './resource-observation-primitives.js';
+import type {
+  ResourceAliasObservation,
+  ResourceTargetObservation,
+} from './resource-observation-primitives.js';
 
 interface NamedResourceKindDescriptor {
   readonly declarationKind: AureliaResourceDeclarationKind;
   createHeader(
     target: ResourceTargetObservation | null,
     name: string | null,
-    aliases: readonly string[],
+    aliases: readonly ResourceAliasObservation[],
     nameSourceNode: ts.Node | null,
   ): NamedResourceDefinitionHeader;
 }
@@ -56,7 +59,7 @@ export function createNamedResourceDefinitionHeader(
   resourceKind: NamedResourceDefinitionKind,
   target: ResourceTargetObservation | null,
   name: string | null,
-  aliases: readonly string[],
+  aliases: readonly ResourceAliasObservation[],
   nameSourceNode: ts.Node | null = null,
 ): NamedResourceDefinitionHeader {
   return NamedResourceKindDescriptors[resourceKind].createHeader(target, name, aliases, nameSourceNode);

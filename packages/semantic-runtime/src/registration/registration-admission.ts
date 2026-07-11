@@ -50,7 +50,7 @@ export const enum RegistrationStrategy {
   Defer = 'defer',
   /** Admit an IRegistry-compatible value that will register itself. */
   Registry = 'registry',
-  /** Register a resource key and aliases for a resource definition or static `$au` type. */
+  /** Invoke a converged resource's registration semantics; most publish keys, while syntax resources mutate compiler services. */
   Resource = 'resource',
   /** Register a plain class as itself. */
   PlainClassSelf = 'plain-class-self',
@@ -224,7 +224,7 @@ export class RegistryRegistrationAdmission {
 }
 
 /**
- * Admission for a converged Aurelia resource definition before it is spent into runtime resource-key rows.
+ * Admission for a converged Aurelia resource definition before its kind-specific registration effects are spent.
  */
 export class ResourceRegistrationAdmission {
   constructor(

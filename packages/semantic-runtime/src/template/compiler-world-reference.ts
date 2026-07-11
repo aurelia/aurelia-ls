@@ -52,6 +52,26 @@ export class TemplateBindableReference {
   ) {}
 }
 
+/** Resource selected from a compiler world without retaining its full definition or visibility catalog entry. */
+export class TemplateVisibleResourceReference {
+  constructor(
+    /** Author-facing resource taxonomy of the selected resource. */
+    readonly resourceKind: ResourceDefinitionKind,
+    /** Canonical runtime lookup name; the authored occurrence may have used an alias. */
+    readonly name: string,
+    /** Product handle for the visible resource model, when materialized. */
+    readonly resourceProductHandle: ProductHandle | null,
+    /** Identity handle for the visible resource model, when materialized. */
+    readonly resourceIdentityHandle: IdentityHandle | null,
+    /** Product handle for the full resource definition, when convergence has produced one. */
+    readonly definitionProductHandle: ProductHandle | null,
+    /** How the selected resource became visible to this compiler world. */
+    readonly visibilityKind: TemplateResourceVisibilityKind,
+    /** Source address for the registration, definition, import, or convention that made it visible. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /** Resource definition visible to template compilation through DI/container lookup. */
 export class TemplateVisibleResource {
   constructor(
@@ -74,6 +94,18 @@ export class TemplateVisibleResource {
     /** Source address for the registration, definition, import, or convention that made it visible. */
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
+
+  toReference(): TemplateVisibleResourceReference {
+    return new TemplateVisibleResourceReference(
+      this.resourceKind,
+      this.name,
+      this.resourceProductHandle,
+      this.resourceIdentityHandle,
+      this.definitionProductHandle,
+      this.visibilityKind,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Reference to a compiler service without retaining a runtime singleton instance. */

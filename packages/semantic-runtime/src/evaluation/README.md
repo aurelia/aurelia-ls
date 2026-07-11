@@ -35,6 +35,9 @@ projects static type and member surfaces from the checker for template/expressio
 - Preserve host-environment and external-module carriers as explicit evaluator-local boundary object/value carriers, so
   boundary-dependent expressions propagate without being mislabeled as generic dynamic branches, missing identifiers, or
   object-property fallbacks.
+- Source-local ambient value declarations (`declare const`, `declare function`, `declare class`, and `declare enum`) are
+  host boundaries because TypeScript erases them and an external runtime supplies their values. Keep that distinct from
+  an ordinary uninitialized `let`/`var`, whose JavaScript value is `undefined`.
 - Preserve string-shaped expressions with known static text and dynamic boundary holes as `EvaluationStringPatternValue`
   rather than flattening them to unknown or a generic boundary value. Consumers such as router instruction
   materialization can use the static prefix while still treating the holes as runtime supplied.

@@ -973,8 +973,8 @@ function compilerWorldAdmitsBuiltInSyntaxGroup(
   group: BuiltInSyntaxGroup,
 ): boolean {
   const world = resource.compilation.compilerWorld;
-  return world.attributePatterns.some((pattern) => pattern.handler.group === group)
-    || world.bindingCommands.some((command) => command.handler.group === group);
+  return world.attributePatterns.some((pattern) => pattern.handler?.group === group)
+    || world.bindingCommands.some((command) => command.handler?.group === group);
 }
 
 function builtInResourceFor(

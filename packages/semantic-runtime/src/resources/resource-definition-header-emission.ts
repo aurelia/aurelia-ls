@@ -29,6 +29,8 @@ export class ResourceDefinitionHeaderEmission {
     readonly resourceKind: ResourceDefinitionHeader['type'],
     /** Runtime lookup names or pattern strings observed for this header. */
     readonly lookupNames: readonly string[],
+    /** Exact authored token for each lookup name, aligned with `lookupNames` when recognition retained one. */
+    readonly lookupNameSourceAddressHandles: readonly (AddressHandle | null)[],
     /** Claims emitted for resource identities and aliases. */
     readonly claimHandles: readonly ClaimHandle[],
   ) {}

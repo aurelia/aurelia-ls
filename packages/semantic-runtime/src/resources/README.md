@@ -31,6 +31,21 @@ imported decorator arguments and exact source spans use the right evaluator envi
 Source-address materialization should use only contexts admitted by this index. If a TypeChecker node is not owned by a
 resource-recognition context, leave the source span absent or surface an open seam rather than re-resolving a file name
 from the store and risking a span attached to the wrong project/source admission.
+Convention-derived resources are transform output, not a consequence of class/file shape alone. The project pass spends
+the shared `StaticProjectEvaluationPass` with tooling-config roots and a narrow Vite host adapter; it does not grow a
+second configuration evaluator. Source-local ambient declarations encountered there remain host boundaries rather than
+collapsing to `undefined`. The resulting static Vite configuration proves `@aurelia/vite-plugin` convention preprocessing
+for each matching source. Vite and plugin factory identity enters through the module evaluator's external-value resolver,
+so local import/export forwarding does not collapse back to syntax matching. Include/exclude patterns are applied through the same
+`@rollup/pluginutils/createFilter` implementation used by the framework plugin. Missing tooling or
+`enableConventions: false` does not admit a convention resource. Dynamic plugin lists, options, or filters publish
+`resource.open-convention-transform-admission` rather than producing confident definitions. Recognition provenance
+retains the tooling transform and paired-template evidence; open admission seams spend evaluator boundary reason kinds,
+and only evaluator-executed plugin calls can produce evidence or seams. A derived public name remains non-editable until
+an authored name token exists. ESM imports/exports and CommonJS `require(...)`/`module.exports` spend the same evaluator
+and admission path. This reader currently owns Vite configuration only. Webpack-loader, Gulp, Parcel, and ts-jest use the
+same Aurelia preprocessor through different configuration carriers and need their own admission readers and pressure
+fixtures before they are treated as covered. Non-static filter values remain open rather than being approximated.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
 `resource-definition-source.ts` is the product-free companion for source

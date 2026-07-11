@@ -1,6 +1,8 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { ProductDetailsRoute } from './routes/product-details-route';
 import { ProductsRoute } from './routes/products-route';
+import template from './router-pattern-app.html';
 
 class SenchaRouteInstruction {
   readonly component = ProductsRoute;
@@ -24,6 +26,7 @@ class SenchaRouteInstruction {
     },
   ],
 })
+@customElement({ name: 'router-pattern-app', template })
 export class RouterPatternApp {
   readonly productsRoute = ProductsRoute;
   readonly productDetailsRoute = ProductDetailsRoute;

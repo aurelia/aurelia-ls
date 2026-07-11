@@ -9,6 +9,8 @@
     "aurelia": "^2.0.0-rc.1"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@aurelia/vite-plugin": "^2.0.0-rc.1",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0"
   }
 }

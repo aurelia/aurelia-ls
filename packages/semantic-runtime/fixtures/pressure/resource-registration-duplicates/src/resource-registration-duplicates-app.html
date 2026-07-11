@@ -3,4 +3,9 @@
   <section duplicate-flag.bind="value"></section>
   <span>${value | duplicateFormat}</span>
   <input value.bind="value & duplicateTrack">
+  <input value.duplicate-command="value">
+  <div title::duplicate="value"></div>
+  <shared-card-alias></shared-card-alias>
+  <alias-primary></alias-primary>
+  <primary-after-alias></primary-after-alias>
 </template>

@@ -1,5 +1,7 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { KnownRoute } from './routes/known-route';
+import template from './router-instruction-errors-app.html';
 
 @route({
   title: 'Router Instruction Errors Pressure',
@@ -16,4 +18,5 @@ import { KnownRoute } from './routes/known-route';
     },
   ],
 })
+@customElement({ name: 'router-instruction-errors-app', template })
 export class RouterInstructionErrorsApp {}

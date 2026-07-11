@@ -10,6 +10,12 @@ Verification is intentionally neutral: it should not infer taste, generate sourc
 live next to pressure fixtures to describe semantic contracts that should survive refactors, while app-builder remains
 the future owner of recommendable app generation.
 
+App-bearing fixtures must prove the resource definition that the framework itself requires. A class passed to
+`.app({ component })` is an app-root target, not an implicit custom-element definition; use explicit metadata and an
+authored template unless the fixture is specifically exercising a modeled convention transform. Negative or zero-count
+effects should be accompanied by an `AppRoot`, template-compilation, or other positive prerequisite effect so a missing
+root cannot satisfy the contract vacuously.
+
 `effect-kind-descriptor.ts` is the runtime-readable map from `ExpectedSemanticEffectKind` to verifier observation
 surfaces, public query families, and docs/tests seed posture. Use it when app-builder, MCP, IDE, or future fixture tools
 need to explain semantic product families without scraping enum comments or inventing local glossaries.

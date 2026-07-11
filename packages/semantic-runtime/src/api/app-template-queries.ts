@@ -78,6 +78,8 @@ import {
   type SemanticTemplateInlayHintsResult,
   SemanticTemplateBindableAttributeSourceKind,
   SemanticTemplateReferenceKind,
+  SemanticTemplateResourceDeclarationKind,
+  SemanticTemplateResourceUsageKind,
   type SemanticTemplateReferenceRow,
   type SemanticTemplateReferencesResult,
   SemanticTemplateRenameEditKind,
@@ -110,9 +112,13 @@ import {
   resourceLocalRuntimeBindings,
 } from './runtime-resource-ownership.js';
 import {
+  HydrateElementInstruction,
   TemplateBindingMode,
 } from '../template/instruction-ir.js';
-import { HtmlElement } from '../template/html-ir.js';
+import {
+  HtmlElement,
+  htmlElementAttributeOwnersByElementProduct,
+} from '../template/html-ir.js';
 import {
   BuiltInBindingCommandName,
 } from '../template/built-in-syntax.js';
@@ -122,7 +128,9 @@ import {
 import {
   effectivePropertyBindingMode,
 } from '../template/runtime-binding-mode-behavior.js';
+import { TemplateProductDetails } from '../template/product-details.js';
 import { sourceSpanFromBounds } from '../expression/source-span.js';
+import { isAureliaExpressionIdentifier } from '../expression/expression-scanner.js';
 import { bindableAttributeNameForProperty } from '../resources/bindable-attribute.js';
 import type { BindableDefinitionReference } from '../resources/bindable-definition.js';
 import {
@@ -131,6 +139,9 @@ import {
 } from '../resources/resource-kind.js';
 import { TypeSystemHotDetails } from '../type-system/product-details.js';
 import { checkerTypeMemberValueSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import type { TemplateVisibleResourceReference } from '../template/compiler-world-reference.js';
+import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
+import { TemplateSpecialAttributeName } from '../template/special-attribute-source.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -277,7 +288,7 @@ export class SemanticAppTemplateQueries {
         null,
       );
     }
-    const { context, activeSource } = selected;
+    const { context, activeRow, activeSource } = selected;
 
     if (context.renameSurface === TemplateRenameSurface.UnsupportedResource) {
       return templateRenameUnavailable(
@@ -363,7 +374,7 @@ export class SemanticAppTemplateQueries {
     const bindableConventionCallbackEdits = bindableConventionCallbackRenameEdits(this.emission, context, newName);
     // Reference rows carry authored token sources, so each edit replaces exactly the token.
     const templateEdits = context.rows
-      .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface))
+      .filter((row) => referenceRowNeedsTemplateRenameEdit(row, context.renameSurface, context.selectedMemberName))
       .map((row) => {
         const editKind = templateRenameEditKindForReferenceRow(row, context.renameSurface);
         const oldText = this.authoredTextForSource(row.source) ?? row.name;
@@ -913,17 +924,28 @@ export class SemanticAppTemplateQueries {
       query.diagnosticProjection,
     );
     const selectedDefinition = cursorInfo.value.selectedDefinition;
-    const selectedName = selectedDefinition?.name ?? selectedDefinition?.targetName ?? null;
-    const declarationSource = selectedDefinition?.nameSource ?? selectedDefinition?.source ?? null;
+    const canonicalName = selectedDefinition?.name ?? selectedDefinition?.targetName ?? null;
+    const matchedName = selectedDefinition?.matchedName ?? canonicalName;
+    const matchedAlias = canonicalName != null
+      && matchedName != null
+      && canonicalName.toLowerCase() !== matchedName.toLowerCase()
+      && selectedDefinition?.matchedNameSource != null;
+    const selectedName = matchedAlias ? matchedName : canonicalName;
+    const declarationSource = matchedAlias
+      ? selectedDefinition?.matchedNameSource ?? null
+      : selectedDefinition?.nameSource ?? selectedDefinition?.targetSource ?? selectedDefinition?.source ?? null;
     const targetSource = semanticExactSourceReference(declarationSource);
     if (selectedDefinition == null || selectedName == null || targetSource == null) {
       return null;
     }
 
     const renameSurface = templateRenameSurfaceForResourceKind(selectedDefinition.resourceKind);
-    const sourceAddressHandle = selectedDefinition.handles?.nameSourceAddressHandle
-      ?? selectedDefinition.handles?.sourceAddressHandle
-      ?? null;
+    const sourceAddressHandle = matchedAlias
+      ? selectedDefinition.handles?.matchedNameSourceAddressHandle ?? null
+      : selectedDefinition.handles?.nameSourceAddressHandle
+        ?? selectedDefinition.handles?.targetAddressHandle
+        ?? selectedDefinition.handles?.sourceAddressHandle
+        ?? null;
     const target: ResourceReferenceTarget = {
       resourceKind: selectedDefinition.resourceKind,
       selectedName,
@@ -942,13 +964,18 @@ export class SemanticAppTemplateQueries {
       targetSource,
       renameSurface,
       includeTypeScriptReferences: false,
-      hasAuthoredDeclarationSource: selectedDefinition.nameSource != null,
+      hasAuthoredDeclarationSource: matchedAlias
+        ? selectedDefinition.matchedNameSource != null
+        : selectedDefinition.nameSource != null,
       declarationRow: templateReferenceDeclarationRow(
         declarationSource,
         selectedName,
         targetSource,
         target.sourceAddressHandle,
         handles,
+        matchedAlias
+          ? SemanticTemplateResourceDeclarationKind.AliasName
+          : SemanticTemplateResourceDeclarationKind.PrimaryName,
       ),
       templateUsageRows,
       candidateRows: [],
@@ -1122,6 +1149,7 @@ const enum TemplateRenameSurface {
   BindableAttributeAlias = 'bindable-attribute-alias',
   ResourceElement = 'resource-element',
   ResourceAttribute = 'resource-attribute',
+  ResourceExpression = 'resource-expression',
   UnsupportedResource = 'unsupported-resource',
 }
 
@@ -1182,6 +1210,7 @@ interface TypeScriptReferenceContext {
 
 interface ActiveTemplateReferenceContext {
   readonly context: TemplateReferenceContext;
+  readonly activeRow: SemanticTemplateReferenceRow;
   readonly activeSource: SemanticSourceReference;
 }
 
@@ -1610,26 +1639,26 @@ function activeTemplateReferenceContext(
   cursor: SemanticAppQuery['cursor'],
 ): ActiveTemplateReferenceContext | null {
   for (const context of contexts) {
-    const activeSource = activeRenameSource(context.rows, cursor);
-    if (activeSource != null) {
-      return { context, activeSource };
+    const activeRow = activeRenameRow(context.rows, cursor);
+    const activeSource = semanticExactSourceReference(activeRow?.source ?? null);
+    if (activeRow != null && activeSource != null) {
+      return { context, activeRow, activeSource };
     }
   }
   return null;
 }
 
-function activeRenameSource(
+function activeRenameRow(
   rows: readonly SemanticTemplateReferenceRow[],
   cursor: SemanticAppQuery['cursor'],
-): SemanticSourceReference | null {
+): SemanticTemplateReferenceRow | null {
   for (const row of rows) {
     if (!referenceRowSupportsRename(row)) {
       continue;
     }
     const source = semanticExactSourceReference(row.source);
     if (source != null && semanticSourceReferenceContainsFileOffset(source, cursor?.filePath, cursor?.offset)) {
-      // Usage rows carry authored member-name token sources, so prepareRename ranges are token-granular.
-      return source;
+      return row;
     }
   }
   return null;
@@ -1645,6 +1674,7 @@ function referenceRowSupportsRename(row: SemanticTemplateReferenceRow): boolean 
 function referenceRowNeedsTemplateRenameEdit(
   row: SemanticTemplateReferenceRow,
   surface: TemplateRenameSurface,
+  selectedMemberName: string,
 ): boolean {
   if (
     row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute
@@ -1653,27 +1683,42 @@ function referenceRowNeedsTemplateRenameEdit(
   ) {
     return false;
   }
+  if (
+    row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage
+    && isResourceRenameSurface(surface)
+    && row.name.toLowerCase() !== selectedMemberName.toLowerCase()
+  ) {
+    return false;
+  }
   return referenceRowSupportsRename(row)
     && (
       row.referenceKind !== SemanticTemplateReferenceKind.Declaration
       || surface === TemplateRenameSurface.ResourceElement
       || surface === TemplateRenameSurface.ResourceAttribute
+      || surface === TemplateRenameSurface.ResourceExpression
       || surface === TemplateRenameSurface.BindableAttributeAlias
       || !sourceReferenceLooksTypeScript(row.targetSource)
     );
 }
 
 function isValidRenameName(value: string, surface: TemplateRenameSurface): boolean {
-  return isResourceRenameSurface(surface) || surface === TemplateRenameSurface.BindableAttributeAlias
-    ? isValidTemplateAddressableResourceName(value)
-    : isValidRenameIdentifier(value);
+  if (surface === TemplateRenameSurface.ResourceExpression) {
+    return isAureliaExpressionIdentifier(value);
+  }
+  if (isTemplateAddressableResourceRenameSurface(surface) || surface === TemplateRenameSurface.BindableAttributeAlias) {
+    return isValidTemplateAddressableResourceName(value);
+  }
+  return isValidRenameIdentifier(value);
 }
 
 function invalidRenameNameMessage(value: string, surface: TemplateRenameSurface): string {
   if (surface === TemplateRenameSurface.BindableAttributeAlias) {
     return `Rename target '${value}' is not a valid Aurelia bindable attribute alias. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template attribute names from lowercased HTML.`;
   }
-  return isResourceRenameSurface(surface)
+  if (surface === TemplateRenameSurface.ResourceExpression) {
+    return `Rename target '${value}' is not a valid Aurelia expression resource identifier.`;
+  }
+  return isTemplateAddressableResourceRenameSurface(surface)
     ? `Rename target '${value}' is not a valid Aurelia template resource name. Use lowercase letters, digits, '_' or '-' because Aurelia resolves template element and attribute names from lowercased HTML.`
     : `Rename target '${value}' is not a valid TypeScript identifier.`;
 }
@@ -1684,6 +1729,11 @@ function isBindablePropertyRenameSurface(surface: TemplateRenameSurface): boolea
 }
 
 function isResourceRenameSurface(surface: TemplateRenameSurface): boolean {
+  return isTemplateAddressableResourceRenameSurface(surface)
+    || surface === TemplateRenameSurface.ResourceExpression;
+}
+
+function isTemplateAddressableResourceRenameSurface(surface: TemplateRenameSurface): boolean {
   return surface === TemplateRenameSurface.ResourceElement
     || surface === TemplateRenameSurface.ResourceAttribute;
 }
@@ -1905,6 +1955,9 @@ function templateRenameSurfaceForResourceKind(
     case ResourceDefinitionKind.CustomAttribute:
     case ResourceDefinitionKind.TemplateController:
       return TemplateRenameSurface.ResourceAttribute;
+    case ResourceDefinitionKind.ValueConverter:
+    case ResourceDefinitionKind.BindingBehavior:
+      return TemplateRenameSurface.ResourceExpression;
     default:
       return TemplateRenameSurface.UnsupportedResource;
   }
@@ -2064,20 +2117,33 @@ function templateRenameEditKindForReferenceRow(
   surface: TemplateRenameSurface,
 ): SemanticTemplateRenameEditKind {
   if (row.referenceKind === SemanticTemplateReferenceKind.ResourceUsage) {
-    return surface === TemplateRenameSurface.ResourceAttribute
-      ? SemanticTemplateRenameEditKind.ResourceAttributeTarget
-      : SemanticTemplateRenameEditKind.ResourceElementTag;
+    switch (row.resourceUsageKind) {
+      case SemanticTemplateResourceUsageKind.AttributeTarget:
+        return SemanticTemplateRenameEditKind.ResourceAttributeTarget;
+      case SemanticTemplateResourceUsageKind.AsElementValue:
+        return SemanticTemplateRenameEditKind.ResourceAsElementValue;
+      case SemanticTemplateResourceUsageKind.ExpressionName:
+        return SemanticTemplateRenameEditKind.ResourceExpressionName;
+      case SemanticTemplateResourceUsageKind.ElementTag:
+      case null:
+      case undefined:
+        return SemanticTemplateRenameEditKind.ResourceElementTag;
+    }
   }
   if (
     row.referenceKind === SemanticTemplateReferenceKind.Declaration
     && (
       surface === TemplateRenameSurface.ResourceElement
       || surface === TemplateRenameSurface.ResourceAttribute
+      || surface === TemplateRenameSurface.ResourceExpression
       || surface === TemplateRenameSurface.BindableAttributeAlias
     )
   ) {
-    return surface === TemplateRenameSurface.BindableAttributeAlias
-      ? SemanticTemplateRenameEditKind.BindableAttributeAliasDeclaration
+    if (surface === TemplateRenameSurface.BindableAttributeAlias) {
+      return SemanticTemplateRenameEditKind.BindableAttributeAliasDeclaration;
+    }
+    return row.resourceDeclarationKind === SemanticTemplateResourceDeclarationKind.AliasName
+      ? SemanticTemplateRenameEditKind.ResourceAliasDeclaration
       : SemanticTemplateRenameEditKind.ResourceNameDeclaration;
   }
   if (row.referenceKind === SemanticTemplateReferenceKind.BindableAttribute) {
@@ -2144,6 +2210,7 @@ function templateReferenceDeclarationRow(
   targetSource: SemanticSourceReference,
   sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'],
   handles: boolean,
+  resourceDeclarationKind: SemanticTemplateResourceDeclarationKind | null = null,
 ): SemanticTemplateReferenceRow {
   return {
     referenceKind: SemanticTemplateReferenceKind.Declaration,
@@ -2151,6 +2218,7 @@ function templateReferenceDeclarationRow(
     definitionName: null,
     bindingKind: null,
     dependencyKind: null,
+    resourceDeclarationKind,
     source: semanticExactSourceReference(source),
     targetSource,
     ...(handles ? {
@@ -2183,7 +2251,7 @@ function bindableAttributeReferenceRows(
       const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
       const token = syntax == null
         ? null
-        : bindableAttributeTokenSource(store, syntax, attributeByProduct, bindable.attribute);
+        : bindableAttributeTokenSource(store, syntax, bindable.attribute);
       const row = token == null
         ? null
         : bindableAttributeReferenceRow(resource, bindable, target, token, handles);
@@ -2286,6 +2354,9 @@ function resourceReferenceRows(
   return uniqueSortedTemplateReferenceRows(resources.flatMap((resource) => [
     ...customElementResourceReferenceRows(store, resource, target, handles),
     ...attributeResourceReferenceRows(store, resource, target, handles),
+    ...expressionResourceReferenceRows(store, resource, target, handles),
+    ...bindingCommandResourceReferenceRows(store, resource, target, handles),
+    ...attributePatternResourceReferenceRows(store, resource, target, handles),
   ]));
 }
 
@@ -2298,26 +2369,53 @@ function customElementResourceReferenceRows(
   if (target.resourceKind !== ResourceDefinitionKind.CustomElement) {
     return [];
   }
-  const visibleResources = resource.compilation.compilerWorld.resourceScope.resources.filter((candidate) =>
-    candidate.resourceKind === ResourceDefinitionKind.CustomElement
-    && visibleResourceMatchesTarget(store, candidate, target)
-  );
-  if (visibleResources.length === 0) {
+  if (target.definitionProductHandle == null) {
     return [];
   }
-  const names = new Set(visibleResources.flatMap((visible) => [visible.name, ...visible.aliases]).map((name) => name.toLowerCase()));
-  return resource.compilation.html.nodes.flatMap((node): readonly SemanticTemplateReferenceRow[] => {
-    if (!(node instanceof HtmlElement) || !names.has(node.tagName.toLowerCase())) {
+  const elementsByProduct = new Map(resource.compilation.html.nodes.flatMap((node) =>
+    node instanceof HtmlElement ? [[node.productHandle, node] as const] : []
+  ));
+  const ownersByElement = htmlElementAttributeOwnersByElementProduct(
+    resource.compilation.html.nodes,
+    resource.compilation.html.attributes,
+  );
+  return resource.compilation.compiledTemplate.instructions.flatMap((instruction): readonly SemanticTemplateReferenceRow[] => {
+    if (
+      !(instruction instanceof HydrateElementInstruction)
+      || instruction.definitionProductHandle !== target.definitionProductHandle
+    ) {
       return [];
     }
-    return elementTagNameSources(store, resource, node).map((source) =>
+    const element = instruction.node.productHandle == null
+      ? null
+      : elementsByProduct.get(instruction.node.productHandle) ?? null;
+    if (element == null) {
+      return [];
+    }
+    const asElement = ownersByElement.get(element.productHandle)?.attributes.find((attribute) =>
+      attribute.rawName.toLowerCase() === TemplateSpecialAttributeName.AsElement
+      && attribute.rawValue.length > 0
+    ) ?? null;
+    if (asElement != null) {
+      return [resourceUsageReferenceRow(
+        resource,
+        target,
+        asElement.rawValue,
+        describeAddress(store, asElement.valueAddressHandle),
+        asElement.valueAddressHandle,
+        handles,
+        SemanticTemplateResourceUsageKind.AsElementValue,
+      )];
+    }
+    return elementTagNameSources(store, resource, element).map((source) =>
       resourceUsageReferenceRow(
         resource,
         target,
-        node.tagName,
+        element.tagName,
         source,
-        node.sourceAddressHandle,
+        element.sourceAddressHandle,
         handles,
+        SemanticTemplateResourceUsageKind.ElementTag,
       )
     );
   });
@@ -2349,7 +2447,7 @@ function attributeResourceReferenceRows(
     const syntax = syntaxByProduct.get(classification.syntaxProductHandle) ?? null;
     const token = syntax == null
       ? null
-      : attributeSyntaxTargetTokenSource(store, syntax, attributeByProduct);
+      : attributeSyntaxTargetTokenSource(store, syntax);
     return token == null
       ? []
       : [resourceUsageReferenceRow(
@@ -2359,6 +2457,7 @@ function attributeResourceReferenceRows(
           token.source,
           token.sourceAddressHandle,
           handles,
+          SemanticTemplateResourceUsageKind.AttributeTarget,
         )];
   });
 }
@@ -2370,6 +2469,8 @@ function resourceUsageReferenceRow(
   source: SemanticSourceReference | null,
   sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'],
   handles: boolean,
+  resourceUsageKind: SemanticTemplateResourceUsageKind,
+  bindingProductHandle: ProductHandle | null = null,
 ): SemanticTemplateReferenceRow {
   return {
     referenceKind: SemanticTemplateReferenceKind.ResourceUsage,
@@ -2377,13 +2478,14 @@ function resourceUsageReferenceRow(
     definitionName: resource.compilation.definition.name,
     bindingKind: null,
     dependencyKind: null,
+    resourceUsageKind,
     source,
     targetSource: target.targetSource,
     ...(handles ? {
       handles: {
         observedDependencyProductHandle: null,
         expressionProductHandle: null,
-        bindingProductHandle: null,
+        bindingProductHandle,
         sourceAddressHandle,
         targetSourceAddressHandle: target.sourceAddressHandle,
       },
@@ -2391,25 +2493,171 @@ function resourceUsageReferenceRow(
   };
 }
 
+function expressionResourceReferenceRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  target: ResourceReferenceTarget,
+  handles: boolean,
+): readonly SemanticTemplateReferenceRow[] {
+  if (target.resourceKind === ResourceDefinitionKind.ValueConverter) {
+    return resource.runtimeAnalysis.valueConverter.applications.flatMap((application) =>
+      application.resource != null && visibleResourceReferenceMatchesTarget(store, application.resource, target)
+        ? [resourceUsageReferenceRow(
+            resource,
+            target,
+            application.converterName,
+            describeAddress(store, application.sourceAddressHandle),
+            application.sourceAddressHandle,
+            handles,
+            SemanticTemplateResourceUsageKind.ExpressionName,
+            application.binding.productHandle,
+          )]
+        : []
+    );
+  }
+  if (target.resourceKind === ResourceDefinitionKind.BindingBehavior) {
+    return resource.runtimeAnalysis.bindingBehavior.applications.flatMap((application) =>
+      application.resource != null && visibleResourceReferenceMatchesTarget(store, application.resource, target)
+        ? [resourceUsageReferenceRow(
+            resource,
+            target,
+            application.behaviorName,
+            describeAddress(store, application.sourceAddressHandle),
+            application.sourceAddressHandle,
+            handles,
+            SemanticTemplateResourceUsageKind.ExpressionName,
+            application.binding.productHandle,
+          )]
+        : []
+    );
+  }
+  return [];
+}
+
+function bindingCommandResourceReferenceRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  target: ResourceReferenceTarget,
+  handles: boolean,
+): readonly SemanticTemplateReferenceRow[] {
+  if (target.resourceKind !== ResourceDefinitionKind.BindingCommand) {
+    return [];
+  }
+  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
+    if (syntax.command == null) {
+      return [];
+    }
+    const command = findVisibleTemplateResource(
+      resource.compilation.compilerWorld.resourceScope,
+      ResourceDefinitionKind.BindingCommand,
+      syntax.command.toLowerCase(),
+    );
+    if (command == null || !visibleResourceMatchesTarget(store, command, target)) {
+      return [];
+    }
+    return [resourceUsageReferenceRow(
+      resource,
+      target,
+      syntax.command,
+      describeAddress(store, syntax.commandSourceAddressHandle),
+      syntax.commandSourceAddressHandle,
+      handles,
+      SemanticTemplateResourceUsageKind.BindingCommandName,
+    )];
+  });
+}
+
+function attributePatternResourceReferenceRows(
+  store: KernelStore,
+  resource: TemplateResourceEmission,
+  target: ResourceReferenceTarget,
+  handles: boolean,
+): readonly SemanticTemplateReferenceRow[] {
+  if (target.resourceKind !== ResourceDefinitionKind.AttributePattern || target.definitionProductHandle == null) {
+    return [];
+  }
+  return resource.compilation.attributeSyntax.syntaxes.flatMap((syntax): readonly SemanticTemplateReferenceRow[] => {
+    const compiledPattern = syntax.compiledPatternProductHandle == null
+      ? null
+      : store.productDetails.read(
+          TemplateProductDetails.CompiledAttributePattern,
+          syntax.compiledPatternProductHandle,
+        );
+    const executable = compiledPattern?.executableProductHandle == null
+      ? null
+      : store.productDetails.read(
+          TemplateProductDetails.AttributePatternExecutable,
+          compiledPattern.executableProductHandle,
+        );
+    if (executable?.definitionProductHandle !== target.definitionProductHandle) {
+      return [];
+    }
+    return syntax.patternLiterals.map((literal) => resourceUsageReferenceRow(
+      resource,
+      target,
+      literal.value,
+      describeAddress(store, literal.sourceAddressHandle),
+      literal.sourceAddressHandle,
+      handles,
+      SemanticTemplateResourceUsageKind.AttributePatternLiteral,
+    ));
+  });
+}
+
+function visibleResourceReferenceMatchesTarget(
+  store: KernelStore,
+  resource: TemplateVisibleResourceReference,
+  target: ResourceReferenceTarget,
+): boolean {
+  return resourceIdentityMatchesTarget(
+    store,
+    resource.resourceKind,
+    [resource.name],
+    resource.definitionProductHandle,
+    resource.sourceAddressHandle,
+    target,
+  );
+}
+
 function visibleResourceMatchesTarget(
   store: KernelStore,
   resource: TemplateResourceEmission['compilation']['compilerWorld']['resourceScope']['resources'][number],
   target: ResourceReferenceTarget,
 ): boolean {
-  if (!resourceKindsShareRegistrationIdentity(resource.resourceKind, target.resourceKind)) {
-    return false;
-  }
-  if (resource.definitionProductHandle != null && target.definitionProductHandle != null) {
-    return resource.definitionProductHandle === target.definitionProductHandle;
-  }
   const definitionSourceAddressHandle = resource.definition == null
     ? null
     : 'nameSourceAddressHandle' in resource.definition
-      ? resource.definition.nameSourceAddressHandle ?? resource.definition.sourceAddressHandle
+      ? resource.definition.nameSourceAddressHandle
+        ?? resource.definition.target.addressHandle
+        ?? resource.definition.sourceAddressHandle
       : resource.definition.sourceAddressHandle;
+  return resourceIdentityMatchesTarget(
+    store,
+    resource.resourceKind,
+    [resource.name, ...resource.aliases],
+    resource.definitionProductHandle,
+    definitionSourceAddressHandle,
+    target,
+  );
+}
+
+function resourceIdentityMatchesTarget(
+  store: KernelStore,
+  resourceKind: ResourceDefinitionKind,
+  names: readonly string[],
+  definitionProductHandle: ProductHandle | null,
+  definitionSourceAddressHandle: AddressHandle | null,
+  target: ResourceReferenceTarget,
+): boolean {
+  if (!resourceKindsShareRegistrationIdentity(resourceKind, target.resourceKind)) {
+    return false;
+  }
+  if (definitionProductHandle != null && target.definitionProductHandle != null) {
+    return definitionProductHandle === target.definitionProductHandle;
+  }
   const definitionSource = semanticExactSourceReference(describeAddress(store, definitionSourceAddressHandle));
   return sourceReferencesMatchExactSpan(definitionSource, target.targetSource)
-    && [resource.name, ...resource.aliases].some((name) => name.toLowerCase() === target.selectedName.toLowerCase());
+    && names.some((name) => name.toLowerCase() === target.selectedName.toLowerCase());
 }
 
 function elementTagNameSources(
@@ -2485,13 +2733,12 @@ function closingTagNameStart(
 function bindableAttributeTokenSource(
   store: KernelStore,
   syntax: TemplateResourceEmission['compilation']['attributeSyntax']['syntaxes'][number],
-  attributeByProduct: ReadonlyMap<NonNullable<TemplateResourceEmission['compilation']['html']['attributes'][number]['productHandle']>, TemplateResourceEmission['compilation']['html']['attributes'][number]>,
   attributeName: string,
 ): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'] } | null {
   if (syntax.target.toLowerCase() !== attributeName.toLowerCase()) {
     return null;
   }
-  return attributeSyntaxTargetTokenSource(store, syntax, attributeByProduct);
+  return attributeSyntaxTargetTokenSource(store, syntax);
 }
 
 function multiBindingSegmentTargetTokenSource(
@@ -2519,32 +2766,16 @@ function multiBindingSegmentTargetTokenSource(
 function attributeSyntaxTargetTokenSource(
   store: KernelStore,
   syntax: TemplateResourceEmission['compilation']['attributeSyntax']['syntaxes'][number],
-  attributeByProduct: ReadonlyMap<NonNullable<TemplateResourceEmission['compilation']['html']['attributes'][number]['productHandle']>, TemplateResourceEmission['compilation']['html']['attributes'][number]>,
 ): { readonly source: SemanticSourceReference; readonly text: string; readonly sourceAddressHandle: NonNullable<SemanticTemplateReferenceRow['handles']>['sourceAddressHandle'] } | null {
-  const attribute = syntax.attribute.productHandle == null
-    ? null
-    : attributeByProduct.get(syntax.attribute.productHandle) ?? null;
-  const nameSourceAddressHandle = attribute?.nameAddressHandle ?? syntax.sourceAddressHandle;
-  const nameSource = semanticExactSourceReference(describeAddress(store, nameSourceAddressHandle));
-  if (nameSource?.path == null || nameSource.start == null) {
-    return null;
-  }
-  const rawNameLower = syntax.rawName.toLowerCase();
-  const targetLower = syntax.target.toLowerCase();
-  const targetStart = rawNameLower.indexOf(targetLower);
-  if (targetStart < 0) {
-    return null;
-  }
-  const start = nameSource.start + targetStart;
-  const end = start + syntax.target.length;
-  const source = sourceSlice(nameSource, start, end, 'name');
+  const sourceAddressHandle = syntax.targetSourceAddressHandle;
+  const source = semanticExactSourceReference(describeAddress(store, sourceAddressHandle));
   if (source == null) {
     return null;
   }
   return {
     source,
-    text: syntax.rawName.slice(targetStart, targetStart + syntax.target.length),
-    sourceAddressHandle: nameSourceAddressHandle,
+    text: syntax.target,
+    sourceAddressHandle,
   };
 }
 

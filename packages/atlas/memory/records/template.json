@@ -239,11 +239,14 @@
         "binding",
         "resources"
       ],
-      "summary": "BuiltInSyntaxCatalogMaterializer and its configured companion are the framework-owned syntax catalog frontier before compiler-world visibility.",
-      "rationale": "Aurelia built-in binding commands, attribute patterns, template controllers, i18n/state syntax, and configured framework registrations become compiler-visible through this catalog substrate. Future binding, forms, interpolation, or authoring work should start here before inventing local syntax availability rules.",
+      "summary": "Built-in and app-registered attribute patterns and binding commands converge through one syntax-executable substrate before compiler-world visibility.",
+      "rationale": "Aurelia framework/plugin catalogs and app-owned compiler resources use different registration carriers but feed the same attribute-pattern and binding-command semantics. SyntaxResourceExecutableMaterializer owns their shared executable and compiled-pattern products; configured built-ins and admitted source registrations decide which entries reach an app compiler world.",
       "guidance": [
         "Inspect built-in syntax catalog materialization before adding framework-owned binding commands, attribute patterns, or package-specific syntax availability.",
         "Keep raw catalog product materialization distinct from configured catalog selection; the configured companion is where registration/configuration pressure belongs.",
+        "Use SyntaxResourceExecutableMaterializer for executable and compiled-pattern products shared by built-in catalogs and app-owned registrations; do not restore separate product publication paths.",
+        "App-owned attribute patterns and binding commands are app-global within a compiler world, but effective registration follows framework carriers: patterns execute into the singleton parser, while commands occupy container resource keys and are selected through the root world's visible registration.",
+        "RegisteredSyntaxResourceMaterializer should preserve exact source definitions, registrations, aliases, references, and duplicate authority. Arbitrary user handler execution remains an explicit open lowering seam until a shared extension interpreter exists.",
         "Use framework.compiler, framework.resources, and framework configuration pressure before deciding a built-in syntax entry is missing or in the wrong package.",
         "`parseBuiltInAttributeSyntax(...)` is the product-free parser for validating generated/source-lowering attributes against the built-in pattern inventory. Do not confuse it with configured compiler-world parsing; app-specific visibility still flows through compiler-world and attribute-syntax materialization.",
         "`builtInBindingCommandExpressionType(...)` exposes the product-free parser entry family for a built-in command value. Use it when source lowerers or previews need to validate generated `.bind`, `.trigger`, `repeat.for`, `.state`, or `.dispatch` values without duplicating command-build policy.",
@@ -259,15 +262,25 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/built-in-syntax-catalog-materializer.ts",
           "symbolName": "BuiltInSyntaxCatalogMaterializer",
-          "line": 192,
-          "summary": "Materializes framework-owned syntax catalog products."
+          "summary": "Materializes framework-owned syntax catalog products through the shared executable substrate."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/built-in-syntax-catalog-materializer.ts",
           "symbolName": "ConfiguredBuiltInSyntaxCatalogMaterializer",
-          "line": 708,
           "summary": "Selects syntax catalogs admitted by framework registrations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/syntax-resource-materializer.ts",
+          "symbolName": "SyntaxResourceExecutableMaterializer",
+          "summary": "Publishes shared attribute-pattern, binding-command, and compiled-pattern products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/registered-syntax-resource-materializer.ts",
+          "symbolName": "RegisteredSyntaxResourceMaterializer",
+          "summary": "Projects effective app-owned compiler-resource registrations into the shared executable catalog."
         },
         {
           "kind": "source",
@@ -345,6 +358,11 @@
           "filePath": "packages/semantic-runtime/src/template/built-in-syntax.ts",
           "symbolName": "allBuiltInAttributePatterns",
           "summary": "Inventory helper for built-in attribute-pattern definitions before configured compiler-world selection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/README.md",
+          "summary": "Owning doctrine for compiler-visible syntax resources and their registration carriers."
         }
       ],
       "liveChecks": [
@@ -361,10 +379,24 @@
           "filePath": "packages/semantic-runtime/src/template/built-in-syntax-catalog-materializer.ts",
           "minLineCount": 180,
           "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "SyntaxResourceExecutableMaterializer",
+          "filePath": "packages/semantic-runtime/src/template/syntax-resource-materializer.ts",
+          "minLineCount": 100,
+          "minMethodCount": 2
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RegisteredSyntaxResourceMaterializer",
+          "filePath": "packages/semantic-runtime/src/template/registered-syntax-resource-materializer.ts",
+          "minLineCount": 120,
+          "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:template-compilation-project-pass",

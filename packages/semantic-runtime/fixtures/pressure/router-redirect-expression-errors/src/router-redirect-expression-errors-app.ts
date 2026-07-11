@@ -1,6 +1,8 @@
 import { route } from '@aurelia/router';
+import { customElement } from '@aurelia/runtime-html';
 import { OtherRoute } from './routes/other-route';
 import { TargetRoute } from './routes/target-route';
+import template from './router-redirect-expression-errors-app.html';
 
 @route({
   title: 'Router Redirect Expression Errors Pressure',
@@ -25,4 +27,5 @@ import { TargetRoute } from './routes/target-route';
     },
   ],
 })
+@customElement({ name: 'router-redirect-expression-errors-app', template })
 export class RouterRedirectExpressionErrorsApp {}

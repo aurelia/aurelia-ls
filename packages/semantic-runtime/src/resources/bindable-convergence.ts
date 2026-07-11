@@ -14,6 +14,7 @@ import {
   compactFieldProvenance,
 } from '../kernel/provenance.js';
 import {
+  authoredStringLiteralNode,
   EvaluationRead,
   readStaticStringValue,
 } from '../evaluation/expression-reader.js';
@@ -590,40 +591,10 @@ function readObjectStringFieldSource(
   if (property == null || property.value.kind !== EvaluationValueKind.String) {
     return null;
   }
-  const sourceNode = stringLiteralValueNode(property.value, property.node);
+  const sourceNode = authoredStringLiteralNode(property.value, property.value.node, property.node);
   return sourceNode == null
     ? null
     : sourceSpanEvidenceForNode(store, context, sourceNode, local, SourceSpanRole.Name);
-}
-
-function stringLiteralValueNode(
-  value: EvaluationValue,
-  owningNode: ts.Node | null,
-): ts.Node | null {
-  if (
-    value.kind !== EvaluationValueKind.String
-    || value.node == null
-    || !ts.isStringLiteralLike(value.node)
-  ) {
-    return null;
-  }
-  return owningNode == null || nodeContains(owningNode, value.node)
-    ? value.node
-    : null;
-}
-
-function nodeContains(
-  parent: ts.Node,
-  node: ts.Node,
-): boolean {
-  let current: ts.Node | undefined = node;
-  while (current != null) {
-    if (current === parent) {
-      return true;
-    }
-    current = current.parent;
-  }
-  return false;
 }
 
 function bindableSourceRecords(
@@ -760,6 +731,7 @@ function publishBindableIssueEntry(
     message,
     frameworkErrorCode,
     source?.addressHandle ?? null,
+    [],
   );
   return {
     bindable: null,

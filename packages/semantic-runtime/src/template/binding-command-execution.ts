@@ -244,7 +244,7 @@ export class BindingCommandExecutable {
     /** Runtime DI/resource key for this command. */
     readonly key: string,
     /** Mirrors built-in command behavior that tells the template compiler whether to keep the source attr. */
-    readonly ignoreAttr: boolean,
+    readonly ignoreAttr: boolean | null,
     /** How much of command execution is known to this substrate. */
     readonly executionKind: BindingCommandExecutionKind,
     /** Source address for the command definition or registration. */

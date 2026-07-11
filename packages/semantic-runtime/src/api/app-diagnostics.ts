@@ -335,6 +335,7 @@ function templateAppDiagnosticRow(
     missingInputs: row.missingInputs,
     source: row.source,
     subject: row.subject,
+    relatedInformation: row.relatedInformation,
     suggestion: row.suggestion,
     relatedQueryKind: 'template-diagnostics' satisfies `${SemanticAppQueryKind}`,
   };
@@ -352,6 +353,7 @@ function resourceAppDiagnosticRow(
     severity: row.severity,
     summary: row.message,
     source: row.source,
+    relatedInformation: row.relatedInformation,
     relatedQueryKind: 'resource-issues' satisfies `${SemanticAppQueryKind}`,
   };
 }

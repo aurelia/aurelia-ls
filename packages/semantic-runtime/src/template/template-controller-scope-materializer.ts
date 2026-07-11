@@ -741,13 +741,53 @@ export class TemplateControllerScopeMaterializer {
       ownerIdentityHandle: input.runtimeBindings.rootController.identityHandle,
       parent: null,
       viewModelType: input.definition.target.targetType,
-      bindingContextSlots: this.boundControllerBindingContextSlots(
+      bindingContextSlots: this.definitionBindingContextSlots(
         input,
+        input.definition,
         input.runtimeBindings.rootController.productHandle,
-        input.definition.target.targetType,
       ),
       sourceAddressHandle: input.definition.sourceAddressHandle,
     }));
+  }
+
+  private definitionBindingContextSlots(
+    input: TemplateScopeConstructionRequest,
+    definition: CustomElementDefinition,
+    controllerProductHandle: ProductHandle | null,
+  ): readonly BindingContextSlotDraft[] {
+    return [
+      ...this.definitionBindableBindingContextSlots(definition),
+      ...this.boundControllerBindingContextSlots(
+        input,
+        controllerProductHandle,
+        definition.target.targetType,
+      ),
+    ];
+  }
+
+  private definitionBindableBindingContextSlots(
+    definition: CustomElementDefinition,
+  ): readonly BindingContextSlotDraft[] {
+    const contextType = definition.target.targetType;
+    return definition.bindables.map((bindable) => {
+      const declaration = bindingContextSlotDraftForContextTypeMember(
+        this.store,
+        contextType,
+        bindable.name,
+      );
+      return new BindingContextSlotDraft(
+        bindable.name,
+        declaration?.targetIdentityHandle ?? null,
+        declaration?.targetProductHandle ?? null,
+        declaration?.targetType ?? null,
+        bindable.nameSourceAddressHandle ?? declaration?.sourceAddressHandle ?? bindable.sourceAddressHandle,
+        declaration?.fieldProvenance ?? [],
+        declaration?.staticValue ?? null,
+        declaration?.memberTypes ?? [],
+        contextType == null ? BindingContextSlotAssignmentAccessKind.Writable : declaration?.assignmentAccessKind ?? null,
+        declaration?.targetTypeSourceProductHandle ?? null,
+      );
+    });
   }
 
   private boundControllerBindingContextSlots(
@@ -1332,10 +1372,10 @@ export class TemplateControllerScopeMaterializer {
       ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
       parent,
       viewModelType: definition.target.targetType,
-      bindingContextSlots: this.boundControllerBindingContextSlots(
+      bindingContextSlots: this.definitionBindingContextSlots(
         frame.input,
+        definition,
         controller?.productHandle ?? instruction.productHandle,
-        definition.target.targetType,
       ),
       sourceAddressHandle: instruction.sourceAddressHandle,
     }));

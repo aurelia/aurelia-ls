@@ -160,6 +160,75 @@ export function readStaticStringValue(
   }
 }
 
+export interface StaticStringArrayEntryRead {
+  readonly value: string;
+  /** Directly authored literal for this value inside the owning expression, when one exists. */
+  readonly valueNode: ts.StringLiteralLike | null;
+}
+
+/**
+ * Retain exact editable literals while reading a statically closed string array.
+ *
+ * Evaluated values can originate outside the expression that consumes them. Such values remain semantically useful,
+ * but their source is not an owned field token and must not masquerade as one for rename or diagnostics.
+ */
+export function readStaticStringArrayEntries(
+  value: EvaluationValue,
+  owningNode: ts.Node | null,
+): readonly StaticStringArrayEntryRead[] | null {
+  if (value.kind !== EvaluationValueKind.Array || value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
+    return null;
+  }
+  const result: StaticStringArrayEntryRead[] = [];
+  for (const element of value.elements) {
+    const stringValue = readStaticStringValue(element.value);
+    if (stringValue == null) {
+      return null;
+    }
+    result.push({
+      value: stringValue,
+      valueNode: authoredStringLiteralNode(element.value, element.expression, owningNode),
+    });
+  }
+  return result;
+}
+
+/** Read the directly authored literal that owns a statically evaluated string value. */
+export function authoredStringLiteralNode(
+  value: EvaluationValue,
+  expression: ts.Node | null,
+  owningNode: ts.Node | null,
+): ts.StringLiteralLike | null {
+  const candidates = [
+    value.kind === EvaluationValueKind.String ? value.node : null,
+    expression,
+  ];
+  for (const candidate of candidates) {
+    if (
+      candidate != null
+      && ts.isStringLiteralLike(candidate)
+      && (owningNode == null || nodeBelongsTo(candidate, owningNode))
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function nodeBelongsTo(
+  node: ts.Node,
+  owner: ts.Node,
+): boolean {
+  let current: ts.Node | undefined = node;
+  while (current != null) {
+    if (current === owner) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 function classDeclarationForTargetValue(value: EvaluationInstanceValue | Extract<EvaluationValue, { readonly kind: EvaluationValueKind.Class }>): ts.ClassLikeDeclarationBase {
   return value.kind === EvaluationValueKind.Instance
     ? value.classValue.declaration
@@ -169,19 +238,5 @@ function classDeclarationForTargetValue(value: EvaluationInstanceValue | Extract
 export function readStaticStringArrayValue(
   value: EvaluationValue,
 ): readonly string[] | null {
-  if (value.kind !== EvaluationValueKind.Array) {
-    return null;
-  }
-  if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
-    return null;
-  }
-  const result: string[] = [];
-  for (const element of value.elements) {
-    const stringValue = readStaticStringValue(element.value);
-    if (stringValue == null) {
-      return null;
-    }
-    result.push(stringValue);
-  }
-  return result;
+  return readStaticStringArrayEntries(value, null)?.map((entry) => entry.value) ?? null;
 }

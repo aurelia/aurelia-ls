@@ -1,0 +1,8 @@
+<template>
+  <template as-custom-element="local-chip">
+    <bindable name="secondaryLabel" attribute="secondary-label"></bindable>
+    <strong>secondary ${secondaryLabel}</strong>
+  </template>
+
+  <local-chip secondary-label.bind="message"></local-chip>
+</template>

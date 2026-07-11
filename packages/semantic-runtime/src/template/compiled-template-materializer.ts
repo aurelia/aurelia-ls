@@ -15,13 +15,6 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  SourceSpanRole,
-} from '../kernel/address.js';
-import {
-  sourceSpanAddressForAddress,
-  sourceSpanAddressForSite,
-} from '../kernel/source-address.js';
-import {
   CompilerIdentity,
   InstructionIdentity,
 } from '../kernel/identity.js';
@@ -999,6 +992,7 @@ class CompiledTemplateInstructionTraversal {
           identityHandle,
           node.toReference(),
           elementDefinition.name,
+          lookupName,
           this.input.compilerWorld.templateCompiler.resolveResources ? elementDefinition.productHandle : null,
           null,
           projectionGroups.map((group, index) => {
@@ -1307,7 +1301,7 @@ class CompiledTemplateInstructionTraversal {
           TemplateCompilerIssueKind.LocalTemplateNameDuplicate,
           `Template compilation error: duplicate definition of the local template named "${localName}" in element ${rootName}.`,
           TemplateCompilerFrameworkErrorCode.CompilerDuplicateLocalName,
-          nameAttribute?.sourceAddressHandle ?? template.sourceAddressHandle,
+          nameAttribute?.valueAddressHandle ?? nameAttribute?.sourceAddressHandle ?? template.sourceAddressHandle,
         );
       } else {
         names.add(localName);
@@ -1344,15 +1338,20 @@ class CompiledTemplateInstructionTraversal {
         );
         continue;
       }
-      const attribute = this.attributeForElement(bindable, 'attribute')?.rawValue ?? null;
-      if ((attribute != null && attributes.has(attribute)) || properties.has(property)) {
+      const attributeField = this.attributeForElement(bindable, 'attribute');
+      const attribute = attributeField?.rawValue ?? null;
+      const duplicateAttribute = attribute != null && attributes.has(attribute);
+      const duplicateProperty = properties.has(property);
+      if (duplicateAttribute || duplicateProperty) {
         this.assemblyState.addCompilerIssue(
           `local-bindable-duplicate:${bindable.productHandle}`,
           bindable.identityHandle,
           TemplateCompilerIssueKind.LocalTemplateBindableDuplicate,
           `Template compilation error: Bindable property and attribute needs to be unique; found property: ${property}, attribute: ${attribute ?? '(none)'}.`,
           TemplateCompilerFrameworkErrorCode.CompilerLocalElementBindableDuplicate,
-          bindable.sourceAddressHandle,
+          duplicateAttribute
+            ? attributeField?.valueAddressHandle ?? attributeField?.sourceAddressHandle ?? bindable.sourceAddressHandle
+            : propertyAttribute?.valueAddressHandle ?? propertyAttribute?.sourceAddressHandle ?? bindable.sourceAddressHandle,
         );
       } else {
         if (attribute != null) {
@@ -1634,7 +1633,7 @@ class CompiledTemplateInstructionTraversal {
           TemplateCompilerIssueKind.InvalidLetCommand,
           `Template compilation error: Invalid command ".${syntax.command ?? ''}" for <let>. Use .bind or remove the command`,
           TemplateCompilerFrameworkErrorCode.CompilerInvalidLetCommand,
-          syntax.sourceAddressHandle,
+          syntax.commandSourceAddressHandle ?? syntax.sourceAddressHandle,
         );
         continue;
       }
@@ -1648,7 +1647,7 @@ class CompiledTemplateInstructionTraversal {
       const literalValue = classification?.bindingCommand == null && site == null
         ? syntax.rawValue
         : null;
-      const targetSourceAddressHandle = this.letBindingTargetSourceAddressHandle(attribute, syntax);
+      const targetSourceAddressHandle = syntax.targetSourceAddressHandle;
       result.push(this.assemblyState.createInstruction(
         `let-binding:${attribute.productHandle}`,
         TemplateInstructionKind.LetBinding,
@@ -1669,37 +1668,6 @@ class CompiledTemplateInstructionTraversal {
       ));
     }
     return result;
-  }
-
-  private letBindingTargetSourceAddressHandle(
-    attribute: HtmlAttribute,
-    syntax: AttributeSyntax,
-  ): AddressHandle | null {
-    const nameSource = sourceSpanAddressForAddress(this.assemblyState.store, attribute.nameAddressHandle);
-    if (nameSource == null) {
-      return null;
-    }
-    const targetStart = syntax.rawName.toLowerCase().indexOf(syntax.target.toLowerCase());
-    if (targetStart < 0) {
-      return null;
-    }
-    const source = sourceSpanAddressForSite(
-      this.assemblyState.store,
-      [
-        'compiled-template',
-        this.input.localKey,
-        'let-binding-target',
-        attribute.productHandle,
-      ].join(':'),
-      {
-        sourceFileAddressHandle: nameSource.fileHandle,
-        start: nameSource.start + targetStart,
-        end: nameSource.start + targetStart + syntax.target.length,
-      },
-      SourceSpanRole.Name,
-    );
-    this.assemblyState.records.push(...source.records);
-    return source.handle;
   }
 
   private surrogateInstructionsForTemplateElement(node: HtmlElement): readonly TemplateInstruction[] {
@@ -1768,7 +1736,7 @@ class CompiledTemplateInstructionTraversal {
             TemplateCompilerIssueKind.TemplateControllerOnSurrogate,
             `Template compilation error: template controller "${syntax?.target ?? classification.resource?.name ?? '(unknown)'}" is invalid on element surrogate.`,
             TemplateCompilerFrameworkErrorCode.CompilerNoTemplateControllerOnSurrogate,
-            classification.sourceAddressHandle,
+            syntax?.targetSourceAddressHandle ?? classification.sourceAddressHandle,
           );
           break;
         case AttributeClassificationKind.Bindable:

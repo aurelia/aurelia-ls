@@ -6,7 +6,8 @@ import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
-  readStaticStringArrayValue,
+  authoredStringLiteralNode,
+  readStaticStringArrayEntries,
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
@@ -14,11 +15,12 @@ import type { EvaluationOpenSeam } from '../evaluation/seams.js';
 import {
   type EvaluationArrayElement,
   type EvaluationArrayValue,
-  type EvaluationValue,
+  type EvaluationObjectValue,
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import {
   AttributePatternObservation,
+  ResourceAliasObservation,
 } from './resource-observation.js';
 import {
   ResourceDefinitionKind,
@@ -157,26 +159,29 @@ export function readResourceNameField(
       value.node,
       summaryWithEvaluationSeams('Resource definition name did not close to a static string.', value.openSeams),
     )
-    : new ResourceFieldRead(name, value.node, null, resourceNameLiteralValueNode(value.value, value.node));
+    : new ResourceFieldRead(name, value.node, null, authoredStringLiteralNode(value.value, value.value.node, value.node));
 }
 
 export function readResourceAliasesField(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): ResourceFieldRead<readonly string[]> {
+): ResourceFieldRead<readonly ResourceAliasObservation[]> {
   const value = reader.readObjectProperty(expression, 'aliases');
   if (value.value == null) {
     return new ResourceFieldRead([], value.node);
   }
-  const aliases = readStaticStringArrayValue(value.value);
-  if (aliases == null) {
+  const entries = readStaticStringArrayEntries(value.value, value.node);
+  if (entries == null) {
     return new ResourceFieldRead(
       [],
       value.node,
       summaryWithEvaluationSeams('Resource aliases field did not close to a static string array.', value.openSeams),
     );
   }
-  return new ResourceFieldRead(aliases, value.node);
+  return new ResourceFieldRead(
+    entries.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)),
+    value.node,
+  );
 }
 
 export function readTemplateControllerFlag(
@@ -201,19 +206,18 @@ export function readAttributePatternEntries(
     );
   }
 
-  const entries = readAttributePatternArray(value, expression, reader);
+  const entries = readAttributePatternArray(value, expression);
   return attributePatternEntriesFieldRead(entries, expression, result.openSeams);
 }
 
 function readAttributePatternArray(
   value: EvaluationArrayValue,
   sourceExpression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
 ): AttributePatternEntriesRead {
   const patterns: AttributePatternObservation[] = [];
   let open = value.mayHaveUnknownElements || value.mayHaveUnknownOrder;
   for (const element of value.elements) {
-    const entry = readAttributePatternArrayElement(element, sourceExpression, reader);
+    const entry = readAttributePatternArrayElement(element, sourceExpression);
     open ||= entry.open;
     if (entry.pattern == null) {
       continue;
@@ -226,56 +230,48 @@ function readAttributePatternArray(
 function readAttributePatternArrayElement(
   element: EvaluationArrayElement,
   sourceExpression: ts.Expression,
-  reader: StaticEvaluationExpressionReader,
 ): AttributePatternEntryRead {
   if (element.value.kind !== EvaluationValueKind.Object) {
     return { pattern: null, open: true };
   }
 
-  const pattern = reader.readObjectStringProperty(element.value, 'pattern');
-  const symbols = reader.readObjectStringProperty(element.value, 'symbols');
-  if (pattern?.value == null || symbols?.value == null) {
+  const pattern = attributePatternObservationFromObject(
+    element.value,
+    element.expression ?? sourceExpression,
+  );
+  if (pattern == null) {
     return { pattern: null, open: true };
   }
 
   return {
-    pattern: new AttributePatternObservation(
-      pattern.value,
-      symbols.value,
-      pattern.node ?? element.expression ?? sourceExpression,
-    ),
+    pattern,
     open: false,
   };
 }
 
-function resourceNameLiteralValueNode(
-  value: EvaluationValue,
-  owningNode: ts.Node | null,
-): ts.Node | null {
-  if (
-    value.kind !== EvaluationValueKind.String
-    || value.node == null
-    || !ts.isStringLiteralLike(value.node)
-  ) {
+function attributePatternObservationFromObject(
+  value: EvaluationObjectValue,
+  sourceExpression: ts.Expression,
+): AttributePatternObservation | null {
+  const patternProperty = value.properties.get('pattern') ?? null;
+  const symbolsProperty = value.properties.get('symbols') ?? null;
+  if (patternProperty == null || symbolsProperty == null) {
     return null;
   }
-  return owningNode == null || nodeContains(owningNode, value.node)
-    ? value.node
-    : null;
-}
-
-function nodeContains(
-  parent: ts.Node,
-  node: ts.Node,
-): boolean {
-  let current: ts.Node | undefined = node;
-  while (current != null) {
-    if (current === parent) {
-      return true;
-    }
-    current = current.parent;
+  const pattern = readStaticStringValue(patternProperty.value);
+  const symbols = readStaticStringValue(symbolsProperty.value);
+  if (pattern == null || symbols == null) {
+    return null;
   }
-  return false;
+  return new AttributePatternObservation(
+    pattern,
+    symbols,
+    authoredStringLiteralNode(
+      patternProperty.value,
+      patternProperty.value.node,
+      patternProperty.node ?? sourceExpression,
+    ) ?? patternProperty.node ?? sourceExpression,
+  );
 }
 
 function attributePatternEntriesFieldRead(
@@ -308,9 +304,8 @@ export function readAttributePatternEntry(
       summaryWithEvaluationSeams('Attribute pattern definition did not close to an object.', result.openSeams),
     );
   }
-  const pattern = reader.readObjectStringProperty(value, 'pattern');
-  const symbols = reader.readObjectStringProperty(value, 'symbols');
-  if (pattern?.value == null || symbols?.value == null) {
+  const pattern = attributePatternObservationFromObject(value, expression);
+  if (pattern == null) {
     return new ResourceFieldRead<AttributePatternObservation>(
       null,
       expression,
@@ -321,7 +316,7 @@ export function readAttributePatternEntry(
     );
   }
   return new ResourceFieldRead(
-    new AttributePatternObservation(pattern.value, symbols.value, pattern.node ?? expression),
+    pattern,
     expression,
   );
 }

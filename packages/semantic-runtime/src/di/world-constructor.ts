@@ -1223,12 +1223,18 @@ export class DiWorldConstructor {
       return new DiResourceSlotEmission(seam.records, [], [], [seam.seam]);
     }
 
+    // AttributePattern.register mutates the app-global IAttributeParser; it has no runtime resource key for DI to spend.
+    if (definition.type === ResourceDefinitionKind.AttributePattern) {
+      return new DiResourceSlotEmission([], [], [], []);
+    }
+
     const names = resourceLookupNames(definition, admission.resourceLookupNameOverride);
     names.forEach((name, index) => {
       const slot = this.resourceSlotPublication.recordsForResourceDefinitionSlot(
         container,
         definition,
         name,
+        admission.sourceAddressHandle,
         `${local}:${index}`,
         provenanceHandle,
         projectKey,
@@ -1295,6 +1301,7 @@ export class DiWorldConstructor {
           container,
           resource,
           name,
+          admission.sourceAddressHandle,
           `${local}:${resourceIndex}:${nameIndex}`,
           provenanceHandle,
           projectKey,

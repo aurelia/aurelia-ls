@@ -1369,6 +1369,10 @@ function templateCompilerIssueDiagnosticRowsForSelection(
       source,
       issue.severity,
     );
+    const relatedInformation = issue.relatedInformation.flatMap((related) => {
+      const relatedSource = describeAddress(store, related.sourceAddressHandle);
+      return relatedSource == null ? [] : [{ message: related.message, source: relatedSource }];
+    });
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -1376,6 +1380,7 @@ function templateCompilerIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...(relatedInformation.length === 0 ? {} : { relatedInformation }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1639,6 +1644,7 @@ function templateCompilerIssues(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateCompilerIssue[] {
   return [
+    ...resource.compilation.compilerWorld.issues,
     ...resource.compilation.attributeClassification.issues,
     ...resource.compilation.bindingCommandLowering.issues,
     ...resource.compilation.compiledTemplate.issues,
@@ -2132,7 +2138,12 @@ function templateCursorInfoResult(
     },
     html,
     valueSite,
-    selectedDefinition: cursorDefinitionRow(store, query.selectedDefinitionProductHandle, includeHandles),
+    selectedDefinition: cursorDefinitionRow(
+      store,
+      query.selectedDefinitionProductHandle,
+      cursorContext.selectedDefinitionMatchedName,
+      includeHandles,
+    ),
     selectedBindable: cursorBindableRow(store, cursorContext.selectedBindable, includeHandles),
     selectedMemberName: cursorContext.selectedMemberName,
     selectedMember,
@@ -2216,6 +2227,7 @@ function cursorValueSiteRow(
 function cursorDefinitionRow(
   store: KernelStore,
   productHandle: TemplateCompletionCursorContext['query']['selectedDefinitionProductHandle'],
+  matchedName: string | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorDefinitionRow | null {
   const definition = productHandle == null
@@ -2224,20 +2236,24 @@ function cursorDefinitionRow(
   if (definition == null) {
     return null;
   }
-  return definitionRow(store, definition, includeHandles);
+  return definitionRow(store, definition, matchedName, includeHandles);
 }
 
 function definitionRow(
   store: KernelStore,
   definition: FullResourceDefinition,
+  selectedName: string | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorDefinitionRow {
+  const matched = matchedResourceName(definition, selectedName);
   return {
     resourceKind: taxonomyResourceKindForDefinition(definition),
     name: 'name' in definition ? definition.name : null,
+    matchedName: matched.name,
     targetName: 'target' in definition ? definition.target.localName : null,
     source: describeAddress(store, definition.sourceAddressHandle),
     nameSource: describeAddress(store, definitionNameSourceAddressHandle(definition)),
+    matchedNameSource: describeAddress(store, matched.sourceAddressHandle),
     targetSource: describeAddress(store, definition.target.addressHandle),
     ...(includeHandles ? {
       handles: {
@@ -2245,10 +2261,28 @@ function definitionRow(
         identityHandle: definition.identityHandle,
         sourceAddressHandle: definition.sourceAddressHandle,
         nameSourceAddressHandle: definitionNameSourceAddressHandle(definition),
+        matchedNameSourceAddressHandle: matched.sourceAddressHandle,
         targetAddressHandle: definition.target.addressHandle,
       },
     } : {}),
   };
+}
+
+function matchedResourceName(
+  definition: FullResourceDefinition,
+  selectedName: string | null,
+): { readonly name: string | null; readonly sourceAddressHandle: AddressHandle | null } {
+  if (selectedName == null || !('name' in definition)) {
+    return { name: null, sourceAddressHandle: null };
+  }
+  const normalized = selectedName.toLowerCase();
+  const alias = definition.aliases.find((candidate) => candidate.name.toLowerCase() === normalized) ?? null;
+  if (alias != null) {
+    return { name: alias.name, sourceAddressHandle: alias.addressHandle };
+  }
+  return definition.name.toLowerCase() === normalized
+    ? { name: definition.name, sourceAddressHandle: definitionNameSourceAddressHandle(definition) }
+    : { name: selectedName, sourceAddressHandle: null };
 }
 
 function definitionNameSourceAddressHandle(

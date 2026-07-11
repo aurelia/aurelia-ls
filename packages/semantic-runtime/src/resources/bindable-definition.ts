@@ -81,6 +81,7 @@ export const enum BindableContributionKind {
   RuntimePartial = 'runtime-partial',
   InheritedMetadata = 'inherited-metadata',
   Convention = 'convention',
+  LocalTemplate = 'local-template',
 }
 
 export class BindableDefinitionContribution {

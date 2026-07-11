@@ -106,6 +106,7 @@ import {
 } from './resource-convention.js';
 import {
   type ResourceRecognitionObservation,
+  type ResourceAliasObservation,
   type ResourceTargetObservation,
   resourceTargetClassLikeNode,
 } from './resource-observation.js';
@@ -122,8 +123,10 @@ import {
   type HtmlTemplateMetadataImport,
 } from './html-template-metadata.js';
 import {
+  mergeResourceAliasObservations,
   readAliasMetadataAnnotations,
   readCustomElementMetadataAnnotations,
+  readStaticAliasMetadata,
 } from './resource-metadata-annotations.js';
 import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
@@ -143,6 +146,7 @@ import {
   externalTemplateSourceAddress,
   sourceFileAddressHandleForNode,
   sourceSpanAddressForNode,
+  sourceSpanEvidenceForNode,
   sourceSpanRangeForNode,
   templateCarrierExpression,
   templateMarkupSourceAddress,
@@ -157,13 +161,11 @@ import {
   dependencyReferenceForFunction,
   memberName,
   memberNameNode,
-  mergeAliases,
   nullableConvergenceOpenForNode,
   openIfPresent,
   readBooleanField,
   readFieldValue,
   readObjectProperty,
-  readStaticStringArrayClassProperty,
   readStringField,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
@@ -267,6 +269,13 @@ class ResourceAliasClaimEmission {
   ) {}
 }
 
+class ResourceAliasMaterialization {
+  constructor(
+    readonly definitions: readonly ResourceAliasDefinition[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
 type AliasableResourceDefinitionHeader =
   | CustomElementDefinitionHeader
   | CustomAttributeDefinitionHeader
@@ -279,6 +288,7 @@ interface CustomElementConvergenceFacts {
   readonly target: ResourceTargetReference;
   readonly name: string;
   readonly aliasDefinitions: readonly ResourceAliasDefinition[];
+  readonly aliasRecords: readonly KernelStoreRecord[];
   readonly key: string;
   readonly capture: CustomElementCaptureDefinition;
   readonly template: TemplateDefinitionRead;
@@ -328,10 +338,10 @@ class CustomElementConvergenceFrame {
 
     const bindables = this.readBindables();
     const watches = this.readWatches();
-    const aliases = mergeAliases(
+    const aliases = mergeResourceAliasObservations(
       this.annotations.aliases,
       this.definition.aliases,
-      readStaticStringArrayClassProperty(this.context, this.targetClass, 'aliases'),
+      readStaticAliasMetadata(this.context, this.targetClass),
     );
     const capture = this.annotations.capture
       ?? readCustomElementCapture(this.context, this.definitionExpression, this.targetClass);
@@ -346,14 +356,18 @@ class CustomElementConvergenceFrame {
     const controllerIssue = this.readControllerIssue(containerless, shadowOptions, hasSlots);
     const processContent = this.readProcessContent();
     const decoratorIssues = this.readDecoratorIssues();
-    const aliasDefinitions = aliases.map((alias) =>
-      new ResourceAliasDefinition(alias, this.header.sourceAddressHandle, this.provenanceHandle)
+    const aliasMaterialization = materializeResourceAliases(
+      this.store,
+      this.context,
+      `${this.localPrefix}:alias`,
+      aliases,
     );
 
     return {
       target,
       name,
-      aliasDefinitions,
+      aliasDefinitions: aliasMaterialization.definitions,
+      aliasRecords: aliasMaterialization.records,
       key,
       capture,
       template,
@@ -612,6 +626,32 @@ class CustomElementConvergenceFrame {
   }
 }
 
+function materializeResourceAliases(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  aliases: readonly ResourceAliasObservation[],
+): ResourceAliasMaterialization {
+  const definitions: ResourceAliasDefinition[] = [];
+  const records: KernelStoreRecord[] = [];
+  aliases.forEach((alias, index) => {
+    const source = sourceSpanEvidenceForNode(
+      store,
+      context,
+      alias.node,
+      `${local}:${index}`,
+      SourceSpanRole.Name,
+    );
+    definitions.push(new ResourceAliasDefinition(
+      alias.name,
+      source?.addressHandle ?? null,
+      source?.provenanceHandle ?? null,
+    ));
+    records.push(...(source?.records ?? []));
+  });
+  return new ResourceAliasMaterialization(definitions, records);
+}
+
 function emptyResourceAliasClaims(): ResourceAliasClaimsEmission {
   return new ResourceAliasClaimsEmission([], []);
 }
@@ -639,10 +679,10 @@ function aliasesForDefinition(
 }
 
 function newAliasNames(
-  headerAliases: readonly string[],
+  headerAliases: readonly ResourceAliasObservation[],
   aliases: readonly ResourceAliasDefinition[],
 ): readonly string[] {
-  const seenHeaderAliases = new Set(headerAliases);
+  const seenHeaderAliases = new Set(headerAliases.map((alias) => alias.name));
   return aliases
     .map((alias) => alias.name)
     .filter((alias) => !seenHeaderAliases.has(alias));
@@ -858,6 +898,7 @@ export class ResourceDefinitionConverger {
       facts.open,
       [
         ...(nameSource?.records ?? []),
+        ...facts.aliasRecords,
         ...facts.template.records,
         ...facts.bindables.records,
         ...facts.watches.records,
@@ -968,7 +1009,16 @@ export class ResourceDefinitionConverger {
       provenanceHandle,
       WatchDefinitionObjectWatchesPolicy.Ignore,
     );
-    const aliases = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
+    const aliases = materializeResourceAliases(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:alias`,
+      mergeResourceAliasObservations(
+        annotations.aliases,
+        definition.aliases,
+        readStaticAliasMetadata(context, targetClass),
+      ),
+    );
     const isTemplateController = definition.type === ResourceDefinitionKind.TemplateController
       || readBooleanField(context, definitionExpression, targetClass, 'isTemplateController') === true;
     const noMultiBindings = readBooleanField(context, definitionExpression, targetClass, 'noMultiBindings') ?? false;
@@ -982,7 +1032,6 @@ export class ResourceDefinitionConverger {
       ...dependencies.open,
     ];
     const nameSource = this.nameSourceForDefinition(context, definition, header);
-    const aliasDefinitions = aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
     return new ConvergedResourceDefinition(
       new CustomAttributeDefinition(
         productHandle,
@@ -990,7 +1039,7 @@ export class ResourceDefinitionConverger {
         header.sourceAddressHandle,
         target,
         name,
-        aliasDefinitions,
+        aliases.definitions,
         key,
         isTemplateController,
         bindables.bindables,
@@ -1004,7 +1053,7 @@ export class ResourceDefinitionConverger {
             namedResourceContributionKindForCarrier(observation.carrierKind),
             target,
             name,
-            aliasDefinitions,
+            aliases.definitions,
             key,
             isTemplateController,
             bindables.contributions,
@@ -1019,7 +1068,7 @@ export class ResourceDefinitionConverger {
         nameSource?.addressHandle ?? null,
       ),
       open,
-      [...(nameSource?.records ?? []), ...bindables.records, ...watches.records],
+      [...(nameSource?.records ?? []), ...aliases.records, ...bindables.records, ...watches.records],
       [...bindables.issues, ...watches.issues],
     );
   }
@@ -1049,8 +1098,16 @@ export class ResourceDefinitionConverger {
 
     const targetClass = resourceTargetClassLikeNode(definition.target);
     const annotations = readAliasMetadataAnnotations(context, targetClass);
-    const aliasNames = mergeAliases(annotations.aliases, definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
-    const aliases = aliasNames.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
+    const aliases = materializeResourceAliases(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:alias`,
+      mergeResourceAliasObservations(
+        annotations.aliases,
+        definition.aliases,
+        readStaticAliasMetadata(context, targetClass),
+      ),
+    );
     const nameSource = this.nameSourceForDefinition(context, definition, header);
     switch (definition.type) {
       case ResourceDefinitionKind.ValueConverter: {
@@ -1061,14 +1118,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new ValueConverterDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new ValueConverterDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
             [],
             nameSource?.addressHandle ?? null,
           ),
           annotations.open,
-          nameSource?.records ?? [],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       case ResourceDefinitionKind.BindingBehavior: {
@@ -1079,14 +1136,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new BindingBehaviorDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new BindingBehaviorDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
             [],
             nameSource?.addressHandle ?? null,
           ),
           annotations.open,
-          nameSource?.records ?? [],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       case ResourceDefinitionKind.BindingCommand: {
@@ -1097,14 +1154,14 @@ export class ResourceDefinitionConverger {
             header.sourceAddressHandle,
             target,
             name,
-            aliases,
+            aliases.definitions,
             key,
-            [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases, key)],
+            [new BindingCommandDefinitionContribution(namedResourceContributionKindForCarrier(observation.carrierKind), target, name, aliases.definitions, key)],
             [],
             nameSource?.addressHandle ?? null,
           ),
           annotations.open,
-          nameSource?.records ?? [],
+          [...(nameSource?.records ?? []), ...aliases.records],
         );
       }
       default:
@@ -1124,10 +1181,10 @@ export class ResourceDefinitionConverger {
       return null;
     }
 
-    const entries = definition.patterns.map((pattern) => new AttributePatternDefinitionEntry(
+    const entries = definition.patterns.map((pattern, index) => new AttributePatternDefinitionEntry(
       pattern.pattern,
       pattern.symbols,
-      header.sourceAddressHandle,
+      header.lookupNameSourceAddressHandles[index] ?? null,
       provenanceHandle,
     ));
     return new ConvergedResourceDefinition(
@@ -1561,6 +1618,7 @@ function readCustomElementControllerNoShadowOnContainerlessIssue(
     'Containerless custom elements cannot request Shadow DOM or slot projection.',
     ResourceFrameworkErrorCode.ControllerNoShadowOnContainerless,
     source?.addressHandle ?? null,
+    [],
   );
   return new ResourceIssuePublication(
     publication.issue,
@@ -2002,6 +2060,7 @@ function publishResourceIssue(
     message,
     frameworkErrorCode,
     source?.addressHandle ?? null,
+    [],
   );
   return new ResourceIssuePublication(
     publication.issue,

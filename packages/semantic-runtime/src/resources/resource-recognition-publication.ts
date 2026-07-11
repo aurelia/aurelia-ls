@@ -50,6 +50,7 @@ import type { ResourceRecognitionContext } from './resource-recognition-context.
 import type { ResourceRecognitionEmissionPhaseName } from './resource-recognition-kernel-emitter.js';
 import {
   type AttributePatternObservation,
+  type ResourceAliasObservation,
   type ResourceTargetObservation,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
@@ -59,12 +60,14 @@ import {
 } from './resource-kind.js';
 import { toAureliaResourceDeclarationKind } from './named-resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
+import { sourceSpanRangeForNode } from './resource-source-address.js';
 
 class ResourceIdentityPublication {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly identityHandle: IdentityHandle,
     readonly claimHandle: ClaimHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
   ) {}
 }
 
@@ -73,6 +76,7 @@ export class ResourceIdentityPublicationSet {
     readonly records: readonly KernelStoreRecord[],
     readonly primaryIdentityHandle: IdentityHandle | null,
     readonly claimHandles: readonly ClaimHandle[],
+    readonly sourceAddressHandles: readonly (AddressHandle | null)[],
   ) {}
 }
 
@@ -137,7 +141,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const definition = observation.definition;
     if (definition == null) {
-      return new ResourceIdentityPublicationSet([], null, []);
+      return new ResourceIdentityPublicationSet([], null, [], []);
     }
     if (definition instanceof AttributePatternDefinitionHeader) {
       return this.recordsForAttributePatternIdentities(
@@ -271,6 +275,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     const resourceKind = definition.type;
     const primaryNames = primaryResourceNames(definition);
@@ -286,6 +291,7 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle ??= publication.identityHandle;
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
 
       if (nameIndex === 0 && name != null) {
@@ -298,6 +304,7 @@ export class ResourceRecognitionPublicationSupport {
           provenanceHandle,
         );
         claimHandles.push(...aliases.claimHandles);
+        sourceAddressHandles.push(...aliases.sourceAddressHandles);
         records.push(...aliases.records);
       }
     });
@@ -315,10 +322,11 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle = publication.identityHandle;
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     }
 
-    return new ResourceIdentityPublicationSet(records, primaryIdentityHandle, claimHandles);
+    return new ResourceIdentityPublicationSet(records, primaryIdentityHandle, claimHandles, sourceAddressHandles);
   }
 
   private publishNamedResourceIdentity(
@@ -351,6 +359,7 @@ export class ResourceRecognitionPublicationSupport {
       ],
       identityHandle,
       claimHandle,
+      null,
     );
   }
 
@@ -365,6 +374,7 @@ export class ResourceRecognitionPublicationSupport {
   ): ResourceIdentityPublicationSet {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     definition.patterns.forEach((pattern, patternIndex) => {
       const publication = this.publishAttributePatternIdentity(
@@ -378,6 +388,7 @@ export class ResourceRecognitionPublicationSupport {
       );
       primaryIdentityHandle ??= publication.identityHandle;
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     });
 
@@ -385,6 +396,7 @@ export class ResourceRecognitionPublicationSupport {
       records,
       definition.patterns.length === 1 ? primaryIdentityHandle : null,
       claimHandles,
+      sourceAddressHandles,
     );
   }
 
@@ -413,6 +425,7 @@ export class ResourceRecognitionPublicationSupport {
       ),
       identityHandle,
       claimHandle,
+      addressHandle,
     );
   }
 
@@ -426,12 +439,16 @@ export class ResourceRecognitionPublicationSupport {
     declarationIdentityHandle: IdentityHandle | null,
     provenanceHandle: ProvenanceHandle,
   ): readonly KernelStoreRecord[] {
+    const span = sourceSpanRangeForNode(context.sourceFile, pattern.node);
+    if (span == null) {
+      throw new Error('Attribute-pattern source node did not produce a valid authored span.');
+    }
     return [
       new SourceSpanAddress(
         addressHandle,
         context.sourceFileAddressHandle,
-        pattern.node.getStart(context.sourceFile),
-        pattern.node.end,
+        span.start,
+        span.end,
         SourceSpanRole.Value,
       ),
       new AureliaAttributePatternIdentity(
@@ -452,7 +469,7 @@ export class ResourceRecognitionPublicationSupport {
   }
 
   private recordsForAliases(
-    aliases: readonly string[],
+    aliases: readonly ResourceAliasObservation[],
     resourceKind: NamedResourceDefinitionKind,
     local: string,
     canonicalIdentityHandle: IdentityHandle,
@@ -461,23 +478,26 @@ export class ResourceRecognitionPublicationSupport {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly claimHandles: readonly ClaimHandle[];
+    readonly sourceAddressHandles: readonly (AddressHandle | null)[];
   } {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
+    const sourceAddressHandles: (AddressHandle | null)[] = [];
     aliases.forEach((alias, aliasIndex) => {
       const publication = this.publishResourceAliasIdentity(
         local,
         resourceKind,
-        alias,
+        alias.name,
         aliasIndex,
         canonicalIdentityHandle,
         declarationIdentityHandle,
         provenanceHandle,
       );
       claimHandles.push(publication.claimHandle);
+      sourceAddressHandles.push(publication.sourceAddressHandle);
       records.push(...publication.records);
     });
-    return { records, claimHandles };
+    return { records, claimHandles, sourceAddressHandles };
   }
 
   private publishResourceAliasIdentity(
@@ -510,6 +530,7 @@ export class ResourceRecognitionPublicationSupport {
       ],
       aliasIdentityHandle,
       aliasClaimHandle,
+      null,
     );
   }
 }

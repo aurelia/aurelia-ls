@@ -6,7 +6,10 @@ import ts from 'typescript';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const frameworkPackageRoot = path.join(workspaceRoot, 'aurelia/packages');
+const frameworkPackageRoots = [
+  path.join(workspaceRoot, 'aurelia/packages'),
+  path.join(workspaceRoot, 'aurelia/packages-tooling'),
+];
 const defaultFixtureRootSpecs = [
   {
     root: path.join(packageRoot, 'fixtures/app-builder'),
@@ -96,21 +99,28 @@ async function resolveRequestedRoot(arg) {
 
 async function aureliaPackagePathMappings() {
   const mappings = {};
-  const entries = await readdir(frameworkPackageRoot, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue;
+  for (const packageRoot of frameworkPackageRoots) {
+    const entries = await readdir(packageRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const packageJsonPath = path.join(packageRoot, entry.name, 'package.json');
+      const packageJson = await readJsonIfExists(packageJsonPath);
+      if (packageJson == null || typeof packageJson.name !== 'string') {
+        continue;
+      }
+      const typesPath = path.join(packageRoot, entry.name, 'dist/types/index.d.ts');
+      if (!await fileExists(typesPath)) {
+        continue;
+      }
+      mappings[packageJson.name] = [slash(path.relative(workspaceRoot, typesPath))];
     }
-    const packageJsonPath = path.join(frameworkPackageRoot, entry.name, 'package.json');
-    const packageJson = await readJsonIfExists(packageJsonPath);
-    if (packageJson == null || typeof packageJson.name !== 'string') {
-      continue;
-    }
-    const typesPath = path.join(frameworkPackageRoot, entry.name, 'dist/types/index.d.ts');
-    if (!await fileExists(typesPath)) {
-      continue;
-    }
-    mappings[packageJson.name] = [slash(path.relative(workspaceRoot, typesPath))];
+  }
+  const frameworkViteTypes = path.join(workspaceRoot, 'aurelia/node_modules/vite/dist/node/index.d.ts');
+  if (await fileExists(frameworkViteTypes)) {
+    // Tooling declarations and fixture configs must share one Vite type universe across major versions.
+    mappings.vite = [slash(path.relative(workspaceRoot, frameworkViteTypes))];
   }
   return mappings;
 }

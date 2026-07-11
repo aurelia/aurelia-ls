@@ -1,0 +1,28 @@
+<template>
+  <template as-custom-element="local-chip">
+    <bindable name="label" attribute="public-label" mode="twoWay"></bindable>
+    <local-icon value.bind="label"></local-icon>
+    <global-helper value.bind="label"></global-helper>
+  </template>
+
+  <template as-custom-element="local-icon">
+    <bindable name="value"></bindable>
+    <span>${value}</span>
+  </template>
+
+  <template as-custom-element="outer-local">
+    <bindable name="outerValue" attribute="outer-value"></bindable>
+    <template as-custom-element="nested-local">
+      <bindable name="nestedValue" attribute="nested-value"></bindable>
+      <em>${nestedValue}</em>
+    </template>
+    <nested-local nested-value.bind="outerValue"></nested-local>
+    <local-templates-app if.bind="false"></local-templates-app>
+  </template>
+
+  <local-chip public-label.bind="message"></local-chip>
+  <outer-local outer-value.bind="message"></outer-local>
+  <nested-local></nested-local>
+  <secondary-host></secondary-host>
+  <secondary-only></secondary-only>
+</template>

@@ -1,5 +1,9 @@
 import ts from 'typescript';
-import { readStaticStringValue } from '../evaluation/expression-reader.js';
+import {
+  authoredStringLiteralNode,
+  readStaticStringArrayEntries,
+  readStaticStringValue,
+} from '../evaluation/expression-reader.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
 import {
@@ -21,19 +25,21 @@ import {
   decoratorCallNamed,
   decoratorIdentifierNamed,
   memberName,
+  readStaticClassPropertyValue,
   targetReferenceForFunction,
 } from './resource-convergence-support.js';
+import { ResourceAliasObservation } from './resource-observation.js';
 
 export interface AliasAnnotationRead {
   /** Class-level `@alias(...)` values in framework annotation priority position. */
-  readonly aliases: readonly string[];
+  readonly aliases: readonly ResourceAliasObservation[];
   /** Alias decorators that exist but did not close to static string arguments. */
   readonly open: readonly ConvergenceOpen[];
 }
 
 export interface CustomElementMetadataAnnotationRead {
   /** `@alias(...)` values shared by Aurelia resource kinds. */
-  readonly aliases: readonly string[];
+  readonly aliases: readonly ResourceAliasObservation[];
   /** `@capture(...)` / `@capture()` metadata, when statically visible. */
   readonly capture: CustomElementCaptureDefinition | null;
   /** Source node for the capture annotation that supplied the current value. */
@@ -59,7 +65,7 @@ export function readAliasMetadataAnnotations(
   if (targetClass == null) {
     return { aliases: [], open: [] };
   }
-  const aliases: string[] = [];
+  const aliases: ResourceAliasObservation[] = [];
   const open: ConvergenceOpen[] = [];
   for (const decorator of classDecorators(targetClass)) {
     const call = decoratorCallNamed(decorator, 'alias');
@@ -68,8 +74,9 @@ export function readAliasMetadataAnnotations(
     }
     for (const argument of call.arguments) {
       const read = context.expressionReader.evaluateExpression(argument);
-      const alias = read.value == null ? null : readStaticStringValue(read.value);
-      if (alias == null) {
+      const value = read.value;
+      const alias = value == null ? null : readStaticStringValue(value);
+      if (alias == null || value == null) {
         open.push(new ConvergenceOpen(
           '@alias(...) argument did not close to a static string.',
           argument,
@@ -77,10 +84,44 @@ export function readAliasMetadataAnnotations(
         ));
         continue;
       }
-      aliases.push(alias);
+      aliases.push(new ResourceAliasObservation(
+        alias,
+        authoredStringLiteralNode(value, value.node, argument),
+      ));
     }
   }
   return { aliases, open };
+}
+
+/** Read class-side alias metadata without discarding directly authored array-entry tokens. */
+export function readStaticAliasMetadata(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+): readonly ResourceAliasObservation[] {
+  const read = readStaticClassPropertyValue(context, targetClass, 'aliases');
+  if (read?.value == null) {
+    return [];
+  }
+  const entries = readStaticStringArrayEntries(read.value, read.node);
+  return entries?.map((entry) => new ResourceAliasObservation(entry.value, entry.valueNode)) ?? [];
+}
+
+/** Merge framework-priority alias sources while preserving the winning authored token. */
+export function mergeResourceAliasObservations(
+  ...aliasLists: readonly (readonly ResourceAliasObservation[])[]
+): readonly ResourceAliasObservation[] {
+  const seen = new Set<string>();
+  const result: ResourceAliasObservation[] = [];
+  for (const aliases of aliasLists) {
+    for (const alias of aliases) {
+      if (seen.has(alias.name)) {
+        continue;
+      }
+      seen.add(alias.name);
+      result.push(alias);
+    }
+  }
+  return result;
 }
 
 export function readCustomElementMetadataAnnotations(

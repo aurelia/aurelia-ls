@@ -7,7 +7,10 @@ import {
   ModuleLoaderTransformStatus,
   type ModuleItem,
 } from '../evaluation/module-loader.js';
-import { readReferenceSeed } from '../evaluation/ts-syntax.js';
+import {
+  readDeclarationLocalName,
+  readReferenceSeed,
+} from '../evaluation/ts-syntax.js';
 import {
   EvaluationValueKind,
   type EvaluationObjectValue,
@@ -46,6 +49,7 @@ import type {
 import {
   KernelVocabulary,
 } from '../kernel/vocabulary.js';
+import { firstSymbolDeclaration } from '../type-system/checker-node-helpers.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
@@ -1118,8 +1122,24 @@ function resourceDefinitionForRegistrationValue(
       return definition;
     }
   }
+  const carrierDefinition = resources.lookupByCarrierNode(observation.registeredValue.node);
+  if (carrierDefinition?.productHandle != null) {
+    return carrierDefinition;
+  }
   if (!ts.isExpression(observation.registeredValue.node)) {
     return null;
+  }
+  const targetSymbol = context.typeSystem?.readProgramAliasedSymbolAtLocation(observation.registeredValue.node) ?? null;
+  const targetDeclaration = targetSymbol == null ? null : firstSymbolDeclaration(targetSymbol);
+  const targetModuleKey = targetDeclaration == null
+    ? null
+    : context.typeSystem?.readModuleKeyForSourceFile(targetDeclaration.getSourceFile()) ?? null;
+  const targetLocalName = readDeclarationLocalName(targetDeclaration);
+  if (targetModuleKey != null && targetLocalName != null) {
+    const definition = resources.lookupByModuleLocal(targetModuleKey, targetLocalName);
+    if (definition?.productHandle != null) {
+      return definition;
+    }
   }
   const definition = resources.lookupExpression(observation.registeredValue.node, context.expressionReader);
   return definition?.productHandle == null

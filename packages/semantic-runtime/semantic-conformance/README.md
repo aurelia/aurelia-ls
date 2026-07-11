@@ -12,6 +12,12 @@ The conformance matrix is a query/locus contract layer, not a replacement for fi
 The stable requirement lives in `matrix.json`. It should describe what must be true, not whether the implementation
 currently satisfies it.
 
+Fixture truth is part of the contract. A fixture that expects app-root or template behavior must prove its root custom
+element through explicit resource metadata or through the build-transform admission the fixture is specifically testing;
+`.app({ component })` is not itself a custom-element definition. Prefer explicit `@customElement({ name, template })`
+outside convention-policy fixtures. Pair absence assertions with a positive app-root, compilation, or neighboring-row
+control so an unopened app cannot make a requirement pass vacuously.
+
 `matrix.json` and `known-gaps.json` both carry local JSON schemas. The runner also enforces the core schema fields so
 schema drift fails in CI without relying on an editor or an extra validator package.
 
@@ -80,6 +86,8 @@ Current matrix scale, as of 2026-07-09:
   attribute aliases; binding modes and data flows; cursor/completion surfaces; references; template- and TS-origin
   rename plans; diagnostics; inlay hints; and semantic-token source projection;
 - custom-element resource references and rename edit plans;
+- resource registration across effective declaration forms, aliases, component-local and compiler-local scopes,
+  expression resources, syntax resources, exact duplicate authority, and source-backed convention-transform admission;
 - router resource cursor/completion/diagnostic/refusal surfaces, router instruction cursor/completion/diagnostic
   projection, router topology, route recognizer, route-resource instruction closure, route config declaration/routeable
   identity forms, routeable string resolution, router diagnostics, active-link state, static redirect controls, and the
@@ -93,12 +101,13 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 268 active assertions pass with 41 known gaps. The bindable-contracts subdomain has 82 assertion
+Current default output: 374 active assertions pass with 39 known gaps. The bindable-contracts subdomain has 82 assertion
 rows: 60 active passes and 22 known-gap witnesses. Its gaps are grouped by causal mechanism rather than surface symptom:
 bindable metadata/class-symbol closure, inline multi-binding segment projection, coercion policy loss, field-provenance
 loss, cursor type loss, interceptor-reference convergence, custom-attribute compiler-policy projection, and TS-origin callback
 propagation. The router-composition subdomain has 64 assertion rows, including the current router known-gap witnesses;
-the runtime-composition subdomain has 4 assertion rows.
+the resource-registration subdomain has 90 active assertion rows and no current known gaps; the runtime-composition
+subdomain has 4 assertion rows.
 
 The matrix is intentionally structural rather than exhaustive. New assertion families should be added when they expose
 a new semantic axis, a new answer contract, or a known data-loss risk. Do not add duplicate rows merely to raise the

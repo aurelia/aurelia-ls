@@ -1,9 +1,11 @@
 import type ts from 'typescript';
+import type { EvidenceHandle } from '../kernel/handles.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { ResourceDefinitionHeader } from './resource-definition.js';
 import type { ResourceCarrierKind } from './resource-kind.js';
 export {
   AttributePatternObservation,
+  ResourceAliasObservation,
   resourceTargetClassLikeNode,
   ResourceTargetObservation,
 } from './resource-observation-primitives.js';
@@ -33,5 +35,7 @@ export class ResourceRecognitionObservation {
     readonly definition: ResourceDefinitionHeader | null,
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly ResourceRecognitionOpen[] = [],
+    /** Additional direct witnesses needed to derive this resource observation. */
+    readonly supportingEvidenceHandles: readonly EvidenceHandle[] = [],
   ) {}
 }

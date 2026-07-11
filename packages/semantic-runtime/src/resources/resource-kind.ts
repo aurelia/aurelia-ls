@@ -57,6 +57,7 @@ export const enum NamedResourceDefinitionContributionKind {
   TypeStaticProperty = 'type-static-property',
   Annotation = 'annotation',
   Convention = 'convention',
+  LocalTemplate = 'local-template',
 }
 
 export const enum ResourceMetadataContributionKind {
@@ -70,6 +71,7 @@ export type ComponentResourceDefinitionContributionKind =
 
 export const enum AttributePatternDefinitionContributionKind {
   Header = 'header',
+  Annotation = 'annotation',
   CreateCall = 'create-call',
   Convention = 'convention',
 }
@@ -97,9 +99,10 @@ export function attributePatternContributionKindForCarrier(
   switch (carrierKind) {
     case ResourceCarrierKind.AttributePatternCreate:
       return AttributePatternDefinitionContributionKind.CreateCall;
+    case ResourceCarrierKind.Decorator:
+      return AttributePatternDefinitionContributionKind.Annotation;
     case ResourceCarrierKind.Convention:
       return AttributePatternDefinitionContributionKind.Convention;
-    case ResourceCarrierKind.Decorator:
     case ResourceCarrierKind.StaticAu:
     case ResourceCarrierKind.DefineCall:
       return AttributePatternDefinitionContributionKind.Header;

@@ -547,11 +547,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   the corresponding attribute patterns and binding-command aliases. Translation-key catalogs are separate i18n
   products in `../i18n`; syntax visibility says where `t` can appear, while i18n products say which static keys are
   known from configuration resources.
-- The current syntax-execution middle ground is deliberate: built-in framework and built-in plugin attribute patterns
-  and binding commands are modeled as concrete executable classes. Userland custom elements, custom attributes, value
-  converters, binding behaviors, and template controllers are product priorities; userland attribute-pattern and
-  binding-command bodies are not dynamically executed yet. If they become visible later, they should surface as
-  explicit custom or opaque seams until a dedicated extension materializer exists.
+- The current syntax-execution middle ground is deliberate: framework/plugin catalogs and app-owned registered
+  attribute patterns and binding commands converge through the shared `SyntaxResourceExecutableMaterializer`.
+  App-owned definitions therefore retain registration identity, exact syntax occurrences, references, and duplicate
+  registry/parser authority without a second parser or command table. Their arbitrary handler bodies are not
+  dynamically executed: custom pattern handling and command lowering remain explicit open seams until a dedicated
+  extension materializer can interpret them honestly. Attribute-pattern duplicate `AUR0089` diagnostics use the
+  incoming registration as the primary locus and retain the occupied parser registration as related information.
+  Both surfaces are app-global within a compiler world, but their effective-registration carriers differ: attribute
+  patterns execute into the singleton attribute parser, while binding commands occupy the container resource-key space
+  and are selected through the root world's visible registration before joining the shared executable catalog.
 - built-in resource headers from `resources/built-in-resources.ts` become ordinary visible resources after DI has
   spent them into container resource slots. Compiler-world visibility should preserve the header/resource slot for
   lookup while preferring a converged full definition when one exists, because bindable maps and compiler-consumable

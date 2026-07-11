@@ -19,6 +19,11 @@ const contractSuites = [
   ], 'contract-evaluation-ambient-globals.mjs', 'Project-local ambient global declarations resolve as host boundaries while open-seam filters expose unresolved identifier source samples.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'host-boundary',
+    'ambient-declarations',
+  ], 'contract-evaluation-ambient-declarations.mjs', 'Source-local ambient value declarations remain host boundaries while ordinary uninitialized locals retain JavaScript undefined semantics.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'api',
     'mcp',
     'open-seams',

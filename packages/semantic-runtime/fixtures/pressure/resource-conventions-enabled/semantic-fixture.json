@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "semantic-pressure-fixture.v1",
+  "fixtureRole": "semantic-conformance-resource-registration",
+  "pressureOrigin": "semantic-conformance-resource-conventions-enabled",
+  "appPatternKey": "resource-conventions-enabled",
+  "expectedEffects": []
+}

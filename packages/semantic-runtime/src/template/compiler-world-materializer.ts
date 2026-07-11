@@ -7,6 +7,7 @@ import {
   TemplateCompilerIssue,
   TemplateCompilerIssueKind,
   TemplateCompilerIssuePhase,
+  TemplateCompilerIssueRelatedInformation,
   type TemplateCompilerIssueSeverity,
 } from './compiler-issue.js';
 import {
@@ -30,9 +31,9 @@ import {
   TemplateVisibleResource,
 } from './compiler-world-reference.js';
 import type {
-  BuiltInAttributePatternEmission,
-  BuiltInBindingCommandEmission,
-} from './built-in-syntax-catalog-materializer.js';
+  CompilerAttributePatternResource,
+  CompilerBindingCommandResource,
+} from './syntax-resource-materializer.js';
 import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-materializer.js';
 import {
   TemplateCompilerFrameworkErrorCode,
@@ -87,9 +88,9 @@ export class TemplateCompilerWorldConstructionRequest {
     /** Non-syntax resources already selected as visible to this compiler world. */
     readonly resources: readonly TemplateVisibleResource[],
     /** Attribute-pattern executables selected as visible to this compiler world. */
-    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
+    readonly attributePatterns: readonly CompilerAttributePatternResource[],
     /** Binding-command executables selected as visible to this compiler world. */
-    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
+    readonly bindingCommands: readonly CompilerBindingCommandResource[],
     /** Runtime renderers selected as visible to Rendering in this compiler world. */
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
     /** How the selected syntax executables became visible to this compiler world. */
@@ -117,8 +118,8 @@ export class TemplateCompilerWorldEmission {
     readonly attributeParser: AttributeParserService,
     readonly attributeParserMachine: AttributeParserMachine,
     readonly bindingCommandResolver: BindingCommandResolverService,
-    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
-    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
+    readonly attributePatterns: readonly CompilerAttributePatternResource[],
+    readonly bindingCommands: readonly CompilerBindingCommandResource[],
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
     readonly issues: readonly TemplateCompilerIssue[],
     readonly syntaxResources: readonly TemplateVisibleResource[],
@@ -168,6 +169,7 @@ class CompilerWorldIssueSet {
     frameworkErrorCode: string,
     sourceAddressHandle: AddressHandle | null,
     severity: TemplateCompilerIssueSeverity = 'error',
+    relatedInformation: readonly TemplateCompilerIssueRelatedInformation[] = [],
   ): void {
     const publication = this.publisher.publish(
       `compiler-world:${this.localKey}:issue:${local}`,
@@ -179,6 +181,7 @@ class CompilerWorldIssueSet {
       frameworkErrorCode,
       sourceAddressHandle,
       severity,
+      relatedInformation,
     );
     this.issues.push(publication.issue);
     this.records.push(...publication.records);
@@ -505,23 +508,37 @@ export class TemplateCompilerWorldMaterializer {
       source.addressHandle,
       [],
     );
-    const registeredPatterns = new Set<string>();
+    const registeredPatterns = new Map<string, RegisteredAttributePattern>();
     input.attributePatterns.forEach((pattern, index) => {
-      const duplicate = firstDuplicateAttributePattern(pattern.executable.patterns, registeredPatterns);
+      const duplicate = firstDuplicateAttributePattern(pattern, registeredPatterns);
       if (duplicate != null) {
+        const occupiedSourceAddressHandle = registeredAttributePatternSource(duplicate.occupied);
         issues.publish(
           `attribute-pattern-duplicate:${index}`,
           attributeParser.identityHandle,
           TemplateCompilerIssuePhase.CompilerWorld,
           TemplateCompilerIssueKind.AttributePatternDuplicate,
-          `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.pattern}".`,
+          `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.incoming.pattern}".`,
           TemplateCompilerFrameworkErrorCode.AttributePatternDuplicate,
-          duplicate.addressHandle ?? pattern.executable.sourceAddressHandle,
+          pattern.registrationSourceAddressHandle
+            ?? duplicate.incoming.addressHandle
+            ?? pattern.executable.sourceAddressHandle,
+          'error',
+          occupiedSourceAddressHandle == null
+            ? []
+            : [new TemplateCompilerIssueRelatedInformation(
+              `Attribute pattern "${duplicate.incoming.pattern}" was first registered here.`,
+              occupiedSourceAddressHandle,
+            )],
         );
         return;
       }
       for (const entry of pattern.executable.patterns) {
-        registeredPatterns.add(entry.pattern);
+        registeredPatterns.set(entry.pattern, new RegisteredAttributePattern(
+          entry,
+          pattern.registrationSourceAddressHandle,
+          pattern.executable.sourceAddressHandle,
+        ));
       }
       attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
     });
@@ -863,22 +880,50 @@ export class TemplateCompilerWorldMaterializer {
   }
 }
 
+class RegisteredAttributePattern {
+  constructor(
+    readonly entry: AttributePatternDefinitionEntry,
+    readonly registrationSourceAddressHandle: AddressHandle | null,
+    readonly executableSourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+class DuplicateAttributePattern {
+  constructor(
+    readonly incoming: AttributePatternDefinitionEntry,
+    readonly occupied: RegisteredAttributePattern,
+  ) {}
+}
+
 function firstDuplicateAttributePattern(
-  entries: readonly AttributePatternDefinitionEntry[],
-  registeredPatterns: ReadonlySet<string>,
-): AttributePatternDefinitionEntry | null {
-  const localPatterns = new Set<string>();
-  for (const entry of entries) {
-    if (registeredPatterns.has(entry.pattern) || localPatterns.has(entry.pattern)) {
-      return entry;
+  resource: CompilerAttributePatternResource,
+  registeredPatterns: ReadonlyMap<string, RegisteredAttributePattern>,
+): DuplicateAttributePattern | null {
+  const localPatterns = new Map<string, RegisteredAttributePattern>();
+  for (const entry of resource.executable.patterns) {
+    const occupied = registeredPatterns.get(entry.pattern) ?? localPatterns.get(entry.pattern) ?? null;
+    if (occupied != null) {
+      return new DuplicateAttributePattern(entry, occupied);
     }
-    localPatterns.add(entry.pattern);
+    localPatterns.set(entry.pattern, new RegisteredAttributePattern(
+      entry,
+      resource.registrationSourceAddressHandle,
+      resource.executable.sourceAddressHandle,
+    ));
   }
   return null;
 }
 
+function registeredAttributePatternSource(
+  pattern: RegisteredAttributePattern,
+): AddressHandle | null {
+  return pattern.registrationSourceAddressHandle
+    ?? pattern.entry.addressHandle
+    ?? pattern.executableSourceAddressHandle;
+}
+
 function bindingCommandsWithRegistrationIssues(
-  emissions: readonly BuiltInBindingCommandEmission[],
+  emissions: readonly CompilerBindingCommandResource[],
   ownerIdentityHandle: IdentityHandle,
   issues: CompilerWorldIssueSet,
 ): readonly BindingCommandExecutable[] {
@@ -920,47 +965,55 @@ function bindingCommandKeyFor(
 function syntaxResourcesForInput(
   input: TemplateCompilerWorldConstructionRequest,
 ): readonly TemplateVisibleResource[] {
+  const definitionProducts = new Set(input.resources.flatMap((resource) =>
+    resource.definitionProductHandle == null ? [] : [resource.definitionProductHandle]
+  ));
   return [
     ...input.attributePatterns.map((pattern) =>
       visibleAttributePattern(pattern, input.syntaxVisibilityKind)
     ),
-    ...input.bindingCommands.map((command) =>
-      visibleBindingCommand(command, input.syntaxVisibilityKind)
+    ...input.bindingCommands.flatMap((command) =>
+      command.executable.definitionProductHandle != null
+        && definitionProducts.has(command.executable.definitionProductHandle)
+        ? []
+        : [visibleBindingCommand(command, input.syntaxVisibilityKind)]
     ),
   ];
 }
 
 function visibleAttributePattern(
-  emission: BuiltInAttributePatternEmission,
+  emission: CompilerAttributePatternResource,
   visibilityKind: TemplateResourceVisibilityKind,
 ): TemplateVisibleResource {
   return new TemplateVisibleResource(
     ResourceDefinitionKind.AttributePattern,
-    emission.handler.targetName,
+    emission.definition?.target.localName
+      ?? emission.executable.target?.localName
+      ?? 'attribute-pattern',
     [],
     emission.executable.productHandle,
     emission.executable.identityHandle,
-    null,
-    null,
+    emission.executable.definitionProductHandle,
+    emission.definition,
     visibilityKind,
-    emission.executable.sourceAddressHandle,
+    emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );
 }
 
 function visibleBindingCommand(
-  emission: BuiltInBindingCommandEmission,
+  emission: CompilerBindingCommandResource,
   visibilityKind: TemplateResourceVisibilityKind,
 ): TemplateVisibleResource {
   return new TemplateVisibleResource(
     ResourceDefinitionKind.BindingCommand,
-    emission.handler.name,
-    emission.handler.aliases,
+    emission.executable.name,
+    emission.executable.aliases,
     emission.executable.productHandle,
     emission.executable.identityHandle,
-    null,
-    null,
+    emission.executable.definitionProductHandle,
+    emission.definition,
     visibilityKind,
-    emission.executable.sourceAddressHandle,
+    emission.registrationSourceAddressHandle ?? emission.executable.sourceAddressHandle,
   );
 }
 

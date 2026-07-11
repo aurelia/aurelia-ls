@@ -20,6 +20,7 @@ import type {
   RuntimeBindingReference,
   RuntimeBindingTargetAccessReference,
 } from './runtime-binding.js';
+import type { TemplateVisibleResourceReference } from './compiler-world-reference.js';
 
 export const enum RuntimeBindingBehaviorApplicationPhase {
   Bind = 'bind',
@@ -27,6 +28,7 @@ export const enum RuntimeBindingBehaviorApplicationPhase {
 
 export type RuntimeBindingBehaviorApplicationField =
   | 'binding'
+  | 'resource'
   | 'targetAccess'
   | 'phase'
   | 'behaviorName'
@@ -37,6 +39,7 @@ export type RuntimeBindingBehaviorApplicationField =
 export class RuntimeBindingBehaviorApplicationReference {
   constructor(
     readonly behaviorName: string,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly productHandle: ProductHandle | null,
     readonly identityHandle: IdentityHandle | null,
     readonly addressHandle: AddressHandle | null,
@@ -51,6 +54,7 @@ export class RuntimeBindingBehaviorApplication {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
+    readonly resource: TemplateVisibleResourceReference | null,
     readonly targetAccess: RuntimeBindingTargetAccessReference | null,
     readonly phase: RuntimeBindingBehaviorApplicationPhase,
     readonly behaviorName: string,
@@ -63,6 +67,7 @@ export class RuntimeBindingBehaviorApplication {
   toReference(): RuntimeBindingBehaviorApplicationReference {
     return new RuntimeBindingBehaviorApplicationReference(
       this.behaviorName,
+      this.resource,
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,

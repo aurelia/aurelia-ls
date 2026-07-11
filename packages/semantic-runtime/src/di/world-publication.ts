@@ -52,6 +52,7 @@ import {
   ResourceIssueKind,
   ResourceIssuePhase,
   type ResourceIssue,
+  ResourceIssueRelatedInformation,
 } from '../resources/resource-issue.js';
 import {
   ResourceIssuePublication,
@@ -626,9 +627,9 @@ export class DiResourceSlotEmission {
   ) {}
 }
 
-interface RuntimeHtmlResourceDuplicateDiagnostic {
+interface ResourceDuplicateDiagnostic {
   readonly issueKind: ResourceIssueKind;
-  readonly frameworkErrorCode: string;
+  readonly frameworkErrorCode: string | null;
   readonly message: string;
 }
 
@@ -641,7 +642,7 @@ class DiResourceSlotPublication {
     readonly resourceProductHandle: ProductHandle,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly projectKey: string | null,
-    readonly duplicateDiagnostic: RuntimeHtmlResourceDuplicateDiagnostic | null,
+    readonly duplicateDiagnostic: ResourceDuplicateDiagnostic | null,
   ) {}
 }
 
@@ -938,6 +939,7 @@ export class DiResourceSlotPublicationMaterializer {
     container: Container,
     definition: FullResourceDefinition,
     lookupName: string,
+    registrationSourceAddressHandle: AddressHandle | null,
     local: string,
     provenanceHandle: ProvenanceHandle,
     projectKey: string | null,
@@ -963,9 +965,9 @@ export class DiResourceSlotPublicationMaterializer {
         registrationName,
         definition.identityHandle,
         definition.productHandle,
-        definition.sourceAddressHandle,
+        registrationSourceAddressHandle ?? definition.sourceAddressHandle,
         projectKey,
-        runtimeHtmlDuplicateDiagnosticForKind(definition.type, registrationName),
+        resourceDuplicateDiagnosticForLookup(definition.type, registrationName, lookupName),
       ),
       local,
       provenanceHandle,
@@ -976,6 +978,7 @@ export class DiResourceSlotPublicationMaterializer {
     container: Container,
     resource: BuiltInResourceEmission['resource'],
     lookupName: string,
+    registrationSourceAddressHandle: AddressHandle | null,
     local: string,
     provenanceHandle: ProvenanceHandle,
     projectKey: string | null,
@@ -997,9 +1000,9 @@ export class DiResourceSlotPublicationMaterializer {
         resource.name,
         resource.identityHandle,
         resource.productHandle,
-        resource.sourceAddressHandle,
+        registrationSourceAddressHandle ?? resource.sourceAddressHandle,
         projectKey,
-        runtimeHtmlDuplicateDiagnosticForKind(resource.resourceKind, resource.name),
+        resourceDuplicateDiagnosticForLookup(resource.resourceKind, resource.name, lookupName),
       ),
       local,
       provenanceHandle,
@@ -1028,6 +1031,7 @@ export class DiResourceSlotPublicationMaterializer {
       const resourceIssue = this.publishRuntimeHtmlDuplicateResourceIssue(
         local,
         publication,
+        existingSlot,
         sourceAddressHandle,
         provenanceHandle,
       );
@@ -1088,6 +1092,7 @@ export class DiResourceSlotPublicationMaterializer {
   private publishRuntimeHtmlDuplicateResourceIssue(
     local: string,
     publication: DiResourceSlotPublication,
+    existingSlot: ContainerResourceSlot,
     sourceAddressHandle: AddressHandle | null,
     provenanceHandle: ProvenanceHandle,
   ): ResourceIssuePublication | null {
@@ -1104,6 +1109,12 @@ export class DiResourceSlotPublicationMaterializer {
       publication.duplicateDiagnostic.message,
       publication.duplicateDiagnostic.frameworkErrorCode,
       sourceAddressHandle,
+      existingSlot.sourceAddressHandle == null
+        ? []
+        : [new ResourceIssueRelatedInformation(
+            'Resource was first registered here.',
+            existingSlot.sourceAddressHandle,
+          )],
       'warning',
     );
   }
@@ -1218,10 +1229,25 @@ export class DiResourceSlotPublicationMaterializer {
   }
 }
 
+function resourceDuplicateDiagnosticForLookup(
+  resourceKind: ResourceDefinitionKind,
+  resourceName: string,
+  lookupName: string,
+): ResourceDuplicateDiagnostic | null {
+  if (lookupName !== resourceName) {
+    return {
+      issueKind: ResourceIssueKind.ResourceAliasAlreadyRegistered,
+      frameworkErrorCode: null,
+      message: `Resource alias "${lookupName}" is already registered; the first registration remains effective.`,
+    };
+  }
+  return runtimeHtmlDuplicateDiagnosticForKind(resourceKind, resourceName);
+}
+
 function runtimeHtmlDuplicateDiagnosticForKind(
   resourceKind: ResourceDefinitionKind,
   resourceName: string,
-): RuntimeHtmlResourceDuplicateDiagnostic | null {
+): ResourceDuplicateDiagnostic | null {
   switch (resourceKind) {
     case ResourceDefinitionKind.CustomElement:
       return {
@@ -1249,6 +1275,11 @@ function runtimeHtmlDuplicateDiagnosticForKind(
         message: `Binding behavior ${resourceName} has already been registered.`,
       };
     case ResourceDefinitionKind.BindingCommand:
+      return {
+        issueKind: ResourceIssueKind.BindingCommandAlreadyRegistered,
+        frameworkErrorCode: ResourceFrameworkErrorCode.BindingCommandExisted,
+        message: `Binding command ${resourceName} has already been registered.`,
+      };
     case ResourceDefinitionKind.AttributePattern:
       return null;
   }
