@@ -191,6 +191,7 @@ export const enum RouterIssuePhase {
   RouteTreeRedirectResolution = 'route-tree-redirect-resolution',
   RouteTreeViewportResolution = 'route-tree-viewport-resolution',
   RouteTreeRedirectMigration = 'route-tree-redirect-migration',
+  RouteContextParameterReadOwnership = 'route-context-parameter-read-ownership',
 }
 
 export const enum RouterIssueKind {
@@ -209,6 +210,7 @@ export const enum RouterIssueKind {
   InstructionUnknownRedirect = 'instruction-unknown-redirect',
   EagerPathGenerationFailed = 'eager-path-generation-failed',
   RedirectUnexpectedExpressionKind = 'redirect-unexpected-expression-kind',
+  SharedBaseRouteContextParameterRead = 'shared-base-route-context-parameter-read',
 }
 
 export type RouterIssueSeverity =
@@ -279,6 +281,7 @@ export type RouterIssueField =
   | 'unexpectedExpressionKind'
   | 'routeConfig'
   | 'recognizedRoute'
+  | 'relatedInformation'
   | 'source';
 
 export type RouteableComponentField =
@@ -309,6 +312,7 @@ export type RouteContextField =
 
 export type RouteContextParameterReadField =
   | 'component'
+  | 'ownership'
   | 'routeConfigs'
   | 'mergeStrategy'
   | 'includeQueryParams'
@@ -793,6 +797,12 @@ export type RouteContextParameterReadAlignment =
   | 'unknown-declared-parameters'
   | 'unmatched-component';
 
+export const enum RouteContextParameterReadOwnershipKind {
+  Direct = 'direct',
+  Inherited = 'inherited',
+  Unmatched = 'unmatched',
+}
+
 /** Source-backed RouteContext.getRouteParameters(...) read correlated with route-recognizer path parameters. */
 @auLink('router:RouteContext.getRouteParameters')
 export class RouteContextParameterReadModel {
@@ -802,6 +812,8 @@ export class RouteContextParameterReadModel {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly componentClassName: string | null,
+    readonly ownershipKind: RouteContextParameterReadOwnershipKind,
+    readonly knownOwnerCount: number,
     readonly component: RouteableComponentReference | null,
     readonly routeConfigs: readonly RouteConfigReference[],
     readonly mergeStrategy: RouteContextParameterMergeStrategy,
@@ -1225,6 +1237,7 @@ export class RouterIssueModel {
     readonly redirectTo: string | null,
     readonly unexpectedExpressionKind: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly relatedInformation: readonly RouterIssueRelatedInformation[],
     readonly fieldProvenance: readonly FieldProvenance<RouterIssueField>[] = [],
   ) {}
 
@@ -1237,6 +1250,13 @@ export class RouterIssueModel {
       this.path,
     );
   }
+}
+
+export class RouterIssueRelatedInformation {
+  constructor(
+    readonly message: string,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
 }
 
 /** Potential au-viewport semantics discovered from static template/controller hydration. */

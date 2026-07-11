@@ -4,12 +4,25 @@ import {
   type RouterIssueModel,
 } from '../router/model.js';
 import type { SemanticTemplateCursorSuggestionRow } from './contracts.js';
+import type { SemanticRouterIssueRow } from './contracts.js';
 import type { SemanticSourceReference } from './source-reference.js';
 
 interface RouterIssueDiagnosticRepairProjection {
   readonly missingInput: string;
   readonly missingInputs: readonly string[];
   readonly suggestion: SemanticTemplateCursorSuggestionRow;
+}
+
+/** Preserve the issue producer's causal authority across router, template, and app diagnostic projections. */
+export function routerIssueDiagnosticAuthority(
+  issue: RouterIssueModel,
+): SemanticRouterIssueRow['diagnosticAuthority'] {
+  if (issue.issueKind === RouterIssueKind.SharedBaseRouteContextParameterRead) {
+    return 'semantic-authoring-policy';
+  }
+  return issue.frameworkErrorCode == null
+    ? 'framework-runtime-behavior'
+    : 'framework-error-code';
 }
 
 /** Project repair intent only when a router failure has a template-authored instruction target. */
@@ -68,6 +81,7 @@ function routerIssueRepairSummary(issueKind: RouterIssueKind): string | null {
     case RouterIssueKind.RouteableComponentNotFound:
     case RouterIssueKind.InstructionUnknownRedirect:
     case RouterIssueKind.RedirectUnexpectedExpressionKind:
+    case RouterIssueKind.SharedBaseRouteContextParameterRead:
       return null;
   }
 }

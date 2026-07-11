@@ -268,6 +268,7 @@ import type {
   RouteConfigStageKind,
   RouteConfigValueField,
   RouteConfigValueKind,
+  RouteContextParameterReadOwnershipKind,
   RouteRecognizerIssueKind,
   RouteRecognizerModelKind,
   RouteRecognizerSegmentKind,
@@ -2673,6 +2674,8 @@ export interface SemanticRouteContextsResult {
 export interface SemanticRouteContextParameterReadRow {
   readonly projectKey: string;
   readonly componentClassName: string | null;
+  readonly ownershipKind: RouteContextParameterReadOwnershipKind | `${RouteContextParameterReadOwnershipKind}`;
+  readonly knownOwnerCount: number;
   readonly routeConfigCount: number;
   readonly routeConfigIds: readonly string[];
   readonly routeConfigPaths: readonly string[];
@@ -3188,7 +3191,7 @@ export interface SemanticRouterIssueRow {
   readonly projectKey: string;
   readonly phase: RouterIssuePhase | `${RouterIssuePhase}`;
   readonly issueKind: RouterIssueKind | `${RouterIssueKind}`;
-  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly diagnosticAuthority: 'framework-error-code' | 'framework-runtime-behavior' | 'semantic-runtime-product' | 'semantic-authoring-policy';
   readonly frameworkErrorCode: string | null;
   readonly severity: RouterIssueSeverity;
   readonly message: string;
@@ -3205,6 +3208,7 @@ export interface SemanticRouterIssueRow {
   readonly routeConfig: SemanticRouteConfigReferenceRow | null;
   readonly recognizedRoute: SemanticRouteRecognizerReferenceRow | null;
   readonly source: SemanticSourceReference | null;
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
@@ -3213,6 +3217,7 @@ export interface SemanticRouterIssueRow {
     readonly recognizedRouteProductHandle: ProductHandle | null;
     readonly recognizedRouteIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
+    readonly relatedSourceAddressHandles: readonly AddressHandle[];
   };
 }
 

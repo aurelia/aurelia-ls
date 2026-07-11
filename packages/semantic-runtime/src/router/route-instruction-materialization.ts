@@ -1040,6 +1040,7 @@ function recordEagerPathGenerationIssue(
     null,
     null,
     closed.sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {
@@ -1087,6 +1088,7 @@ function recordInvalidInstructionIssue(
     null,
     null,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {
@@ -1231,6 +1233,7 @@ function recordRouteExpressionParseIssue(
     null,
     null,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {

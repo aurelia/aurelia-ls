@@ -1,0 +1,21 @@
+{
+  "fixture": "packages/semantic-runtime/fixtures/pressure/router-route-context-inherited-ownership",
+  "lanes": {
+    "diagnostics": [
+      {
+        "id": "shared-base-route-context-read",
+        "file": "src/route-parameters/shared-route-parameters.ts",
+        "verdict": "correct",
+        "reason": "Reports one router authoring warning at the inherited getRouteParameters call and preserves both concrete routed descendants as cross-file related information.",
+        "note": "NEW 2026-07-11. Adapter canary for one-to-many RouteContext read ownership. Correct means LSP and the custom diagnostics report agree on the primary base-class source, semantic-authoring-policy authority, warning severity, and AccountRoute/ProjectRoute related locations."
+      },
+      {
+        "id": "single-descendant-base-route-context-read",
+        "file": "src/route-parameters/single-route-parameters.ts",
+        "verdict": "correct",
+        "reason": "A uniquely owned inherited read remains semantically correlated without producing a blanket class-inheritance warning.",
+        "note": "NEW 2026-07-11. Negative control: inheritance alone is not the diagnostic condition; proven multiple routed owners are."
+      }
+    ]
+  }
+}

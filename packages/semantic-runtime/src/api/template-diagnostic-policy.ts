@@ -56,7 +56,10 @@ import {
   RuntimeObservationFrameworkErrorCode,
 } from '../observation/framework-error-code.js';
 import type { RouterIssueModel } from '../router/model.js';
-import { routerIssueDiagnosticRepairProjection } from './router-diagnostic-policy.js';
+import {
+  routerIssueDiagnosticAuthority,
+  routerIssueDiagnosticRepairProjection,
+} from './router-diagnostic-policy.js';
 import {
   FrameworkCapabilityAvailabilityState,
   FrameworkCapabilityDemandKind,
@@ -1172,7 +1175,7 @@ export function routerIssueDiagnostic(
   const repair = routerIssueDiagnosticRepairProjection(issue, source);
   return {
     diagnosticKind: 'router-framework-error',
-    diagnosticAuthority: issue.frameworkErrorCode == null ? 'framework-runtime-behavior' : 'framework-error-code',
+    diagnosticAuthority: routerIssueDiagnosticAuthority(issue),
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
     summary: issue.message,

@@ -1285,6 +1285,7 @@ function recordNoAvailableViewportAgentIssue(
     open.seed.routeConfig.redirectTo,
     null,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {
@@ -1350,6 +1351,7 @@ function recordRedirectMigrationIssue(
     routeConfig.redirectTo,
     unsupported.unexpectedKind,
     sourceAddressHandle,
+    [],
   );
   issues.push(issue);
   records.push(...routerIssueProductRecords(store, {

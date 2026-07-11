@@ -363,6 +363,7 @@ export class RouteRecognitionMaterializationProjectPass {
       null,
       null,
       viewportInstruction.sourceAddressHandle,
+      [],
     );
     return [{
       records: routerIssueProductRecords(store, {
@@ -429,6 +430,7 @@ function unknownRedirectIssueModel(
     draft.redirectPath,
     null,
     sourceAddressHandle,
+    [],
   );
 }
 

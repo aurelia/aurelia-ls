@@ -438,6 +438,7 @@ function routerAppDiagnosticRow(
     missingInputs: row.missingInputs,
     suggestion: row.suggestion,
     source: row.source,
+    relatedInformation: row.relatedInformation,
     relatedQueryKind: 'router-issues' satisfies `${SemanticAppQueryKind}`,
   };
 }

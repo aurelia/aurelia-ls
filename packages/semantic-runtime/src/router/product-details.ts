@@ -27,6 +27,6 @@ export const RouterProductDetails = {
   RouteContextParameterRead: defineProductDetailSlot<RouteContextParameterReadModel>(
     KernelVocabulary.Router.RouteContextParameterRead.key,
     'router.route-context-parameter-read',
-    'RouteContext.getRouteParameters(...) detail with declared key shape and route path parameter alignment.',
+    'RouteContext.getRouteParameters(...) detail with per-owner route identity, ownership cardinality, declared key shape, and route path parameter alignment.',
   ),
 } as const;

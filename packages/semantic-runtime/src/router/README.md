@@ -286,8 +286,13 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   identify the framework method declaration, read the call's declared parameter shape, then resolve the enclosing
   class through its module-local custom-element definition and join effective route configs by resource target
   identity. Class names remain presentation facts rather than ownership keys, so same-named routeables in different
-  modules cannot lend each other route paths or parameter keys. This keeps route-param authoring honest: a view-model
-  can declare query values, but the API separately reports which keys are backed by `:path` segments.
+  modules cannot lend each other route paths or parameter keys. For inherited reads, the existing TypeSystem prototype
+  chain is inverted over routed custom-element identities and one read row is retained per known concrete owner;
+  `ownershipKind` and `knownOwnerCount` make that cardinality explicit. A base call inherited by multiple routed
+  components publishes one `shared-base-route-context-parameter-read` authoring warning with each concrete route use as
+  related information. A uniquely owned inherited read remains correlated without a blanket inheritance warning. This
+  keeps route-param authoring honest: a view-model can declare query values, but the API separately reports which keys
+  are backed by `:path` segments.
 - Preserve the framework RouteExpression tree shape, not only flattened viewport instructions. Redirect parameter
   migration in `RouteTree.createConfiguredNode(...)` accepts only `Segment` / slash-scoped `Segment` chains; sibling
   composites and grouped expressions are known framework failures and should publish router issue products with

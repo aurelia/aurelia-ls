@@ -33,7 +33,10 @@ import {
   describeAddress,
   type SemanticSourceReference,
 } from './source-reference.js';
-import { routerIssueDiagnosticRepairProjection } from './router-diagnostic-policy.js';
+import {
+  routerIssueDiagnosticAuthority,
+  routerIssueDiagnosticRepairProjection,
+} from './router-diagnostic-policy.js';
 import type {
   SemanticRouteConfigComponentRow,
   SemanticRouteConfigReferenceRow,
@@ -268,6 +271,7 @@ export function readRouterIssueRows(
 ): SemanticRouterIssuesResult['rows'] {
   return [
     ...emission.routes.readIssues(),
+    ...emission.routeContextParameterReads.readIssues(),
     ...emission.routeInstructions.readIssues(),
     ...emission.routeRecognition.readIssues(),
     ...emission.routeTree.readIssues(),
@@ -708,6 +712,8 @@ function routeContextParameterReadRow(
   return {
     projectKey: emission.project.projectKey,
     componentClassName: read.componentClassName,
+    ownershipKind: read.ownershipKind,
+    knownOwnerCount: read.knownOwnerCount,
     routeConfigCount: routeConfigs.length,
     routeConfigIds: routeConfigs.flatMap((routeConfig) => routeConfig.id == null ? [] : [routeConfig.id]),
     routeConfigPaths: routeConfigs.flatMap((routeConfig) => routeConfig.paths),
@@ -1067,7 +1073,7 @@ function routerIssueRow(
     projectKey: emission.project.projectKey,
     phase: issue.phase,
     issueKind: issue.issueKind,
-    diagnosticAuthority: issue.frameworkErrorCode == null ? 'semantic-runtime-product' : 'framework-error-code',
+    diagnosticAuthority: routerIssueDiagnosticAuthority(issue),
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
     message: issue.message,
@@ -1084,6 +1090,10 @@ function routerIssueRow(
     routeConfig: routeConfigReferenceRow(store, issue.routeConfig),
     recognizedRoute: routeRecognizerReferenceRow(store, issue.recognizedRoute),
     source,
+    relatedInformation: issue.relatedInformation.map((related) => ({
+      message: related.message,
+      source: describeAddress(store, related.sourceAddressHandle),
+    })),
     ...(handles ? {
       handles: {
         productHandle: issue.productHandle,
@@ -1093,6 +1103,8 @@ function routerIssueRow(
         recognizedRouteProductHandle: issue.recognizedRoute?.productHandle ?? null,
         recognizedRouteIdentityHandle: issue.recognizedRoute?.identityHandle ?? null,
         sourceAddressHandle: issue.sourceAddressHandle,
+        relatedSourceAddressHandles: issue.relatedInformation
+          .flatMap((related) => related.sourceAddressHandle == null ? [] : [related.sourceAddressHandle]),
       },
     } : {}),
   };

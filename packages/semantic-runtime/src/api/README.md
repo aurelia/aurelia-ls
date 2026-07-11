@@ -1327,6 +1327,10 @@ RouteConfigContext eager path generation publishes `eager-path-generation-failed
 whose endpoint path cannot be generated from the provided params. Rows preserve route-config and recognized-route
 references when available, the component/path/redirect fields relevant to the owning router algorithm, source, and
 optional handles.
+Router issues may also carry related information when one source fact has several concrete router contexts. The
+`shared-base-route-context-parameter-read` warning is a `semantic-authoring-policy` row rather than a framework error:
+it points at the inherited base call and relates every routed descendant without selecting one owner or merging their
+route parameter domains.
 Template diagnostics also project router issue rows whose authored source belongs to the selected template. Those rows
 use `router-framework-error` so file-level and cursor-locus APIs can surface `load`/`href` expression parser,
 instruction creation, recognition, viewport-resolution, and eager path-generation failures without moving issue
@@ -1374,7 +1378,10 @@ framework defaults.
 declared parameter keys on the TypeScript call, the route-config paths for the owning routed component, the recognized
 path parameter names, and whether declared non-path keys are only query/open parameters. Ownership joins through the
 module-local custom-element target identity carried by effective route configs; `componentClassName` is display data,
-not a semantic key.
+not a semantic key. Inherited calls publish one row per known routed descendant instead of unioning their parameter
+domains; `ownershipKind` distinguishes direct, inherited, and unmatched rows, while `knownOwnerCount` preserves the
+one-to-many cardinality. Multiple inherited owners also produce a policy-owned RouterIssue at the base call with exact
+related route sources; one inherited owner does not produce that warning.
 `RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed. Synthetic root tree/node rows use
 `realizationStage: potential`; context-relative transition rows use `realizationStage: planned` and are compiled from closed static
 `ViewportInstructionTree` products when their recognized routes point at non-redirect route configs. Rows carry

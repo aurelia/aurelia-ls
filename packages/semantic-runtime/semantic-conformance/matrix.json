@@ -8868,6 +8868,74 @@
       ]
     },
     {
+      "id": "router-route-context-inherited-ownership",
+      "fixture": "fixtures/pressure/router-route-context-inherited-ownership",
+      "aureliaDomain": "router-composition",
+      "capability": "router-route-context-parameter-identity",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/route-parameters/shared-route-parameters.ts",
+      "requirement": "Inherited RouteContext parameter reads preserve each routed descendant as a separate owner, warn when one base call has multiple routed owners, and do not turn single-descendant inheritance into a blanket diagnostic.",
+      "cases": [
+        {
+          "id": "shared-base-read-preserves-descendant-owners-and-warns-once",
+          "expectations": [
+            {
+              "name": "route context parameter reads",
+              "query": { "kind": "route-context-parameter-reads", "options": { "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 3 },
+              "rows": [
+                {
+                  "fields": { "componentClassName": "SharedRouteParameters", "ownershipKind": "inherited", "knownOwnerCount": 2, "component.resolvedName": "account-route", "declaredParameterNames": ["sharedId"], "routePathParameterNames": ["accountId"], "missingRoutePathParameterNames": ["accountId"], "declaredNonPathParameterNames": ["sharedId"], "alignment": "missing-route-path-parameters" },
+                  "source": { "sourceFile": "src/route-parameters/shared-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()" }
+                },
+                {
+                  "fields": { "componentClassName": "SharedRouteParameters", "ownershipKind": "inherited", "knownOwnerCount": 2, "component.resolvedName": "project-route", "declaredParameterNames": ["sharedId"], "routePathParameterNames": ["projectId"], "missingRoutePathParameterNames": ["projectId"], "declaredNonPathParameterNames": ["sharedId"], "alignment": "missing-route-path-parameters" },
+                  "source": { "sourceFile": "src/route-parameters/shared-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()" }
+                },
+                {
+                  "fields": { "componentClassName": "SingleRouteParameters", "ownershipKind": "inherited", "knownOwnerCount": 1, "component.resolvedName": "solo-route", "declaredParameterNames": ["soloId"], "routePathParameterNames": ["soloId"], "missingRoutePathParameterNames": [], "declaredNonPathParameterNames": [], "alignment": "aligned" },
+                  "source": { "sourceFile": "src/route-parameters/single-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ soloId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ soloId: string }>()" }
+                }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "detail": "handles", "page": { "size": 100 } } },
+              "equals": { "value.rows.length": 1 },
+              "rows": [
+                {
+                  "fields": { "phase": "route-context-parameter-read-ownership", "issueKind": "shared-base-route-context-parameter-read", "diagnosticAuthority": "semantic-authoring-policy", "frameworkErrorCode": null, "severity": "warning", "component": "SharedRouteParameters", "relatedInformation.length": 2 },
+                  "source": { "sourceFile": "src/route-parameters/shared-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()" }
+                },
+                {
+                  "fields": { "issueKind": "shared-base-route-context-parameter-read", "relatedInformation.0.message": "Routed component 'account-route' inherits this RouteContext parameter read." },
+                  "sourceField": "relatedInformation.0.source",
+                  "source": { "sourceFile": "src/router-route-context-inherited-ownership-app.ts", "marker": "component: AccountRoute", "token": "AccountRoute" }
+                },
+                {
+                  "fields": { "issueKind": "shared-base-route-context-parameter-read", "relatedInformation.1.message": "Routed component 'project-route' inherits this RouteContext parameter read." },
+                  "sourceField": "relatedInformation.1.source",
+                  "source": { "sourceFile": "src/router-route-context-inherited-ownership-app.ts", "marker": "component: ProjectRoute", "token": "ProjectRoute" }
+                }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": { "diagnosticDomain": "router", "diagnosticKind": "shared-base-route-context-parameter-read", "diagnosticAuthority": "semantic-authoring-policy", "severity": "warning", "relatedQueryKind": "router-issues", "relatedInformation.length": 2 },
+                  "source": { "sourceFile": "src/route-parameters/shared-route-parameters.ts", "marker": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()", "token": "resolve(IRouteContext).getRouteParameters<{ sharedId: string }>()" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "router-routecontext-topology-lab",
       "fixture": "fixtures/pressure/router-routecontext-topology-lab",
       "aureliaDomain": "router-composition",

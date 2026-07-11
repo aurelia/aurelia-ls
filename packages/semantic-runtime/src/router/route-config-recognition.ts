@@ -489,6 +489,7 @@ class RouteConfigKernelEmitter {
         contribution.redirectTo,
         null,
         sourceAddressHandle,
+        [],
       );
       models.push(model);
       records.push(
