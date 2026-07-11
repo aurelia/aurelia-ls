@@ -30,6 +30,7 @@ import {
   BindingContextKind,
   BindingContextSlot,
   BindingScope,
+  BindingScopeOwnerKind,
 } from '../configuration/scope.js';
 import {
   TemplateProductDetails,
@@ -63,6 +64,7 @@ import {
   sameCheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
+  checkerTypeMemberIsCallable,
   checkerTypeMemberVisibilityKind,
 } from '../type-system/checker-member-surface.js';
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
@@ -72,6 +74,11 @@ import {
   type RouteConfigModel,
 } from '../router/model.js';
 import { RouterProductDetails } from '../router/product-details.js';
+import {
+  checkerTypeDeclaresRouteViewModel,
+  routerViewModelHookKindForName,
+  RouterViewModelHookKind,
+} from '../router/route-view-model-hook.js';
 import { I18nProductDetails } from '../i18n/product-details.js';
 import type { I18nTranslationKey } from '../i18n/model.js';
 import {
@@ -101,6 +108,7 @@ import {
   BuiltInTemplateControllerValueDomainKind,
   frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
+import { componentLifecycleHookName } from '../template/component-lifecycle-source.js';
 import {
   bindingSourceContextProjectionForTemplateExpressionParseAtOffset,
   bindingScopeForTemplateExpressionParse,
@@ -183,12 +191,12 @@ export const enum TemplateCompletionCandidateSourceKind {
 }
 
 export const enum TemplateCompletionAureliaHookKind {
-  /** Member name matches a custom-element/controller lifecycle hook such as attached or binding. */
+  /** Callable custom-element view-model member discovered by Controller as a component lifecycle hook. */
   ComponentLifecycle = 'component-lifecycle',
-  /** Member name matches a router viewport/component hook such as canLoad or load. */
+  /** Callable member on a proven routed view model discovered during router transition lifecycle. */
   RouterLifecycle = 'router-lifecycle',
-  /** Member name matches an app-task phase hook such as hydrating or activated. */
-  AppTaskLifecycle = 'app-task-lifecycle',
+  /** Member is the routed component's dynamic route-configuration hook. */
+  RouterConfiguration = 'router-configuration',
 }
 
 export class TemplateCompletionTypeMemberFacts {
@@ -201,7 +209,7 @@ export class TemplateCompletionTypeMemberFacts {
     readonly isOptional: boolean,
     /** Whether the member is readonly on the owner type surface. */
     readonly isReadonly: boolean,
-    /** Aurelia hook category for known framework hook names, if this member name matches one. */
+    /** Framework hook category proven from member callability and the owning Aurelia role. */
     readonly aureliaHookKind: TemplateCompletionAureliaHookKind | null = null,
   ) {}
 }
@@ -383,6 +391,7 @@ interface TemplateCompletionAnswerFrame {
   readonly expressionFrontier: TemplateExpressionCompletionFrontier | null;
   readonly bindingScope: BindingScope | null;
   readonly resourceScope: TemplateResourceScope | null;
+  readonly frameworkHookBasisProductHandles: ProductHandle[];
   memberOwnerTypeProductHandle: ProductHandle | null;
 }
 
@@ -807,11 +816,14 @@ function createTemplateCompletionAnswerFrame(
   const expressionFrontier = expressionResult == null
     ? null
     : expressionCompletionFrontier(expressionResult);
-  const needsBindingScope = shouldReadBindingScope(query.siteKind, expressionFrontier);
+  const requiresBindingScope = shouldOfferBindingScopeCandidates(query.siteKind, expressionFrontier);
   const needsResourceScope = shouldReadResourceScope(query.siteKind, expressionFrontier);
-  const bindingScope = needsBindingScope
+  const bindingScope = requiresBindingScope
     ? readBindingScope(store, query.bindingScopeProductHandle, missingInputs)
-    : null;
+    : query.siteKind === TemplateCompletionSiteKind.ExpressionMember
+      && query.bindingScopeProductHandle != null
+      ? store.productDetails.read(ConfigurationProductDetails.BindingScope, query.bindingScopeProductHandle)
+      : null;
   const resourceScope = needsResourceScope
     ? readResourceScope(store, query.resourceScopeProductHandle, missingInputs)
     : null;
@@ -826,6 +838,7 @@ function createTemplateCompletionAnswerFrame(
     expressionFrontier,
     bindingScope,
     resourceScope,
+    frameworkHookBasisProductHandles: [],
     memberOwnerTypeProductHandle: query.memberOwnerTypeProductHandle,
   };
 }
@@ -843,10 +856,10 @@ function collectTemplateCompletionCandidates(
 function collectBindingScopeCandidates(
   frame: TemplateCompletionAnswerFrame,
 ): void {
-  if (!shouldReadBindingScope(frame.query.siteKind, frame.expressionFrontier) || frame.bindingScope == null) {
+  if (!shouldOfferBindingScopeCandidates(frame.query.siteKind, frame.expressionFrontier) || frame.bindingScope == null) {
     return;
   }
-  frame.candidates.push(...scopeCandidates(frame.store, frame.bindingScope));
+  frame.candidates.push(...scopeCandidates(frame, frame.bindingScope));
 }
 
 function collectResourceScopeCandidates(
@@ -882,7 +895,7 @@ function collectExpressionMemberCandidates(
   }
   const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
   if (members != null) {
-    frame.candidates.push(...typeMemberCandidates(frame.store, members));
+    frame.candidates.push(...typeMemberCandidates(frame, members));
   }
 }
 
@@ -917,7 +930,11 @@ function templateCompletionAnswer(
   uniqueCandidates: readonly TemplateCompletionCandidate[],
   page: TemplateCompletionCandidatePage,
 ): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
-  const products = completionCandidateProducts(frame.store, page.rows);
+  const products = completionCandidateProducts(
+    frame.store,
+    page.rows,
+    frame.frameworkHookBasisProductHandles,
+  );
   const missingInputs = uniqueValues(frame.missingInputs);
   return new InquiryAnswer(
     outcomeForCompletion(page.rows, uniqueCandidates, missingInputs, frame.expressionFrontier),
@@ -951,11 +968,15 @@ function templateCompletionResult(
 function completionCandidateProducts(
   store: KernelStore,
   rows: readonly TemplateCompletionCandidate[],
+  basisProductHandles: readonly ProductHandle[] = [],
 ): readonly MaterializedProduct[] {
   return uniqueValues(
-    rows
+    [
+      ...rows
       .map((candidate) => candidate.productHandle)
       .filter((handle): handle is ProductHandle => handle != null),
+      ...basisProductHandles,
+    ],
   )
     .map((handle) => store.readProduct(handle))
     .filter((product): product is MaterializedProduct => product != null);
@@ -1018,6 +1039,7 @@ function completionProjectionProductHandles(
     frame.query.selectedDefinitionProductHandle,
     frame.query.expressionParseProductHandle,
     frame.memberOwnerTypeProductHandle,
+    ...frame.frameworkHookBasisProductHandles,
   ].filter((handle): handle is ProductHandle => handle != null);
 }
 
@@ -1703,7 +1725,7 @@ function expressionCompletionFrontier(
   return null;
 }
 
-function shouldReadBindingScope(
+function shouldOfferBindingScopeCandidates(
   siteKind: TemplateCompletionSiteKind,
   frontier: TemplateExpressionCompletionFrontier | null,
 ): boolean {
@@ -1848,7 +1870,7 @@ function bindableCandidates(
 }
 
 function typeMemberCandidates(
-  store: KernelStore,
+  frame: TemplateCompletionAnswerFrame,
   members: readonly CheckerTypeMember[],
 ): readonly TemplateCompletionCandidate[] {
   return members.map((member) => new TemplateCompletionCandidate(
@@ -1857,68 +1879,141 @@ function typeMemberCandidates(
     TemplateCompletionCandidateSourceKind.TypeSystem,
     member.productHandle,
     checkerTypeMemberReachableIdentityHandle(member),
-    checkerTypeMemberSourceAddressHandle(store, member),
+    checkerTypeMemberSourceAddressHandle(frame.store, member),
     `Member visible on checker-projected type.`,
     member.valueType,
-    new TemplateCompletionTypeMemberFacts(
-      member.memberKind,
-      checkerTypeMemberVisibilityKind(member),
-      member.isOptional,
-      member.isReadonly,
-      aureliaHookKindForMemberName(member.name),
-    ),
+    typeMemberFacts(frame, member),
   ));
 }
 
-function aureliaHookKindForMemberName(
-  name: string,
+function typeMemberFacts(
+  frame: TemplateCompletionAnswerFrame,
+  member: CheckerTypeMember,
+  scope: BindingScope | null = frameworkOwnerScopeForMemberExpression(frame, member),
+): TemplateCompletionTypeMemberFacts {
+  return new TemplateCompletionTypeMemberFacts(
+    member.memberKind,
+    checkerTypeMemberVisibilityKind(member),
+    member.isOptional,
+    member.isReadonly,
+    aureliaHookKindForMember(frame, member, scope),
+  );
+}
+
+function aureliaHookKindForMember(
+  frame: TemplateCompletionAnswerFrame,
+  member: CheckerTypeMember,
+  ownerScope: BindingScope | null,
 ): TemplateCompletionAureliaHookKind | null {
-  if (COMPONENT_LIFECYCLE_HOOK_NAMES.has(name)) {
+  if (
+    ownerScope?.ownerKind !== BindingScopeOwnerKind.CustomElementController
+    || ownerScope.bindingContext.contextKind !== BindingContextKind.ViewModel
+    || !checkerTypeMemberIsCallable(member)
+  ) {
+    return null;
+  }
+
+  const routerHookKind = routerViewModelHookKindForName(member.name);
+  if (routerHookKind != null) {
+    const basisProductHandle = routerViewModelBasisProductHandle(frame, ownerScope);
+    if (basisProductHandle != null) {
+      frame.frameworkHookBasisProductHandles.push(basisProductHandle);
+      return routerHookKind === RouterViewModelHookKind.Configuration
+        ? TemplateCompletionAureliaHookKind.RouterConfiguration
+        : TemplateCompletionAureliaHookKind.RouterLifecycle;
+    }
+  }
+
+  if (componentLifecycleHookName(member.name) != null) {
+    const basisProductHandle = ownerScope.bindingContext.ownerProductHandle;
+    if (basisProductHandle != null) {
+      frame.frameworkHookBasisProductHandles.push(basisProductHandle);
+    }
     return TemplateCompletionAureliaHookKind.ComponentLifecycle;
-  }
-  if (ROUTER_LIFECYCLE_HOOK_NAMES.has(name)) {
-    return TemplateCompletionAureliaHookKind.RouterLifecycle;
-  }
-  if (APP_TASK_LIFECYCLE_HOOK_NAMES.has(name)) {
-    return TemplateCompletionAureliaHookKind.AppTaskLifecycle;
   }
   return null;
 }
 
-const COMPONENT_LIFECYCLE_HOOK_NAMES = new Set([
-  'created',
-  'binding',
-  'bound',
-  'attaching',
-  'attached',
-  'detaching',
-  'detached',
-  'unbinding',
-  'unbound',
-  'dispose',
-]);
+function frameworkOwnerScopeForMemberExpression(
+  frame: TemplateCompletionAnswerFrame,
+  member: CheckerTypeMember,
+): BindingScope | null {
+  const offset = frame.query.locus.kind === InquiryLocusKind.SourceCursor
+    ? frame.query.locus.cursor.offset
+    : null;
+  if (frame.bindingScope == null || frame.expressionResult == null || offset == null) {
+    return null;
+  }
+  const owner = ExpressionParseResultInspector.memberOwnerAtOffset(frame.expressionResult, offset);
+  const ownerScope = directBindingContextScopeForExpression(frame.bindingScope, owner);
+  return ownerScope?.bindingContext.contextType != null
+    && sameCheckerTypeReference(ownerScope.bindingContext.contextType, member.ownerType)
+    ? ownerScope
+    : null;
+}
 
-const ROUTER_LIFECYCLE_HOOK_NAMES = new Set([
-  'canLoad',
-  'loading',
-  'load',
-  'canUnload',
-  'unloading',
-  'unload',
-]);
+function directBindingContextScopeForExpression(
+  scope: BindingScope,
+  expression: ExpressionAstNode | null,
+): BindingScope | null {
+  switch (expression?.$kind) {
+    case 'AccessThis':
+      return scope.locateThis(expression.ancestor).scope;
+    case 'AccessBoundary':
+      return scope.locateBoundary();
+    default:
+      return null;
+  }
+}
 
-const APP_TASK_LIFECYCLE_HOOK_NAMES = new Set([
-  'creating',
-  'hydrating',
-  'hydrated',
-  'activating',
-  'activated',
-  'deactivating',
-  'deactivated',
-]);
+function routerViewModelBasisProductHandle(
+  frame: TemplateCompletionAnswerFrame,
+  scope: BindingScope,
+): ProductHandle | null {
+  const routeConfig = routeConfigForScopeDefinition(frame.store, scope, frame.query.routeConfigProductHandles);
+  if (routeConfig != null) {
+    return routeConfig.productHandle;
+  }
+  const contextType = scope.bindingContext.contextType;
+  const typeShape = contextType?.productHandle == null
+    ? null
+    : frame.store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
+  return checkerTypeDeclaresRouteViewModel(typeShape)
+    ? contextType?.productHandle ?? null
+    : null;
+}
+
+function routeConfigForScopeDefinition(
+  store: KernelStore,
+  scope: BindingScope,
+  routeConfigProductHandles: readonly ProductHandle[],
+): RouteConfigModel | null {
+  const controllerProductHandle = scope.bindingContext.ownerProductHandle;
+  const controller = controllerProductHandle == null
+    ? null
+    : store.productDetails.read(ConfigurationProductDetails.Controller, controllerProductHandle);
+  const definitionProductHandle = controller != null && 'definitionProductHandle' in controller
+    ? controller.definitionProductHandle
+    : null;
+  const definition = definitionProductHandle == null
+    ? null
+    : store.productDetails.read(ResourceProductDetails.Definition, definitionProductHandle);
+  if (definition?.type !== ResourceDefinitionKind.CustomElement) {
+    return null;
+  }
+  return routeConfigProductHandles
+    .map((productHandle) => store.productDetails.read(RouterProductDetails.RouteConfig, productHandle))
+    .find((routeConfig): routeConfig is RouteConfigModel =>
+      routeConfig != null
+      && (
+        routeConfig.component?.resolvedIdentityHandle === definition.target.identityHandle
+        || routeConfig.component?.resolvedProductHandle === definition.productHandle
+      )
+    ) ?? null;
+}
 
 function scopeCandidates(
-  store: KernelStore,
+  frame: TemplateCompletionAnswerFrame,
   scope: BindingScope,
 ): readonly TemplateCompletionCandidate[] {
   const candidates: TemplateCompletionCandidate[] = [];
@@ -1927,10 +2022,10 @@ function scopeCandidates(
 
   while (current != null) {
     for (const slot of current.overrideContext.slots) {
-      candidates.push(scopeSlotCandidate(store, slot, current, depth, BindingContextKind.Override));
+      candidates.push(scopeSlotCandidate(frame, slot, current, depth, BindingContextKind.Override));
     }
     for (const slot of current.bindingContext.slots) {
-      candidates.push(scopeSlotCandidate(store, slot, current, depth, current.bindingContext.contextKind));
+      candidates.push(scopeSlotCandidate(frame, slot, current, depth, current.bindingContext.contextKind));
     }
     if (current.isBoundary) {
       break;
@@ -1955,13 +2050,13 @@ function scopeCandidates(
 }
 
 function scopeSlotCandidate(
-  store: KernelStore,
+  frame: TemplateCompletionAnswerFrame,
   slot: BindingContextSlot,
   scope: BindingScope,
   depth: number,
   contextKind: BindingContextKind,
 ): TemplateCompletionCandidate {
-  const typeMemberFacts = typeMemberFactsForSlot(store, slot);
+  const typeMemberFacts = typeMemberFactsForSlot(frame, slot, scope, contextKind);
   return new TemplateCompletionCandidate(
     contextKind === BindingContextKind.Override
       ? TemplateCompletionCandidateKind.OverrideContextSlot
@@ -1980,20 +2075,20 @@ function scopeSlotCandidate(
 }
 
 function typeMemberFactsForSlot(
-  store: KernelStore,
+  frame: TemplateCompletionAnswerFrame,
   slot: BindingContextSlot,
+  scope: BindingScope,
+  contextKind: BindingContextKind,
 ): TemplateCompletionTypeMemberFacts | null {
   const member = slot.targetProductHandle == null
     ? null
-    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+    : frame.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
   return member == null
     ? null
-    : new TemplateCompletionTypeMemberFacts(
-      member.memberKind,
-      checkerTypeMemberVisibilityKind(member),
-      member.isOptional,
-      member.isReadonly,
-      aureliaHookKindForMemberName(member.name),
+    : typeMemberFacts(
+      frame,
+      member,
+      contextKind === BindingContextKind.ViewModel && slot.name === member.name ? scope : null,
     );
 }
 
@@ -2295,7 +2390,7 @@ function completionSiteForExpressionResult(
   expressionResult: ExpressionParseResult,
 ): TemplateCompletionSiteKind {
   const frontier = expressionCompletionFrontier(expressionResult);
-  if (frontier?.frontierKind === ExpressionFrontierKind.AwaitingMemberName) {
+  if (frontier?.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.MemberName) === true) {
     return TemplateCompletionSiteKind.ExpressionMember;
   }
   if (frontier?.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.ValueConverterName) === true) {

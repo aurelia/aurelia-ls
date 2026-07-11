@@ -10441,7 +10441,7 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/routes/hook-route.html",
-      "requirement": "Template completions classify current Aurelia router view-model hook methods from IRouteViewModel without treating ordinary load() methods as router lifecycle hooks.",
+      "requirement": "Template completions classify executable Aurelia component and router view-model hooks only when the checker member belongs to a proven framework owner, keeping router configuration distinct from transition lifecycle and rejecting nested, ordinary-component, AppTask-slot, and removed-hook lookalikes.",
       "cases": [
         {
           "id": "current-router-view-model-hook-vocabulary",
@@ -10455,7 +10455,132 @@
                 { "rowPath": "value.candidates", "fields": { "name": "loaded", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
                 { "rowPath": "value.candidates", "fields": { "name": "canUnload", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
                 { "rowPath": "value.candidates", "fields": { "name": "unloading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
-                { "rowPath": "value.candidates", "fields": { "name": "load", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+                { "rowPath": "value.candidates", "fields": { "name": "getRouteConfig", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-configuration" } },
+                { "rowPath": "value.candidates", "fields": { "name": "hydrating", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "load", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "unload", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "detached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "unbound", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "activated", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nested-hook-lookalikes-remain-ordinary",
+          "expectations": [
+            {
+              "name": "nested object completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${helper.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            },
+            {
+              "name": "self-typed ordinary member completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${child.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            },
+            {
+              "name": "self-typed explicit-context member completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.child.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            },
+            {
+              "name": "self-typed optional-chain member completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${child?.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "top-level-and-member-owner-classification-agree",
+          "expectations": [
+            {
+              "name": "top-level template completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "load", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "activated", "candidateKind": "binding-context-slot", "memberKind": "method", "aureliaHookKind": null } }
+              ]
+            },
+            {
+              "name": "boundary this completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } }
+              ]
+            },
+            {
+              "name": "parent binding-context completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$parent.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "route-config-owner-proves-duck-typed-hooks",
+          "sourceFile": "src/routes/duck-route.html",
+          "expectations": [
+            {
+              "name": "route-config-owned completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "getRouteConfig", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-configuration" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loaded", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "canUnload", "candidateKind": "type-member", "memberKind": "property", "aureliaHookKind": null } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "framework-interface-proves-unconfigured-route-view-model",
+          "sourceFile": "src/declared-route-like.html",
+          "expectations": [
+            {
+              "name": "IRouteViewModel-declared completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "loaded", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "router-lifecycle" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ordinary-component-uses-only-current-component-hooks",
+          "sourceFile": "src/ordinary-panel.html",
+          "expectations": [
+            {
+              "name": "ordinary component completions",
+              "query": { "kind": "template-completions", "cursor": { "marker": "${$this.", "position": "after-marker" }, "options": { "page": { "size": 100 } } },
+              "rows": [
+                { "rowPath": "value.candidates", "fields": { "name": "binding", "candidateKind": "type-member", "memberKind": "property", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "loading", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "loaded", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "hydrating", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "attached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": "component-lifecycle" } },
+                { "rowPath": "value.candidates", "fields": { "name": "detached", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "unbound", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } },
+                { "rowPath": "value.candidates", "fields": { "name": "activated", "candidateKind": "type-member", "memberKind": "method", "aureliaHookKind": null } }
               ]
             }
           ]

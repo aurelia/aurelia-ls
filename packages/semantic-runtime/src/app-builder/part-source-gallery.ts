@@ -1189,7 +1189,6 @@ function componentLifecycleMembers(
   sampleKind: AppBuilderPartSourceLoweringSampleKind = AppBuilderPartSourceLoweringSampleKind.WithOptionalSlots,
 ): string {
   return [
-    AppBuilderComponentLifecycleId.DefineHook,
     AppBuilderComponentLifecycleId.HydratingHook,
     AppBuilderComponentLifecycleId.HydratedHook,
     AppBuilderComponentLifecycleId.CreatedHook,

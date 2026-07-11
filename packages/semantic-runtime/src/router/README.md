@@ -44,6 +44,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   field provenance, and remains field-open when execution order, static values, or a dynamic hook cannot close. Only
   positively executed `Route.configure(...)` calls can become effective winners; cross-module winners without a proven
   global order remain explicitly open.
+- Classify callable routed view-model members for IDE completion only when the owner is proved by an effective
+  `RouteConfig` or explicit/inherited framework `IRouteViewModel` heritage. Keep `getRouteConfig` in the configuration
+  category and `canLoad`, `loading`, `loaded`, `canUnload`, and `unloading` in transition lifecycle. Preserve the route
+  or checker product that proved the role in the inquiry answer instead of reducing the fact to a member-name string.
 - Materialize one applied `RouteConfig` per parent/use through `_applyChildRouteConfig(...)` semantics. Child overlays win,
   transition plan and fallback can inherit from the parent, bare routeables clone their definition config, and repeated
   uses stay distinct even when they resolve to the same component. Recursive route graphs are bounded at the repeated
@@ -292,7 +296,7 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   pre-activation route-tree facts.
 - Executing routed view-model `getRouteConfig(...)` hooks or detecting repeated hook application. The hook declaration
   opens the effective fields it may override while retaining pre-hook facts; `RouteConfig._applyFromConfigurationHook` /
-  `AUR3550` remains a runtime view-model lifecycle guard.
+  `AUR3550` remains a runtime view-model configuration-hook guard.
 - Resolving `NavigationStrategy` components outside a concrete viewport instruction. `RouteConfig.component` /
   `AUR3558` stays unclaimed because navigation-strategy routeables remain referential/open until navigation supplies
   the instruction context.

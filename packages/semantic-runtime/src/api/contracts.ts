@@ -3391,12 +3391,12 @@ export interface SemanticTemplateCompletionCandidateRow {
 }
 
 export const enum SemanticTemplateCompletionAureliaHookKind {
-  /** Member name matches a custom-element/controller lifecycle hook such as attached or binding. */
+  /** Callable custom-element view-model member discovered by Controller as a component lifecycle hook. */
   ComponentLifecycle = 'component-lifecycle',
-  /** Member name matches a router viewport/component hook such as canLoad or load. */
+  /** Callable member on a proven routed view model discovered during router transition lifecycle. */
   RouterLifecycle = 'router-lifecycle',
-  /** Member name matches an app-task phase hook such as hydrating or activated. */
-  AppTaskLifecycle = 'app-task-lifecycle',
+  /** Member is the routed component's dynamic route-configuration hook. */
+  RouterConfiguration = 'router-configuration',
 }
 
 export interface SemanticTemplateCompletionFrontierRow {

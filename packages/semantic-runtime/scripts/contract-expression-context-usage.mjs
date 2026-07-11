@@ -32,6 +32,7 @@ const allowedKnownScopeContextCalls = new Set([
 
 const allowedSourceValueKnownScopeCalls = new Set([
   'packages/semantic-runtime/src/observation/binding-source-value-evaluation-context.ts#projectRuntimeBindingSourceValueContextInScope',
+  'packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts#RuntimeBindingSourceValueEvaluator.evaluateBoundControllerPropertyValue',
   'packages/semantic-runtime/src/router/route-instruction-materialization.ts#routerSourceExpressionEvaluationFrame',
 ]);
 

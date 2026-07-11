@@ -46,6 +46,10 @@ open seams, or inquiry answers.
 - `parse-result-algebra.ts` is parser-owned publication.
 - `parse-result-inspection.ts` is the stable query surface for downstream
   consumers that should not rebuild sibling-kind switches locally.
+- Member-owner inspection follows the parser's `MemberName` continuation class, not one frontier enum. Both
+  `AwaitingMemberName` and `AwaitingChainSegment` can retain a member receiver; the latter covers optional-chain and
+  `$parent.` scope-path frontiers. Consumers must spend the published continuation algebra rather than discard those
+  receivers and recreate incomplete-syntax policy.
 
 ## Core Design Decisions
 

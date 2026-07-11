@@ -75,7 +75,7 @@ Transient verdict state lives in `known-gaps.json`:
 
 This keeps the north-star requirements durable while making today's implementation gaps explicit.
 
-Current matrix scale, as of 2026-07-09:
+Current matrix scale, as of 2026-07-11:
 
 - public app-query catalog boundary assertions;
 - source precision and cross-query agreement canaries;
@@ -101,11 +101,11 @@ Current matrix scale, as of 2026-07-09:
 - code-action edit-plan provenance, including safe no-action cases;
 - framework capability demand rows before diagnostic/code-action projection.
 
-Current default output: 374 active assertions pass with 39 known gaps. The bindable-contracts subdomain has 82 assertion
+Current default output: 401 active assertions pass with 34 known gaps. The bindable-contracts subdomain has 82 assertion
 rows: 60 active passes and 22 known-gap witnesses. Its gaps are grouped by causal mechanism rather than surface symptom:
 bindable metadata/class-symbol closure, inline multi-binding segment projection, coercion policy loss, field-provenance
 loss, cursor type loss, interceptor-reference convergence, custom-attribute compiler-policy projection, and TS-origin callback
-propagation. The router-composition subdomain has 64 assertion rows, including the current router known-gap witnesses;
+propagation. The router-composition subdomain has 86 assertion rows: 83 active passes and 3 known-gap witnesses;
 the resource-registration subdomain has 90 active assertion rows and no current known gaps; the runtime-composition
 subdomain has 4 assertion rows.
 

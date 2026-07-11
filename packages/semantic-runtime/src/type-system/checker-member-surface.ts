@@ -4,6 +4,7 @@ import {
   CheckerTypeMemberVisibilityKind,
   type CheckerTypeMember,
 } from './type-shape.js';
+import { checkerCallableContextSignatures } from './checker-signature-parameters.js';
 
 export function declarationsForCheckerSymbol(symbol: ts.Symbol | null): readonly ts.Declaration[] {
   return symbol?.getDeclarations() ?? [];
@@ -57,6 +58,18 @@ export function checkerTypeMemberVisibilityKind(
   return member.carrier == null
     ? CheckerTypeMemberVisibilityKind.Unknown
     : checkerDeclarationsVisibilityKind(member.carrier.declarations);
+}
+
+/** Whether the projected member can be invoked through Aurelia's non-nullish runtime call lane. */
+export function checkerTypeMemberIsCallable(
+  member: CheckerTypeMember,
+): boolean {
+  const carrier = member.carrier;
+  if (carrier?.valueType != null) {
+    return checkerCallableContextSignatures(carrier.checker, carrier.valueType).length > 0;
+  }
+  return member.memberKind === CheckerTypeMemberKind.Method
+    || member.memberKind === CheckerTypeMemberKind.CallSignature;
 }
 
 export function checkerDeclarationsVisibilityKind(

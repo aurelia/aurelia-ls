@@ -1,6 +1,7 @@
 import { customElement } from '@aurelia/runtime-html';
 import type {
   INavigationOptions,
+  IRouteConfig,
   IRouteViewModel,
   NavigationInstruction,
   Params,
@@ -13,6 +14,18 @@ import template from './hook-route.html';
   template,
 })
 export class HookRoute implements IRouteViewModel {
+  public readonly child: HookRoute = this;
+  public readonly entries = [0];
+
+  public readonly helper = {
+    loading(): void {},
+    attached(): void {},
+  };
+
+  public getRouteConfig(): IRouteConfig {
+    return { routes: [] };
+  }
+
   public canLoad(
     _params: Params,
     _next: RouteNode,
@@ -50,5 +63,17 @@ export class HookRoute implements IRouteViewModel {
     _options: INavigationOptions,
   ): void {}
 
+  public hydrating(): void {}
+
+  public attached(): void {}
+
   public load(): void {}
+
+  public unload(): void {}
+
+  public detached(): void {}
+
+  public unbound(): void {}
+
+  public activated(): void {}
 }

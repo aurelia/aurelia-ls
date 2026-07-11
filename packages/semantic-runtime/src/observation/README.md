@@ -726,6 +726,11 @@ intentionally kept inside the context class so every source-value entry point na
 context carries that lifecycle explicitly; do not use a missing binding-expression projector as a synonym for
 evaluate-only behavior, because nested bound-controller or composition reads may still need the projector while the
 current source expression must ignore bind-time behavior effects.
+An external read of one retained `RuntimeBoundControllerPropertyValue` is another named exact-scope root:
+`evaluateBoundControllerPropertyValue(...)` seeds container and recursion state from the stored parent `BindingScope`,
+then immediately routes the expression through `projectBindingSourceValueContext(...)` with the retained binding
+behavior, scope projector, strictness, resource scope, and source container before evaluation. The structural context
+contract allowlists that owner specifically; it does not admit other bound-controller or observation-local fallbacks.
 The projector also carries the binding-behavior lifecycle policy. Most runtime bindings evaluate source expressions
 after `astBind(...)`, while i18n dynamic translation keys are evaluate-only and `t-params.bind` parameter bindings use
 the normal bind-time path. Keep that distinction here instead of adding i18n or overlay-local binding-behavior rules.

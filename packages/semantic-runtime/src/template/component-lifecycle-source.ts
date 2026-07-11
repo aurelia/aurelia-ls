@@ -1,7 +1,5 @@
 /** Aurelia component view-model lifecycle hook names discovered by runtime-html Controller. */
 export enum ComponentLifecycleHookName {
-  /** Compile-time definition hook for custom elements. */
-  Define = 'define',
   /** Pre-node-creation custom-element hydration hook. */
   Hydrating = 'hydrating',
   /** Post-node-creation custom-element hydration hook. */
@@ -28,7 +26,6 @@ export enum ComponentLifecycleHookName {
 
 /** Stable value list for component lifecycle hook source requests. */
 export const COMPONENT_LIFECYCLE_HOOK_NAMES = [
-  ComponentLifecycleHookName.Define,
   ComponentLifecycleHookName.Hydrating,
   ComponentLifecycleHookName.Hydrated,
   ComponentLifecycleHookName.Created,
@@ -41,6 +38,17 @@ export const COMPONENT_LIFECYCLE_HOOK_NAMES = [
   ComponentLifecycleHookName.Dispose,
   ComponentLifecycleHookName.Accept,
 ] as const;
+
+const COMPONENT_LIFECYCLE_HOOK_NAME_SET: ReadonlySet<string> = new Set(COMPONENT_LIFECYCLE_HOOK_NAMES);
+
+/** Classify names that runtime-html Controller currently discovers and invokes on component view models. */
+export function componentLifecycleHookName(
+  name: string,
+): ComponentLifecycleHookName | null {
+  return COMPONENT_LIFECYCLE_HOOK_NAME_SET.has(name)
+    ? name as ComponentLifecycleHookName
+    : null;
+}
 
 /** Source request for one component lifecycle method member. */
 export interface ComponentLifecycleHookMethodSourceRequest {

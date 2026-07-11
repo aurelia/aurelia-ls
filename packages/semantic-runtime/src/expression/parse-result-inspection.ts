@@ -8,7 +8,7 @@ import type {
   ExpressionType,
 } from './ast.js';
 import {
-  ExpressionFrontierKind,
+  ExpressionExpectedContinuationClass,
   ExpressionParseResultFlags,
   ExpressionParseResultKind,
   hasExpressionParseResultKindFlag,
@@ -120,14 +120,14 @@ export class ExpressionParseResultInspector {
     if (
       'frontierKind' in result
       && 'closedSubtreeRefs' in result
-      && result.frontierKind === ExpressionFrontierKind.AwaitingMemberName
+      && frontierExpectsMemberName(result)
     ) {
       return result.closedSubtreeRefs.at(-1)?.node ?? null;
     }
 
     if (
       'activeHole' in result
-      && result.activeHole.frontierKind === ExpressionFrontierKind.AwaitingMemberName
+      && frontierExpectsMemberName(result.activeHole)
     ) {
       return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
     }
@@ -152,14 +152,14 @@ export class ExpressionParseResultInspector {
     }
     if (
       'activeHole' in result
-      && result.activeHole.frontierKind === ExpressionFrontierKind.AwaitingMemberName
+      && frontierExpectsMemberName(result.activeHole)
     ) {
       return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
     }
     if (
       'frontierKind' in result
       && 'closedSubtreeRefs' in result
-      && result.frontierKind === ExpressionFrontierKind.AwaitingMemberName
+      && frontierExpectsMemberName(result)
     ) {
       return result.closedSubtreeRefs.at(-1)?.node ?? null;
     }
@@ -208,6 +208,12 @@ export class ExpressionParseResultInspector {
       ? bindingIdentifierForNodeOffset(result.ast, offset)
       : null;
   }
+}
+
+function frontierExpectsMemberName(
+  frontier: { readonly expectedContinuationClasses: readonly ExpressionExpectedContinuationClass[] },
+): boolean {
+  return frontier.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.MemberName);
 }
 
 export interface ExpressionMemberAccessSpan {

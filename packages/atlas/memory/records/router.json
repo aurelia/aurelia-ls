@@ -780,6 +780,97 @@
       ],
       "createdAt": "2026-07-11",
       "updatedAt": "2026-07-11"
+    },
+    {
+      "id": "decision:framework-view-model-hook-ownership",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "router",
+        "type-system",
+        "ide"
+      ],
+      "summary": "Classify callable framework hooks from the owning Aurelia role, never from global member-name sets.",
+      "rationale": "The former completion path classified every checker member from three global spelling sets. It produced false router and AppTask facts, retained removed names, omitted current names, and disagreed with the framework's role-specific dispatch. The checker, binding-scope, controller, RouteConfig, and framework-declaration products already carried the missing ownership evidence; the repair reconnects those products instead of introducing another hook registry.",
+      "guidance": [
+        "Template completion may read an available ambient BindingScope at member sites as classification evidence without offering binding-scope candidates there or requiring scope evidence from owner types projected through another lane. Dependency admission and candidate projection are separate decisions.",
+        "Checker type equality is not component-instance proof: self-typed nested and optional-chained values stay ordinary. Expression-member hook facts require a direct $this, $parent, or boundary this receiver resolved through BindingScope.",
+        "Member-owner inspection spends the parser's MemberName continuation class. AwaitingChainSegment retains valid receivers for optional-chain and $parent scope-path frontiers and must not be discarded by frontier-enum matching.",
+        "Component lifecycle facts require a callable checker member on a custom-element controller binding context and use the executable runtime-html Controller vocabulary owned by component-lifecycle-source.ts.",
+        "Router hook facts additionally require an effective RouteConfig targeting the owner or explicit/inherited framework IRouteViewModel heritage. Route configuration proves duck-typed owners; framework heritage is independent declaration evidence.",
+        "Keep getRouteConfig in router configuration and canLoad/loading/loaded/canUnload/unloading in router transition lifecycle. Preserve the product that proves owner role in the inquiry answer.",
+        "AppTask phases are registration slots, not view-model hooks. Removed or legacy names such as define, load, unload, detached, and unbound must not enter completion classification without executable framework evidence.",
+        "Exact hook signature compatibility is a future diagnostic and presentation question. It must not replace role ownership because the runtime discovers and invokes callable members by role and name."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "aureliaHookKindForMember",
+          "summary": "Completion join over callable member, component owner, routed owner, and retained basis products."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for routed view-model role evidence and hook categories."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/component-lifecycle-source.ts",
+          "symbolName": "componentLifecycleHookName",
+          "summary": "Executable runtime-html Controller lifecycle vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/framework-declaration-source.ts",
+          "symbolName": "typeOrHeritageMatchesFrameworkDeclarationSource",
+          "summary": "Shared framework declaration and recursive heritage proof."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector",
+          "summary": "Member receiver recovery from parser continuation algebra across ordinary, optional-chain, and scope-path frontiers."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --fixture fixtures/pressure/router-lifecycle-hook-vocabulary",
+          "summary": "Contrastive configured, declared, inherited, nested, ordinary, stale, and AppTask-name pressure."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-router-relationships.ts",
+          "symbolName": "routerRelationshipsFromFlowRows",
+          "summary": "Framework router relationship projection distinguishing configuration and lifecycle surfaces."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticTemplateCompletionAureliaHookKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/component-lifecycle-source.ts",
+          "symbolName": "componentLifecycleHookName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "aureliaHookKindForMember"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector"
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
     }
   ]
 }

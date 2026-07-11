@@ -667,6 +667,22 @@ from template/runtime/scope products. Expression-scope completion also spends th
 context as overlays and data-flow: if a specific binding expression opts into a source-scope-changing binding behavior,
 the cursor scope reflects that binding source while ordinary child scopes remain unchanged.
 
+Framework hook facts on completion members are role classifications, not global name matches. Component lifecycle
+classification requires a callable member on a custom-element controller binding context and uses only names that
+runtime-html `Controller` currently discovers and invokes: `hydrating`, `hydrated`, `created`, `binding`, `bound`,
+`attaching`, `attached`, `detaching`, `unbinding`, `dispose`, and `accept`. Routed view-model classification additionally
+requires either an effective `RouteConfig` targeting the owning custom-element definition or explicit/inherited
+framework `IRouteViewModel` heritage. `getRouteConfig` is a router-configuration hook; `canLoad`, `loading`, `loaded`,
+`canUnload`, and `unloading` are transition-lifecycle hooks. AppTask phases are registration slots, not view-model
+hooks, and removed or legacy spellings such as `define`, `load`, `unload`, `detached`, and `unbound` must not re-enter
+completion vocabulary without executable framework evidence. Member-expression completion reads an available ambient
+`BindingScope` as classification evidence without offering unrelated scope candidates or making that evidence
+mandatory for owner types projected through another lane; dependency admission and candidate projection are
+deliberately separate decisions. At member-access sites the owner expression must resolve directly to `$this`,
+`$parent`, or boundary `this` for the selected BindingScope; a nested or optional-chained value with the same checker
+type as the component is not the component role. Member frontiers are selected from the parser's `MemberName`
+continuation class so `$parent.` and optional-chain receivers retain the same owner evidence as ordinary dot access.
+
 Template compilation should now enter through a compilation unit. Avoid letting later template materializers rediscover
 the owner resource, compiler world, parse context, or runtime service set from source. If a materializer needs different
 context, add it to the unit/context model or create a nested child context instead of threading unrelated parameters

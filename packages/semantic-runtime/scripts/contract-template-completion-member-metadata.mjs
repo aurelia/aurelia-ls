@@ -75,7 +75,7 @@ assertMember('detached', {
   memberKind: 'method',
   memberVisibility: 'public',
   memberIsReadonly: false,
-  aureliaHookKind: 'component-lifecycle',
+  aureliaHookKind: null,
 });
 assertMember('applyDarkTheme', {
   memberKind: 'method',
