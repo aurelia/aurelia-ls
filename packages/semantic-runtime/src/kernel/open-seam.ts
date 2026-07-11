@@ -88,6 +88,10 @@ export const enum OpenSeamReasonKind {
   RouterInstructionParseFailure = 'router-instruction-parse-failure',
   /** Router viewport resolution could not close the viewport target. */
   RouterViewportResolutionOpen = 'router-viewport-resolution-open',
+  /** An au-viewport bindable value could not close to the string semantics used by viewport matching. */
+  RouterViewportValueOpen = 'router-viewport-value-open',
+  /** An au-viewport lives under controller flow whose runtime presence or multiplicity is not singular. */
+  RouterViewportPresenceOpen = 'router-viewport-presence-open',
   /** Router redirect materialization could not close the redirect target. */
   RouterRedirectTargetOpen = 'router-redirect-target-open',
   /** RouteConfig has an instance getRouteConfig hook whose runtime result may override pre-hook fields. */

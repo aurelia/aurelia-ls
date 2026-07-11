@@ -37,6 +37,7 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   ComponentAgentModel,
+  RouterRealizationStageKind,
   type RouteContextModel,
   type RouteNodeModel,
 } from './model.js';
@@ -244,7 +245,7 @@ function componentAgentEmission(
     handles.sourceAddressHandle,
     routeContext.toReference(),
     routeNode.toReference(),
-    routeContext.viewportAgent,
+    routeNode.viewportAgentCandidate,
     controllerEmission?.controller ?? null,
     routeNode,
   );
@@ -311,16 +312,17 @@ function componentAgentModel(
   sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
   routeContext: ComponentAgentModel['routeContext'],
   routeNodeReference: ComponentAgentModel['routeNode'],
-  viewportAgent: ComponentAgentModel['viewportAgent'],
+  viewportAgentCandidate: ComponentAgentModel['viewportAgentCandidate'],
   controller: RuntimeControllerFrame | null,
   routeNode: RouteNodeModel,
 ): ComponentAgentModel {
   return new ComponentAgentModel(
     productHandle,
     identityHandle,
+    RouterRealizationStageKind.Planned,
     routeContext,
     routeNodeReference,
-    viewportAgent,
+    viewportAgentCandidate,
     controller?.productHandle ?? null,
     routeNode.component,
     sourceAddressHandle,

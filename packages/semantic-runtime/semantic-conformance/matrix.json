@@ -8793,15 +8793,15 @@
           ]
         },
         {
-          "id": "runtime-route-contexts-viewports-and-agents",
+          "id": "potential-route-contexts-viewports-and-agents",
           "expectations": [
             {
               "name": "route contexts",
               "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
               "equals": { "value.rows.length": 3 },
               "rows": [
-                { "fields": { "parentLabel": null, "hasViewportAgent": false } },
-                { "fields": { "hasViewportAgent": true }, "count": 2 }
+                { "fields": { "realizationStage": "potential", "parentLabel": null, "hasHostingViewportAgentCandidate": false } },
+                { "fields": { "realizationStage": "potential", "hasHostingViewportAgentCandidate": true }, "count": 2 }
               ]
             },
             {
@@ -8843,17 +8843,17 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/router-routecontext-topology-app.html",
-      "requirement": "Router RouteContext topology distinguishes static potential contexts from selected transition rows, preserves viewport-agent/used-by source facts, and spends resolved custom-element names where Aurelia RouteConfigContext and ViewportAgent semantics require them.",
+      "requirement": "Router topology distinguishes potential contexts from planned pre-activation rows, preserves viewport-agent candidate and viewport-field source facts, and spends resolved custom-element names where Aurelia RouteConfigContext and ViewportAgent matching require them.",
       "cases": [
         {
-          "id": "potential-topology-and-selected-transition-boundary",
+          "id": "potential-topology-and-planned-transition-boundary",
           "expectations": [
             {
               "name": "route contexts",
               "query": { "kind": "route-contexts", "options": { "page": { "size": 100 } } },
               "rows": [
                 { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'main'", "endMarker": "\n    }" } },
-                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'open'", "endMarker": "\n    }" }, "count": 2 }
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "startMarker": "{\n      id: 'open'", "endMarker": "\n    }" }, "atLeast": 2 }
               ]
             },
             {
@@ -8861,7 +8861,7 @@
               "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "path": "main", "finalPath": "main", "viewport": "main", "routeConfig.id": "main" }, "source": { "marker": "load=\"main\"", "token": "main" } },
-                { "fields": { "path": "open", "finalPath": "open", "viewport": "default", "routeConfig.id": "open" }, "source": { "marker": "load=\"open\"", "token": "open" } }
+                { "fields": { "path": "open", "finalPath": "open", "viewport": "default", "routeConfig.id": "open" }, "source": { "marker": "load=\"open\"", "token": "open" }, "absent": true }
               ]
             },
             {
@@ -8869,7 +8869,7 @@
               "query": { "kind": "component-agents", "options": { "page": { "size": 100 } } },
               "rows": [
                 { "source": { "marker": "load=\"main\"", "token": "main" } },
-                { "source": { "marker": "load=\"open\"", "token": "open" } }
+                { "source": { "marker": "load=\"open\"", "token": "open" }, "absent": true }
               ]
             },
             {
@@ -8883,30 +8883,28 @@
           ]
         },
         {
-          "id": "viewport-source-facts-and-nested-potential-duplication",
+          "id": "viewport-source-facts-and-nested-topology",
           "expectations": [
             {
               "name": "router viewports",
               "query": { "kind": "router-viewports", "options": { "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 6 },
               "rows": [
                 { "fields": { "name": "main" }, "source": { "marker": "<au-viewport name=\"main\"", "token": "<au-viewport name=\"main\"></au-viewport>" } },
                 { "fields": { "name": "side" }, "source": { "marker": "<au-viewport name=\"side\"", "token": "<au-viewport name=\"side\"></au-viewport>" } },
                 { "fields": { "name": "filtered" }, "source": { "marker": "<au-viewport name=\"filtered\"", "token": "<au-viewport name=\"filtered\" used-by=\"filtered-route\"></au-viewport>" } },
                 { "fields": { "name": "blocked" }, "source": { "marker": "<au-viewport name=\"blocked\"", "token": "<au-viewport name=\"blocked\" used-by=\"other-route\"></au-viewport>" } },
-                { "fields": { "name": "report-detail" }, "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" }, "count": 2 }
+                { "fields": { "name": "report-detail" }, "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" } }
               ]
             },
             {
               "name": "viewport agents",
               "query": { "kind": "viewport-agents", "options": { "page": { "size": 100 } } },
-              "equals": { "value.rows.length": 6 },
               "rows": [
                 { "source": { "marker": "<au-viewport name=\"main\"", "token": "<au-viewport name=\"main\"></au-viewport>" } },
                 { "source": { "marker": "<au-viewport name=\"side\"", "token": "<au-viewport name=\"side\"></au-viewport>" } },
                 { "source": { "marker": "<au-viewport name=\"filtered\"", "token": "<au-viewport name=\"filtered\" used-by=\"filtered-route\"></au-viewport>" } },
                 { "source": { "marker": "<au-viewport name=\"blocked\"", "token": "<au-viewport name=\"blocked\" used-by=\"other-route\"></au-viewport>" } },
-                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" }, "count": 2 }
+                { "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "<au-viewport name=\"report-detail\"", "token": "<au-viewport name=\"report-detail\" used-by=\"report-detail-route\"></au-viewport>" } }
               ]
             }
           ]
@@ -8921,8 +8919,8 @@
               "rows": [
                 { "fields": { "label": "router-routecontext-topology-app", "parentLabel": null } },
                 { "fields": { "label": "router-routecontext-topology-app/main-route", "parentLabel": "router-routecontext-topology-app" } },
-                { "fields": { "label": "router-routecontext-topology-app/open-route", "parentLabel": "router-routecontext-topology-app" }, "count": 2 },
-                { "fields": { "label": "router-routecontext-topology-app/reports-route", "parentLabel": "router-routecontext-topology-app" }, "count": 2 }
+                { "fields": { "label": "router-routecontext-topology-app/open-route", "parentLabel": "router-routecontext-topology-app" }, "atLeast": 2 },
+                { "fields": { "label": "router-routecontext-topology-app/reports-route", "parentLabel": "router-routecontext-topology-app" } }
               ]
             },
             {
@@ -8930,7 +8928,15 @@
               "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "path": "main", "componentName": "main-route" }, "source": { "marker": "load=\"main\"", "token": "main" } },
-                { "fields": { "path": "open", "componentName": "open-route" }, "source": { "marker": "load=\"open\"", "token": "open" } }
+                { "fields": { "path": "bound", "componentName": "bound-route" }, "source": { "marker": "load=\"bound\"", "token": "bound" } }
+              ]
+            },
+            {
+              "name": "application topology",
+              "query": { "kind": "app-topology" },
+              "rows": [
+                { "rowPath": "value.routes", "fields": { "componentName": "MainRoute", "resolvedComponentName": "main-route" } },
+                { "rowPath": "value.routes", "fields": { "componentName": "BoundRoute", "resolvedComponentName": "bound-route" } }
               ]
             }
           ]
@@ -8961,6 +8967,252 @@
               "rows": [
                 { "source": { "marker": "load=\"filtered\"", "token": "filtered" } },
                 { "source": { "marker": "load=\"reports/detail/r-1\"", "token": "reports/detail/r-1" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "realization-stages-distinguish-potential-and-planned-products",
+          "expectations": [
+            {
+              "name": "route contexts",
+              "query": { "kind": "route-contexts", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "potential" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            },
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "potential" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            },
+            {
+              "name": "viewport agents",
+              "query": { "kind": "viewport-agents", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "potential" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            },
+            {
+              "name": "route trees",
+              "query": { "kind": "route-trees", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "potential" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "planned" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "potential", "path": "" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "planned", "path": "main", "viewportCandidateResolution": "sole" }, "source": { "marker": "load=\"main\"", "token": "main" } },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            },
+            {
+              "name": "component agents",
+              "query": { "kind": "component-agents", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "realizationStage": "planned" }, "atLeast": 1 },
+                { "fields": { "realizationStage": "potential" }, "absent": true },
+                { "fields": { "realizationStage": "live" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bound-viewport-fields-close-through-binding-source-evaluation",
+          "expectations": [
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "name": "bound",
+                    "usedBy": ["bound-route"],
+                    "defaultComponent": "main-route",
+                    "fallback": "open-route",
+                    "fieldStates.name": "closed",
+                    "fieldStates.usedBy": "closed",
+                    "fieldStates.default": "closed",
+                    "fieldStates.fallback": "closed"
+                  },
+                  "source": { "marker": "<au-viewport\n    name.bind=\"boundViewportName\"", "token": "<au-viewport\n    name.bind=\"boundViewportName\"\n    used-by.bind=\"boundUsedBy\"\n    default.bind=\"boundDefault\"\n    fallback.bind=\"boundFallback\"\n  ></au-viewport>" }
+                },
+                {
+                  "fields": { "name": "bound" },
+                  "sourceField": "fieldSources.name",
+                  "source": { "marker": "name.bind=\"boundViewportName\"", "token": "boundViewportName" }
+                },
+                {
+                  "fields": { "name": "bound" },
+                  "sourceField": "fieldSources.usedBy",
+                  "source": { "marker": "used-by.bind=\"boundUsedBy\"", "token": "boundUsedBy" }
+                },
+                {
+                  "fields": { "name": "bound" },
+                  "sourceField": "fieldSources.default",
+                  "source": { "marker": "default.bind=\"boundDefault\"", "token": "boundDefault" }
+                },
+                {
+                  "fields": { "name": "bound" },
+                  "sourceField": "fieldSources.fallback",
+                  "source": { "marker": "fallback.bind=\"boundFallback\"", "token": "boundFallback" }
+                }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "bound", "componentName": "bound-route", "viewportCandidateResolution": "sole", "viewportAgentCandidate.label": "bound" }, "source": { "marker": "load=\"bound\"", "token": "bound" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open-bound-viewport-values-remain-open",
+          "domainAxis": "open-honesty",
+          "expectations": [
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "name": null, "usedBy": ["dynamic-route"], "defaultComponent": null, "fallback": null, "fieldStates.name": "open", "fieldStates.usedBy": "closed", "fieldStates.default": "defaulted", "fieldStates.fallback": "defaulted" },
+                  "source": { "marker": "<au-viewport name.bind=\"dynamicViewportName\"", "token": "<au-viewport name.bind=\"dynamicViewportName\" used-by=\"dynamic-route\"></au-viewport>" }
+                },
+                {
+                  "fields": { "name": "dynamic-used-by", "usedBy": null, "defaultComponent": null, "fallback": null, "fieldStates.name": "closed", "fieldStates.usedBy": "open", "fieldStates.default": "defaulted", "fieldStates.fallback": "defaulted" },
+                  "source": { "marker": "<au-viewport name=\"dynamic-used-by\"", "token": "<au-viewport name=\"dynamic-used-by\" used-by.bind=\"dynamicUsedBy\"></au-viewport>" }
+                }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-topology" }, "source": { "marker": "name.bind=\"dynamicViewportName\"", "token": "dynamicViewportName" } },
+                { "fields": { "seamKindKey": "router.open-topology" }, "source": { "marker": "used-by.bind=\"dynamicUsedBy\"", "token": "dynamicUsedBy" } },
+                { "fields": { "seamKindKey": "router.open-instruction" }, "source": { "marker": "load=\"dynamic\"", "token": "dynamic" } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "dynamic" }, "source": { "marker": "load=\"dynamic\"", "token": "dynamic" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "conditional-and-multiple-viewport-candidates-stay-unselected",
+          "domainAxis": "open-honesty",
+          "expectations": [
+            {
+              "name": "router viewports",
+              "query": { "kind": "router-viewports", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "name": "conditional", "presenceCardinality": "optional" }, "source": { "marker": "<au-viewport if.bind=\"showConditionalViewport\"", "token": "<au-viewport if.bind=\"showConditionalViewport\" name=\"conditional\"></au-viewport>" } },
+                { "fields": { "name": "shared", "presenceCardinality": "single" }, "count": 2 }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-topology" }, "source": { "marker": "<au-viewport if.bind=\"showConditionalViewport\"", "token": "<au-viewport if.bind=\"showConditionalViewport\" name=\"conditional\"></au-viewport>" } },
+                { "fields": { "seamKindKey": "router.open-instruction" }, "source": { "marker": "load=\"conditional\"", "token": "conditional" } },
+                { "fields": { "seamKindKey": "router.open-instruction" }, "source": { "marker": "load=\"shared\"", "token": "shared" } }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "conditional" }, "source": { "marker": "load=\"conditional\"", "token": "conditional" }, "absent": true },
+                { "fields": { "path": "shared" }, "source": { "marker": "load=\"shared\"", "token": "shared" }, "absent": true }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "conditional" }, "source": { "marker": "load=\"conditional\"", "token": "conditional" }, "absent": true },
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "shared" }, "source": { "marker": "load=\"shared\"", "token": "shared" }, "absent": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "closed-no-match-remains-an-exact-router-error",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "issueKind": "no-available-viewport-agent", "path": "missing", "frameworkErrorCode": "AUR3174" }, "source": { "marker": "load=\"missing\"", "token": "missing" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unresolved-routeable-names-do-not-masquerade-as-runtime-component-identity",
+          "domainAxis": "open-honesty",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "rows": [
+                {
+                  "fields": { "id": "unresolved", "component.name": "unregistered-routeable", "component.resolvedName": null, "component.resolved": false },
+                  "sourceField": "component.source",
+                  "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "component: 'unregistered-routeable'", "token": "'unregistered-routeable'" }
+                }
+              ]
+            },
+            {
+              "name": "application topology",
+              "query": { "kind": "app-topology" },
+              "rows": [
+                { "rowPath": "value.routes", "fields": { "id": "unresolved", "componentName": "unregistered-routeable", "resolvedComponentName": null } }
+              ]
+            },
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "issueKind": "routeable-component-not-found", "frameworkErrorCode": "AUR3552", "actual": "unregistered-routeable" }, "source": { "sourceFile": "src/router-routecontext-topology-app.ts", "marker": "component: 'unregistered-routeable'", "token": "'unregistered-routeable'" } }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-instruction" }, "source": { "marker": "load=\"unresolved\"", "token": "unresolved" } }
+              ]
+            },
+            {
+              "name": "route nodes",
+              "query": { "kind": "route-nodes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "fields": { "path": "unresolved" }, "source": { "marker": "load=\"unresolved\"", "token": "unresolved" }, "absent": true }
+              ]
+            },
+            {
+              "name": "component agents",
+              "query": { "kind": "component-agents", "options": { "page": { "size": 200 } } },
+              "rows": [
+                { "source": { "marker": "load=\"unresolved\"", "token": "unresolved" }, "absent": true }
               ]
             }
           ]
@@ -9729,7 +9981,7 @@
               "name": "open seams",
               "query": { "kind": "open-seams", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "count": 0 }
+                { "fields": { "seamKindKey": "router.open-instruction" }, "source": { "marker": "load=\"class-reference-route\"", "token": "class-reference-route" } }
               ]
             }
           ]
@@ -10085,7 +10337,7 @@
               "name": "route nodes",
               "query": { "kind": "route-nodes", "options": { "page": { "size": 100 } } },
               "rows": [
-                { "fields": { "path": "target", "finalPath": "target", "componentName": "TargetRoute" }, "source": { "marker": "load=\"legacy\"", "token": "legacy" } }
+                { "fields": { "path": "target", "finalPath": "target", "componentName": "target-route" }, "source": { "marker": "load=\"legacy\"", "token": "legacy" } }
               ]
             }
           ]

@@ -676,6 +676,9 @@ class RouteConfigKernelEmitter {
       observation.resourceDefinition?.target.identityHandle ?? null,
       source.addressHandle,
       observation.localName,
+      observation.resourceDefinition?.type === ResourceDefinitionKind.CustomElement
+        ? observation.resourceDefinition.name
+        : null,
     );
   }
 

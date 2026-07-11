@@ -37,6 +37,7 @@ export function readAppOpenSeams(
 
   recordSourceFileOpenSeams(rows, store, sourceFileHandles);
   recordOpenSeams(rows, emission.appWorld.diWorld.openSeams);
+  recordOpenSeams(rows, emission.routeRuntimeTopology.openSeams);
   recordOpenSeams(rows, emission.routeInstructions.openSeams);
   for (const resource of emission.templates.resources) {
     recordOpenSeams(rows, templateResourceOpenSeams(resource));

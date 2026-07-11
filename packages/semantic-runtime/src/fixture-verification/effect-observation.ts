@@ -64,7 +64,7 @@ export enum ExpectedSemanticEffectRouteProductKind {
   RouterOptions = 'router-options',
   /** Normalized RouteConfig product, including origin/value-shape metadata. */
   RouteConfig = 'route-config',
-  /** Runtime RouteContext topology product. */
+  /** Potential RouteContext topology product. */
   RouteContext = 'route-context',
   /** Source-backed RouteContext.getRouteParameters(...) read correlated with route path params. */
   RouteContextParameterRead = 'route-context-parameter-read',

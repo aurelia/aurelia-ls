@@ -107,7 +107,7 @@ function semanticRouterOverviewDisplayText(
 ): string {
   const lines = [
     `Router: ${counts.routes} route config(s), ${counts.routeContexts} route context(s), ${counts.routeContextParameterReads} route-context parameter read(s), ${counts.recognizedRoutes} recognized route row(s), ${counts.typedNavigationInstructions} typed navigation instruction(s).`,
-    `Runtime tree: ${counts.routerViewports} viewport(s), ${counts.viewportAgents} viewport agent(s), ${counts.componentAgents} component agent(s), ${counts.routeTrees} route tree(s), ${counts.routeNodes} route node(s).`,
+    `Static realization: ${counts.routerViewports} potential viewport(s), ${counts.viewportAgents} viewport-agent candidate(s), ${counts.componentAgents} planned component agent(s), ${counts.routeTrees} potential/planned route tree(s), ${counts.routeNodes} potential/planned route node(s).`,
   ];
   if (counts.routerIssues === 0) {
     lines.push('Issues: no router issue rows.');

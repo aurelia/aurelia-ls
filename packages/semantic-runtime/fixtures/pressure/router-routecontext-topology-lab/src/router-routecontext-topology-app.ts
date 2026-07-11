@@ -21,6 +21,42 @@ export class OpenRoute {}
 export class FilteredRoute {}
 
 @customElement({
+  name: 'bound-route',
+  template: '<template>Bound route</template>',
+})
+export class BoundRoute {}
+
+@customElement({
+  name: 'dynamic-route',
+  template: '<template>Dynamic route</template>',
+})
+export class DynamicRoute {}
+
+@customElement({
+  name: 'dynamic-used-by-route',
+  template: '<template>Dynamic used-by route</template>',
+})
+export class DynamicUsedByRoute {}
+
+@customElement({
+  name: 'conditional-route',
+  template: '<template>Conditional route</template>',
+})
+export class ConditionalRoute {}
+
+@customElement({
+  name: 'shared-route',
+  template: '<template>Shared route</template>',
+})
+export class SharedRoute {}
+
+@customElement({
+  name: 'missing-route',
+  template: '<template>Missing route</template>',
+})
+export class MissingRoute {}
+
+@customElement({
   name: 'report-detail-route',
   template: '<template>Report detail</template>',
 })
@@ -67,10 +103,61 @@ export class ReportsRoute {}
       viewport: 'filtered',
     },
     {
+      id: 'bound',
+      path: 'bound',
+      component: BoundRoute,
+      viewport: 'bound',
+    },
+    {
+      id: 'dynamic',
+      path: 'dynamic',
+      component: DynamicRoute,
+      viewport: 'dynamic',
+    },
+    {
+      id: 'dynamic-used-by',
+      path: 'dynamic-used-by',
+      component: DynamicUsedByRoute,
+      viewport: 'dynamic-used-by',
+    },
+    {
+      id: 'conditional',
+      path: 'conditional',
+      component: ConditionalRoute,
+      viewport: 'conditional',
+    },
+    {
+      id: 'shared',
+      path: 'shared',
+      component: SharedRoute,
+      viewport: 'shared',
+    },
+    {
+      id: 'missing',
+      path: 'missing',
+      component: MissingRoute,
+      viewport: 'missing',
+    },
+    {
+      id: 'unresolved',
+      path: 'unresolved',
+      component: 'unregistered-routeable',
+      viewport: 'main',
+    },
+    {
       id: 'reports',
       path: 'reports',
       component: ReportsRoute,
+      viewport: 'side',
     },
   ],
 })
-export class RouterRoutecontextTopologyApp {}
+export class RouterRoutecontextTopologyApp {
+  readonly boundViewportName = 'bound';
+  readonly boundUsedBy = 'bound-route';
+  readonly boundDefault = 'main-route';
+  readonly boundFallback = 'open-route';
+  readonly dynamicViewportName = window.location.hash.slice(1);
+  readonly dynamicUsedBy = window.location.pathname;
+  readonly showConditionalViewport = window.matchMedia('(min-width: 60rem)').matches;
+}

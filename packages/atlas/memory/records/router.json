@@ -194,31 +194,42 @@
         "route-tree",
         "controller"
       ],
-      "summary": "RouteTreeTransitionMaterializationFrame is a live pressure point for route tree transition semantics, redirect migration diagnostics, and route-node handoff.",
-      "rationale": "Route tree work overlaps controller semantics, viewport agents, routeable components, recursive rendering, and framework-thrown router errors. It should be tracked as a first-class frontier rather than inferred from broad router notes.",
+      "summary": "RouteTreeTransitionMaterializationFrame owns planned pre-activation route trees, redirect diagnostics, and sole-candidate route-node handoff.",
+      "rationale": "Route tree work overlaps controller semantics, viewport-agent candidates, routeable components, recursive rendering, and framework-thrown router errors. Planned products are stronger than potential topology but do not prove live availability, guards, scheduling, activation, or successful navigation.",
       "guidance": [
-        "Check framework.router route-tree, viewport-agent, and relationship rows before changing product route-tree materialization.",
-        "RouteableComponent should be treated as a convergeable thing like CustomElement when component discovery is in scope.",
+        "Check framework.router route-tree, ViewportAgent, and relationship rows before changing planned route-tree materialization.",
+        "RouteableComponent is a converged framework concept: preserve authored spelling and resolved custom-element name, and spend the resolved name for viewport compatibility.",
         "Keep au-viewport semantics explicit when route rendering or recursive hydration is involved.",
         "RouteTree redirect-parameter migration accepts only Segment / slash-scoped Segment RouteExpression chains. Sibling composites and grouped expressions belong in RouterIssue rows with exact router exprUnexpectedKind / AUR3502 authority, not route-recognizer rows or generic open seams.",
         "Closed static redirect targets must carry redirectSourceRouteConfig from RouteRecognizer expansion into RouteTree compilation. Use that exact edge to suppress generic redirect-target open seams only when the redirect target was actually re-recognized.",
         "Unknown static redirect targets belong to instrUnknownRedirect / AUR3402 RouterIssue rows from redirect expansion, not to generic redirect-target open seams.",
-        "Residual parent-route matches should not stop at the parent residual parameter. RouteRecognitionMaterializationProjectPass follows the residual child ViewportInstruction through the resolved child RouteConfigContext so RouteTreeTransitionMaterializationFrame can materialize nested child RouteNode and ComponentAgent products under the parent route context.",
-        "A closed ViewportRequest with no matching available ViewportAgent is an exact router issue with rcNoAvailableVpa / AUR3174 authority, not a route-tree open seam. Do not publish a partial transition tree for that chain, and keep genuinely missing request/context handoffs as open seams."
+        "Residual parent-route matches should follow the residual child ViewportInstruction through the resolved child RouteConfigContext so nested child RouteNode and ComponentAgent products remain visible under the parent route context.",
+        "Resolve ViewportRequest through none/sole/multiple/open candidate semantics. None with no statically compatible candidate is exact rcNoAvailableVpa/AUR3174 evidence; multiple/open are seams. Never publish a partial transition tree or call a sole static candidate selected/live."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
           "symbolName": "RouteTreeTransitionMaterializationFrame",
-          "line": 331,
-          "summary": "Route tree transition materialization frame."
+          "summary": "Planned route tree transition materialization frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "ViewportAgentCandidateResolution",
+          "summary": "Static viewport candidate resolution consumed by planned transitions."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router relationship rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Potential/planned boundary, exact viewport failure, and open candidate contract."
         }
       ],
       "liveChecks": [
@@ -238,7 +249,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-config-context-materialization-project-pass",
@@ -249,26 +260,31 @@
         "route-config",
         "route-context"
       ],
-      "summary": "RouteConfigContextMaterializationProjectPass materializes RouteConfigContext topology and owned RouteRecognizer instances from route configs.",
-      "rationale": "Route contexts sit between authored route configs, recognizer ownership, eager-loading policy, and later runtime topology. Keep this layer explicit instead of folding route-context construction into recognizer or route-tree passes.",
+      "summary": "RouteConfigContextMaterializationProjectPass materializes static configured-route topology and owned RouteRecognizer instances from effective route configs.",
+      "rationale": "RouteConfigContext is configured-route/recognizer ownership, distinct from both authored/effective RouteConfig convergence and later potential RouteContext/ViewportAgent topology. Keeping this layer explicit prevents configured routes from masquerading as navigated contexts.",
       "guidance": [
-        "Start here when route-config roots, child context trees, eager-loading recognizer ownership, or RouteConfigContext products change.",
-        "Keep RouteConfigContext materialization separate from authored route-config convergence and runtime RouteContext/ViewportAgent topology.",
-        "Use framework.router route-context and route-tree rows before changing context ownership semantics."
+        "Start here when effective route-config roots, child configured-context trees, eager-loading recognizer ownership, or RouteConfigContext products change.",
+        "Keep RouteConfigContext materialization separate from authored/effective route-config convergence and potential RouteContext/ViewportAgent-candidate topology.",
+        "Use framework.router RouteConfigContext, RouteContext, and route-tree relationship rows before changing configured-context ownership semantics."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
           "symbolName": "RouteConfigContextMaterializationProjectPass",
-          "line": 133,
-          "summary": "RouteConfigContext materialization project pass."
+          "summary": "Configured-route context and recognizer ownership pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "symbolName": "RouteConfigConvergenceProjectPass",
+          "summary": "Upstream effective RouteConfig authority consumed by configured-context materialization."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
-          "summary": "Framework router relationship rows for route-context semantics."
+          "summary": "Framework router relationship rows for configured and potential route-context semantics."
         }
       ],
       "liveChecks": [
@@ -281,7 +297,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-runtime-topology",
@@ -293,36 +309,55 @@
         "viewport",
         "controller"
       ],
-      "summary": "RouteRuntimeTopologyProjectPass and RouteRuntimeTopologyFrame materialize RouteContext, au-viewport, ViewportCustomElement, ViewportAgent, and route child-container topology.",
-      "rationale": "The user called out au-viewport and ViewportAgent as first-class router semantics. This topology lane is the bridge from static template rendering/controller products into route runtime context products before navigation or activation.",
+      "summary": "RouteRuntimeTopologyProjectPass materializes potential RouteContext, au-viewport, ViewportAgent-candidate, presence, and field-closure topology.",
+      "rationale": "Static rendering/controller products can prove potential router topology before navigation, but live viewport registration and availability remain runtime state. This frontier owns that bridge without manufacturing selected agents or active route trees.",
       "guidance": [
-        "Start here when work touches au-viewport, ViewportAgent, RouteContext, route child containers, or static router/rendering topology.",
-        "Keep runtime topology separate from route-config contexts, route instruction parsing, recognition, and route-tree transition materialization.",
-        "Use framework.router viewport-agent and framework.rendering controller rows before changing route rendering semantics."
+        "Start here when work touches au-viewport, ViewportAgent candidates, RouteContext, route child containers, viewport field closure, or static router/rendering topology.",
+        "Keep potential topology separate from effective route-config contexts, route instruction parsing, recognition, planned route-tree materialization, and live navigation state.",
+        "Use framework.router ViewportAgent/RouteContext relationships and framework.rendering controller rows before changing route rendering semantics.",
+        "Spend RuntimeBoundControllerValueTable and RuntimeBindingSourceValueEvaluator for bound viewport inputs. Concrete viewport controllers require exact-controller reads; do not reconstruct expressions or borrow contextual definition fallback.",
+        "Preserve template-controller child-view cardinality and none/sole/multiple/open candidate resolution. Only a sole static candidate can cross into a planned transition."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
           "symbolName": "RouteRuntimeTopologyProjectPass",
-          "line": 174,
-          "summary": "Route runtime topology project pass."
+          "summary": "Potential router topology project pass."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
           "symbolName": "RouteRuntimeTopologyFrame",
-          "line": 219,
-          "summary": "Route runtime topology work frame."
+          "summary": "Potential RouteContext and viewport work frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable",
+          "summary": "Bound viewport value authority, including exact-controller reads."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router viewport-agent and route-context relationship rows."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Current potential topology and candidate-resolution contract."
         }
       ],
       "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteRuntimeTopologyProjectResult",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "minLineCount": 90,
+          "minMethodCount": 6
+        },
         {
           "kind": "product-large-class",
           "className": "RouteRuntimeTopologyFrame",
@@ -332,7 +367,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-instruction-materialization-project-pass",
@@ -661,6 +696,86 @@
           "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
           "minLineCount": 450,
           "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
+    },
+    {
+      "id": "decision:router-realization-stage-and-viewport-candidate-honesty",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-context",
+        "viewport",
+        "observation",
+        "open-seam"
+      ],
+      "summary": "Static router topology distinguishes potential products from sole-candidate plans and never claims live navigation state.",
+      "rationale": "Aurelia resolves navigation against registered ViewportAgent instances and checks live availability before name and usedBy compatibility. Static template analysis can prove potential topology and sometimes a sole compatible candidate, but cannot prove registration order, availability, guards, scheduling, or activation. Flattening those stages created false selected agents, false AUR3174 issues, and bound viewport values rewritten as defaults.",
+      "guidance": [
+        "Use RouterRealizationStageKind as an orthogonal axis: RouteContext, au-viewport, and ViewportAgent rows are potential; pre-activation RouteTree, RouteNode, and ComponentAgent rows are planned; no current producer may emit live.",
+        "Potential viewport presence spends the existing template-controller child-view cardinality. Optional, many, or open presence remains potential and publishes open topology evidence rather than being treated as one live registration.",
+        "Viewport name, usedBy, default, and fallback retain independent defaulted, closed, referential, or open state plus exact authored sources. Open bound values must not be rewritten as absent framework defaults.",
+        "RuntimeBoundControllerValueTable has two intentional authority modes. Synthetic/cross-resource analysis may use definition/type fallback; a consumer that owns one concrete hydrated controller must use readExactControllerProperty so sibling usage sites cannot lend each other values.",
+        "Bound-controller rows carry their source resource's RuntimeBindingExpressionScopeProjector. Evaluate parent-to-child values with the row-owned projector rather than borrowing a consumer's binding-behavior lifecycle across resources.",
+        "Viewport matching compares usedBy with the resolved custom-element registration name, while routeable products and public rows preserve authored spelling separately for navigation and explanation. If resolution did not close, keep the resolved name null/open; never borrow the authored class or string label as registration identity.",
+        "Candidate resolution is none, sole, multiple, or open. Only sole may seed planned route products. None may publish exact rcNoAvailableVpa/AUR3174 when no statically compatible candidate exists; multiple/open publish a seam and no partial plan.",
+        "Do not call a sole static candidate selected or available. Live ViewportAgent._isAvailable, transition guards, scheduling, activation, and current route-tree state remain outside the current semantic-runtime claim."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/router/src/viewport-agent.ts",
+          "summary": "Framework authority for live availability, viewport-name matching, and usedBy matching."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouterRealizationStageKind",
+          "summary": "Potential/planned/live and viewport closure/candidate vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "RouteRuntimeTopologyProjectPass",
+          "summary": "Potential RouteContext, viewport, field-closure, presence, and candidate materialization."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable",
+          "summary": "Exact-controller versus contextual definition/type bound-value authority."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "symbolName": "RouteTreeTransitionMaterializationFrame",
+          "summary": "Sole-candidate planned route-tree boundary and open/none outcomes."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for potential topology and planned transitions."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-semantic-conformance.mjs --fixture fixtures/pressure/router-routecontext-topology-lab",
+          "summary": "Realization stage, bound viewport field, candidate plurality, openness, and exact failure pressure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouterRealizationStageKind"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable"
         }
       ],
       "createdAt": "2026-07-11",

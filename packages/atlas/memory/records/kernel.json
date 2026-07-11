@@ -145,6 +145,7 @@
         "Producer-owned reason kinds should be carried into OpenSeam at publication time. Static evaluator seams now prove this path through `EvaluationOpenSeam.reasonKinds`; extend producer threading before adding downstream classifiers.",
         "When one semantic layer wraps lower-level open seams into a higher product boundary, carry existing `reasonKinds` through the intermediate carrier before publication. `ConfigurationRecognitionOpen` and `RegistrationRecognitionOpen` preserve evaluator reasons for this purpose; add producer-specific reason taxonomy only when the higher layer owns a genuinely new reason.",
         "Public open-seam site rows should not expose empty `reasonKinds` when the producer has already emitted a prose open reason. The current pressure-fixture census found and closed the binding-data-flow parser-open gap through `binding-source-unsupported-expression`; repeat this producer-level audit before adding display heuristics.",
+        "The 2026-07-11 broad public-quality census still reports 23 empty-reason failures from resource-registration executable/target seams and service-root registration spreads. Treat those as producer-owned threading debt; the reason-coded router topology seams are not members of that failure set.",
         "Public summary answers should distinguish raw derivation row counts from unique authored seam-site counts structurally, not only in prose. Raw `open-seams` display samples should dedupe repeated derivation rows for breadth while preserving raw structured rows for deep inspection.",
         "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
         "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
@@ -230,7 +231,7 @@
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-06-10"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:product-detail-catalog",

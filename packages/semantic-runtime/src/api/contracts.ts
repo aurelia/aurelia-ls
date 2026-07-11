@@ -276,6 +276,9 @@ import type {
   RouterIssuePhase,
   RouterIssueSeverity,
   RouterModelKind,
+  RouterRealizationStageKind,
+  ViewportAgentCandidateResolutionKind,
+  ViewportFieldStateKind,
 } from '../router/model.js';
 import type { SemanticSourceReference } from './source-reference.js';
 import type {
@@ -2553,7 +2556,10 @@ export interface SemanticFrameworkCapabilityDemandsResult {
 
 export interface SemanticRouteConfigComponentRow {
   readonly componentKind: RouteableComponentKind | `${RouteableComponentKind}`;
+  /** Authored class, alias, or resource spelling. */
   readonly name: string | null;
+  /** Custom-element registration name after routeable resolution. */
+  readonly resolvedName: string | null;
   readonly resolved: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
@@ -2634,6 +2640,7 @@ export interface SemanticRouteConfigsResult {
 
 export interface SemanticRouteContextRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly label: string | null;
   readonly parentLabel: string | null;
   readonly rootLabel: string | null;
@@ -2642,7 +2649,7 @@ export interface SemanticRouteContextRow {
     readonly source: SemanticSourceReference | null;
   };
   readonly hasContainer: boolean;
-  readonly hasViewportAgent: boolean;
+  readonly hasHostingViewportAgentCandidate: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -2653,8 +2660,8 @@ export interface SemanticRouteContextRow {
     readonly routeConfigContextIdentityHandle: IdentityHandle | null;
     readonly containerProductHandle: ProductHandle | null;
     readonly containerIdentityHandle: IdentityHandle | null;
-    readonly viewportAgentProductHandle: ProductHandle | null;
-    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly hostingViewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly hostingViewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -2699,14 +2706,28 @@ export interface SemanticRouteContextParameterReadsResult {
 
 export interface SemanticRouterViewportRow {
   readonly projectKey: string;
-  readonly name: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality | `${BuiltInTemplateControllerChildViewCardinality}`;
+  readonly name: string | null;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
   } | null;
-  readonly usedBy: readonly string[];
+  readonly usedBy: readonly string[] | null;
   readonly defaultComponent: string | null;
   readonly fallback: string | null;
+  readonly fieldStates: {
+    readonly name: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly usedBy: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly default: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+    readonly fallback: ViewportFieldStateKind | `${ViewportFieldStateKind}`;
+  };
+  readonly fieldSources: {
+    readonly name: SemanticSourceReference | null;
+    readonly usedBy: SemanticSourceReference | null;
+    readonly default: SemanticSourceReference | null;
+    readonly fallback: SemanticSourceReference | null;
+  };
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -2724,6 +2745,8 @@ export interface SemanticRouterViewportsResult {
 
 export interface SemanticViewportAgentRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
+  readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality | `${BuiltInTemplateControllerChildViewCardinality}`;
   readonly viewport: {
     readonly name: string | null;
     readonly source: SemanticSourceReference | null;
@@ -2752,12 +2775,13 @@ export interface SemanticViewportAgentsResult {
 
 export interface SemanticComponentAgentRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly routeContext: {
     readonly label: string | null;
     readonly source: SemanticSourceReference | null;
   };
   readonly routeNode: SemanticRouterProductReferenceRow;
-  readonly viewportAgent: SemanticRouterProductReferenceRow | null;
+  readonly viewportAgentCandidate: SemanticRouterProductReferenceRow | null;
   readonly hasController: boolean;
   readonly component: SemanticRouteConfigComponentRow | null;
   readonly source: SemanticSourceReference | null;
@@ -2768,8 +2792,8 @@ export interface SemanticComponentAgentRow {
     readonly routeContextIdentityHandle: IdentityHandle | null;
     readonly routeNodeProductHandle: ProductHandle | null;
     readonly routeNodeIdentityHandle: IdentityHandle | null;
-    readonly viewportAgentProductHandle: ProductHandle | null;
-    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly viewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly controllerProductHandle: ProductHandle | null;
     readonly componentProductHandle: ProductHandle | null;
     readonly componentIdentityHandle: IdentityHandle | null;
@@ -2886,6 +2910,7 @@ export interface SemanticViewportInstructionTreesResult {
 
 export interface SemanticRouteTreeRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly rootNodeLabel: string | null;
   readonly instructionTree: SemanticRouterProductReferenceRow | null;
   readonly hasOptions: boolean;
@@ -2915,6 +2940,7 @@ export interface SemanticRouteTreesResult {
 
 export interface SemanticRouteNodeRow {
   readonly projectKey: string;
+  readonly realizationStage: RouterRealizationStageKind | `${RouterRealizationStageKind}`;
   readonly path: string;
   readonly finalPath: string;
   readonly childCount: number;
@@ -2951,6 +2977,8 @@ export interface SemanticRouteNodeRow {
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
+  readonly viewportAgentCandidate: SemanticRouterProductReferenceRow | null;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind | `${ViewportAgentCandidateResolutionKind}` | null;
   readonly residueInstructionCount: number;
   readonly routeContext: {
     readonly label: string | null;
@@ -2980,6 +3008,8 @@ export interface SemanticRouteNodeRow {
     readonly originalInstructionIdentityHandle: IdentityHandle | null;
     readonly recognizedRouteProductHandle: ProductHandle | null;
     readonly recognizedRouteIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentCandidateProductHandle: ProductHandle | null;
+    readonly viewportAgentCandidateIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }

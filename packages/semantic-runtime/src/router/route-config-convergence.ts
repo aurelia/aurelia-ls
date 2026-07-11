@@ -678,6 +678,7 @@ function routeableReferenceForDefinition(
     RouteableComponentKind.ResourceDefinition,
     definition.sourceAddressHandle,
     definition.target.localName ?? definition.name,
+    definition.name,
     definition.productHandle,
     definition.target.identityHandle,
   );
@@ -695,6 +696,7 @@ function appliedComponentReference(
     authored.componentKind,
     authored.sourceAddressHandle,
     authored.localName,
+    definition.resolvedName ?? authored.resolvedName,
     definition.resolvedProductHandle ?? authored.resolvedProductHandle,
     definition.resolvedIdentityHandle ?? authored.resolvedIdentityHandle,
   );

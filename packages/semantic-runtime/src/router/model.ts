@@ -8,6 +8,8 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container-reference.js';
 import type { RouterFrameworkErrorCode } from './framework-error-code.js';
 import type { RouteRecognizerRawErrorAuthority } from './framework-raw-error-authority.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type { BuiltInTemplateControllerChildViewCardinality } from '../template/template-controller-semantics.js';
 
 export const enum RouterModelKind {
   Registration = 'registration',
@@ -96,6 +98,29 @@ export const enum RouteConfigFieldStateKind {
   Absent = 'absent',
   Closed = 'closed',
   Referential = 'referential',
+  Open = 'open',
+}
+
+/** How far a router topology product has progressed toward live navigation state. */
+export const enum RouterRealizationStageKind {
+  Potential = 'potential',
+  Planned = 'planned',
+  Live = 'live',
+}
+
+/** Static closure state for one au-viewport bindable. */
+export const enum ViewportFieldStateKind {
+  Defaulted = 'defaulted',
+  Closed = 'closed',
+  Referential = 'referential',
+  Open = 'open',
+}
+
+/** Aggregate result of matching one ViewportRequest against potential viewport agents. */
+export const enum ViewportAgentCandidateResolutionKind {
+  None = 'none',
+  Sole = 'sole',
+  Multiple = 'multiple',
   Open = 'open',
 }
 
@@ -273,12 +298,13 @@ export type RouteConfigContextField =
   | 'source';
 
 export type RouteContextField =
+  | 'realizationStage'
   | 'parent'
   | 'root'
   | 'container'
   | 'router'
   | 'routeConfigContext'
-  | 'viewportAgent'
+  | 'hostingViewportAgentCandidate'
   | 'source';
 
 export type RouteContextParameterReadField =
@@ -292,6 +318,7 @@ export type RouteContextParameterReadField =
   | 'source';
 
 export type RouteNodeField =
+  | 'realizationStage'
   | 'routeContext'
   | 'config'
   | 'parent'
@@ -304,6 +331,8 @@ export type RouteNodeField =
   | 'fragment'
   | 'data'
   | 'viewport'
+  | 'viewportAgentCandidate'
+  | 'viewportCandidateResolution'
   | 'residue'
   | 'path'
   | 'finalPath'
@@ -312,6 +341,7 @@ export type RouteNodeField =
   | 'source';
 
 export type RouteTreeField =
+  | 'realizationStage'
   | 'rootNode'
   | 'instructionTree'
   | 'options'
@@ -367,25 +397,44 @@ export type RouteRecognizerField =
   | 'conflictingEndpoint'
   | 'source';
 
-export type ViewportField =
-  | 'routeContext'
-  | 'controller'
+export type ViewportValueField =
   | 'name'
   | 'usedBy'
   | 'default'
-  | 'fallback'
+  | 'fallback';
+
+export class ViewportFieldState {
+  constructor(
+    readonly field: ViewportValueField,
+    readonly stateKind: ViewportFieldStateKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly openReason: string | null = null,
+    readonly openReasonKinds: readonly OpenSeamReasonKind[] = [],
+  ) {}
+}
+
+export type ViewportField =
+  | 'realizationStage'
+  | 'presenceCardinality'
+  | 'routeContext'
+  | 'controller'
+  | ViewportValueField
   | 'source';
 
 export type ViewportAgentField =
+  | 'realizationStage'
+  | 'presenceCardinality'
   | 'viewport'
   | 'routeContext'
+  | 'name'
   | 'hostController'
   | 'source';
 
 export type ComponentAgentField =
+  | 'realizationStage'
   | 'routeContext'
   | 'routeNode'
-  | 'viewportAgent'
+  | 'viewportAgentCandidate'
   | 'controller'
   | 'component'
   | 'source';
@@ -704,7 +753,7 @@ export class CurrentRouteModel {
   }
 }
 
-/** Runtime RouteContext model that owns context routers, route config context, and route tree state. */
+/** Potential RouteContext topology before navigation selects and activates a live context. */
 @auLink('router:RouteContext')
 export class RouteContextModel {
   readonly routerKind = RouterModelKind.RouteContext;
@@ -712,12 +761,13 @@ export class RouteContextModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly realizationStage: RouterRealizationStageKind,
     readonly parent: RouterReference | null,
     readonly root: RouterReference,
     readonly container: ContainerReference | null,
     readonly router: RouterReference | null,
     readonly routeConfigContext: RouterReference | null,
-    readonly viewportAgent: RouterReference | null,
+    readonly hostingViewportAgentCandidate: RouterReference | null,
     readonly localName: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteContextField>[] = [],
@@ -869,6 +919,7 @@ export class RouteableComponentReference {
     readonly componentKind: RouteableComponentKind,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly localName: string | null,
+    readonly resolvedName: string | null,
     readonly resolvedProductHandle: ProductHandle | null = null,
     readonly resolvedIdentityHandle: IdentityHandle | null = null,
   ) {}
@@ -887,6 +938,7 @@ export class RouteableComponentModel {
     readonly resolvedIdentityHandle: IdentityHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly localName: string | null,
+    readonly resolvedName: string | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteableComponentField>[] = [],
   ) {}
 
@@ -897,10 +949,18 @@ export class RouteableComponentModel {
       this.componentKind,
       this.sourceAddressHandle,
       this.localName,
+      this.resolvedName,
       this.resolvedProductHandle,
       this.resolvedIdentityHandle,
     );
   }
+}
+
+/** Name Aurelia spends after routeable resolution; null until a custom-element definition is proven. */
+export function resolvedRouteableComponentName(
+  component: RouteableComponentReference | null,
+): string | null {
+  return component?.resolvedName ?? null;
 }
 
 /** Parsed route-recognizer parameter fact produced from one authored path segment. */
@@ -1179,7 +1239,7 @@ export class RouterIssueModel {
   }
 }
 
-/** Runtime au-viewport custom element instance semantics discovered from template/controller hydration. */
+/** Potential au-viewport semantics discovered from static template/controller hydration. */
 @auLink('router:ViewportCustomElement', { facet: 'router-runtime-model' })
 export class ViewportCustomElementModel {
   readonly routerKind = RouterModelKind.Viewport;
@@ -1187,12 +1247,15 @@ export class ViewportCustomElementModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly realizationStage: RouterRealizationStageKind,
+    readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality,
     readonly routeContext: RouterReference | null,
     readonly controllerProductHandle: ProductHandle | null,
-    readonly name: string,
-    readonly usedBy: readonly string[],
+    readonly name: string | null,
+    readonly usedBy: readonly string[] | null,
     readonly defaultComponent: string | null,
     readonly fallback: string | null,
+    readonly fieldStates: readonly ViewportFieldState[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ViewportField>[] = [],
   ) {}
@@ -1202,7 +1265,7 @@ export class ViewportCustomElementModel {
   }
 }
 
-/** Runtime ViewportAgent created when au-viewport.hydrated registers itself with the active RouteContext. */
+/** Potential ViewportAgent candidate corresponding to an au-viewport registration site. */
 @auLink('router:ViewportAgent')
 export class ViewportAgentModel {
   readonly routerKind = RouterModelKind.ViewportAgent;
@@ -1210,19 +1273,22 @@ export class ViewportAgentModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly realizationStage: RouterRealizationStageKind,
+    readonly presenceCardinality: BuiltInTemplateControllerChildViewCardinality,
     readonly viewport: RouterReference,
     readonly routeContext: RouterReference | null,
+    readonly localName: string | null,
     readonly hostControllerProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ViewportAgentField>[] = [],
   ) {}
 
   toReference(): RouterReference {
-    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.localName);
   }
 }
 
-/** Runtime ComponentAgent created when a routed component is loaded into a viewport. */
+/** Planned ComponentAgent handoff before guards, scheduling, or component activation run. */
 @auLink('router:ComponentAgent')
 export class ComponentAgentModel {
   readonly routerKind = RouterModelKind.ComponentAgent;
@@ -1230,9 +1296,10 @@ export class ComponentAgentModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly realizationStage: RouterRealizationStageKind,
     readonly routeContext: RouterReference,
     readonly routeNode: RouterReference,
-    readonly viewportAgent: RouterReference | null,
+    readonly viewportAgentCandidate: RouterReference | null,
     readonly controllerProductHandle: ProductHandle | null,
     readonly component: RouteableComponentReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -1344,6 +1411,7 @@ export class RouteConfigModel {
 export interface RouteNodeModelFields {
   readonly productHandle: ProductHandle;
   readonly identityHandle: IdentityHandle;
+  readonly realizationStage: RouterRealizationStageKind;
   readonly routeContext: RouterReference;
   readonly config: RouteConfigReference | null;
   readonly parent: RouterReference | null;
@@ -1358,6 +1426,8 @@ export interface RouteNodeModelFields {
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
+  readonly viewportAgentCandidate: RouterReference | null;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind | null;
   readonly residueInstructionCount: number;
   readonly path: string;
   readonly finalPath: string;
@@ -1367,12 +1437,13 @@ export interface RouteNodeModelFields {
   readonly fieldProvenance?: readonly FieldProvenance<RouteNodeField>[];
 }
 
-/** Runtime RouteNode model used for recognized route state. */
+/** Potential synthetic root or planned pre-activation RouteNode. */
 @auLink('router:RouteNode')
 export class RouteNodeModel {
   readonly routerKind = RouterModelKind.RouteNode;
   readonly productHandle: ProductHandle;
   readonly identityHandle: IdentityHandle;
+  readonly realizationStage: RouterRealizationStageKind;
   readonly routeContext: RouterReference;
   readonly config: RouteConfigReference | null;
   readonly parent: RouterReference | null;
@@ -1387,6 +1458,8 @@ export class RouteNodeModel {
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
+  readonly viewportAgentCandidate: RouterReference | null;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind | null;
   readonly residueInstructionCount: number;
   readonly path: string;
   readonly finalPath: string;
@@ -1398,6 +1471,7 @@ export class RouteNodeModel {
   constructor(fields: RouteNodeModelFields) {
     this.productHandle = fields.productHandle;
     this.identityHandle = fields.identityHandle;
+    this.realizationStage = fields.realizationStage;
     this.routeContext = fields.routeContext;
     this.config = fields.config;
     this.parent = fields.parent;
@@ -1412,6 +1486,8 @@ export class RouteNodeModel {
     this.fragment = fields.fragment;
     this.hasData = fields.hasData;
     this.viewport = fields.viewport;
+    this.viewportAgentCandidate = fields.viewportAgentCandidate;
+    this.viewportCandidateResolution = fields.viewportCandidateResolution;
     this.residueInstructionCount = fields.residueInstructionCount;
     this.path = fields.path;
     this.finalPath = fields.finalPath;
@@ -1426,7 +1502,7 @@ export class RouteNodeModel {
   }
 }
 
-/** Runtime RouteTree model that groups route nodes for navigation state. */
+/** Potential synthetic root or planned pre-activation RouteTree. */
 @auLink('router:RouteTree')
 export class RouteTreeModel {
   readonly routerKind = RouterModelKind.RouteTree;
@@ -1434,6 +1510,7 @@ export class RouteTreeModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly realizationStage: RouterRealizationStageKind,
     readonly rootNode: RouterReference | null,
     readonly instructionTree: RouterReference | null,
     readonly options: RouterOptionsReference | null,

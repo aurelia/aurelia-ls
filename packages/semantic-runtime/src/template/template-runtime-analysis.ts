@@ -526,6 +526,7 @@ class TemplateRuntimeAnalysisFrame {
         runtimeRendering,
         controllerBind,
         scopes,
+        expressionWorld: this.expressionWorld,
       },
       this.request.compilerWorld.resourceScope,
       this.request.compilerWorld.container,

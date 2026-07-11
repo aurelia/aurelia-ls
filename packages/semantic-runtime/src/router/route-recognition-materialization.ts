@@ -21,7 +21,9 @@ import {
   RouterIssuePhase,
   RouteParameterValueModel,
   RouteRecognizerStateKind,
+  ViewportAgentCandidateResolutionKind,
   ViewportRequestModel,
+  resolvedRouteableComponentName,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigModel,
@@ -566,18 +568,23 @@ function childRecognitionContextFor(
     return null;
   }
 
-  const componentName = routeConfig?.component?.localName ?? null;
+  const componentName = resolvedRouteableComponentName(routeConfig?.component ?? null);
   const viewportName = viewportInstruction.viewport ?? routeConfig?.viewport ?? DEFAULT_VIEWPORT_NAME;
-  const viewportAgent = componentName == null
+  const viewportResolution = componentName == null
     ? null
-    : indexes.routeRuntime.resolveViewportAgent(
+    : indexes.routeRuntime.resolveViewportAgentCandidates(
       parentRouteContext?.identityHandle ?? null,
       new ViewportRequestModel(viewportName, componentName),
     );
-  const childRouteContext = indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
-    childRouteConfigContext.identityHandle,
-    viewportAgent?.identityHandle ?? null,
-  );
+  const viewportAgentCandidate = viewportResolution?.resolutionKind === ViewportAgentCandidateResolutionKind.Sole
+    ? viewportResolution.candidate
+    : null;
+  const childRouteContext = viewportAgentCandidate == null
+    ? null
+    : indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgentCandidate(
+        childRouteConfigContext.identityHandle,
+        viewportAgentCandidate.identityHandle,
+      );
   return {
     routeContext: childRouteContext,
     routeConfigContext: childRouteConfigContext,

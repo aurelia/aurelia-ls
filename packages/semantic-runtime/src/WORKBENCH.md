@@ -312,25 +312,24 @@ emulator exists. Treat this as recursive static topology, not viewport activatio
 Router option convergence now sits before route-context materialization. `RouterConfiguration` admissions create
 framework-defaulted `RouterOptions` products, owner-tagged `customize(...)` option contributions fold into those options,
 and the API exposes them through `routerOptions`. Route-context topology starts from configured app roots when the app
-root is known, with graph-root fallback for library-style package analysis. Component-level static route metadata is
-applied during topology traversal when a route points at a component that owns child route metadata, so nested child
-routes become visible without requiring navigation. `useEagerLoading: true` reuses the root recognizer for child
-contexts and materializes parent-prefixed recognizer paths while keeping local authored route paths separate. A future
-applied-`RouteConfig` product may still be needed if consumers need exact `RouteConfig._applyChildRouteConfig(...)`
-provenance rather than topology-level application.
+root is known, with graph-root fallback for library-style package analysis. Definition and per-use applied
+`RouteConfig` products converge class metadata, child overlays, inherited parent policy, and framework defaults before
+topology consumes them, so nested child routes become visible without repeating `RouteConfig._applyChildRouteConfig(...)`
+precedence downstream. `useEagerLoading: true` reuses the root recognizer for child contexts and materializes
+parent-prefixed recognizer paths while keeping local authored route paths separate.
 
-Route runtime topology now separates `RouteContext` from `RouteConfigContext`. The former is materialized after routed
+Route runtime topology now separates potential `RouteContext` from static `RouteConfigContext`. The former is materialized after routed
 templates are compiled, because it needs the controller/container and `au-viewport` boundaries that the framework uses
 when `ViewportCustomElement.hydrated`, `RouteContext._registerViewport`, and `Router._getRouteContext` cooperate.
-`ViewportCustomElement` and `ViewportAgent` products now point at runtime `RouteContext` references; child route contexts
-point back to the hosting viewport agent selected through framework-shaped viewport-name/`usedBy` matching. These are
-static potential route contexts, not proof that a `RouteNode` exists or that viewport activation has run.
+`ViewportCustomElement` and `ViewportAgent` candidate products point at potential `RouteContext` references; child route
+contexts point back to every statically compatible hosting candidate. These are static possibilities, not proof that a
+`RouteNode` exists or that viewport availability or activation has run.
 `Router._getRouteContext(...)` is pair-keyed by `(ViewportAgent | null, RouteConfigContext)`, so semantic-runtime no
 longer treats component definitions or route config contexts as singular route-context owners. Router-resource
-instruction materialization follows every modeled runtime context for a component template, and transition route trees
-are emitted only when the full recognized instruction chain resolves through `ViewportRequest -> ViewportAgent ->
-RouteContext` without an open seam. Without a first-class partial-tree product, prefixes of an unresolved chain should
-stay as open pressure rather than resolved-looking route trees.
+instruction materialization follows every modeled potential context for a component template, and transition route trees
+are emitted only when the full recognized instruction chain resolves through `ViewportRequest -> sole ViewportAgent
+candidate -> RouteContext` without an open seam. Without a first-class partial-tree product, prefixes of an unresolved
+chain should stay as open pressure rather than resolved-looking route trees.
 External pressure also caught a faithful-porting bug in parent-relative router resources: the framework's
 `RouteContext.createViewportInstructions(...)` climbs once per `../` before setting the context-changed flag. Setting
 that flag inside the loop stripped extra prefixes without climbing and pushed recognizer matching into a sibling
@@ -469,6 +468,10 @@ controller and narrowing scopes can copy a view-model binding context while legi
 synthetic view, so value evaluation must be able to fall back from exact controller handles to an unambiguous
 definition/type match. If several call sites bind the same definition property, keep the value open until recursive
 rendering can select the concrete call context; do not collapse that ambiguity in router or diagnostics.
+That fallback is contextual, not instance truth. A consumer that owns a concrete hydrated controller must use the
+table's exact-controller read; otherwise one instance's bound property can masquerade as a sibling instance's value.
+Bound rows retain the parent resource's binding-expression scope projector so cross-resource reads do not borrow the
+consumer's scope-changing binding-behavior lifecycle.
 Host environment and external module reads are now explicit evaluator boundary values. The old object-level
 missing-property reason blurred host state with ordinary object fallbacks, and external package imports blurred
 dependency boundaries with missing lexical bindings. The durable rule is: boundary objects/values propagate through

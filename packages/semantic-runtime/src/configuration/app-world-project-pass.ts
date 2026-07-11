@@ -59,6 +59,9 @@ import {
   TemplateCompilationProjectPass,
   type TemplateCompilationProjectEmission,
 } from '../template/template-compilation-project-pass.js';
+import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
+import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
+import { runtimeBoundControllerValueTableForTemplateResources } from '../observation/runtime-bound-controller-value.js';
 import {
   ConfigurationRecognitionProjectPass,
   type ConfigurationRecognitionProjectResult,
@@ -436,16 +439,21 @@ class AureliaAppWorldProjectConstructionFrame {
     const bindingObservation = this.materializeBindingObservationIssues(typeSystem, templates);
     const observation = mergeObservationSourceIssueProjectResults([sourceObservation, bindingObservation]);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
-    const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
-    const routeInstructions = this.materializeRouteInstructions(
+    const bindingSourceValues = new RuntimeBindingSourceValueEvaluator(
+      this.store,
       evaluation,
-      typeSystem,
+      runtimeBoundControllerValueTableForTemplateResources(this.store, templates.resources),
+      new RuntimeBindingSourceActivationContext(this.store, evaluation, typeSystem),
+    );
+    const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates, bindingSourceValues);
+    const routeInstructions = this.materializeRouteInstructions(
       resourceIndex,
       routerOptions,
       routeContexts,
       routeRecognizer,
       routeRuntimeTopology,
       templates,
+      bindingSourceValues,
     );
     const routeRecognition = this.materializeRouteRecognition(
       routeContexts,
@@ -951,25 +959,26 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeRouteRuntimeTopology(
     routeContexts: RouteConfigContextMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
+    bindingSourceValues: RuntimeBindingSourceValueEvaluator,
   ): RouteRuntimeTopologyProjectResult {
     return this.measure('route-runtime-topology', () =>
       new RouteRuntimeTopologyProjectPass(this.store).materializeAndEmit(
         this.project,
         routeContexts,
         templates,
+        bindingSourceValues,
       )
     );
   }
 
   private materializeRouteInstructions(
-    evaluation: StaticProjectEvaluationResult,
-    typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
     routerOptions: RouterOptionsMaterializationProjectResult,
     routeContexts: RouteConfigContextMaterializationProjectResult,
     routeRecognizer: RouteRecognizerMaterializationProjectResult,
     routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
     templates: TemplateCompilationProjectEmission,
+    bindingSourceValues: RuntimeBindingSourceValueEvaluator,
   ): RouteInstructionMaterializationProjectResult {
     return this.measure('route-instruction-materialization', () =>
       new RouteInstructionMaterializationProjectPass().materializeAndEmit(
@@ -980,9 +989,8 @@ class AureliaAppWorldProjectConstructionFrame {
         routeRuntimeTopology,
         templates,
         routerOptions,
-        evaluation,
         resourceIndex,
-        typeSystem,
+        bindingSourceValues,
       )
     );
   }

@@ -8,7 +8,7 @@ config contributions converge into framework-shaped definition and per-use appli
 string/class/promise/navigation-strategy lane while carrying resolved resource handles when static evaluation can close
 them, route-config contexts model parent/root/child topology, router options control recognizer ownership, route-
 recognizer paths materialize configurable routes plus primary/residual endpoints, route runtime topology separates
-runtime `RouteContext` from static `RouteConfigContext` and keys contexts by the framework's
+potential `RouteContext` from static `RouteConfigContext` and keys contexts by the framework's
 `(ViewportAgent | null, RouteConfigContext)` cache shape, and routed components can seed template compilation so nested `au-viewport` /
 `ViewportAgent` topology becomes visible before runtime navigation runs. Static router resource values materialize the
 `TypedNavigationInstruction` / `ViewportInstruction` / `ViewportInstructionTree` handoff layer, closed static and
@@ -71,7 +71,8 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Treat `RouteableComponent` as its own convergeable framework concept. The source lane remains visible (`class`,
   `promise`, custom-element name, resource definition, navigation strategy, or open), and resolved resource handles
   express the `resolveCustomElementDefinition(...)` / `_resolveLazy(...)` handoff when static module evaluation can close
-  it.
+  it. Authored spelling and resolved custom-element name remain separate; a missing resolved name stays null/open and
+  must not fall back to the class or string spelling for viewport matching or planned route-tree construction.
   Lazy-imported routeable modules publish `rcInvalidLazyImport` / `AUR3175` only when the fulfillment lane is definitely
   not a custom-element type, a module with a resource definition, or a partial custom-element-definition-like object.
   If the module exports a class/function but resource recognition cannot prove the definition, the routeable stays
@@ -121,18 +122,28 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Feed resolved routeable custom elements into template compilation as routeable seeds. This is the current recursive
   rendering bridge: it lets routed component templates, nested route configs, and nested `au-viewport`s be analyzed
   without pretending that viewport activation or route-tree transitions have run.
-- Materialize static `RouteContext` topology after route configs and routed templates are visible. A `RouteContext`
+- Materialize potential `RouteContext` topology after route configs and routed templates are visible. Every row carries
+  `realizationStage: potential`; no current producer claims live route-context state. A `RouteContext`
   points at its parent/root route context, its owning `RouteConfigContext`, the modeled child DI container when a
-  controller/container boundary is available, and the hosting `ViewportAgent` for non-root contexts. This prevents
-  `au-viewport` products from pretending that a configured-route context is the runtime route context. Follow
-  `Router._getRouteContext(...)`: the same configured route context can produce multiple runtime route contexts when it
-  is hosted by different viewport agents, so callers must use plural context sets or the explicit
-  `(RouteConfigContext, ViewportAgent | null)` pair. The route-runtime topology frame owns this recursive traversal so
+  controller/container boundary is available, and the hosting `ViewportAgent` candidate for non-root contexts. This
+  prevents `au-viewport` products from pretending that a configured-route context is already a live route context.
+  Follow the cache identity in `Router._getRouteContext(...)`: the same configured route context can produce multiple
+  potential route contexts when it is hosted by different viewport-agent candidates, so callers must use plural
+  context sets or the explicit `(RouteConfigContext, ViewportAgent candidate | null)` pair. The route-runtime topology frame owns this recursive traversal so
   route-config indexes, parent-child context topology, viewport drafts, and emitted context/viewport products stay in
   one runtime-topology lifetime.
-- Materialize `ViewportCustomElement` and `ViewportAgent` products against the owning `RouteContext`. Viewport selection
-  follows the framework's `ViewportAgent._handles(...)` shape: non-default viewport requests require a name match, and
-  `usedBy` narrows by component name.
+- Materialize potential `ViewportCustomElement` and `ViewportAgent` candidate products against the owning
+  `RouteContext`. The viewport row retains `name`, `usedBy`, `default`, and `fallback` as independently sourced fields
+  with `defaulted`, `closed`, `referential`, or `open` state. Static and bound values share
+  `RuntimeBoundControllerValueTable` plus `RuntimeBindingSourceValueEvaluator`; exact controller-instance reads prevent
+  a value bound at one viewport site from leaking through definition fallback into another viewport instance. Bound
+  rows also retain the source resource's binding-expression scope projector, so cross-resource source evaluation does
+  not borrow a caller's scope lifecycle.
+  Potential presence is derived from the existing template-controller child-view cardinality (`single`, `optional`,
+  `many`, or `open`). Matching follows the non-availability portion of `ViewportAgent._handles(...)`: non-default
+  requests require a closed name match, and `usedBy` narrows by the resolved custom-element name. Candidate resolution
+  is `none`, `sole`, `multiple`, or `open`; only `sole` may seed a planned route tree. Multiple candidates, open values,
+  and non-single presence publish structured open seams instead of selecting the first static row.
 - Materialize static router-resource instruction trees from `load` and internal `href` custom attributes. This mirrors
   the `valueChanged(...) -> createViewportInstructions(...)` handoff: closed string values are parsed as router
   `RouteExpression` input, then become nested/sibling `TypedNavigationInstruction`, `ViewportInstruction`, and
@@ -174,7 +185,7 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `viewport-source.ts` is the matching product-free source companion for
   `<au-viewport>`. It owns the router resource name and bindable attributes so
   app-builder and future edit surfaces do not grow router-viewport string
-  formatters beside the runtime topology model.
+  formatters beside the potential topology model.
   Router-resource instruction products are emitted only for render contexts with an owning `RouteContext`. A child
   component's standalone definition render is a potential reuse surface; if the same `load`/`href` closes when that
   component is recursively rendered inside a routed parent, the standalone definition should not publish an app-level
@@ -229,20 +240,23 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   this from `RouteTree.createConfiguredNode(...)`; the product pass records it during redirect expansion because the
   recognizer miss is already closed there.
 - Materialize the initial synthetic `RouteTree` root that `Router.routeTree` creates before navigation transition
-  compilation. These products connect the root `RouteContext`, root `RouteConfig`, and effective `RouterOptions` so API
-  consumers can distinguish configured/runtime topology from the later active route-node tree.
+  compilation. These products carry `realizationStage: potential` and connect the root `RouteContext`, root
+  `RouteConfig`, and effective `RouterOptions` without claiming an active route-node tree.
 - Materialize context-relative transition `RouteTree` / `RouteNode` products once a static `ViewportInstructionTree`
-  has closed and recognizer matching has produced non-redirect `RecognizedRoute` facts. Route nodes now carry the
+  has closed, recognizer matching has produced non-redirect `RecognizedRoute` facts, and every request has one sole
+  static viewport-agent candidate. These products carry `realizationStage: planned`: they are stronger than potential
+  topology and weaker than live navigation. Route nodes now carry the
   framework-shaped handoff fields from `RouteNode.create(...)`: instruction/original-instruction references,
   recognized route, params/query/fragment counts, viewport name, residue count, parent/child node references, component,
   title, path, and final path. Transition materialization preserves the lowered `ViewportInstructionTree` shape:
   recognized routes from the same viewport instruction stay chained for scoped route contexts, while sibling viewport
   instructions remain sibling route nodes under the update root or the nearest seeded parent instruction. A transition
-  tree emits only when every `ViewportRequest` can resolve through its parent route context's available
-  `ViewportAgent`s and the resulting context pair is materialized. A closed request with no matching viewport agent
+  tree emits only when every `ViewportRequest` has one sole static candidate and the resulting context pair is
+  materialized. The candidate is retained on the route node and component-agent handoff; it is not called selected or
+  live. A closed request with no compatible viewport candidate
   publishes `rcNoAvailableVpa` / `AUR3174` as an exact router issue without also recording a router open seam; missing
-  request pieces and missing route-context pairs stay as open seams instead of publishing partial route trees as if they
-  had closed. Initial root, transition root, and transition child nodes all publish through the same route-node
+  request pieces, multiple/open candidates, and missing route-context pairs stay as open seams instead of publishing
+  partial route trees as if they had closed. Initial root, transition root, and transition child nodes all publish through the same route-node
   materialization primitive so route-node handles and config references stay aligned as the router tree substrate grows.
 - Carry closed static query parameters from `RouteExpression` parsing through `ViewportInstructionTree`, `RouteTree`,
   and every transition `RouteNode`, matching the framework's shared `URLSearchParams` handoff. API rows preserve
@@ -310,15 +324,16 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   diagnostics, or every redirect parameter edge case. Recognized-route and transition-tree products are pre-activation
   handoff facts, not proof that navigation completed. ViewportAgent unexpected-state guards such as `AUR3350` through
   `AUR3353` stay unclaimed until semantic-runtime admits a transition/activation state-machine product.
-- Claiming that every static `RouteContext` has an active `RouteNode`. The current `RouteContext` products are
-  potential runtime contexts rooted in framework-shaped controller/container and viewport boundaries, while
+- Claiming that every potential `RouteContext` has an active `RouteNode`. The current `RouteContext` products are
+  potential contexts rooted in framework-shaped controller/container and viewport boundaries, while
   `RouteContext.node` / `AUR3171` is an active-navigation pointer assigned by root setup or route-tree construction.
-- Claiming that every `RouteContext` has a `ViewportAgent`. Root contexts deliberately have none, unresolved child
+- Claiming that every `RouteContext` has a selected or live `ViewportAgent`. Root contexts deliberately have no hosting
+  candidate, unresolved child
   hosting stays as a viewport-resolution seam, and `RouteContext.vpa` / `AUR3172` belongs to runtime activation reads
   rather than static route-context topology.
 - Claiming that `RouteConfigContext` and `RouteContext` have one-to-one cardinality. Configured topology remains visible
-  even when a child route has no currently modeled hosting viewport; runtime contexts require the framework-shaped
-  viewport-agent handoff.
+  even when a child route has no currently modeled hosting viewport; potential child contexts require a statically
+  compatible viewport-agent candidate, and live contexts remain unmodeled.
 - Publishing partial transition `RouteTree` products for a recognized instruction chain whose nested viewport resolution
   stays open. Add a first-class partial tree product before exposing those prefixes as products.
 

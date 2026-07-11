@@ -1,8 +1,6 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
-import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import type { TypeSystemProject } from '../type-system/project.js';
 import {
   EvaluationBoundaryKind,
   EvaluationValueKind,
@@ -48,10 +46,6 @@ import {
 import {
   RuntimeBindingExpressionScopeProjector,
 } from '../observation/runtime-binding-expression-scope.js';
-import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
-import {
-  runtimeBoundControllerValueTableForTemplateResources,
-} from '../observation/runtime-bound-controller-value.js';
 import { HtmlAttribute, HtmlElement } from '../template/html-ir.js';
 import {
   HydrateAttributeInstruction,
@@ -235,19 +229,17 @@ export class RouteInstructionMaterializationProjectPass {
     routeRuntime: RouteRuntimeTopologyProjectResult,
     templates: TemplateCompilationProjectEmission,
     routerOptions: RouterOptionsMaterializationProjectResult,
-    evaluation: StaticProjectEvaluationResult,
     resourceIndex: ResourceDefinitionIndex,
-    typeSystem: TypeSystemProject | null = null,
+    sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
   ): RouteInstructionMaterializationProjectResult {
     const state = createRouteInstructionMaterializationState(
       store,
-      evaluation,
       resourceIndex,
       templates,
       routeConfigContexts,
       routeRecognizer,
       routeRuntime,
-      typeSystem,
+      sourceValueEvaluator,
     );
     this.collectRouteInstructionEmissions(store, templates, routerOptions, state);
 
@@ -348,23 +340,15 @@ export class RouteInstructionMaterializationProjectPass {
 
 function createRouteInstructionMaterializationState(
   store: KernelStore,
-  evaluation: StaticProjectEvaluationResult,
   resourceIndex: ResourceDefinitionIndex,
   templates: TemplateCompilationProjectEmission,
   routeConfigContexts: RouteConfigContextMaterializationProjectResult,
   routeRecognizer: RouteRecognizerMaterializationProjectResult,
   routeRuntime: RouteRuntimeTopologyProjectResult,
-  typeSystem: TypeSystemProject | null,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
 ): RouteInstructionMaterializationState {
   return {
-    sourceValueEvaluator: new RuntimeBindingSourceValueEvaluator(
-      store,
-      evaluation,
-      runtimeBoundControllerValueTableForTemplateResources(store, templates.resources),
-      typeSystem == null
-        ? null
-        : new RuntimeBindingSourceActivationContext(store, evaluation, typeSystem),
-    ),
+    sourceValueEvaluator,
     resourceIndex,
     eagerPathGeneration: new RouteEagerPathGenerationIndex(routeConfigContexts, routeRecognizer),
     routeContextsByDefinition: routeRuntimeContextsByComponentDefinition(routeConfigContexts, routeRuntime),

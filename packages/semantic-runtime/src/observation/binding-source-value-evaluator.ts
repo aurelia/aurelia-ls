@@ -187,6 +187,35 @@ export class RuntimeBindingSourceValueEvaluator {
     );
   }
 
+  /** Evaluate one exact parent binding that supplies a child-controller property. */
+  evaluateBoundControllerPropertyValue(
+    bound: RuntimeBoundControllerPropertyValue,
+  ): RuntimeBindingSourceValueEvaluation {
+    const sourceScope = bound.sourceScope;
+    if (sourceScope == null) {
+      return openBindingSourceSlotNoStaticValue(
+        `Bound controller property '${bound.propertyName}' did not retain its parent binding Scope.`,
+      );
+    }
+    const expression = bindingExpressionAstForProduct(this.store, bound.expressionProductHandle);
+    if (expression == null) {
+      return openBindingSourceSlotNoStaticValue(
+        `Bound controller property '${bound.propertyName}' did not retain a runtime-accepted binding expression.`,
+      );
+    }
+    const context = RuntimeBindingSourceValueEvaluationContext.knownScope(
+      expression,
+      sourceScope,
+      bound.sourceDefaultContainer,
+      bound.sourceResourceScope,
+      bound.sourceStrictBinding,
+    );
+    return this.evaluationFrame.withActiveContainer(
+      context.containerOrDefault(this.defaultActiveContainer),
+      () => this.evaluateBoundControllerValueRow(bound, expression, sourceScope, context),
+    );
+  }
+
   private evaluateNode(
     context: RuntimeBindingSourceValueEvaluationContext,
   ): RuntimeBindingSourceValueEvaluation {
@@ -569,7 +598,6 @@ export class RuntimeBindingSourceValueEvaluator {
     if (bound == null) {
       return null;
     }
-    const key = `${bound.controllerProductHandle}:${propertyName}:${bound.bindingProductHandle}`;
     if (bound.sourceScope == null) {
       return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain its parent binding Scope.`);
     }
@@ -577,11 +605,22 @@ export class RuntimeBindingSourceValueEvaluator {
     if (expression == null) {
       return openBindingSourceSlotNoStaticValue(`Bound controller property '${propertyName}' did not retain a runtime-accepted binding expression.`);
     }
+    return this.evaluateBoundControllerValueRow(bound, expression, bound.sourceScope, context);
+  }
+
+  private evaluateBoundControllerValueRow(
+    bound: RuntimeBoundControllerPropertyValue,
+    expression: ExpressionAstNode,
+    sourceScope: BindingScope,
+    context: RuntimeBindingSourceValueEvaluationContext,
+  ): RuntimeBindingSourceValueEvaluation {
+    const key = `${bound.controllerProductHandle}:${bound.propertyName}:${bound.bindingProductHandle}`;
     const sourceContext = context.projectBindingSourceValueContext(
       expression,
-      bound.sourceScope,
+      sourceScope,
+      bound.sourceBindingExpressionScopes,
       bound.sourceBindingBehavior,
-      `bound-controller:${propertyName}:${bound.bindingProductHandle}`,
+      `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
       bound.sourceAddressHandle,
       bound.sourceStrictBinding,
       bound.sourceResourceScope,
@@ -589,13 +628,13 @@ export class RuntimeBindingSourceValueEvaluator {
     );
     if (sourceContext.context == null) {
       return RuntimeBindingSourceValueEvaluation.open(
-        sourceContext.openReason ?? `Bound controller property '${propertyName}' did not project to a source-value context.`,
+        sourceContext.openReason ?? `Bound controller property '${bound.propertyName}' did not project to a source-value context.`,
         [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
       );
     }
     return context.withBoundControllerRead(
       key,
-      () => openBindingSourceNeedsRuntimeValue(`Bound controller property '${propertyName}' recursively depends on itself.`),
+      () => openBindingSourceNeedsRuntimeValue(`Bound controller property '${bound.propertyName}' recursively depends on itself.`),
       () => this.evaluateNode(sourceContext.context!),
     );
   }
@@ -1226,6 +1265,7 @@ export class RuntimeBindingSourceValueEvaluator {
     const sourceContext = context.projectBindingSourceValueContext(
       expression,
       bound.sourceScope,
+      bound.sourceBindingExpressionScopes,
       bound.sourceBindingBehavior,
       `bound-controller:${bound.propertyName}:${bound.bindingProductHandle}`,
       bound.sourceAddressHandle,

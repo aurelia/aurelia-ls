@@ -23,9 +23,12 @@ import type {
   TypedNavigationInstructionModel,
   ViewportAgentModel,
   ViewportCustomElementModel,
+  ViewportFieldState,
   ViewportInstructionModel,
   ViewportInstructionTreeModel,
+  ViewportValueField,
 } from '../router/model.js';
+import { resolvedRouteableComponentName } from '../router/model.js';
 import {
   describeAddress,
   type SemanticSourceReference,
@@ -554,6 +557,7 @@ function routeTreeRow(
 ): SemanticRouteTreeRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeTree.realizationStage,
     rootNodeLabel: routeTree.rootNode?.localName ?? null,
     instructionTree: routerProductReferenceRow(store, routeTree.instructionTree),
     hasOptions: routeTree.options != null,
@@ -591,6 +595,7 @@ function routeNodeRow(
   const aggregation = routeNodeParameterAggregation(routeNode, routeNodesByIdentity);
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeNode.realizationStage,
     path: routeNode.path,
     finalPath: routeNode.finalPath,
     childCount: routeNode.children.length,
@@ -607,6 +612,8 @@ function routeNodeRow(
     fragment: routeNode.fragment,
     hasData: routeNode.hasData,
     viewport: routeNode.viewport,
+    viewportAgentCandidate: routerProductReferenceRow(store, routeNode.viewportAgentCandidate),
+    viewportCandidateResolution: routeNode.viewportCandidateResolution,
     residueInstructionCount: routeNode.residueInstructionCount,
     routeContext: {
       label: routeNode.routeContext.localName,
@@ -620,7 +627,7 @@ function routeNodeRow(
         source: describeAddress(store, routeNode.config.sourceAddressHandle),
       },
     parentLabel: routeNode.parent?.localName ?? null,
-    componentName: routeNode.component?.localName ?? null,
+    componentName: resolvedRouteableComponentName(routeNode.component),
     title: routeNode.title,
     source: describeAddress(store, routeNode.sourceAddressHandle),
     ...(handles ? {
@@ -639,6 +646,8 @@ function routeNodeRow(
         originalInstructionIdentityHandle: routeNode.originalInstruction?.identityHandle ?? null,
         recognizedRouteProductHandle: routeNode.recognizedRoute?.productHandle ?? null,
         recognizedRouteIdentityHandle: routeNode.recognizedRoute?.identityHandle ?? null,
+        viewportAgentCandidateProductHandle: routeNode.viewportAgentCandidate?.productHandle ?? null,
+        viewportAgentCandidateIdentityHandle: routeNode.viewportAgentCandidate?.identityHandle ?? null,
         sourceAddressHandle: routeNode.sourceAddressHandle,
       },
     } : {}),
@@ -653,6 +662,7 @@ function routeContextRow(
 ): SemanticRouteContextRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: routeContext.realizationStage,
     label: routeContext.localName,
     parentLabel: routeContext.parent?.localName ?? null,
     rootLabel: routeContext.root.localName,
@@ -661,7 +671,7 @@ function routeContextRow(
       source: describeAddress(store, routeContext.routeConfigContext?.sourceAddressHandle ?? null),
     },
     hasContainer: routeContext.container != null,
-    hasViewportAgent: routeContext.viewportAgent != null,
+    hasHostingViewportAgentCandidate: routeContext.hostingViewportAgentCandidate != null,
     source: describeAddress(store, routeContext.sourceAddressHandle),
     ...(handles ? {
       handles: {
@@ -673,8 +683,8 @@ function routeContextRow(
         routeConfigContextIdentityHandle: routeContext.routeConfigContext?.identityHandle ?? null,
         containerProductHandle: routeContext.container?.productHandle ?? null,
         containerIdentityHandle: routeContext.container?.identityHandle ?? null,
-        viewportAgentProductHandle: routeContext.viewportAgent?.productHandle ?? null,
-        viewportAgentIdentityHandle: routeContext.viewportAgent?.identityHandle ?? null,
+        hostingViewportAgentCandidateProductHandle: routeContext.hostingViewportAgentCandidate?.productHandle ?? null,
+        hostingViewportAgentCandidateIdentityHandle: routeContext.hostingViewportAgentCandidate?.identityHandle ?? null,
         sourceAddressHandle: routeContext.sourceAddressHandle,
       },
     } : {}),
@@ -737,6 +747,8 @@ function routerViewportRow(
 ): SemanticRouterViewportRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: viewport.realizationStage,
+    presenceCardinality: viewport.presenceCardinality,
     name: viewport.name,
     routeContext: viewport.routeContext == null
       ? null
@@ -747,6 +759,18 @@ function routerViewportRow(
     usedBy: viewport.usedBy,
     defaultComponent: viewport.defaultComponent,
     fallback: viewport.fallback,
+    fieldStates: {
+      name: requiredViewportFieldState(viewport, 'name').stateKind,
+      usedBy: requiredViewportFieldState(viewport, 'usedBy').stateKind,
+      default: requiredViewportFieldState(viewport, 'default').stateKind,
+      fallback: requiredViewportFieldState(viewport, 'fallback').stateKind,
+    },
+    fieldSources: {
+      name: describeAddress(store, requiredViewportFieldState(viewport, 'name').sourceAddressHandle),
+      usedBy: describeAddress(store, requiredViewportFieldState(viewport, 'usedBy').sourceAddressHandle),
+      default: describeAddress(store, requiredViewportFieldState(viewport, 'default').sourceAddressHandle),
+      fallback: describeAddress(store, requiredViewportFieldState(viewport, 'fallback').sourceAddressHandle),
+    },
     source: describeAddress(store, viewport.sourceAddressHandle),
     ...(handles ? {
       handles: {
@@ -769,6 +793,8 @@ function viewportAgentRow(
 ): SemanticViewportAgentRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: agent.realizationStage,
+    presenceCardinality: agent.presenceCardinality,
     viewport: {
       name: agent.viewport.localName,
       source: describeAddress(store, agent.viewport.sourceAddressHandle),
@@ -804,12 +830,13 @@ function componentAgentRow(
 ): SemanticComponentAgentRow {
   return {
     projectKey: emission.project.projectKey,
+    realizationStage: agent.realizationStage,
     routeContext: {
       label: agent.routeContext.localName,
       source: describeAddress(store, agent.routeContext.sourceAddressHandle),
     },
     routeNode: routerProductReferenceRow(store, agent.routeNode)!,
-    viewportAgent: routerProductReferenceRow(store, agent.viewportAgent),
+    viewportAgentCandidate: routerProductReferenceRow(store, agent.viewportAgentCandidate),
     hasController: agent.controllerProductHandle != null,
     component: routeableComponentRow(store, agent.component, handles),
     source: describeAddress(store, agent.sourceAddressHandle),
@@ -821,8 +848,8 @@ function componentAgentRow(
         routeContextIdentityHandle: agent.routeContext.identityHandle,
         routeNodeProductHandle: agent.routeNode.productHandle,
         routeNodeIdentityHandle: agent.routeNode.identityHandle,
-        viewportAgentProductHandle: agent.viewportAgent?.productHandle ?? null,
-        viewportAgentIdentityHandle: agent.viewportAgent?.identityHandle ?? null,
+        viewportAgentCandidateProductHandle: agent.viewportAgentCandidate?.productHandle ?? null,
+        viewportAgentCandidateIdentityHandle: agent.viewportAgentCandidate?.identityHandle ?? null,
         controllerProductHandle: agent.controllerProductHandle,
         componentProductHandle: agent.component?.productHandle ?? null,
         componentIdentityHandle: agent.component?.identityHandle ?? null,
@@ -1496,6 +1523,7 @@ function routeableComponentRow(
   return {
     componentKind: component.componentKind,
     name: component.localName,
+    resolvedName: component.resolvedName,
     resolved: component.resolvedProductHandle != null || component.resolvedIdentityHandle != null,
     source,
     ...(handles ? {
@@ -1508,4 +1536,15 @@ function routeableComponentRow(
       },
     } : {}),
   };
+}
+
+function requiredViewportFieldState(
+  viewport: ViewportCustomElementModel,
+  field: ViewportValueField,
+): ViewportFieldState {
+  const state = viewport.fieldStates.find((candidate) => candidate.field === field) ?? null;
+  if (state == null) {
+    throw new Error(`Router viewport '${viewport.identityHandle}' is missing ${field} field state.`);
+  }
+  return state;
 }

@@ -284,6 +284,13 @@ export const KernelOpenSeamKinds = {
       KernelVocabularySlot.OpenSeamKind,
       'Router instruction materialization could not close a NavigationInstruction, params, context, or href classification without guessing.',
     ),
+    /** Potential router topology retained a dynamic viewport value or non-singular presence boundary. */
+    OpenTopology: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'open-topology',
+      KernelVocabularySlot.OpenSeamKind,
+      'Potential router topology retained an au-viewport value, presence, or multiplicity boundary without guessing live state.',
+    ),
   },
   Compiler: {
     /** Executable command or pattern body stayed opaque. */

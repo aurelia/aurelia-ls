@@ -47,8 +47,9 @@ import {
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
-import type {
-  RouteConfigModel,
+import {
+  resolvedRouteableComponentName,
+  type RouteConfigModel,
 } from '../router/model.js';
 import { projectBindableTypeSurface } from './bindable-type-projection.js';
 import {
@@ -247,7 +248,10 @@ export interface SemanticApplicationRouteRow {
   readonly routeKind: string;
   readonly stage: string;
   readonly closure: string;
+  /** Authored class, alias, or resource spelling. */
   readonly componentName: string | null;
+  /** Custom-element registration name after routeable resolution. */
+  readonly resolvedComponentName: string | null;
   readonly viewport: string | null;
   readonly childRouteCount: number;
   readonly source: SemanticSourceReference | null;
@@ -1340,6 +1344,7 @@ function applicationRouteRow(
     stage: routeConfig.stage,
     closure: routeConfig.closure,
     componentName: routeConfig.component?.localName ?? null,
+    resolvedComponentName: resolvedRouteableComponentName(routeConfig.component),
     viewport: routeConfig.viewport,
     childRouteCount: routeConfig.childRoutes.length,
     source: describeAddress(store, routeConfig.sourceAddressHandle),

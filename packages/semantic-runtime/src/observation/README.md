@@ -487,6 +487,13 @@ static type surfaces rather than hydrated runtime values.
   authored source address, strict-mode axis, compiler resource scope, and compiler-world container; a child-side
   source-value read should not rederive provenance, resource visibility, `resolve(...)` visibility, or nullish runtime
   behavior from the child controller.
+  The table has two deliberate authority modes. Ordinary `read(...)` / `readAll(...)` may fall back through an
+  unambiguous definition or context type because synthetic views and recursively analyzed child resources can change
+  the exact controller handle. Consumers that own a concrete hydrated controller instance, such as router viewport
+  topology, must use `readExactControllerProperty(...)`; definition fallback there would leak one usage site's bound
+  value into sibling instances of the same resource. Every bound row also retains its source resource's
+  `RuntimeBindingExpressionScopeProjector`, and evaluator reads spend that row-owned projector rather than borrowing
+  the caller's projector across a resource boundary.
 - `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
   and open seams between target-side products and data flow. Value-channel fields are generated from binding, target,
   observer, and checker facts, so they should not receive same-handle field provenance unless a future source product

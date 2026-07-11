@@ -25,6 +25,7 @@ import {
   RouteRecognizerModel,
   RouteRecognizerOwnershipKind,
   type RouteConfigModel,
+  resolvedRouteableComponentName,
 } from './model.js';
 import type { RouteConfigConvergenceProjectResult } from './route-config-convergence.js';
 import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
@@ -384,7 +385,7 @@ function routeRecognizerRecords(
 }
 
 function routeConfigContextName(routeConfig: RouteConfigModel): string {
-  return routeConfig.component?.localName
+  return resolvedRouteableComponentName(routeConfig.component)
     ?? routeConfig.id
     ?? routeConfig.paths.find((path) => path.length > 0)
     ?? '(anonymous-route)';

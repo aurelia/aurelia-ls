@@ -105,7 +105,7 @@ function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, '
       : bindingProjectionDepthText(app),
   ];
   if (app.routeConfigs > 0 || app.typedNavigationInstructions > 0) {
-    lines.push(`Routing: ${app.routeConfigs} config(s), ${app.routeContexts} runtime context(s), ${app.typedNavigationInstructions} typed navigation instruction(s), ${app.componentAgents} component agent(s).`);
+    lines.push(`Routing: ${app.routeConfigs} config(s), ${app.routeContexts} potential context(s), ${app.typedNavigationInstructions} typed navigation instruction(s), ${app.componentAgents} planned component agent(s).`);
   }
   if (diagnosticRows === 0 && openSeamRows === 0) {
     lines.push('Pressure: no diagnostic rows or open seam sites in the overview page.');

@@ -842,7 +842,10 @@ both roles or carry provenance through a transforming wrapper; either mistake tu
 declaration/type-source relationship.
 The table is the resource-boundary carrier: once a child template is being analyzed, the parent `RuntimeBinding` is not
 available through the child's runtime rendering emission, so strict mode and binding-behavior lifecycle must travel on
-the table entry rather than being rediscovered downstream.
+the table entry rather than being rediscovered downstream. That includes the parent resource's binding-expression
+scope projector. Definition/type fallback is reserved for synthetic-view and cross-resource child analysis;
+instance-owning consumers use the exact-controller read so one resource usage cannot lend its bound value to a sibling
+usage of the same definition.
 When the parent binding source uses a source-scope-changing behavior such as `& state`, child root slot source lookup
 must spend `RuntimeBindingExpressionScopeProjector` before chasing `AccessScope`/`AccessMember` identity; otherwise the
 slot can have the right evaluated type while losing the store member as its source. The state-source overlay fixture

@@ -379,12 +379,12 @@ export const KernelProductKinds = {
       'A runtime-shaped RouteConfigContext that owns parent/root topology, child route processing, and a route recognizer.',
     ),
 
-    /** Product kind for a runtime RouteContext over one route config context and component/container boundary. */
+    /** Product kind for a potential RouteContext over one route config context and component/container boundary. */
     RouteContext: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'route-context',
       KernelVocabularySlot.ProductKind,
-      'A runtime RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport agent.',
+      'A potential RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport-agent candidate.',
     ),
 
     /** Product kind for a source-backed RouteContext.getRouteParameters(...) call correlated with route path params. */
@@ -403,12 +403,12 @@ export const KernelProductKinds = {
       'A router RouteableComponent input converged from string, class, resource definition, promise, or navigation strategy source.',
     ),
 
-    /** Product kind for the runtime au-viewport custom element instance semantics. */
+    /** Product kind for potential au-viewport custom-element semantics. */
     Viewport: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'viewport',
       KernelVocabularySlot.ProductKind,
-      'A runtime au-viewport instance with name, usedBy, default, fallback, and owning route context semantics.',
+      'A potential au-viewport with field closure, presence cardinality, and owning route-context semantics before live registration.',
     ),
 
     /** Product kind for a ViewportAgent attached to an au-viewport and route context. */
@@ -416,7 +416,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'viewport-agent',
       KernelVocabularySlot.ProductKind,
-      'A ViewportAgent that mediates routed component controller activation for one au-viewport.',
+      'A potential ViewportAgent candidate corresponding to one statically materialized au-viewport.',
     ),
 
     /** Product kind for a ComponentAgent created for a routed component. */
@@ -424,7 +424,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'component-agent',
       KernelVocabularySlot.ProductKind,
-      'A ComponentAgent that joins a routed component controller, route node, route context, and viewport agent.',
+      'A planned ComponentAgent handoff joining a routed controller, route node, route context, and viewport-agent candidate before activation.',
     ),
 
     /** Product kind for a RouteNode in the router's route tree. */
@@ -432,7 +432,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'route-node',
       KernelVocabularySlot.ProductKind,
-      'A RouteNode that joins a RouteContext to realized or synthetic route-tree state.',
+      'A potential synthetic root or planned pre-activation RouteNode with an explicit realization stage.',
     ),
 
     /** Product kind for the router's RouteTree state container. */
@@ -440,7 +440,7 @@ export const KernelProductKinds = {
       KernelVocabularyNamespace.Router,
       'route-tree',
       KernelVocabularySlot.ProductKind,
-      'A RouteTree that owns the current root RouteNode and later transition-compiled child nodes.',
+      'A potential synthetic root or planned pre-activation RouteTree with an explicit realization stage.',
     ),
 
     /** Product kind for a source-backed router runtime issue. */

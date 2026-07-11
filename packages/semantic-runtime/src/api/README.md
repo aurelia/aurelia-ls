@@ -1345,22 +1345,29 @@ recursive child recognized-route rows when the residual `ViewportInstruction` se
 component's child `RouteConfigContext`; the child row carries the routed child context, while the parent row preserves
 the residual parameter value that the framework keeps as the parent route-node residue handoff.
 
-Resolved routeable components also seed template compilation. That recursive rendering bridge lets routed component
+Resolved routeable components also seed template compilation. Routeable rows preserve authored `name` separately from
+the resolved custom-element `resolvedName`; route-context paths, viewport `usedBy` matching, and planned route nodes
+spend the resolved name while source navigation retains the authored carrier. An unresolved routeable keeps
+`resolvedName: null` and cannot cross into a planned node by borrowing its authored label. That recursive rendering bridge lets routed component
 templates and nested `au-viewport` / `ViewportAgent` topology show up before a future route-tree/navigation emulator
 exists. App roots seed the route-context topology when they are known; resource-only package analysis can still fall
 back to graph roots. Treat this as static route/component topology, not as proof that viewport activation or guard
 lifecycles ran.
-The app summary also distinguishes configured-route contexts from runtime route contexts: `routeConfigContexts` counts
+The app summary also distinguishes configured-route contexts from potential route contexts: `routeConfigContexts` counts
 the `RouteConfigContext`/recognizer topology, while `routeContexts` counts the static `RouteContext` products that join
-those config contexts to parent/root context, modeled child containers, and hosting viewport agents. `routerViewports`
-and `viewportAgents` are owned by those runtime route contexts, not by the config-context layer. The
+those config contexts to parent/root context, modeled child containers, and hosting viewport-agent candidates.
+`routerViewports` and `viewportAgents` are potential products owned by those contexts, not by the config-context layer.
+Rows carry `realizationStage: potential`; no current public row claims live router state. The
 `RouteContexts`, `RouteContextParameterReads`, `RouterViewports`, and `ViewportAgents` queries expand those counts into
-compact rows with labels, source references, container/host-controller closure, and optional handles.
+compact rows with labels, source references, container/host-controller closure, and optional handles. Viewport rows
+also expose `single`/`optional`/`many`/`open` presence, per-field closure, and exact `name`/`usedBy`/`default`/`fallback`
+sources. Open bound values remain null plus structured field state and open seams; they are never rewritten as absent
+framework defaults.
 `RouteContextParameterReads` specifically reports source-backed `RouteContext.getRouteParameters(...)` calls, the
 declared parameter keys on the TypeScript call, the route-config paths for the owning routed component, the recognized
 path parameter names, and whether declared non-path keys are only query/open parameters.
-`RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed: the synthetic root tree/node that
-`Router.routeTree` creates before navigation, and context-relative transition trees compiled from closed static
+`RouteTrees` and `RouteNodes` expose the route-tree layers that are currently closed. Synthetic root tree/node rows use
+`realizationStage: potential`; context-relative transition rows use `realizationStage: planned` and are compiled from closed static
 `ViewportInstructionTree` products when their recognized routes point at non-redirect route configs. Rows carry
 instruction-tree closure, root context/config/component labels, node counts, effective options closure, query/fragment
 shape, instruction/original-instruction references, recognized-route references, decoded params, child-first and
@@ -1373,7 +1380,9 @@ path-only parameters and include-query parameters; include-query append/by-route
 query values across route contexts because Aurelia copies the active instruction-tree query params onto every active
 route node before aggregation. Treat these rows as pre-activation
 route-tree compilation facts; the runtime still does not claim to have run guards, scheduled viewport updates,
-activated component agents, or exhausted every redirect edge case. Redirect routes that reach transition
+activated component agents, or exhausted every redirect edge case. Planned route nodes retain a
+`viewportAgentCandidate` and `viewportCandidateResolution: sole`; the candidate has not passed the framework's live
+availability gate. Multiple or runtime-dependent candidates produce open seams and no partial plan. Redirect routes that reach transition
 compilation without a modeled redirect target still surface an explicit router open-seam reason instead of silently
 disappearing from the transition tree. Closed static redirect targets are consumed through their
 `redirectSourceRouteConfig` edge, and framework-rejected redirect targets or expression shapes surface as
@@ -1390,9 +1399,10 @@ as typed open-seam reason kinds. Object-form router resource values first run th
 substrate; successful generation re-enters this RouteExpression-backed lane, while framework-shaped failures surface in
 `RouterIssues` and `AppDiagnostics`.
 
-`ComponentAgents` exposes the first static `RouteContext._createComponentAgent(...)` handoff for recognized transition
-nodes. Rows connect the route context, route node, selected viewport agent, resolved routeable component, and routed
-controller product. The corresponding `RuntimeControllers` rows use the `routed-custom-element` creation kind and
+`ComponentAgents` exposes the first planned `RouteContext._createComponentAgent(...)` handoff for recognized transition
+nodes. Rows connect the route context, route node, sole viewport-agent candidate, resolved routeable component, and routed
+controller product. The candidate is not called selected because live availability and scheduling have not run. The
+corresponding `RuntimeControllers` rows use the `routed-custom-element` creation kind and
 `created` readiness: the controller and child container exist as framework-shaped pre-activation facts, but guards,
 viewport scheduling, and component activation are still outside the current runtime claim.
 

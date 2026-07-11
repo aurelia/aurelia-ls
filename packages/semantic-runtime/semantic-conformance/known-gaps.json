@@ -227,20 +227,6 @@
       "rationale": "The route instruction and route-pattern substrate can close load=\"route: product-detail\" to the product-detail route and its productId parameter, but template completions inside params.bind fall back to binding-scope members instead of projecting route-parameter key candidates."
     },
     {
-      "assertionId": "router-routecontext-topology-lab/route-context-friendly-path-uses-resolved-custom-element-names",
-      "status": "known-gap",
-      "failureBucket": "router-routecontext-resolved-component-name-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "Aurelia RouteConfigContext._friendlyPath is built from the resolved CustomElementDefinition.name, but semantic-runtime RouteConfigContext/RouteContext labels and route-node componentName values are built from the routeable source localName, which is often a TypeScript class name or authored alias."
-    },
-    {
-      "assertionId": "router-routecontext-topology-lab/used-by-matches-resolved-custom-element-names",
-      "status": "known-gap",
-      "failureBucket": "router-viewport-usedby-resolved-component-name-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "Aurelia resolves the routeable to a CustomElementDefinition before calling ViewportAgent._handles, so used-by should compare against the resolved custom-element name; semantic-runtime currently compares used-by against routeConfig.component.localName and emits false no-available-viewport-agent issues for CE-name filters."
-    },
-    {
       "assertionId": "router-diagnostic-repair-projection/instruction-no-fallback-suggestion-survives-app-aggregation",
       "status": "known-gap",
       "failureBucket": "router-diagnostic-repair-projection-data-loss",

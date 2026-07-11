@@ -204,6 +204,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
   projectBindingSourceValueContext(
     expression: ExpressionAstNode,
     sourceScope: BindingScope,
+    bindingExpressionScopes: RuntimeBindingExpressionScopeProjector | null,
     bindingBehavior: CheckerExpressionTypeBindingBehaviorEvaluation,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
@@ -218,7 +219,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
           sourceScope,
           activeContainer,
           this.activeBoundControllerReads,
-          this.bindingExpressionScopes,
+          bindingExpressionScopes,
           localKey,
           sourceAddressHandle,
           bindingBehavior,
@@ -228,7 +229,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
         openReason: null,
       };
     }
-    if (this.bindingExpressionScopes == null) {
+    if (bindingExpressionScopes == null) {
       return runtimeBindingExpressionUsesModeledScopeChangingBindingBehavior(expression)
         ? {
             context: null,
@@ -240,7 +241,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
               sourceScope,
               activeContainer,
               this.activeBoundControllerReads,
-              this.bindingExpressionScopes,
+              bindingExpressionScopes,
               localKey,
               sourceAddressHandle,
               bindingBehavior,
@@ -250,17 +251,19 @@ export class RuntimeBindingSourceValueEvaluationContext {
             openReason: null,
           };
     }
-    const projected = this.projectBindingSourceExpressionWithLifecycle(
+    const projected = projectRuntimeSourceExpressionWithLifecycle({
       expression,
-      localKey,
       sourceScope,
-      bindingBehavior,
+      localKey,
       sourceAddressHandle,
-    );
-    if (projected?.scope == null) {
+      strictBinding,
+      bindingBehavior,
+      bindingExpressionScopes,
+    });
+    if (projected.kind !== RuntimeBindingSourceExpressionProjectionKind.Context) {
       return {
         context: null,
-        openReason: projected?.openReason
+        openReason: projected.openReason
           ?? 'Runtime binding source value read could not project the source-evaluation Scope.',
       };
     }
@@ -270,7 +273,7 @@ export class RuntimeBindingSourceValueEvaluationContext {
         projected.scope,
         activeContainer,
         this.activeBoundControllerReads,
-        this.bindingExpressionScopes,
+        bindingExpressionScopes,
         localKey,
         sourceAddressHandle,
         bindingBehavior,

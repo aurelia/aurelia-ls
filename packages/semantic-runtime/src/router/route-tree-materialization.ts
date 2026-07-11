@@ -21,15 +21,18 @@ import {
   RouterReference,
   RouteConfigKind,
   RouteContextModel,
+  RouterRealizationStageKind,
   RouteTreeModel,
   RouteParameterValueModel,
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
   ViewportAgentModel,
+  ViewportAgentCandidateResolutionKind,
   ViewportInstructionModel,
   ViewportInstructionTreeModel,
   ViewportRequestModel,
+  resolvedRouteableComponentName,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigContextModel,
@@ -59,6 +62,8 @@ const RESIDUE = ROUTE_RECOGNIZER_RESIDUE_PARAMETER;
 const enum OpenViewportResolutionKind {
   MissingComponentName = 'missing-component-name',
   NoAvailableViewportAgent = 'no-available-viewport-agent',
+  MultipleViewportAgentCandidates = 'multiple-viewport-agent-candidates',
+  OpenViewportAgentCandidates = 'open-viewport-agent-candidates',
   MissingRouteContextPair = 'missing-route-context-pair',
 }
 
@@ -79,7 +84,8 @@ interface TransitionRouteNodeSeed {
 
 interface ResolvedTransitionRouteNodeSeed extends TransitionRouteNodeSeed {
   readonly routeContext: RouteContextModel;
-  readonly viewportAgent: ViewportAgentModel | null;
+  readonly viewportAgentCandidate: ViewportAgentModel;
+  readonly viewportCandidateResolution: ViewportAgentCandidateResolutionKind.Sole;
   readonly viewportRequest: ViewportRequestModel | null;
 }
 
@@ -498,6 +504,7 @@ function initialRootRouteNode(
   routeContext: RouteContextModel,
 ): RouteNodeModel {
   return materializedRouteNode(store, nodeLocal, {
+    realizationStage: RouterRealizationStageKind.Potential,
     routeContext: routeContext.toReference(),
     routeConfig,
     parent: null,
@@ -512,6 +519,8 @@ function initialRootRouteNode(
     fragment: null,
     hasData: routeConfig.hasData,
     viewport: null,
+    viewportAgentCandidate: null,
+    viewportCandidateResolution: null,
     residueInstructionCount: 0,
     path: '',
     finalPath: '',
@@ -532,6 +541,7 @@ function initialRouteTree(
   return new RouteTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
+    RouterRealizationStageKind.Potential,
     rootNode.toReference(),
     null,
     effectiveRouterOptions?.toReference() ?? null,
@@ -610,6 +620,7 @@ function materializedRouteNode(
   return new RouteNodeModel({
     productHandle: store.handles.product(local),
     identityHandle: store.handles.identity(local),
+    realizationStage: fields.realizationStage,
     routeContext: fields.routeContext,
     config: routeConfig.toReference(),
     parent: fields.parent,
@@ -624,6 +635,8 @@ function materializedRouteNode(
     fragment: fields.fragment,
     hasData: fields.hasData,
     viewport: fields.viewport,
+    viewportAgentCandidate: fields.viewportAgentCandidate,
+    viewportCandidateResolution: fields.viewportCandidateResolution,
     residueInstructionCount: fields.residueInstructionCount,
     path: fields.path,
     finalPath: fields.finalPath,
@@ -701,6 +714,7 @@ function transitionRootRouteNode(
   childNodes: readonly TransitionRouteNodeEmission[],
 ): RouteNodeModel {
   return materializedRouteNode(store, rootLocal, {
+    realizationStage: RouterRealizationStageKind.Planned,
     routeContext: routeContext.toReference(),
     routeConfig,
     parent: null,
@@ -715,6 +729,8 @@ function transitionRootRouteNode(
     fragment: instructionTree.fragment,
     hasData: routeConfig.hasData,
     viewport: null,
+    viewportAgentCandidate: null,
+    viewportCandidateResolution: null,
     residueInstructionCount: 0,
     path: '',
     finalPath: '',
@@ -735,6 +751,7 @@ function transitionRouteTree(
   return new RouteTreeModel(
     store.handles.product(treeLocal),
     store.handles.identity(treeLocal),
+    RouterRealizationStageKind.Planned,
     rootNode.toReference(),
     instructionTree.toReference(),
     routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
@@ -836,6 +853,7 @@ function transitionRouteNode(
   const viewport = seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME;
   const residueInstructionCount = seed.recognizedRoute.residue == null ? 0 : 1;
   return materializedRouteNode(store, local, {
+    realizationStage: RouterRealizationStageKind.Planned,
     routeContext: seed.routeContext.toReference(),
     routeConfig: seed.routeConfig,
     parent,
@@ -850,6 +868,8 @@ function transitionRouteNode(
     fragment: instructionTree.fragment,
     hasData: seed.routeConfig.hasData,
     viewport,
+    viewportAgentCandidate: seed.viewportAgentCandidate.toReference(),
+    viewportCandidateResolution: seed.viewportCandidateResolution,
     residueInstructionCount,
     path,
     finalPath: path,
@@ -1107,7 +1127,7 @@ function resolveTransitionRouteNodeSeed(
   readonly seed: ResolvedTransitionRouteNodeSeed | null;
   readonly open: OpenViewportResolution | null;
 } {
-  const componentName = seed.routeConfig.component?.localName ?? null;
+  const componentName = resolvedRouteableComponentName(seed.routeConfig.component);
   if (componentName == null) {
     return {
       seed: null,
@@ -1124,8 +1144,8 @@ function resolveTransitionRouteNodeSeed(
     seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME,
     componentName,
   );
-  const viewportAgent = routeRuntime.resolveViewportAgent(parentRouteContext.identityHandle, viewportRequest);
-  if (viewportAgent == null) {
+  const resolution = routeRuntime.resolveViewportAgentCandidates(parentRouteContext.identityHandle, viewportRequest);
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.None) {
     return {
       seed: null,
       open: {
@@ -1133,13 +1153,41 @@ function resolveTransitionRouteNodeSeed(
         parentRouteContext,
         seed,
         request: viewportRequest,
-        reason: 'parent RouteContext has no matching available ViewportAgent',
+        reason: 'parent RouteContext has no statically compatible ViewportAgent candidate',
       },
     };
   }
-  const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.Multiple) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.MultipleViewportAgentCandidates,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: `parent RouteContext has ${resolution.definiteCandidates.length} matching static ViewportAgent candidates`,
+      },
+    };
+  }
+  if (resolution.resolutionKind === ViewportAgentCandidateResolutionKind.Open) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.OpenViewportAgentCandidates,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: `parent RouteContext has ${resolution.openCandidates.length} runtime-dependent ViewportAgent candidate(s)`,
+      },
+    };
+  }
+  const viewportAgentCandidate = resolution.candidate;
+  if (viewportAgentCandidate == null) {
+    throw new Error(`Sole viewport candidate resolution for '${viewportRequest.viewportName}' did not retain its candidate.`);
+  }
+  const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgentCandidate(
     seed.routeConfigContext.identityHandle,
-    viewportAgent.identityHandle,
+    viewportAgentCandidate.identityHandle,
   );
   if (routeContext == null) {
     return {
@@ -1157,7 +1205,8 @@ function resolveTransitionRouteNodeSeed(
     seed: {
       ...seed,
       routeContext,
-      viewportAgent,
+      viewportAgentCandidate,
+      viewportCandidateResolution: ViewportAgentCandidateResolutionKind.Sole,
       viewportRequest,
     },
     open: null,

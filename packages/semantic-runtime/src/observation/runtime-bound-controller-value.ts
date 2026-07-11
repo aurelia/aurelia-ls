@@ -1,6 +1,7 @@
 import { BindingScope } from '../configuration/scope.js';
 import type { Container } from '../di/container.js';
-import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { readFieldProvenance } from '../kernel/provenance.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
@@ -30,9 +31,11 @@ import {
 import {
   CheckerExpressionTypeBindingBehaviorEvaluation,
 } from '../type-system/expression-type-context.js';
+import type { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   bindingBehaviorEvaluationForRuntimeBindingSource,
 } from './runtime-binding-source-expression-context.js';
+import { RuntimeBindingExpressionScopeProjector } from './runtime-binding-expression-scope.js';
 
 export interface RuntimeBoundControllerPropertyValue {
   readonly controllerProductHandle: ProductHandle;
@@ -42,7 +45,11 @@ export interface RuntimeBoundControllerPropertyValue {
   readonly expressionProductHandle: ProductHandle | null;
   /** Authored source address for the parent binding expression that feeds this child controller property. */
   readonly sourceAddressHandle: AddressHandle | null;
+  /** Field provenance for the parent binding expression, when the runtime binding retained it. */
+  readonly sourceProvenanceHandle: ProvenanceHandle | null;
   readonly sourceScope: BindingScope | null;
+  /** Source-resource projector for binding-behavior scope changes such as `& state`. */
+  readonly sourceBindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
   /** Compiler resource scope visible to the parent binding source expression. */
   readonly sourceResourceScope: TemplateResourceScope | null;
   /** Compiler-world container visible to parent binding-source `resolve(...)` calls. */
@@ -63,6 +70,7 @@ export interface RuntimeBindingSourceValueRuntimeAnalysis {
   readonly runtimeRendering: RuntimeRenderingEmission;
   readonly controllerBind: RuntimeControllerBindEmission;
   readonly scopes: TemplateScopeConstructionEmission;
+  readonly expressionWorld: CheckerExpressionTypeWorld;
 }
 
 export interface RuntimeBindingSourceValueTemplateResource {
@@ -138,6 +146,14 @@ export class RuntimeBoundControllerValueTable {
       : this.byController.get(controllerProductHandle)?.get(propertyName)
         ?? this.readDefinitionValue(controllerProductHandle, propertyName))
       ?? this.readContextTypeDefinitionValue(contextType, propertyName);
+  }
+
+  /** Read only a binding rendered against this exact controller instance. */
+  readExactControllerProperty(
+    controllerProductHandle: ProductHandle,
+    propertyName: string,
+  ): RuntimeBoundControllerPropertyValue | null {
+    return this.byController.get(controllerProductHandle)?.get(propertyName) ?? null;
   }
 
   readControllerDefinitions(): readonly RuntimeControllerDefinitionReference[] {
@@ -297,6 +313,7 @@ function boundControllerValuesForRuntimeAnalysis(
   const controllersByProductHandle = new Map(analysis.runtimeRendering.controllers
     .map((controller) => [controller.productHandle, controller]));
   const scopes = instructionScopeLookup(analysis.scopes.instructionScopes);
+  const sourceBindingExpressionScopes = new RuntimeBindingExpressionScopeProjector(store, analysis.expressionWorld);
   const values: RuntimeBoundControllerPropertyValue[] = [];
   for (const targetAccess of analysis.controllerBind.targetAccesses) {
     if (
@@ -319,7 +336,10 @@ function boundControllerValuesForRuntimeAnalysis(
       bindingProductHandle: binding.productHandle,
       expressionProductHandle,
       sourceAddressHandle: readTemplateExpressionParse(store, expressionProductHandle)?.sourceAddressHandle ?? null,
+      sourceProvenanceHandle: readFieldProvenance(binding.fieldProvenance, 'expression')
+        ?? readFieldProvenance(binding.fieldProvenance, 'source'),
       sourceScope: scopes.scopeForBinding(analysis.runtimeRendering, binding),
+      sourceBindingExpressionScopes,
       sourceResourceScope: resourceScope,
       sourceDefaultContainer,
       sourceStrictBinding: analysis.runtimeRendering.readRenderContextForBinding(binding.productHandle)?.renderingController.strict ?? null,
