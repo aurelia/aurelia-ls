@@ -90,6 +90,16 @@ export const enum OpenSeamReasonKind {
   RouterViewportResolutionOpen = 'router-viewport-resolution-open',
   /** Router redirect materialization could not close the redirect target. */
   RouterRedirectTargetOpen = 'router-redirect-target-open',
+  /** RouteConfig has an instance getRouteConfig hook whose runtime result may override pre-hook fields. */
+  RouterRouteConfigDynamicHook = 'router-route-config-dynamic-hook',
+  /** RouteConfig.configure syntax was observed without positive module-execution evidence. */
+  RouterRouteConfigExecutionUnproven = 'router-route-config-execution-unproven',
+  /** Multiple effective RouteConfig contributions could not be placed in one proven execution order. */
+  RouterRouteConfigExecutionOrderOpen = 'router-route-config-execution-order-open',
+  /** One or more authored RouteConfig fields could not be reduced to a closed scalar or reference. */
+  RouterRouteConfigValueOpen = 'router-route-config-value-open',
+  /** Recursive RouteConfig application was bounded instead of expanding an infinite effective child graph. */
+  RouterRouteConfigRecursiveApplication = 'router-route-config-recursive-application',
   /** Spread hydration could not close the binding/context needed to expand spread entries. */
   SpreadHydrationContextOpen = 'spread-hydration-context-open',
   /** DI world construction could not find the target container for a registration step. */

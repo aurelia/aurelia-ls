@@ -65,6 +65,7 @@ import type {
   SemanticViewportInstructionTreeRow,
   SemanticViewportAgentRow,
 } from './contracts.js';
+import type { RouteConfigConvergenceLink } from '../router/route-config-convergence.js';
 
 export function readRouterOptionsRows(
   emission: AureliaAppWorldProjectEmission,
@@ -84,11 +85,11 @@ export function readRouteConfigRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouteConfigRow[] {
-  return emission.routes.readRouteConfigs()
-    .map((routeConfig) => routeConfigRow(emission, store, routeConfig, handles))
+  return routeConfigLinkGroups(emission.routes.readLinks())
+    .map((links) => routeConfigRow(emission, store, links, handles))
     .sort((left, right) =>
-      `${left.routeKind}:${left.id ?? ''}:${left.paths.join('|')}:${left.source?.label ?? ''}`
-        .localeCompare(`${right.routeKind}:${right.id ?? ''}:${right.paths.join('|')}:${right.source?.label ?? ''}`)
+      `${left.routeKind}:${left.id ?? ''}:${left.originKind}:${left.effectKind}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.routeKind}:${right.id ?? ''}:${right.originKind}:${right.effectKind}:${right.source?.label ?? ''}`)
     );
 }
 
@@ -366,14 +367,22 @@ function routerOptionsRow(
 function routeConfigRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
-  routeConfig: RouteConfigModel,
+  links: readonly RouteConfigConvergenceLink[],
   handles: boolean,
 ): SemanticRouteConfigRow {
+  const link = links[0]!;
+  const routeConfig = link.routeConfig;
+  const contribution = link.contribution;
+  const effectiveVariantCount = new Set(links.map((entry) => routeConfigEffectiveVariantKey(entry.routeConfig))).size;
   return {
     projectKey: emission.project.projectKey,
     routeKind: routeConfig.routeKind,
-    originKind: routeConfig.originKind,
-    valueKind: routeConfig.valueKind,
+    originKind: contribution.originKind,
+    valueKind: contribution.valueKind,
+    executionKind: contribution.executionKind,
+    effectKind: link.effectKind,
+    stage: routeConfig.stage,
+    closure: routeConfig.closure,
     id: routeConfig.id,
     paths: routeConfig.paths,
     title: routeConfig.title,
@@ -386,15 +395,58 @@ function routeConfigRow(
     childRouteCount: routeConfig.childRoutes.length,
     fallback: routeableComponentRow(store, routeConfig.fallback, handles),
     nav: routeConfig.nav,
-    source: describeAddress(store, routeConfig.sourceAddressHandle),
+    fieldStates: Object.fromEntries(routeConfig.fieldStates.map((state) => [state.field, state.stateKind])) as SemanticRouteConfigRow['fieldStates'],
+    openFields: routeConfig.openFields,
+    openFieldCount: routeConfig.openFields.length,
+    effectiveUseCount: links.length,
+    effectiveVariantCount,
+    effectiveFieldsStable: effectiveVariantCount === 1,
+    source: describeAddress(store, contribution.sourceAddressHandle),
     ...(handles ? {
       handles: {
         productHandle: routeConfig.productHandle,
         identityHandle: routeConfig.identityHandle,
-        sourceAddressHandle: routeConfig.sourceAddressHandle,
+        contributionProductHandle: contribution.productHandle,
+        contributionIdentityHandle: contribution.identityHandle,
+        sourceAddressHandle: contribution.sourceAddressHandle,
       },
     } : {}),
   };
+}
+
+function routeConfigLinkGroups(
+  links: readonly RouteConfigConvergenceLink[],
+): readonly (readonly RouteConfigConvergenceLink[])[] {
+  const groups = new Map<RouteConfigConvergenceLink['contribution']['identityHandle'], RouteConfigConvergenceLink[]>();
+  for (const link of links) {
+    groups.set(link.contribution.identityHandle, [
+      ...(groups.get(link.contribution.identityHandle) ?? []),
+      link,
+    ]);
+  }
+  return [...groups.values()];
+}
+
+function routeConfigEffectiveVariantKey(routeConfig: RouteConfigModel): string {
+  return JSON.stringify([
+    routeConfig.stage,
+    routeConfig.closure,
+    routeConfig.routeKind,
+    routeConfig.id,
+    routeConfig.paths,
+    routeConfig.title,
+    routeConfig.component?.resolvedIdentityHandle ?? routeConfig.component?.localName ?? null,
+    routeConfig.redirectTo,
+    routeConfig.caseSensitive,
+    routeConfig.transitionPlan,
+    routeConfig.viewport,
+    routeConfig.hasData,
+    routeConfig.childRoutes.length,
+    routeConfig.fallback?.resolvedIdentityHandle ?? routeConfig.fallback?.localName ?? null,
+    routeConfig.nav,
+    routeConfig.fieldStates.map((state) => [state.field, state.stateKind]),
+    routeConfig.openFields,
+  ]);
 }
 
 function typedNavigationInstructionRow(

@@ -2,15 +2,21 @@ import { defineProductDetailSlot } from '../kernel/product-details.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type {
   RouteContextParameterReadModel,
+  RouteConfigContributionModel,
   RouteConfigModel,
 } from './model.js';
 
 /** Typed detail slots for router products consumed by inquiry and API layers. */
 export const RouterProductDetails = {
+  RouteConfigContribution: defineProductDetailSlot<RouteConfigContributionModel>(
+    KernelVocabulary.Router.RouteConfigContribution.key,
+    'router.route-config-contribution',
+    'Source-backed RouteConfig contribution with authoring form, execution evidence, field state, and exact provenance.',
+  ),
   RouteConfig: defineProductDetailSlot<RouteConfigModel>(
     KernelVocabulary.Router.RouteConfig.key,
     'router.route-config',
-    'Router RouteConfig detail with configured id, paths, component, redirect, viewport, and child route references.',
+    'Effective RouteConfig definition or applied child use with configured fields, closure, and child route references.',
   ),
   RouteContextParameterRead: defineProductDetailSlot<RouteContextParameterReadModel>(
     KernelVocabulary.Router.RouteContextParameterRead.key,

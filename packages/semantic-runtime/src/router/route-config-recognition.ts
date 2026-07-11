@@ -51,14 +51,18 @@ import {
   RouteableComponentKind,
   RouteableComponentModel,
   RouteableComponentReference,
+  RouteConfigContributionModel,
+  RouteConfigExecutionKind,
+  RouteConfigFieldState,
+  RouteConfigFieldStateKind,
   RouteConfigKind,
-  RouteConfigModel,
   RouteConfigOriginKind,
   RouteConfigValueKind,
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
   type RouteConfigField,
+  type RouteConfigValueField,
 } from './model.js';
 import { RouterProductDetails } from './product-details.js';
 import { routerIdentityProductRecords } from './router-product-records.js';
@@ -115,6 +119,8 @@ interface RouteConfigObservation {
   readonly routeKind: RouteConfigKind;
   readonly originKind: RouteConfigOriginKind;
   readonly valueKind: RouteConfigValueKind;
+  readonly executionKind: RouteConfigExecutionKind;
+  readonly executionOrder: number | null;
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly pathSourceNode: ts.Node | null;
@@ -204,13 +210,13 @@ interface RouteConfigRouteableEmissions {
   readonly fallback: RouteableComponentReference | null;
 }
 
-class RouteConfigEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly routeConfig: RouteConfigModel,
-    readonly routeConfigs: readonly RouteConfigModel[],
-    readonly issues: readonly RouterIssueModel[],
-  ) {}
+interface RouteConfigSubtreeEmission {
+  readonly records: readonly KernelStoreRecord[];
+  /** Contribution emitted for this observation and referenced by its direct parent. */
+  readonly rootContribution: RouteConfigContributionModel;
+  /** Pre-order closure containing the root contribution and every nested child contribution. */
+  readonly subtreeContributions: readonly RouteConfigContributionModel[];
+  readonly issues: readonly RouterIssueModel[];
 }
 
 class RouteConfigValidationIssueEmission {
@@ -224,7 +230,7 @@ class RouteConfigSourceRecords {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly source: SourceRecordSet,
-    readonly pathSource: SourceRecordSet | null,
+    readonly pathSources: readonly SourceRecordSet[],
     readonly fieldSources: ReadonlyMap<RouteConfigField, SourceRecordSet>,
   ) {}
 }
@@ -245,6 +251,8 @@ const ROUTE_CONFIG_SOURCE_FIELDS = [
   'fallback',
   'nav',
 ] as const satisfies readonly RouteConfigField[];
+
+const ROUTE_CONFIG_VALUE_FIELDS = ROUTE_CONFIG_SOURCE_FIELDS satisfies readonly RouteConfigValueField[];
 
 const ROUTE_CONFIG_ALLOWED_PROPERTIES = new Set([
   'id',
@@ -271,7 +279,7 @@ export class RouteConfigRecognitionSourceResult {
   constructor(
     readonly admission: SourceFileAdmission,
     readonly moduleKey: string,
-    readonly routeConfigs: readonly RouteConfigModel[],
+    readonly contributions: readonly RouteConfigContributionModel[],
     readonly issues: readonly RouterIssueModel[] = [],
   ) {}
 }
@@ -283,8 +291,8 @@ export class RouteConfigRecognitionProjectResult {
     readonly sources: readonly RouteConfigRecognitionSourceResult[],
   ) {}
 
-  readRouteConfigs(): readonly RouteConfigModel[] {
-    return this.sources.flatMap((source) => source.routeConfigs);
+  readContributions(): readonly RouteConfigContributionModel[] {
+    return this.sources.flatMap((source) => source.contributions);
   }
 
   readIssues(): readonly RouterIssueModel[] {
@@ -327,12 +335,12 @@ export class RouteConfigRecognitionProjectPass {
       resourceIndex,
     );
     const observations = recognizeRouteConfigs(context);
-    const emission = new RouteConfigKernelEmitter(store).emit(context, observations);
+    const emittedSubtrees = new RouteConfigKernelEmitter(store).emit(context, observations);
     return new RouteConfigRecognitionSourceResult(
       source.admission,
       source.moduleKey,
-      emission.flatMap((entry) => entry.routeConfigs),
-      emission.flatMap((entry) => entry.issues),
+      emittedSubtrees.flatMap((subtree) => subtree.subtreeContributions),
+      emittedSubtrees.flatMap((subtree) => subtree.issues),
     );
   }
 }
@@ -345,62 +353,66 @@ class RouteConfigKernelEmitter {
   emit(
     context: RouteConfigRecognitionContext,
     observations: readonly RouteConfigObservation[],
-  ): readonly RouteConfigEmission[] {
-    const emissions = observations.map((observation, index) =>
-      this.emitRouteConfig(context, observation, `${context.projectKey}:${context.moduleKey}:${index}`, null)
+  ): readonly RouteConfigSubtreeEmission[] {
+    const emittedSubtrees = observations.map((observation, index) =>
+      this.emitRouteConfigSubtree(context, observation, `${context.projectKey}:${context.moduleKey}:${index}`, null)
     );
-    const records = emissions.flatMap((emission) => emission.records);
+    const records = emittedSubtrees.flatMap((subtree) => subtree.records);
     if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-route-config:${context.moduleKey}`));
-      for (const routeConfig of emissions.flatMap((emission) => emission.routeConfigs)) {
-        this.store.productDetails.add(RouterProductDetails.RouteConfig, routeConfig.productHandle, routeConfig);
+      this.store.commit(new KernelStoreBatch(records, `router-route-config-contribution:${context.moduleKey}`));
+      for (const contribution of emittedSubtrees.flatMap((subtree) => subtree.subtreeContributions)) {
+        this.store.productDetails.add(RouterProductDetails.RouteConfigContribution, contribution.productHandle, contribution);
       }
     }
-    return emissions;
+    return emittedSubtrees;
   }
 
-  private emitRouteConfig(
+  private emitRouteConfigSubtree(
     context: RouteConfigRecognitionContext,
     observation: RouteConfigObservation,
     local: string,
     parentIdentityHandle: IdentityHandle | null,
-  ): RouteConfigEmission {
+  ): RouteConfigSubtreeEmission {
     const sources = this.recordsForRouteConfigSources(context, observation, local);
-    const productHandle = this.store.handles.product(`router-route-config:${local}`);
-    const identityHandle = this.store.handles.identity(`router-route-config:${local}`);
+    const productHandle = this.store.handles.product(`router-route-config-contribution:${local}`);
+    const identityHandle = this.store.handles.identity(`router-route-config-contribution:${local}`);
     const routeables = this.routeableComponentEmissions(context, observation, local, identityHandle);
-    const childEmissions = this.childRouteConfigEmissions(context, observation, local, identityHandle);
-    const routeConfig = this.routeConfigModelForObservation(
+    const childSubtrees = this.emitChildRouteConfigSubtrees(context, observation, local, identityHandle);
+    const contribution = this.contributionModelForObservation(
+      context,
       observation,
       sources,
       routeables.component,
       routeables.fallback,
-      childEmissions,
+      childSubtrees,
       productHandle,
       identityHandle,
     );
     const validationIssueRecords = this.validationIssueRecords(
       context,
       local,
-      routeConfig,
+      contribution,
       observation.validationIssues,
     );
 
-    return new RouteConfigEmission(
-      [
+    return {
+      records: [
         ...sources.records,
         ...routeables.records,
-        ...childEmissions.flatMap((emission) => emission.records),
+        ...childSubtrees.flatMap((subtree) => subtree.records),
         ...validationIssueRecords.records,
-        ...this.recordsForRouteConfigProduct(local, observation, sources, routeConfig, parentIdentityHandle),
+        ...this.recordsForRouteConfigProduct(local, observation, sources, contribution, parentIdentityHandle),
       ],
-      routeConfig,
-      [routeConfig, ...childEmissions.flatMap((emission) => emission.routeConfigs)],
-      [
+      rootContribution: contribution,
+      subtreeContributions: [
+        contribution,
+        ...childSubtrees.flatMap((subtree) => subtree.subtreeContributions),
+      ],
+      issues: [
         ...validationIssueRecords.issues,
-        ...childEmissions.flatMap((emission) => emission.issues),
+        ...childSubtrees.flatMap((subtree) => subtree.issues),
       ],
-    );
+    };
   }
 
   private routeableComponentEmissions(
@@ -425,21 +437,21 @@ class RouteConfigKernelEmitter {
     };
   }
 
-  private childRouteConfigEmissions(
+  private emitChildRouteConfigSubtrees(
     context: RouteConfigRecognitionContext,
     observation: RouteConfigObservation,
     local: string,
     ownerIdentityHandle: IdentityHandle,
-  ): readonly RouteConfigEmission[] {
+  ): readonly RouteConfigSubtreeEmission[] {
     return observation.childRoutes.map((child, index) =>
-      this.emitRouteConfig(context, child, `${local}:child:${index}`, ownerIdentityHandle)
+      this.emitRouteConfigSubtree(context, child, `${local}:child:${index}`, ownerIdentityHandle)
     );
   }
 
   private validationIssueRecords(
     context: RouteConfigRecognitionContext,
     local: string,
-    routeConfig: RouteConfigModel,
+    contribution: RouteConfigContributionModel,
     issues: readonly RouteConfigValidationIssueObservation[],
   ): RouteConfigValidationIssueEmission {
     const records: KernelStoreRecord[] = [];
@@ -467,14 +479,14 @@ class RouteConfigKernelEmitter {
         observed.message,
         'error',
         observed.frameworkErrorCode,
-        routeConfig.toReference(),
+        contribution.toRouteConfigReference(),
         null,
         observed.property,
         observed.expected,
         observed.actual,
         null,
-        routeConfig.paths[0] ?? null,
-        routeConfig.redirectTo,
+        contribution.paths[0] ?? null,
+        contribution.redirectTo,
         null,
         sourceAddressHandle,
       );
@@ -484,9 +496,9 @@ class RouteConfigKernelEmitter {
         ...routerIssueProductRecords(this.store, {
           local: issueLocal,
           issue: model,
-          ownerHandle: routeConfig.identityHandle,
+          ownerHandle: contribution.identityHandle,
           sourceAddressHandle,
-          localName: observed.property ?? routeConfig.id ?? routeConfig.paths[0] ?? observed.issueKind,
+          localName: observed.property ?? contribution.id ?? contribution.paths[0] ?? observed.issueKind,
           evidenceSummary: observed.message,
         }),
       );
@@ -494,21 +506,26 @@ class RouteConfigKernelEmitter {
     return new RouteConfigValidationIssueEmission(records, models);
   }
 
-  private routeConfigModelForObservation(
+  private contributionModelForObservation(
+    context: RouteConfigRecognitionContext,
     observation: RouteConfigObservation,
     sources: RouteConfigSourceRecords,
     component: RouteableComponentReference | null,
     fallback: RouteableComponentReference | null,
-    childEmissions: readonly RouteConfigEmission[],
+    childSubtrees: readonly RouteConfigSubtreeEmission[],
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
-  ): RouteConfigModel {
-    return new RouteConfigModel(
+  ): RouteConfigContributionModel {
+    return new RouteConfigContributionModel(
       productHandle,
       identityHandle,
       observation.routeKind,
       observation.originKind,
       observation.valueKind,
+      observation.executionKind,
+      context.moduleKey,
+      observation.sourceNode.getStart(context.sourceFile),
+      observation.executionOrder,
       observation.id,
       observation.paths,
       observation.title,
@@ -518,11 +535,12 @@ class RouteConfigKernelEmitter {
       observation.transitionPlan,
       observation.viewport,
       observation.hasData,
-      childEmissions.map((emission) => emission.routeConfig.toReference()),
+      childSubtrees.map((subtree) => subtree.rootContribution.toReference()),
       fallback,
       observation.nav,
+      routeConfigFieldStates(context, observation, component, fallback),
       sources.source.addressHandle,
-      sources.pathSource?.addressHandle ?? null,
+      sources.pathSources.map((source) => source.addressHandle),
       sources.fieldSources.get('redirectTo')?.addressHandle ?? null,
       routeConfigFieldProvenance(sources, observation, component, fallback),
     );
@@ -532,16 +550,16 @@ class RouteConfigKernelEmitter {
     local: string,
     observation: RouteConfigObservation,
     sources: RouteConfigSourceRecords,
-    routeConfig: RouteConfigModel,
+    contribution: RouteConfigContributionModel,
     parentIdentityHandle: IdentityHandle | null,
   ): readonly KernelStoreRecord[] {
     return routerIdentityProductRecords(this.store, {
-      local: `router-route-config:${local}`,
-      productHandle: routeConfig.productHandle,
-      identityHandle: routeConfig.identityHandle,
-      productKindKey: KernelVocabulary.Router.RouteConfig.key,
+      local: `router-route-config-contribution:${local}`,
+      productHandle: contribution.productHandle,
+      identityHandle: contribution.identityHandle,
+      productKindKey: KernelVocabulary.Router.RouteConfigContribution.key,
       ownerHandle: parentIdentityHandle,
-      materializationOwnerHandle: routeConfig.identityHandle,
+      materializationOwnerHandle: contribution.identityHandle,
       sourceAddressHandle: sources.source.addressHandle,
       localName: observation.localName,
       provenanceHandle: sources.source.provenanceHandle,
@@ -560,14 +578,25 @@ class RouteConfigKernelEmitter {
       'Router route configuration source.',
     );
     const fieldSources = this.recordsForRouteConfigFieldSources(context, observation, local, source);
-    const pathSource = fieldSources.get('path') ?? null;
+    const pathFieldSource = fieldSources.get('path') ?? null;
+    const pathSources = routeConfigPathSourceNodes(observation).map((node, index) =>
+      node === observation.fieldSourceNodes.path && pathFieldSource != null
+        ? pathFieldSource
+        : this.recordsForSource(
+            context,
+            node,
+            `router-route-config:${local}:path:${index}`,
+            'Router route path entry source.',
+          )
+    );
     return new RouteConfigSourceRecords(
       [
         ...source.records,
-        ...uniqueRouteSourceRecordSets(fieldSources.values(), source).flatMap((fieldSource) => fieldSource.records),
+        ...uniqueRouteSourceRecordSets([...fieldSources.values(), ...pathSources], source)
+          .flatMap((fieldSource) => fieldSource.records),
       ],
       source,
-      pathSource,
+      pathSources,
       fieldSources,
     );
   }
@@ -708,13 +737,16 @@ function recognizeRouteConfigs(
   context: RouteConfigRecognitionContext,
 ): readonly RouteConfigObservation[] {
   const bindings = readRouterImportedBindings(context.sourceFile);
+  const executedCalls = new Map(
+    context.evaluation.evaluation.executedCallExpressions.map((call, index) => [call, index] as const),
+  );
   const observations: RouteConfigObservation[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
       observations.push(...recognizeRouteDecorators(context, bindings, node));
     }
     if (ts.isCallExpression(node)) {
-      const configured = recognizeRouteConfigureCall(context, bindings, node);
+      const configured = recognizeRouteConfigureCall(context, bindings, node, executedCalls.get(node) ?? null);
       if (configured != null) {
         observations.push(configured);
       }
@@ -725,6 +757,19 @@ function recognizeRouteConfigs(
   return observations.sort((left, right) =>
     left.sourceNode.getStart(context.sourceFile) - right.sourceNode.getStart(context.sourceFile)
   );
+}
+
+function executionKindForOrigin(originKind: RouteConfigOriginKind): RouteConfigExecutionKind {
+  switch (originKind) {
+    case RouteConfigOriginKind.ConfigureCall:
+      return RouteConfigExecutionKind.Unproven;
+    case RouteConfigOriginKind.ChildRoutesProperty:
+      return RouteConfigExecutionKind.Embedded;
+    case RouteConfigOriginKind.RouteDecorator:
+    case RouteConfigOriginKind.ClassStaticDefaults:
+    case RouteConfigOriginKind.DynamicHook:
+      return RouteConfigExecutionKind.Declarative;
+  }
 }
 
 function recognizeRouteDecorators(
@@ -754,16 +799,33 @@ function recognizeRouteDecorators(
         RouteConfigOriginKind.RouteDecorator,
         component,
         decorator,
-        typeDefaults,
         component,
       )
     );
   }
 
-  if (observations.length === 0 && component?.resourceDefinition != null && hasRouteTypeDefaults(typeDefaults)) {
+  if (component?.resourceDefinition != null && hasRouteTypeDefaults(typeDefaults)) {
     observations.push(
       routeConfigFromTypeDefaults(typeDefaults, component, classNode)
     );
+  }
+
+  const dynamicHook = classNode.members.find((member) =>
+    !hasStaticModifier(member)
+    && 'name' in member
+    && member.name != null
+    && readPropertyName(member.name) === 'getRouteConfig'
+  );
+  if (component?.resourceDefinition != null && dynamicHook != null) {
+    observations.push({
+      ...openRouteConfigObservation(
+        RouteConfigKind.Route,
+        RouteConfigOriginKind.DynamicHook,
+        component,
+        dynamicHook,
+      ),
+      executionKind: RouteConfigExecutionKind.Declarative,
+    });
   }
 
   return observations.map((observation) => ({
@@ -776,6 +838,7 @@ function recognizeRouteConfigureCall(
   context: RouteConfigRecognitionContext,
   bindings: RouterImportedBindings,
   call: ts.CallExpression,
+  executionOrder: number | null,
 ): RouteConfigObservation | null {
   const expression = unwrapExpression(call.expression);
   if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'configure') {
@@ -789,15 +852,20 @@ function recognizeRouteConfigureCall(
   const component = typeExpression == null || ts.isSpreadElement(typeExpression)
     ? null
     : routeableComponentForExpression(context, typeExpression);
-  return readRouteConfigObservation(
+  return {
+    ...readRouteConfigObservation(
     context,
     configExpression,
     RouteConfigKind.Route,
     RouteConfigOriginKind.ConfigureCall,
     component,
     call,
-    null,
-  );
+    ),
+    executionKind: executionOrder == null
+      ? RouteConfigExecutionKind.Unproven
+      : RouteConfigExecutionKind.Executed,
+    executionOrder,
+  };
 }
 
 function readRouteConfigObservation(
@@ -807,7 +875,6 @@ function readRouteConfigObservation(
   originKind: RouteConfigOriginKind,
   fallbackComponent: RouteableComponentObservation | null,
   sourceNode: ts.Node,
-  typeDefaults: RouteTypeDefaults | null,
   routeContextComponent: RouteableComponentObservation | null = null,
 ): RouteConfigObservation {
   if (expression == null || ts.isSpreadElement(expression)) {
@@ -815,10 +882,10 @@ function readRouteConfigObservation(
   }
   const current = unwrapExpression(expression);
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current) || ts.isArrayLiteralExpression(current)) {
-    return routeConfigFromPathExpression(context, current, routeKind, originKind, fallbackComponent, sourceNode, typeDefaults);
+    return routeConfigFromPathExpression(context, current, routeKind, originKind, fallbackComponent, sourceNode);
   }
   if (ts.isObjectLiteralExpression(current)) {
-    return routeConfigFromObject(context, current, routeKind, originKind, fallbackComponent, typeDefaults, '', routeContextComponent);
+    return routeConfigFromObject(context, current, routeKind, originKind, fallbackComponent, sourceNode, '', routeContextComponent);
   }
   const validationValue = evaluatedRouteConfigValidationValue(context, current);
   if (validationValue?.kind === EvaluationValueKind.Null) {
@@ -840,32 +907,31 @@ function routeConfigFromPathExpression(
   originKind: RouteConfigOriginKind,
   fallbackComponent: RouteableComponentObservation | null,
   sourceNode: ts.Node,
-  typeDefaults: RouteTypeDefaults | null,
 ): RouteConfigObservation {
-  const expressionPaths = readStringArrayValue(context, expression);
-  const paths = expressionPaths ?? typeDefaults?.paths ?? [];
-  const pathSourceNode = expressionPaths == null ? typeDefaults?.pathSourceNode ?? null : expression;
+  const paths = readStringArrayValue(context, expression) ?? [];
+  const pathSourceNode = paths.length === 0 ? null : expression;
   return {
     routeKind,
     originKind,
     valueKind: RouteConfigValueKind.PathExpression,
-    id: typeDefaults?.id ?? paths[0] ?? null,
+    executionKind: executionKindForOrigin(originKind),
+    executionOrder: null,
+    id: paths[0] ?? null,
     paths,
-    pathSourceNode: pathSourceNode ?? typeDefaults?.pathSourceNode ?? null,
-    title: typeDefaults?.title ?? null,
+    pathSourceNode,
+    title: null,
     component: fallbackComponent,
-    redirectTo: typeDefaults?.redirectTo ?? null,
-    caseSensitive: typeDefaults?.caseSensitive ?? null,
-    transitionPlan: typeDefaults?.transitionPlan ?? null,
-    viewport: typeDefaults?.viewport ?? null,
-    hasData: typeDefaults?.hasData ?? null,
-    childRoutes: typeDefaults?.childRoutes ?? [],
-    fallback: typeDefaults?.fallback ?? null,
-    nav: typeDefaults?.nav ?? null,
+    redirectTo: null,
+    caseSensitive: null,
+    transitionPlan: null,
+    viewport: null,
+    hasData: null,
+    childRoutes: [],
+    fallback: null,
+    nav: null,
     sourceNode,
     fieldSourceNodes: routeConfigFieldSourceNodes([
-      ...routeTypeDefaultFieldSourceEntries(typeDefaults),
-      ['id', typeDefaults?.fieldSourceNodes.id ?? pathSourceNode ?? null],
+      ['id', pathSourceNode],
       ['path', pathSourceNode],
       fallbackComponent == null ? null : ['component', fallbackComponent.sourceNode],
     ]),
@@ -880,15 +946,17 @@ function routeConfigFromObject(
   routeKind: RouteConfigKind,
   originKind: RouteConfigOriginKind,
   fallbackComponent: RouteableComponentObservation | null,
-  typeDefaults: RouteTypeDefaults | null,
+  sourceNode: ts.Node,
   parentPath: string,
   routeContextComponent: RouteableComponentObservation | null,
 ): RouteConfigObservation {
-  const read = readRouteObjectConfig(context, object, routeKind, fallbackComponent, typeDefaults, parentPath, routeContextComponent);
+  const read = readRouteObjectConfig(context, object, routeKind, fallbackComponent, parentPath, routeContextComponent);
   return {
     routeKind: routeObjectKind(routeKind, read),
     originKind,
     valueKind: RouteConfigValueKind.ObjectLiteral,
+    executionKind: executionKindForOrigin(originKind),
+    executionOrder: null,
     id: read.id,
     paths: read.paths,
     pathSourceNode: read.pathSourceNode,
@@ -902,7 +970,7 @@ function routeConfigFromObject(
     childRoutes: read.childRoutes,
     fallback: read.fallback,
     nav: read.nav,
-    sourceNode: object,
+    sourceNode,
     fieldSourceNodes: read.fieldSourceNodes,
     validationIssues: read.validationIssues,
     localName: read.localName,
@@ -914,18 +982,17 @@ function readRouteObjectConfig(
   object: ts.ObjectLiteralExpression,
   routeKind: RouteConfigKind,
   fallbackComponent: RouteableComponentObservation | null,
-  typeDefaults: RouteTypeDefaults | null,
   parentPath: string,
   routeContextComponent: RouteableComponentObservation | null,
 ): RouteObjectConfigRead {
   const expressions = readRouteObjectPropertyExpressions(object);
-  const path = readRouteObjectPaths(context, object, typeDefaults);
+  const path = readRouteObjectPaths(context, object);
   const component = readRouteObjectComponent(context, object, fallbackComponent, routeContextComponent);
-  const fallback = readRouteObjectFallback(context, object, typeDefaults, routeContextComponent);
-  const redirectTo = readStringValueOrNull(context, expressions.redirectTo) ?? typeDefaults?.redirectTo ?? null;
-  const childRoutes = readRouteObjectChildRoutes(context, object, typeDefaults, propertyPath(parentPath, 'routes'), component);
+  const fallback = readRouteObjectFallback(context, object, routeContextComponent);
+  const redirectTo = readStringValueOrNull(context, expressions.redirectTo);
+  const childRoutes = readRouteObjectChildRoutes(context, object, propertyPath(parentPath, 'routes'), component);
   const objectId = readStringValueOrNull(context, expressions.id);
-  const id = objectId ?? typeDefaults?.id ?? path.paths[0] ?? null;
+  const id = objectId ?? path.paths[0] ?? null;
 
   const validationIssues = [
     ...routeObjectValidationIssues(context, object, routeKind, expressions, parentPath),
@@ -939,17 +1006,17 @@ function readRouteObjectConfig(
     id,
     paths: path.paths,
     pathSourceNode: path.pathSourceNode,
-    title: readStringValueOrNull(context, expressions.title) ?? typeDefaults?.title ?? null,
+    title: readStringValueOrNull(context, expressions.title),
     component,
     redirectTo,
-    caseSensitive: readBooleanValueOrNull(context, expressions.caseSensitive) ?? typeDefaults?.caseSensitive ?? null,
-    transitionPlan: readStringValueOrNull(context, expressions.transitionPlan) ?? typeDefaults?.transitionPlan ?? null,
-    viewport: readStringValueOrNull(context, expressions.viewport) ?? typeDefaults?.viewport ?? null,
-    hasData: expressions.data != null ? true : typeDefaults?.hasData ?? null,
+    caseSensitive: readBooleanValueOrNull(context, expressions.caseSensitive),
+    transitionPlan: readStringValueOrNull(context, expressions.transitionPlan),
+    viewport: readStringValueOrNull(context, expressions.viewport),
+    hasData: expressions.data != null ? true : null,
     childRoutes,
     fallback,
-    nav: readBooleanValueOrNull(context, expressions.nav) ?? typeDefaults?.nav ?? null,
-    fieldSourceNodes: routeObjectConfigFieldSourceNodes(expressions, typeDefaults, path, component, childRoutes),
+    nav: readBooleanValueOrNull(context, expressions.nav),
+    fieldSourceNodes: routeObjectConfigFieldSourceNodes(expressions, path, component, childRoutes),
     validationIssues,
     localName: objectId ?? component?.localName ?? path.paths[0] ?? null,
   };
@@ -1346,38 +1413,35 @@ function propertyPath(parentPath: string, property: string): string {
 
 function routeObjectConfigFieldSourceNodes(
   expressions: RouteObjectPropertyExpressions,
-  typeDefaults: RouteTypeDefaults | null,
   path: RouteObjectPathRead,
   component: RouteableComponentObservation | null,
   childRoutes: readonly RouteConfigObservation[],
 ): RouteConfigFieldSourceNodes {
   return routeConfigFieldSourceNodes([
-    ...routeTypeDefaultFieldSourceEntries(typeDefaults),
-    ['id', expressions.id ?? typeDefaults?.fieldSourceNodes.id ?? path.pathSourceNode],
+    ['id', expressions.id ?? path.pathSourceNode],
     ['path', path.pathSourceNode],
-    ['title', expressions.title ?? typeDefaults?.fieldSourceNodes.title ?? null],
+    ['title', expressions.title],
     component == null ? null : ['component', expressions.component ?? component.sourceNode],
-    ['redirectTo', expressions.redirectTo ?? typeDefaults?.fieldSourceNodes.redirectTo ?? null],
-    ['caseSensitive', expressions.caseSensitive ?? typeDefaults?.fieldSourceNodes.caseSensitive ?? null],
-    ['transitionPlan', expressions.transitionPlan ?? typeDefaults?.fieldSourceNodes.transitionPlan ?? null],
-    ['viewport', expressions.viewport ?? typeDefaults?.fieldSourceNodes.viewport ?? null],
-    ['data', expressions.data ?? typeDefaults?.fieldSourceNodes.data ?? null],
-    childRoutes.length === 0 ? null : ['children', expressions.routes ?? typeDefaults?.fieldSourceNodes.children ?? null],
-    ['fallback', expressions.fallback ?? typeDefaults?.fieldSourceNodes.fallback ?? null],
-    ['nav', expressions.nav ?? typeDefaults?.fieldSourceNodes.nav ?? null],
+    ['redirectTo', expressions.redirectTo],
+    ['caseSensitive', expressions.caseSensitive],
+    ['transitionPlan', expressions.transitionPlan],
+    ['viewport', expressions.viewport],
+    ['data', expressions.data],
+    childRoutes.length === 0 ? null : ['children', expressions.routes],
+    ['fallback', expressions.fallback],
+    ['nav', expressions.nav],
   ]);
 }
 
 function readRouteObjectPaths(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
-  typeDefaults: RouteTypeDefaults | null,
 ): RouteObjectPathRead {
   const pathExpression = readObjectPropertyExpression(object, 'path');
   const objectPaths = pathExpression == null ? null : readStringArrayValue(context, pathExpression);
   return {
-    paths: objectPaths ?? typeDefaults?.paths ?? [],
-    pathSourceNode: objectPaths == null ? typeDefaults?.pathSourceNode ?? null : pathExpression,
+    paths: objectPaths ?? [],
+    pathSourceNode: objectPaths == null ? null : pathExpression,
   };
 }
 
@@ -1396,25 +1460,18 @@ function readRouteObjectComponent(
 function readRouteObjectChildRoutes(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
-  typeDefaults: RouteTypeDefaults | null,
   parentPath: string,
   routeContextComponent: RouteableComponentObservation | null,
 ): readonly RouteConfigObservation[] {
-  return [
-    ...readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes'), parentPath, routeContextComponent),
-    ...(typeDefaults?.childRoutes ?? []),
-  ];
+  return readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes'), parentPath, routeContextComponent);
 }
 
 function readRouteObjectFallback(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
-  typeDefaults: RouteTypeDefaults | null,
   routeContextComponent: RouteableComponentObservation | null,
 ): RouteableComponentObservation | null {
-  return routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback'), routeContextComponent)
-    ?? typeDefaults?.fallback
-    ?? null;
+  return routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback'), routeContextComponent);
 }
 
 function routeObjectKind(
@@ -1438,6 +1495,8 @@ function routeConfigFromTypeDefaults(
     routeKind: RouteConfigKind.Route,
     originKind: RouteConfigOriginKind.ClassStaticDefaults,
     valueKind: RouteConfigValueKind.ClassStaticDefaults,
+    executionKind: RouteConfigExecutionKind.Declarative,
+    executionOrder: null,
     id: typeDefaults.id ?? paths[0] ?? null,
     paths,
     pathSourceNode: typeDefaults.pathSourceNode,
@@ -1472,6 +1531,8 @@ function openRouteConfigObservation(
     routeKind: component == null ? RouteConfigKind.Open : routeKind,
     originKind,
     valueKind: RouteConfigValueKind.OpenExpression,
+    executionKind: executionKindForOrigin(originKind),
+    executionOrder: null,
     id: null,
     paths: [],
     pathSourceNode: null,
@@ -1535,7 +1596,7 @@ function readChildRouteElementObservation(
       redirectTo == null ? RouteConfigKind.ChildRoute : RouteConfigKind.Redirect,
       RouteConfigOriginKind.ChildRoutesProperty,
       null,
-      null,
+      expression,
       parentPath,
       routeContextComponent,
     );
@@ -1549,9 +1610,8 @@ function childRouteObservationForRouteable(
   routeContextComponent: RouteableComponentObservation | null,
 ): RouteConfigObservation {
   const component = routeableComponentForExpression(context, expression, routeContextComponent);
-  const paths = routeableComponentDefaultPaths(component);
   const validationIssues = invalidLazyImportIssues('component', component);
-  if (component == null || paths.length === 0) {
+  if (component == null) {
     return openRouteConfigObservation(
       RouteConfigKind.Open,
       RouteConfigOriginKind.ChildRoutesProperty,
@@ -1564,9 +1624,11 @@ function childRouteObservationForRouteable(
     routeKind: RouteConfigKind.ChildRoute,
     originKind: RouteConfigOriginKind.ChildRoutesProperty,
     valueKind: RouteConfigValueKind.RouteableComponent,
-    id: paths[0] ?? component.localName ?? null,
-    paths,
-    pathSourceNode: expression,
+    executionKind: RouteConfigExecutionKind.Embedded,
+    executionOrder: null,
+    id: null,
+    paths: [],
+    pathSourceNode: null,
     title: null,
     component,
     redirectTo: null,
@@ -1579,23 +1641,11 @@ function childRouteObservationForRouteable(
     nav: null,
     sourceNode: expression,
     fieldSourceNodes: routeConfigFieldSourceNodes([
-      ['id', expression],
-      ['path', expression],
       ['component', expression],
     ]),
     validationIssues,
-    localName: component.localName ?? paths[0] ?? null,
+    localName: component.localName,
   };
-}
-
-function routeableComponentDefaultPaths(
-  component: RouteableComponentObservation | null,
-): readonly string[] {
-  const definition = component?.resourceDefinition;
-  if (definition?.type !== ResourceDefinitionKind.CustomElement) {
-    return [];
-  }
-  return [definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
 interface RouteTypeDefaults {
@@ -1660,17 +1710,7 @@ function readRouteTypeDefaults(
 }
 
 function hasRouteTypeDefaults(defaults: RouteTypeDefaults): boolean {
-  return defaults.id != null
-    || defaults.paths != null
-    || defaults.title != null
-    || defaults.redirectTo != null
-    || defaults.caseSensitive != null
-    || defaults.transitionPlan != null
-    || defaults.viewport != null
-    || defaults.hasData != null
-    || defaults.childRoutes.length > 0
-    || defaults.fallback != null
-    || defaults.nav != null;
+  return Object.keys(defaults.fieldSourceNodes).length > 0;
 }
 
 function routeableComponentForClass(
@@ -2021,6 +2061,23 @@ function routeConfigFieldSourceEntries(
   });
 }
 
+function routeConfigPathSourceNodes(
+  observation: RouteConfigObservation,
+): readonly ts.Node[] {
+  const pathSource = observation.fieldSourceNodes.path ?? null;
+  if (pathSource == null || observation.paths.length === 0) {
+    return [];
+  }
+  const current = ts.isExpression(pathSource) ? unwrapExpression(pathSource) : pathSource;
+  if (ts.isArrayLiteralExpression(current)) {
+    const entries = current.elements.filter((element): element is ts.Expression => !ts.isSpreadElement(element));
+    if (entries.length === observation.paths.length) {
+      return entries;
+    }
+  }
+  return observation.paths.map(() => pathSource);
+}
+
 function uniqueRouteSourceRecordSets(
   candidates: Iterable<SourceRecordSet>,
   source: SourceRecordSet,
@@ -2114,6 +2171,73 @@ function readBooleanValue(
   return value?.kind === EvaluationValueKind.Boolean ? value.value : null;
 }
 
+function routeConfigFieldStates(
+  context: RouteConfigRecognitionContext,
+  observation: RouteConfigObservation,
+  component: RouteableComponentReference | null,
+  fallback: RouteableComponentReference | null,
+): readonly RouteConfigFieldState[] {
+  return ROUTE_CONFIG_VALUE_FIELDS.map((field) => new RouteConfigFieldState(
+    field,
+    routeConfigFieldState(context, observation, component, fallback, field),
+  ));
+}
+
+function routeConfigFieldState(
+  context: RouteConfigRecognitionContext,
+  observation: RouteConfigObservation,
+  component: RouteableComponentReference | null,
+  fallback: RouteableComponentReference | null,
+  field: RouteConfigValueField,
+): RouteConfigFieldStateKind {
+  if (observation.originKind === RouteConfigOriginKind.DynamicHook) {
+    return field === 'component' && component != null
+      ? RouteConfigFieldStateKind.Referential
+      : RouteConfigFieldStateKind.Open;
+  }
+  switch (field) {
+    case 'id': if (observation.id != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'path': if (observation.paths.length > 0) return RouteConfigFieldStateKind.Closed; break;
+    case 'title': if (observation.title != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'component': if (component != null) return RouteConfigFieldStateKind.Referential; break;
+    case 'redirectTo': if (observation.redirectTo != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'caseSensitive': if (observation.caseSensitive != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'transitionPlan': if (observation.transitionPlan != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'viewport': if (observation.viewport != null) return RouteConfigFieldStateKind.Closed; break;
+    case 'children': if (observation.childRoutes.length > 0) return RouteConfigFieldStateKind.Referential; break;
+    case 'fallback': if (fallback != null) return RouteConfigFieldStateKind.Referential; break;
+    case 'nav': if (observation.nav != null) return RouteConfigFieldStateKind.Closed; break;
+  }
+
+  const sourceNode = observation.fieldSourceNodes[field];
+  if (sourceNode == null || !ts.isExpression(sourceNode)) {
+    return observation.valueKind === RouteConfigValueKind.OpenExpression
+      ? RouteConfigFieldStateKind.Open
+      : RouteConfigFieldStateKind.Absent;
+  }
+  const value = context.expressionReader.evaluateExpression(sourceNode).value;
+  switch (value?.kind) {
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return RouteConfigFieldStateKind.Referential;
+    case EvaluationValueKind.Unknown:
+    case EvaluationValueKind.BoundaryObject:
+    case EvaluationValueKind.BoundaryValue:
+      return RouteConfigFieldStateKind.Open;
+    default:
+      return value == null
+        ? RouteConfigFieldStateKind.Open
+        : RouteConfigFieldStateKind.Closed;
+  }
+}
+
 function routeConfigFieldProvenance(
   sources: RouteConfigSourceRecords,
   observation: RouteConfigObservation,
@@ -2121,18 +2245,18 @@ function routeConfigFieldProvenance(
   fallback: RouteableComponentReference | null,
 ): readonly FieldProvenance<RouteConfigField>[] {
   return compactFieldProvenance<RouteConfigField>([
-    routeConfigFieldProvenanceEntry(sources, 'id', observation.id != null),
-    routeConfigFieldProvenanceEntry(sources, 'path', observation.paths.length > 0),
-    routeConfigFieldProvenanceEntry(sources, 'title', observation.title != null),
-    routeConfigFieldProvenanceEntry(sources, 'component', component != null),
-    routeConfigFieldProvenanceEntry(sources, 'redirectTo', observation.redirectTo != null),
-    routeConfigFieldProvenanceEntry(sources, 'caseSensitive', observation.caseSensitive != null),
-    routeConfigFieldProvenanceEntry(sources, 'transitionPlan', observation.transitionPlan != null),
-    routeConfigFieldProvenanceEntry(sources, 'viewport', observation.viewport != null),
-    routeConfigFieldProvenanceEntry(sources, 'data', observation.hasData != null),
-    routeConfigFieldProvenanceEntry(sources, 'children', observation.childRoutes.length > 0),
-    routeConfigFieldProvenanceEntry(sources, 'fallback', fallback != null),
-    routeConfigFieldProvenanceEntry(sources, 'nav', observation.nav != null),
+    routeConfigFieldProvenanceEntry(sources, 'id', observation.fieldSourceNodes.id != null || observation.id != null),
+    routeConfigFieldProvenanceEntry(sources, 'path', observation.fieldSourceNodes.path != null || observation.paths.length > 0),
+    routeConfigFieldProvenanceEntry(sources, 'title', observation.fieldSourceNodes.title != null || observation.title != null),
+    routeConfigFieldProvenanceEntry(sources, 'component', observation.fieldSourceNodes.component != null || component != null),
+    routeConfigFieldProvenanceEntry(sources, 'redirectTo', observation.fieldSourceNodes.redirectTo != null || observation.redirectTo != null),
+    routeConfigFieldProvenanceEntry(sources, 'caseSensitive', observation.fieldSourceNodes.caseSensitive != null || observation.caseSensitive != null),
+    routeConfigFieldProvenanceEntry(sources, 'transitionPlan', observation.fieldSourceNodes.transitionPlan != null || observation.transitionPlan != null),
+    routeConfigFieldProvenanceEntry(sources, 'viewport', observation.fieldSourceNodes.viewport != null || observation.viewport != null),
+    routeConfigFieldProvenanceEntry(sources, 'data', observation.fieldSourceNodes.data != null || observation.hasData != null),
+    routeConfigFieldProvenanceEntry(sources, 'children', observation.fieldSourceNodes.children != null || observation.childRoutes.length > 0),
+    routeConfigFieldProvenanceEntry(sources, 'fallback', observation.fieldSourceNodes.fallback != null || fallback != null),
+    routeConfigFieldProvenanceEntry(sources, 'nav', observation.fieldSourceNodes.nav != null || observation.nav != null),
     new FieldProvenance('source', sources.source.provenanceHandle),
   ]);
 }

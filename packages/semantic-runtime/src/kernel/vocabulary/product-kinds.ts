@@ -355,12 +355,20 @@ export const KernelProductKinds = {
       'RouterOptions after RouterConfiguration defaults and recognized customize option contributions converge.',
     ),
 
-    /** Product kind for a source-backed router route configuration before recognizer population. */
+    /** Product kind for one authored or statically observed input to RouteConfig convergence. */
+    RouteConfigContribution: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-config-contribution',
+      KernelVocabularySlot.ProductKind,
+      'One source-backed route decorator, Route.configure call, static field set, child-route use, or dynamic hook declaration.',
+    ),
+
+    /** Product kind for an effective class definition or per-use child RouteConfig. */
     RouteConfig: defineVocabulary(
       KernelVocabularyNamespace.Router,
       'route-config',
       KernelVocabularySlot.ProductKind,
-      'A source-backed router route configuration before route-context and route-recognizer materialization.',
+      'An effective framework-shaped RouteConfig after class definition or child-use convergence.',
     ),
 
     /** Product kind for a runtime-shaped RouteConfigContext over one normalized RouteConfig. */

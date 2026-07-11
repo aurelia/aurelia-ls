@@ -169,6 +169,18 @@ export const KernelClaimPredicates = {
       ),
     ),
   },
+  Router: {
+    /** A source-backed route-config contribution converges into an effective definition or per-use applied config. */
+    ConvergesToRouteConfig: defineClaimPredicate(
+      KernelVocabularyNamespace.Router,
+      'converges-to-route-config',
+      'A source-backed route-config contribution converges into an effective class definition or per-use applied RouteConfig.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Router.RouteConfigContribution),
+        productEndpoint(KernelProductKinds.Router.RouteConfig),
+      ),
+    ),
+  },
   Registration: {
 
     /** A registration admission offers a DI key to later world construction. */

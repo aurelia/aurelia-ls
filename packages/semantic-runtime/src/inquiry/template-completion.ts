@@ -1350,17 +1350,26 @@ function routeConfigRouteCandidates(
   if (routeConfig.routeKind === RouteConfigKind.Open) {
     return [];
   }
-  const values = [
-    routeConfig.id,
-    ...routeConfig.paths.filter((path) => path.length > 0),
-  ].filter((value): value is string => value != null && value.length > 0);
-  return uniqueValues(values).map((value) => new TemplateCompletionCandidate(
+  const entries = [
+    ...(routeConfig.id == null || routeConfig.id.length === 0
+      ? []
+      : [{ value: routeConfig.id, sourceAddressHandle: routeConfig.sourceAddressHandle }]),
+    ...routeConfig.paths.flatMap((value, index) => value.length === 0
+      ? []
+      : [{ value, sourceAddressHandle: routeConfig.pathSourceAddressHandles[index] ?? routeConfig.sourceAddressHandle }]),
+  ];
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.value)) return false;
+    seen.add(entry.value);
+    return true;
+  }).map((entry) => new TemplateCompletionCandidate(
     TemplateCompletionCandidateKind.RouterRoute,
-    value,
+    entry.value,
     TemplateCompletionCandidateSourceKind.Router,
     routeConfig.productHandle,
     routeConfig.identityHandle,
-    routeConfig.id === value ? routeConfig.sourceAddressHandle : routeConfig.pathSourceAddressHandle ?? routeConfig.sourceAddressHandle,
+    entry.sourceAddressHandle,
     'Router route id or path accepted by a router resource primary value.',
   ));
 }

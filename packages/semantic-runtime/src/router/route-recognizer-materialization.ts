@@ -227,7 +227,8 @@ export class RouteRecognizerMaterializationProjectPass {
     parentPathIndex: number,
   ): ConfigurableRoutePathSite {
     const local = `route-recognizer-configurable-route:${routeConfigContext.identityHandle}:route:${routeConfig.identityHandle}:path:${index}:parent:${parentPathIndex}`;
-    const sourceAddressHandle = routeConfig.pathSourceAddressHandle;
+    const sourceAddressHandle = routeConfig.pathSourceAddressHandles[index]
+      ?? routeConfig.sourceAddressHandle;
     const parse = parseConfigurableRoutePath(path, routeConfig.caseSensitive === true);
     const provenanceHandle = store.handles.provenance(local);
     return {

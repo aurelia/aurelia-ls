@@ -39,7 +39,7 @@ import {
   normalizeTypeSystemSourceFileName,
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
-import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
+import type { RouteConfigConvergenceProjectResult } from './route-config-convergence.js';
 import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
 import type {
   ConfigurableRouteModel,
@@ -118,7 +118,7 @@ export class RouteContextParameterReadMaterializer {
     project: ProjectBootFrame,
     typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
-    routes: RouteConfigRecognitionProjectResult,
+    routes: RouteConfigConvergenceProjectResult,
     recognizer: RouteRecognizerMaterializationProjectResult,
   ): RouteContextParameterReadProjectResult {
     const sites = readRouteContextParameterReadSites(project, typeSystem);

@@ -1282,12 +1282,14 @@ owner-tagged `customize(...)` option contributions. Rows include the framework-d
 already used by static topology, especially `useHref`, `useUrlFragmentHash`, and `useEagerLoading`. These rows are the
 authoring/API view of router option convergence; they are not a navigation runtime state snapshot.
 
-`Routes` exposes source-backed authored router route configs recognized from `@route(...)`, `Route.configure(...)`, and
-Aurelia's static route metadata path used by `Route.getConfig(...)`. Rows preserve route kind, paths,
-origin kind, value kind, id/title/redirect/viewport/data/nav/fallback presence, child-route cardinality, routeable component reference kind,
-whether that routeable has resolved to a concrete resource definition, source, and optional handles. Dynamic
-`import(...)` route components are reported through the promise routeable lane even when their fulfilled custom element
-definition is already known.
+`Routes` is a source-backed authoring view built as a contribution/effective join. It emits one row per authored
+`@route(...)`, `Route.configure(...)`, static metadata, or child-route contribution; `originKind`, `valueKind`, execution
+state, effect kind, and source describe that contribution, while stage, closure, normalized fields, field states, and
+open fields come from its associated definition or per-use applied `RouteConfig`. `effectiveUseCount`,
+`effectiveVariantCount`, and `effectiveFieldsStable` disclose when one authored contribution participates in several
+effective uses instead of duplicating the authoring row or selecting a use silently. Rows also retain routeable component
+and fallback resolution plus optional handles. Dynamic `import(...)` route components stay in the promise routeable lane
+even when their fulfilled custom-element definition is already known.
 
 `RoutePatterns` is the next lower route-recognizer layer. It parses closed route-config paths into
 `ConfigurableRoute`-shaped rows with `Parameter`, `StaticSegment`, `DynamicSegment`, and `StarSegment` facts,

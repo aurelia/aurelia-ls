@@ -17,6 +17,7 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RouteConfigContextModel,
   RouteConfigKind,
+  RouteConfigStageKind,
   RouterModelKind,
   RouterReference,
   RouteRecognizerModelKind,
@@ -25,7 +26,7 @@ import {
   RouteRecognizerOwnershipKind,
   type RouteConfigModel,
 } from './model.js';
-import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
+import type { RouteConfigConvergenceProjectResult } from './route-config-convergence.js';
 import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
 import { routeRecognizerProductRecords, routerProductRecords } from './router-product-records.js';
 
@@ -45,7 +46,11 @@ class RouteConfigGraph {
   ) {
     for (const routeConfig of routeConfigs) {
       this.configsByIdentity.set(routeConfig.identityHandle, routeConfig);
-      if (routeConfig.routeKind === RouteConfigKind.Route && routeConfig.component?.resolvedIdentityHandle != null) {
+      if (
+        routeConfig.stage === RouteConfigStageKind.Definition
+        && routeConfig.routeKind === RouteConfigKind.Route
+        && routeConfig.component?.resolvedIdentityHandle != null
+      ) {
         this.configsByComponentIdentity.set(routeConfig.component.resolvedIdentityHandle, routeConfig);
       }
     }
@@ -81,24 +86,9 @@ class RouteConfigGraph {
   }
 
   childrenOf(routeConfig: RouteConfigModel): readonly RouteConfigModel[] {
-    const directChildren = routeConfig.childRoutes
+    return routeConfig.childRoutes
       .map((child) => child.identityHandle == null ? null : this.configsByIdentity.get(child.identityHandle) ?? null)
       .filter((child): child is RouteConfigModel => child != null);
-    if (directChildren.length > 0) {
-      return directChildren;
-    }
-    const componentRouteConfig = this.componentRouteConfigFor(routeConfig);
-    if (componentRouteConfig == null || componentRouteConfig.identityHandle === routeConfig.identityHandle) {
-      return [];
-    }
-    return this.childrenOf(componentRouteConfig);
-  }
-
-  private componentRouteConfigFor(routeConfig: RouteConfigModel): RouteConfigModel | null {
-    const componentIdentity = routeConfig.component?.resolvedIdentityHandle ?? null;
-    return componentIdentity == null
-      ? null
-      : this.configsByComponentIdentity.get(componentIdentity) ?? null;
   }
 }
 
@@ -134,7 +124,7 @@ export class RouteConfigContextMaterializationProjectPass {
   materializeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
-    routes: RouteConfigRecognitionProjectResult,
+    routes: RouteConfigConvergenceProjectResult,
     routerOptions: RouterOptionsMaterializationProjectResult | null = null,
     configuration: ConfigurationRecognitionProjectResult | null = null,
   ): RouteConfigContextMaterializationProjectResult {

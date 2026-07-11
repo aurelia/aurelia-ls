@@ -20,6 +20,7 @@ export const enum RouterModelKind {
   RouteContext = 'route-context',
   RouteContextParameterRead = 'route-context-parameter-read',
   RouteConfigContext = 'route-config-context',
+  RouteConfigContribution = 'route-config-contribution',
   RouteConfig = 'route-config',
   RouteableComponent = 'routeable-component',
   Viewport = 'viewport',
@@ -54,6 +55,7 @@ export const enum RouteConfigOriginKind {
   ConfigureCall = 'configure-call',
   ClassStaticDefaults = 'class-static-defaults',
   ChildRoutesProperty = 'child-routes-property',
+  DynamicHook = 'dynamic-hook',
 }
 
 export const enum RouteConfigValueKind {
@@ -62,6 +64,39 @@ export const enum RouteConfigValueKind {
   RouteableComponent = 'routeable-component',
   ClassStaticDefaults = 'class-static-defaults',
   OpenExpression = 'open-expression',
+}
+
+export const enum RouteConfigExecutionKind {
+  Declarative = 'declarative',
+  Embedded = 'embedded',
+  Executed = 'executed',
+  Unproven = 'unproven',
+}
+
+export const enum RouteConfigContributionEffectKind {
+  Selected = 'selected',
+  Merged = 'merged',
+  Overwritten = 'overwritten',
+  Applied = 'applied',
+  Unproven = 'unproven',
+  OpensDefinition = 'opens-definition',
+}
+
+export const enum RouteConfigStageKind {
+  Definition = 'definition',
+  Applied = 'applied',
+}
+
+export const enum RouteConfigClosureKind {
+  Closed = 'closed',
+  Open = 'open',
+}
+
+export const enum RouteConfigFieldStateKind {
+  Absent = 'absent',
+  Closed = 'closed',
+  Referential = 'referential',
+  Open = 'open',
 }
 
 export const enum NavigationInstructionKind {
@@ -194,6 +229,15 @@ export type RouteConfigField =
   | 'fallback'
   | 'nav'
   | 'source';
+
+export type RouteConfigValueField = Exclude<RouteConfigField, 'source'>;
+
+export class RouteConfigFieldState {
+  constructor(
+    readonly field: RouteConfigValueField,
+    readonly stateKind: RouteConfigFieldStateKind,
+  ) {}
+}
 
 export type RouterIssueField =
   | 'phase'
@@ -806,6 +850,17 @@ export class RouteConfigReference {
   ) {}
 }
 
+/** Reference to one source-backed route-config contribution without expanding nested authored routes. */
+export class RouteConfigContributionReference {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly routeKind: RouteConfigKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly localName: string | null,
+  ) {}
+}
+
 /** Source-level routeable component reference before route-context resolution turns it into a component agent. */
 export class RouteableComponentReference {
   constructor(
@@ -1189,10 +1244,9 @@ export class ComponentAgentModel {
   }
 }
 
-/** Runtime RouteConfig model preserving normalized route metadata and child route references. */
-@auLink('router:RouteConfig')
-export class RouteConfigModel {
-  readonly routerKind = RouterModelKind.RouteConfig;
+/** One authored or statically observed input to RouteConfig convergence. */
+export class RouteConfigContributionModel {
+  readonly routerKind = RouterModelKind.RouteConfigContribution;
 
   constructor(
     readonly productHandle: ProductHandle,
@@ -1200,6 +1254,61 @@ export class RouteConfigModel {
     readonly routeKind: RouteConfigKind,
     readonly originKind: RouteConfigOriginKind,
     readonly valueKind: RouteConfigValueKind,
+    readonly executionKind: RouteConfigExecutionKind,
+    readonly moduleKey: string,
+    readonly sourceOrder: number,
+    readonly executionOrder: number | null,
+    readonly id: string | null,
+    readonly paths: readonly string[],
+    readonly title: string | null,
+    readonly component: RouteableComponentReference | null,
+    readonly redirectTo: string | null,
+    readonly caseSensitive: boolean | null,
+    readonly transitionPlan: string | null,
+    readonly viewport: string | null,
+    readonly hasData: boolean | null,
+    readonly childRoutes: readonly RouteConfigContributionReference[],
+    readonly fallback: RouteableComponentReference | null,
+    readonly nav: boolean | null,
+    readonly fieldStates: readonly RouteConfigFieldState[],
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly pathSourceAddressHandles: readonly (AddressHandle | null)[],
+    readonly redirectToSourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
+  ) {}
+
+  toReference(): RouteConfigContributionReference {
+    return new RouteConfigContributionReference(
+      this.productHandle,
+      this.identityHandle,
+      this.routeKind,
+      this.sourceAddressHandle,
+      this.id,
+    );
+  }
+
+  toRouteConfigReference(): RouteConfigReference {
+    return new RouteConfigReference(
+      this.productHandle,
+      this.identityHandle,
+      this.routeKind,
+      this.sourceAddressHandle,
+      this.id,
+    );
+  }
+}
+
+/** Effective framework-shaped RouteConfig definition or per-use child application. */
+@auLink('router:RouteConfig')
+export class RouteConfigModel {
+  readonly routerKind = RouterModelKind.RouteConfig;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly stage: RouteConfigStageKind,
+    readonly closure: RouteConfigClosureKind,
+    readonly routeKind: RouteConfigKind,
     readonly id: string | null,
     readonly paths: readonly string[],
     readonly title: string | null,
@@ -1212,8 +1321,11 @@ export class RouteConfigModel {
     readonly childRoutes: readonly RouteConfigReference[],
     readonly fallback: RouteableComponentReference | null,
     readonly nav: boolean | null,
+    readonly fieldStates: readonly RouteConfigFieldState[],
+    readonly openFields: readonly RouteConfigValueField[],
+    readonly sourceContribution: RouteConfigContributionReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly pathSourceAddressHandle: AddressHandle | null,
+    readonly pathSourceAddressHandles: readonly (AddressHandle | null)[],
     readonly redirectToSourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
   ) {}

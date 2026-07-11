@@ -14,6 +14,12 @@ const contractSuites = [
   ], 'contract-evaluation-module-graph.mjs', 'Runtime-shaped module graph erases type-only imports/re-exports while preserving value import/export edges.'),
   contract('evaluation', 'fast', [
     'evaluation',
+    'module-graph',
+    'publication',
+    'provenance',
+  ], 'contract-project-evaluation-publication.mjs', 'A graph dependency later admitted as a root replaces its placeholder while retaining both source origins.'),
+  contract('evaluation', 'fast', [
+    'evaluation',
     'mcp',
     'source-address',
   ], 'contract-evaluation-ambient-globals.mjs', 'Project-local ambient global declarations resolve as host boundaries while open-seam filters expose unresolved identifier source samples.'),

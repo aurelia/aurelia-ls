@@ -71,6 +71,10 @@ import {
   type RouteConfigRecognitionProjectResult,
 } from '../router/route-config-recognition.js';
 import {
+  RouteConfigConvergenceProjectPass,
+  type RouteConfigConvergenceProjectResult,
+} from '../router/route-config-convergence.js';
+import {
   RouterOptionsMaterializationProjectPass,
   type RouterOptionsMaterializationProjectResult,
 } from '../router/router-options-materialization.js';
@@ -228,6 +232,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'resource-definition-api-issues'
   | 'scope-api-issues'
   | 'route-config-recognition'
+  | 'route-config-convergence'
   | 'configuration-recognition'
   | 'configuration-option-shape-issues'
   | 'router-options-materialization'
@@ -308,8 +313,10 @@ export class AureliaAppWorldProjectEmission {
     readonly resources: ResourceRecognitionProjectResult,
     /** Product-handle and declaration index for converged resource definitions. */
     readonly resourceIndex: ResourceDefinitionIndex,
-    /** Source-backed router route configs before route-context/recognizer materialization. */
-    readonly routes: RouteConfigRecognitionProjectResult,
+    /** Source-backed inputs retained before effective RouteConfig convergence. */
+    readonly routeConfigContributions: RouteConfigRecognitionProjectResult,
+    /** Effective class-definition and per-use RouteConfigs consumed by topology and inquiries. */
+    readonly routes: RouteConfigConvergenceProjectResult,
     /** RouterOptions materialized from RouterConfiguration defaults and customize contributions. */
     readonly routerOptions: RouterOptionsMaterializationProjectResult,
     /** RouteConfigContext topology and owned recognizers materialized from normalized route configs. */
@@ -401,8 +408,9 @@ class AureliaAppWorldProjectConstructionFrame {
     const resourceIndex = this.indexResources(resources);
     this.materializeResourceDefinitionApiIssues(typeSystem, resources);
     this.materializeScopeApiIssues(typeSystem);
-    const routes = this.recognizeRouteConfigs(evaluation, resourceIndex);
+    const routeConfigContributions = this.recognizeRouteConfigs(evaluation, resourceIndex);
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
+    const routes = this.convergeRouteConfigs(routeConfigContributions, resourceIndex, configuration);
     this.materializeConfigurationOptionShapeIssues(configuration);
     const routerOptions = this.materializeRouterOptions(configuration);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
@@ -472,6 +480,7 @@ class AureliaAppWorldProjectConstructionFrame {
       proxyObservableEscapes,
       resources,
       resourceIndex,
+      routeConfigContributions,
       routes,
       routerOptions,
       routeContexts,
@@ -659,6 +668,22 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
+  private convergeRouteConfigs(
+    contributions: RouteConfigRecognitionProjectResult,
+    resourceIndex: ResourceDefinitionIndex,
+    configuration: ConfigurationRecognitionProjectResult,
+  ): RouteConfigConvergenceProjectResult {
+    return this.measure('route-config-convergence', () =>
+      new RouteConfigConvergenceProjectPass().convergeAndEmit(
+        this.store,
+        this.project,
+        contributions,
+        resourceIndex,
+        configuration,
+      )
+    );
+  }
+
   private materializeRouterOptions(
     configuration: ConfigurationRecognitionProjectResult,
   ): RouterOptionsMaterializationProjectResult {
@@ -672,7 +697,7 @@ class AureliaAppWorldProjectConstructionFrame {
   }
 
   private materializeRouteContexts(
-    routes: RouteConfigRecognitionProjectResult,
+    routes: RouteConfigConvergenceProjectResult,
     routerOptions: RouterOptionsMaterializationProjectResult,
     configuration: ConfigurationRecognitionProjectResult,
   ): RouteConfigContextMaterializationProjectResult {
@@ -702,7 +727,7 @@ class AureliaAppWorldProjectConstructionFrame {
   private materializeRouteContextParameterReads(
     typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
-    routes: RouteConfigRecognitionProjectResult,
+    routes: RouteConfigConvergenceProjectResult,
     routeRecognizer: RouteRecognizerMaterializationProjectResult,
   ): RouteContextParameterReadProjectResult {
     return this.measure('route-context-parameter-reads', () =>

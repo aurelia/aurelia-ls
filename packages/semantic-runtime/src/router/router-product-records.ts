@@ -7,6 +7,8 @@ import type {
   AddressHandle,
   EvidenceHandle,
   IdentityHandle,
+  ClaimHandle,
+  OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -32,6 +34,8 @@ export interface RouterIdentityProductRecordSpec {
   readonly ownerHandle: IdentityHandle | null;
   readonly materializationOwnerHandle?: MaterializationOwnerHandle;
   readonly materializationProductHandles?: readonly ProductHandle[];
+  readonly materializationClaimHandles?: readonly ClaimHandle[];
+  readonly materializationOpenSeamHandles?: readonly OpenSeamHandle[];
   readonly sourceAddressHandle: AddressHandle | null;
   readonly localName: string | null;
   readonly provenanceHandle: ProvenanceHandle;
@@ -118,8 +122,8 @@ function productEnvelopeRecords(
       store.handles.materialization(spec.local),
       spec.materializationOwnerHandle ?? spec.ownerHandle ?? spec.identityHandle,
       spec.materializationProductHandles ?? [spec.productHandle],
-      [],
-      [],
+      spec.materializationClaimHandles ?? [],
+      spec.materializationOpenSeamHandles ?? [],
     ),
   ];
 }

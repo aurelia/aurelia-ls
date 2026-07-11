@@ -1214,7 +1214,7 @@ function recordNoAvailableViewportAgentIssue(
 ): void {
   const sourceAddressHandle = open.seed.instruction?.sourceAddressHandle
     ?? open.seed.recognizedRoute.sourceAddressHandle
-    ?? open.seed.routeConfig.pathSourceAddressHandle
+    ?? open.seed.routeConfig.pathSourceAddressHandles[0]
     ?? open.seed.routeConfig.sourceAddressHandle;
   const local = `router-route-tree-issue:no-available-viewport-agent:${open.seed.recognizedRoute.identityHandle}:${localKeyPart(requestLabel)}`;
   const message = `Failed to resolve ${requestLabel} from RouteContext '${open.parentRouteContext.localName ?? open.parentRouteContext.identityHandle}'.`;
@@ -1272,7 +1272,8 @@ function recordRedirectMigrationIssue(
 
   const sourceAddressHandle = unsupported.source === 'redirectTo'
     ? routeConfig.redirectToSourceAddressHandle ?? routeConfig.sourceAddressHandle
-    : routeConfig.pathSourceAddressHandle ?? routeConfig.sourceAddressHandle;
+    : routeConfig.pathSourceAddressHandles[routeConfig.paths.indexOf(configurableRoute.path)]
+      ?? routeConfig.sourceAddressHandle;
   const local = [
     'router-route-tree-issue',
     'redirect-migration',

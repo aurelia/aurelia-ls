@@ -259,8 +259,14 @@ import type {
 import type {
   NavigationInstructionKind,
   RouteableComponentKind,
+  RouteConfigClosureKind,
+  RouteConfigContributionEffectKind,
+  RouteConfigExecutionKind,
+  RouteConfigFieldStateKind,
   RouteConfigKind,
   RouteConfigOriginKind,
+  RouteConfigStageKind,
+  RouteConfigValueField,
   RouteConfigValueKind,
   RouteRecognizerIssueKind,
   RouteRecognizerModelKind,
@@ -2584,9 +2590,15 @@ export interface SemanticRouterOptionsResult {
 
 export interface SemanticRouteConfigRow {
   readonly projectKey: string;
+  /** Contribution/source-form facts for this one authored route-config input. */
   readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
   readonly originKind: RouteConfigOriginKind | `${RouteConfigOriginKind}`;
   readonly valueKind: RouteConfigValueKind | `${RouteConfigValueKind}`;
+  readonly executionKind: RouteConfigExecutionKind | `${RouteConfigExecutionKind}`;
+  readonly effectKind: RouteConfigContributionEffectKind | `${RouteConfigContributionEffectKind}`;
+  /** Framework-shaped facts joined from the associated definition or per-use applied RouteConfig. */
+  readonly stage: RouteConfigStageKind | `${RouteConfigStageKind}`;
+  readonly closure: RouteConfigClosureKind | `${RouteConfigClosureKind}`;
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly title: string | null;
@@ -2599,10 +2611,19 @@ export interface SemanticRouteConfigRow {
   readonly childRouteCount: number;
   readonly fallback: SemanticRouteConfigComponentRow | null;
   readonly nav: boolean | null;
+  readonly fieldStates: Readonly<Record<RouteConfigValueField, RouteConfigFieldStateKind | `${RouteConfigFieldStateKind}`>>;
+  readonly openFields: readonly RouteConfigValueField[];
+  readonly openFieldCount: number;
+  /** Cardinality and stability of the contribution-to-effective join; the source row itself is never duplicated per use. */
+  readonly effectiveUseCount: number;
+  readonly effectiveVariantCount: number;
+  readonly effectiveFieldsStable: boolean;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
     readonly identityHandle: IdentityHandle;
+    readonly contributionProductHandle: ProductHandle;
+    readonly contributionIdentityHandle: IdentityHandle;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }

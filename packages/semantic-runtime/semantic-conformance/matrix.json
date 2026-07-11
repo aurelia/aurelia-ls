@@ -9657,16 +9657,16 @@
       "coverageIntent": "domain-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/router-route-config-identity-app.ts",
-      "requirement": "Router route config products preserve Aurelia's declaration forms, normalized value shapes, routeable component lanes, route-recognizer handoff paths, and honest gaps where source-backed routeable identity is known but not yet spent.",
+      "requirement": "Router route-config contributions converge through Aurelia's class-definition and per-use child-overlay stages, preserving execution evidence, field provenance, referential/open values, routeable identity, framework defaults, and source-backed public authoring rows without consumer-local reconstruction.",
       "cases": [
         {
           "id": "route-config-declaration-forms-preserve-origin-and-value-shape",
           "expectations": [
             {
               "name": "routes",
-              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "object-literal", "title": "Router Route Config Identity Pressure", "childRouteCount": 6, "component.name": "RouterRouteConfigIdentityApp", "component.resolved": true } },
+                { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "object-literal", "title": "Router Route Config Identity Pressure", "childRouteCount": 20, "component.name": "RouterRouteConfigIdentityApp", "component.resolved": true } },
                 { "fields": { "routeKind": "route", "originKind": "configure-call", "valueKind": "object-literal", "id": "configured-id", "title": "Configured Route", "childRouteCount": 1, "component.name": "ConfiguredRoute", "fallback.name": "FallbackRoute" } },
                 { "fields": { "routeKind": "route", "originKind": "route-decorator", "valueKind": "path-expression", "id": "decorator-path", "title": "Decorator Path Title", "viewport": "main", "component.name": "DecoratorPathRoute" }, "source": { "marker": "@route(['decorator-path', 'decorator-alt'])", "token": "@route(['decorator-path', 'decorator-alt'])" } },
                 { "fields": { "routeKind": "route", "originKind": "class-static-defaults", "valueKind": "class-static-defaults", "id": "static-default-id", "title": "Static Defaults Title", "caseSensitive": true, "transitionPlan": "replace", "viewport": "details", "hasData": true, "childRouteCount": 2, "fallback.name": "FallbackRoute", "nav": false } },
@@ -9680,10 +9680,10 @@
           "expectations": [
             {
               "name": "routes",
-              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "id": "decorator-object", "component.componentKind": "resource-definition", "component.name": "DecoratorObjectRoute", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: DecoratorObjectRoute", "token": "DecoratorObjectRoute" } },
-                { "fields": { "id": "decorator-object", "fallback.componentKind": "resource-definition", "fallback.name": "FallbackRoute", "fallback.resolved": true }, "sourceField": "fallback.source", "source": { "marker": "transitionPlan: 'invoke-lifecycles'", "token": "FallbackRoute" } },
+                { "fields": { "id": "decorator-object", "fallback.componentKind": "resource-definition", "fallback.name": "FallbackRoute", "fallback.resolved": true }, "sourceField": "fallback.source", "source": { "marker": "data: { source: 'decorator-object' }", "token": "FallbackRoute" } },
                 { "fields": { "id": "class-reference-route", "valueKind": "routeable-component", "component.componentKind": "resource-definition", "component.name": "ClassReferenceRoute", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "ClassReferenceRoute,\n    {", "token": "ClassReferenceRoute" } },
                 { "fields": { "id": "scoped-alias", "component.componentKind": "custom-element-name", "component.name": "scoped-child-alias", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "id: 'scoped-alias'", "token": "'scoped-child-alias'" } },
                 { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route" }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
@@ -9698,8 +9698,8 @@
               "name": "route patterns",
               "query": { "kind": "route-patterns", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "path": "decorator-object", "routeConfig.routeKind": "child-route" }, "source": { "marker": "path: ['decorator-object', 'decorator-object-alt']", "token": "['decorator-object', 'decorator-object-alt']" } },
-                { "fields": { "path": "class-reference-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "ClassReferenceRoute,\n    {", "token": "ClassReferenceRoute" } },
+                { "fields": { "path": "decorator-object", "routeConfig.routeKind": "child-route" }, "source": { "marker": "id: 'decorator-object',\n      path: [", "token": "'decorator-object'", "occurrence": 2 } },
+                { "fields": { "path": "class-reference-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "@alias(", "token": "class-reference-alias" } },
                 { "fields": { "path": "scoped-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "path: 'scoped-alias'", "token": "'scoped-alias'" } },
                 { "fields": { "path": "static-child/:childId", "routeConfig.routeKind": "child-route", "parameterCount": 1 }, "source": { "marker": "path: 'static-child/:childId'", "token": "'static-child/:childId'" } }
               ]
@@ -9735,12 +9735,181 @@
           ]
         },
         {
+          "id": "definition-convergence-merges-explicit-and-static-fields",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "route-decorator", "executionKind": "declarative", "effectKind": "selected", "stage": "definition", "closure": "closed", "id": "merged-explicit-id", "paths": ["merged-explicit"], "title": "Merged Explicit Title", "hasData": true, "childRouteCount": 2, "nav": false, "fieldStates.data": "referential" }, "source": { "marker": "@route({\n  id: 'merged-explicit-id'", "token": "@route({\n  id: 'merged-explicit-id',\n  path: 'merged-explicit',\n  title: 'Merged Explicit Title',\n  data: { explicit: true },\n  routes: [{ path: 'merged-explicit-child', component: ConfiguredChildRoute }],\n})" } },
+                { "fields": { "originKind": "class-static-defaults", "executionKind": "declarative", "effectKind": "merged", "stage": "definition", "id": "merged-explicit-id", "paths": ["merged-explicit"], "title": "Merged Explicit Title", "childRouteCount": 2, "nav": false } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "convention-routeable-uses-primary-name-and-aliases",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "child-routes-property", "effectKind": "applied", "stage": "applied", "closure": "closed", "id": "convention-only-route", "paths": ["convention-only-route", "convention-only-alias"], "component.name": "ConventionOnlyRoute", "component.resolved": true }, "source": { "marker": "ConventionOnlyRoute,\n    MergedRoute", "token": "ConventionOnlyRoute" } }
+              ]
+            },
+            {
+              "name": "route patterns",
+              "query": { "kind": "route-patterns", "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "path": "convention-only-route", "routeConfig.routeKind": "child-route" }, "source": { "marker": "ConfiguredRoute);\n\n@customElement({", "token": "convention-only-route" } },
+                { "fields": { "path": "convention-only-alias", "routeConfig.routeKind": "child-route" }, "source": { "marker": "aliases: [", "token": "convention-only-alias" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "repeated-routeable-uses-have-distinct-applied-configs",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "effectKind": "applied", "stage": "applied", "id": "repeated-first-use", "paths": ["repeated-first-use"], "title": "Repeated Definition", "component.name": "RepeatedRoute" }, "sourceField": "component.source", "source": { "marker": "id: 'repeated-first-use'", "token": "RepeatedRoute" } },
+                { "fields": { "effectKind": "applied", "stage": "applied", "id": "repeated-second-use", "paths": ["repeated-second-use"], "title": "Repeated Override", "component.name": "RepeatedRoute" }, "sourceField": "component.source", "source": { "marker": "id: 'repeated-second-use'", "token": "RepeatedRoute" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "applied-child-inherits-parent-transition-and-fallback",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "stage": "applied", "id": "repeated-first-parent", "transitionPlan": "invoke-lifecycles", "fallback.name": "FallbackRoute" }, "sourceField": "component.source", "source": { "marker": "id: 'repeated-first-parent'", "token": "RepeatedRoute" } },
+                { "fields": { "stage": "applied", "id": "repeated-second-parent", "transitionPlan": "replace", "fallback": null }, "sourceField": "component.source", "source": { "marker": "id: 'repeated-second-parent'", "token": "RepeatedRoute" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "decorator-and-configure-order-select-runtime-winners",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "route-decorator", "effectKind": "selected", "id": "topmost-decorator", "paths": ["topmost-decorator"] }, "source": { "marker": "@route({ id: 'topmost-decorator'", "token": "@route({ id: 'topmost-decorator', path: 'topmost-decorator' })" } },
+                { "fields": { "originKind": "route-decorator", "effectKind": "overwritten", "id": "topmost-decorator", "paths": ["topmost-decorator"] }, "source": { "marker": "@route({ id: 'bottom-decorator'", "token": "@route({ id: 'bottom-decorator', path: 'bottom-decorator' })" } },
+                { "fields": { "originKind": "configure-call", "executionKind": "executed", "effectKind": "overwritten", "id": "last-configure", "paths": ["last-configure"] }, "source": { "marker": "Route.configure({ id: 'first-configure'", "token": "Route.configure({ id: 'first-configure', path: 'first-configure' }, ConfigureOrderRoute)" } },
+                { "fields": { "originKind": "configure-call", "executionKind": "executed", "effectKind": "selected", "id": "last-configure", "paths": ["last-configure"] }, "source": { "marker": "Route.configure({ id: 'last-configure'", "token": "Route.configure({ id: 'last-configure', path: 'last-configure' }, ConfigureOrderRoute)" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unproven-configure-calls-open-without-overwriting-static-facts",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "configure-call", "executionKind": "unproven", "effectKind": "unproven", "stage": "definition", "closure": "open", "id": "conditional-static", "paths": ["conditional-static"] }, "source": { "marker": "Route.configure({ id: 'conditional-configure'", "token": "Route.configure({ id: 'conditional-configure', path: 'conditional-configure' }, ConditionallyConfiguredRoute)" } },
+                { "fields": { "originKind": "configure-call", "executionKind": "unproven", "effectKind": "unproven", "stage": "definition", "closure": "open", "id": "conditional-static", "paths": ["conditional-static"] }, "source": { "marker": "Route.configure({ id: 'dead-configure'", "token": "Route.configure({ id: 'dead-configure', path: 'dead-configure' }, ConditionallyConfiguredRoute)" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cross-module-configure-order-remains-explicitly-open",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "configure-call", "executionKind": "executed", "effectKind": "unproven", "stage": "definition", "closure": "open", "id": "cross-module-static", "paths": ["cross-module-static"], "title": "Cross-module static title", "component.name": "CrossModuleRoute" }, "source": { "sourceFile": "src/configure-cross-module-first.ts", "marker": "Route.configure({", "token": "Route.configure({\n  id: 'cross-module-first',\n  path: 'cross-module-first',\n}, CrossModuleRoute)" } },
+                { "fields": { "originKind": "configure-call", "executionKind": "executed", "effectKind": "unproven", "stage": "definition", "closure": "open", "id": "cross-module-static", "paths": ["cross-module-static"], "title": "Cross-module static title", "component.name": "CrossModuleRoute" }, "source": { "sourceFile": "src/configure-cross-module-second.ts", "marker": "Route.configure({", "token": "Route.configure({\n  id: 'cross-module-second',\n  path: 'cross-module-second',\n}, CrossModuleRoute)" } }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-route-config", "reasonKinds": ["router-route-config-execution-order-open"] } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open-static-defaults-retain-convention-facts-and-field-openness",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "class-static-defaults", "executionKind": "declarative", "effectKind": "selected", "stage": "definition", "closure": "open", "id": "open-static-route", "paths": ["open-static-route"], "title": null, "fieldStates.title": "closed", "openFields": ["title"] }, "source": { "marker": "@customElement({\n  name: 'open-static-route'", "token": "@customElement({\n  name: 'open-static-route',\n  template: '<template>Open static route</template>',\n})\nexport class OpenStaticRoute {\n  static path = 'open-static-route';\n  static title = runtimeStaticTitle;\n}" } }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-route-config", "reasonKinds": ["router-route-config-value-open"] }, "source": { "marker": "@customElement({\n  name: 'open-static-route'", "token": "@customElement({\n  name: 'open-static-route',\n  template: '<template>Open static route</template>',\n})\nexport class OpenStaticRoute {\n  static path = 'open-static-route';\n  static title = runtimeStaticTitle;\n}" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "recursive-route-config-application-terminates-honestly",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "child-routes-property", "effectKind": "applied", "stage": "applied", "closure": "open", "id": "recursive-child", "paths": ["recursive-child"], "component.name": "RecursiveRoute", "openFields": ["children"], "effectiveUseCount": 2 }, "source": { "marker": "static routes = [", "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
+              ]
+            },
+            {
+              "name": "open seams",
+              "query": { "kind": "open-seams", "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "seamKindKey": "router.open-route-config", "reasonKinds": ["router-route-config-recursive-application"] }, "source": { "marker": "static routes = [", "token": "{\n    id: 'recursive-child',\n    path: 'recursive-child',\n    component: RecursiveRoute,\n  }" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "referential-route-fields-remain-distinct-from-absence",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "id": "callback-route", "stage": "definition", "closure": "closed", "title": null, "transitionPlan": null, "fieldStates.title": "referential", "fieldStates.transitionPlan": "referential", "fieldStates.fallback": "referential" }, "source": { "marker": "@route({\n  path: 'callback-route'", "token": "@route({\n  path: 'callback-route',\n  title: () => 'Callback title',\n  transitionPlan: () => 'replace',\n  fallback: () => FallbackRoute,\n})" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dynamic-route-config-hook-preserves-pre-hook-facts-and-opens-definition",
+          "expectations": [
+            {
+              "name": "routes",
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 300 } } },
+              "rows": [
+                { "fields": { "originKind": "dynamic-hook", "executionKind": "declarative", "effectKind": "opens-definition", "stage": "definition", "closure": "open", "id": "dynamic-hook-route", "title": "Pre-hook title", "childRouteCount": 1 }, "source": { "marker": "getRouteConfig()", "token": "getRouteConfig() {\n    return globalThis.location.hash.length > 0\n      ? { title: 'Runtime title', routes: [{ path: 'runtime-child', component: ConfiguredChildRoute }] }\n      : null;\n  }" } }
+              ]
+            }
+          ]
+        },
+        {
           "id": "static-default-class-routeable-applies-route-get-config",
           "coverageIntent": "domain-contract",
           "expectations": [
             {
               "name": "routes",
-              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "routeKind": "child-route", "originKind": "child-routes-property", "valueKind": "routeable-component", "id": "static-default-id", "title": "Static Defaults Title", "component.name": "StaticDefaultsRoute", "fallback.name": "FallbackRoute", "childRouteCount": 2 }, "source": { "marker": "StaticDefaultsRoute,\n  ],", "token": "StaticDefaultsRoute" } }
               ]
@@ -9749,7 +9918,7 @@
               "name": "route patterns",
               "query": { "kind": "route-patterns", "options": { "page": { "size": 200 } } },
               "rows": [
-                { "fields": { "path": "static-default", "routeConfig.routeKind": "child-route" }, "source": { "marker": "StaticDefaultsRoute,\n  ],", "token": "StaticDefaultsRoute" } }
+                { "fields": { "path": "static-default", "routeConfig.routeKind": "child-route" }, "source": { "marker": "static path = [", "token": "'static-default'" } }
               ]
             },
             {
@@ -9768,7 +9937,7 @@
           "expectations": [
             {
               "name": "routes",
-              "query": { "kind": "routes", "options": { "page": { "size": 200 } } },
+              "query": { "kind": "routes", "fetchAllPages": true, "options": { "page": { "size": 200 } } },
               "rows": [
                 { "fields": { "id": "lazy-valid", "component.componentKind": "promise", "component.name": "./routes/lazy-route", "component.resolved": true }, "sourceField": "component.source", "source": { "marker": "component: import('./routes/lazy-route')", "token": "import('./routes/lazy-route')" } }
               ]

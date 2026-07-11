@@ -235,7 +235,7 @@ class StaticProjectEvaluationFrame {
 
     const moduleKey = normalizeModuleKey(admission.path);
     this.recordSourceOrigin(moduleKey, StaticProjectEvaluationSourceOriginKind.StaticEvaluationRoot, moduleKey);
-    if (this.sourceResultsByModuleKey.has(moduleKey)) {
+    if (this.sourceResultsByModuleKey.get(moduleKey)?.evaluation != null) {
       return;
     }
     const build = measureStaticProjectEvaluationPhase(
@@ -315,7 +315,7 @@ class StaticProjectEvaluationFrame {
         entryModuleKey,
       );
     }
-    if (this.sourceResultsByModuleKey.has(graphModuleKey)) {
+    if (this.sourceResultsByModuleKey.get(graphModuleKey)?.evaluation != null) {
       return;
     }
     const graphAdmission = this.graphRecordAdmission(graphModuleKey, graphRecord.sourceFile);
@@ -370,7 +370,13 @@ class StaticProjectEvaluationFrame {
   }
 
   private publishSourceResult(source: StaticProjectEvaluationSourceResult): void {
-    this.sources.push(source);
+    const existing = this.sourceResultsByModuleKey.get(source.moduleKey) ?? null;
+    const index = existing == null ? -1 : this.sources.indexOf(existing);
+    if (index === -1) {
+      this.sources.push(source);
+    } else {
+      this.sources[index] = source;
+    }
     this.sourceResultsByModuleKey.set(source.moduleKey, source);
   }
 

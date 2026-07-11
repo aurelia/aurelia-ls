@@ -1,5 +1,8 @@
 import { alias, customElement } from '@aurelia/runtime-html';
 import { route, Route } from '@aurelia/router';
+import './configure-cross-module-first';
+import './configure-cross-module-second';
+import { CrossModuleRoute } from './cross-module-route';
 import template from './router-route-config-identity-app.html';
 
 @customElement({
@@ -59,6 +62,153 @@ Route.configure({
   ],
   fallback: FallbackRoute,
 }, ConfiguredRoute);
+
+@customElement({
+  name: 'convention-only-route',
+  aliases: ['convention-only-alias'],
+  template: '<template>Convention-only route</template>',
+})
+export class ConventionOnlyRoute {}
+
+@customElement({
+  name: 'merged-route',
+  template: '<template><au-viewport></au-viewport></template>',
+})
+@route({
+  id: 'merged-explicit-id',
+  path: 'merged-explicit',
+  title: 'Merged Explicit Title',
+  data: { explicit: true },
+  routes: [{ path: 'merged-explicit-child', component: ConfiguredChildRoute }],
+})
+export class MergedRoute {
+  static id = 'merged-static-id';
+  static path = 'merged-static';
+  static title = 'Merged Static Title';
+  static data = { inherited: true, overwritten: 'static' };
+  static routes = [{ path: 'merged-static-child', component: StaticChildRoute }];
+  static nav = false;
+}
+
+@customElement({
+  name: 'repeated-route',
+  template: '<template>Repeated route</template>',
+})
+@route({
+  id: 'repeated-definition',
+  path: 'repeated-definition',
+  title: 'Repeated Definition',
+})
+export class RepeatedRoute {}
+
+@customElement({
+  name: 'first-parent-route',
+  template: '<template><au-viewport></au-viewport></template>',
+})
+@route({
+  path: 'first-parent',
+  transitionPlan: 'invoke-lifecycles',
+  fallback: FallbackRoute,
+  routes: [{ id: 'repeated-first-parent', path: 'repeated-first-parent', component: RepeatedRoute }],
+})
+export class FirstParentRoute {}
+
+@customElement({
+  name: 'second-parent-route',
+  template: '<template><au-viewport></au-viewport></template>',
+})
+@route({
+  path: 'second-parent',
+  transitionPlan: 'replace',
+  routes: [{ id: 'repeated-second-parent', path: 'repeated-second-parent', component: RepeatedRoute }],
+})
+export class SecondParentRoute {}
+
+@customElement({
+  name: 'decorator-order-route',
+  template: '<template>Decorator order route</template>',
+})
+@route({ id: 'topmost-decorator', path: 'topmost-decorator' })
+@route({ id: 'bottom-decorator', path: 'bottom-decorator' })
+export class DecoratorOrderRoute {}
+
+@customElement({
+  name: 'configure-order-route',
+  template: '<template>Configure order route</template>',
+})
+export class ConfigureOrderRoute {}
+
+Route.configure({ id: 'first-configure', path: 'first-configure' }, ConfigureOrderRoute);
+Route.configure({ id: 'last-configure', path: 'last-configure' }, ConfigureOrderRoute);
+
+@customElement({
+  name: 'conditionally-configured-route',
+  template: '<template>Conditionally configured route</template>',
+})
+export class ConditionallyConfiguredRoute {
+  static path = 'conditional-static';
+}
+
+const runtimeRouteFlag = globalThis.location.hash.length > 0;
+if (runtimeRouteFlag) {
+  Route.configure({ id: 'conditional-configure', path: 'conditional-configure' }, ConditionallyConfiguredRoute);
+}
+if (false) {
+  Route.configure({ id: 'dead-configure', path: 'dead-configure' }, ConditionallyConfiguredRoute);
+}
+
+@customElement({
+  name: 'callback-route',
+  template: '<template>Callback route</template>',
+})
+@route({
+  path: 'callback-route',
+  title: () => 'Callback title',
+  transitionPlan: () => 'replace',
+  fallback: () => FallbackRoute,
+})
+export class CallbackRoute {}
+
+@customElement({
+  name: 'dynamic-hook-route',
+  template: '<template>Dynamic hook route</template>',
+})
+@route({
+  path: 'dynamic-hook-route',
+  title: 'Pre-hook title',
+  routes: [{ path: 'pre-hook-child', component: StaticChildRoute }],
+})
+export class DynamicHookRoute {
+  getRouteConfig() {
+    return globalThis.location.hash.length > 0
+      ? { title: 'Runtime title', routes: [{ path: 'runtime-child', component: ConfiguredChildRoute }] }
+      : null;
+  }
+}
+
+const runtimeStaticTitle = globalThis.document.title;
+
+@customElement({
+  name: 'open-static-route',
+  template: '<template>Open static route</template>',
+})
+export class OpenStaticRoute {
+  static path = 'open-static-route';
+  static title = runtimeStaticTitle;
+}
+
+@customElement({
+  name: 'recursive-route',
+  template: '<template><au-viewport></au-viewport></template>',
+})
+export class RecursiveRoute {
+  static path = 'recursive-route';
+  static routes = [{
+    id: 'recursive-child',
+    path: 'recursive-child',
+    component: RecursiveRoute,
+  }];
+}
 
 @customElement({
   name: 'decorator-path-route',
@@ -135,6 +285,29 @@ export class StaticDefaultsRoute {
       path: 'lazy-valid',
       component: import('./routes/lazy-route'),
     },
+    ConventionOnlyRoute,
+    MergedRoute,
+    {
+      id: 'repeated-first-use',
+      path: 'repeated-first-use',
+      component: RepeatedRoute,
+    },
+    {
+      id: 'repeated-second-use',
+      path: 'repeated-second-use',
+      component: RepeatedRoute,
+      title: 'Repeated Override',
+    },
+    FirstParentRoute,
+    SecondParentRoute,
+    DecoratorOrderRoute,
+    ConfigureOrderRoute,
+    ConditionallyConfiguredRoute,
+    CallbackRoute,
+    DynamicHookRoute,
+    CrossModuleRoute,
+    OpenStaticRoute,
+    RecursiveRoute,
     StaticDefaultsRoute,
   ],
 })

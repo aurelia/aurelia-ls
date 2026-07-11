@@ -270,6 +270,13 @@ export const KernelOpenSeamKinds = {
     ),
   },
   Router: {
+    /** RouteConfig convergence retained pre-runtime facts but could not close all effective fields or contribution order. */
+    OpenRouteConfig: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'open-route-config',
+      KernelVocabularySlot.OpenSeamKind,
+      'RouteConfig convergence retained the strongest static facts while one or more effective fields or contribution ordering remained open.',
+    ),
     /** Router instruction materialization could not close a NavigationInstruction or related option without guessing. */
     OpenInstruction: defineVocabulary(
       KernelVocabularyNamespace.Router,

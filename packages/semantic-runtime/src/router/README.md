@@ -4,7 +4,7 @@ See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and a
 
 Router is now a broad but still non-navigating substrate. Router configuration participates in app-world construction
 through registration, DI, resource visibility, lifecycle-task products, and option convergence. Source-backed route
-configs materialize as normalized `RouteConfig` facts, routeable component inputs preserve their
+config contributions converge into framework-shaped definition and per-use applied `RouteConfig` facts; routeable component inputs preserve their
 string/class/promise/navigation-strategy lane while carrying resolved resource handles when static evaluation can close
 them, route-config contexts model parent/root/child topology, router options control recognizer ownership, route-
 recognizer paths materialize configurable routes plus primary/residual endpoints, route runtime topology separates
@@ -29,11 +29,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Materialize `RouterOptions` from `RouterConfiguration` admissions and owner-tagged `customize(...)` option
   contributions. Option folding follows the framework defaults before route-context topology decides recognizer
   ownership.
-- Materialize authored route config records from `@route(...)` and `Route.configure(...)` without running navigation.
-  These records are anchored to Aurelia's `RouteConfig` convergence class, not the authoring-only route config
-  interfaces. They stay source/provenance oriented so route-context and route-recognizer products can point back to the
-  exact authoring site.
-  Route configs also preserve separate origin and value-shape dimensions: whether the config came from `@route(...)`,
+- Materialize authored route-config contributions from `@route(...)`, executed or unproven `Route.configure(...)`, class
+  static defaults, instance `getRouteConfig` hooks, and child `routes` entries without running navigation. Contributions
+  stay source/provenance oriented and preserve separate origin and value-shape dimensions: whether the input came from `@route(...)`,
   `Route.configure(...)`, class static defaults, or a child `routes` property, and whether the read value closed as an
   object literal, path expression, routeable component, class static defaults, or open expression. Authoring taste should
   consume those two dimensions instead of guessing decorator/static/dynamic policy from route presence alone.
@@ -41,6 +39,16 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   component can supply both the fallback `id` and `path` lane. Recognition should group shared fields under one
   combined source record and map each field to that record instead of emitting duplicate kernel records or choosing one
   arbitrary field name as the source identity.
+- Converge contributions once through Aurelia's `RouteConfig._create(...)` semantics. A definition `RouteConfig` is owned
+  by the target custom-element identity, merges selected explicit and static inputs, applies framework defaults, preserves
+  field provenance, and remains field-open when execution order, static values, or a dynamic hook cannot close. Only
+  positively executed `Route.configure(...)` calls can become effective winners; cross-module winners without a proven
+  global order remain explicitly open.
+- Materialize one applied `RouteConfig` per parent/use through `_applyChildRouteConfig(...)` semantics. Child overlays win,
+  transition plan and fallback can inherit from the parent, bare routeables clone their definition config, and repeated
+  uses stay distinct even when they resolve to the same component. Recursive route graphs are bounded at the repeated
+  authored use and publish `router-route-config-recursive-application` instead of expanding forever or silently dropping
+  descendants.
 - Publish route-config validation issues while source-backed route config records are recognized. This mirrors
   `validateRouteConfig(...)` / `validateRedirectRouteConfig(...)` before route-context, recognizer, or route-tree
   materializers consume normalized facts: statically closed invalid property values publish
@@ -53,8 +61,8 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `RouteConfigContext._configureChildRoutes(...)`: a child route object with `component: import(...)` must specify
   `path` before the import resolves, so semantic-runtime publishes `rcNoPathLazyImport` / `AUR3173` on the child route
   object instead of treating it as a generic open route.
-- Keep field-level provenance on authored router configuration surfaces only when the fields can plausibly be tied back
-  to authored route/options fields. Generated router products such as `RouteConfigContext`, `RouteContext`,
+- Keep field-level provenance on route-config contributions and on effective fields whose winning or merged inputs are
+  known. Generated router products such as `RouteConfigContext`, `RouteContext`,
   `ViewportInstruction`, recognizer states/endpoints, recognized routes, route nodes/trees, viewport agents, and
   component agents should rely on product/source/evidence provenance until exact sub-field source ranges are modeled.
   Stamping one router provenance handle onto every generated property creates false edit and rename precision.
@@ -82,10 +90,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `ResourceDefinitionIndex`. If a routeable string misses while the component source is present, first inspect shared
   static evaluation and resource recognition admission, especially local side-effect imports, before adding
   router-local discovery.
-- Materialize `RouteConfigContext` parent/root/config/child-route topology from app roots when available, falling back
-  to graph roots for library-like analysis. Explicit child route configs win; otherwise a route whose component has
-  static route metadata borrows that component route config's child routes, matching the framework's
-  `_applyChildRouteConfig(...)` handoff closely enough for static topology.
+- Materialize `RouteConfigContext` parent/root/config/child-route topology from effective definition and applied
+  `RouteConfig` products, using app roots when available and graph roots for library-like analysis. Topology consumes the
+  converged child references directly; it does not borrow component metadata or repeat `_applyChildRouteConfig(...)`
+  precedence locally.
 - Model recognizer ownership from effective router options. In lazy mode each route-config context owns its recognizer;
   with `useEagerLoading: true`, child contexts reuse the root recognizer reference and route-recognizer paths include the
   parent route path prefix.
@@ -268,8 +276,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Computing `NavigationRoute.isActive` menu state from the live route tree. `NavigationRoute._setIsActive` /
   `AUR3450` belongs to active navigation state, while semantic-runtime currently exposes recognizer endpoints and
   pre-activation route-tree facts.
-- Executing routed view-model `getRouteConfig(...)` hooks or detecting repeated hook application. `RouteConfig._applyFromConfigurationHook`
-  / `AUR3550` is a runtime view-model lifecycle guard.
+- Executing routed view-model `getRouteConfig(...)` hooks or detecting repeated hook application. The hook declaration
+  opens the effective fields it may override while retaining pre-hook facts; `RouteConfig._applyFromConfigurationHook` /
+  `AUR3550` remains a runtime view-model lifecycle guard.
 - Resolving `NavigationStrategy` components outside a concrete viewport instruction. `RouteConfig.component` /
   `AUR3558` stays unclaimed because navigation-strategy routeables remain referential/open until navigation supplies
   the instruction context.
@@ -312,9 +321,6 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   viewport-agent handoff.
 - Publishing partial transition `RouteTree` products for a recognized instruction chain whose nested viewport resolution
   stays open. Add a first-class partial tree product before exposing those prefixes as products.
-- Materializing a cloned/applied `RouteConfig` product for component-level child metadata. The current route-context
-  graph applies those children during topology traversal; add a first-class applied-config product if another consumer
-  needs exact `RouteConfig._applyChildRouteConfig(...)` provenance.
 
 ## Watchpoints
 
@@ -330,6 +336,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Follow-up expression readers must preserve the `StaticModuleEvaluationResult` policy/runtime host. Re-reading route
   component expressions through a fresh evaluator amputates dynamic-import and framework intrinsics that the module graph
   already resolved.
+- Project evaluation publishes one result per module. A dependency placeholder with no evaluation must be replaced when
+  that module is later admitted as a static-evaluation root, while retaining both dependency and root origin provenance;
+  map presence alone is not proof that the module's evaluated exports reached resource recognition.
 - Dynamic route values that call view-model methods should consume the binding-source evaluator's activation facts.
   Direct `resolve(ClassKey)` state reads can close through the shared Aurelia evaluator host, and registered/interface
   keys can close through `RuntimeBindingSourceActivationContext` when the router-resource render site carries an active

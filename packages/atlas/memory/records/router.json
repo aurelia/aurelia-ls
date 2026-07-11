@@ -59,41 +59,51 @@
         "route-config",
         "routeable-component"
       ],
-      "summary": "RouteConfigKernelEmitter is the route-config convergence frontier for route config products, routeable components, validation issues, fallback components, child routes, field provenance, and kernel records.",
-      "rationale": "External app pressure often starts from authored route arrays or decorators, but product semantics need the route-config model before route tree, route context, viewport, or route-recognizer layers can consume it. Keep this emitter explicit so RouteableComponent can become a convergeable thing rather than an app-shape heuristic, and so router validation failures are source-backed before normalized route facts flow downstream.",
+      "summary": "RouteConfigKernelEmitter publishes source contributions and validation evidence; RouteConfigConvergenceProjectPass owns effective definition and applied-use products.",
+      "rationale": "Authored route arrays, decorators, static defaults, configure calls, and hooks need exact source products before effective framework semantics can be computed. Recognition and convergence are now deliberately separate: the emitter preserves source form and issues, while one downstream pass spends resource identity and execution evidence through _create and _applyChildRouteConfig semantics.",
       "guidance": [
-        "Start here when authored route configs, child routes, component/fallback values, RouteableComponent products, or route-config and child-route configuration diagnostics need better provenance or type handling.",
-        "Spend router validation codes only for statically closed values matching validation.ts: rtInvalidConfigProperty / AUR3554 for invalid property values and rtInvalidConfig / AUR3555 for null config objects. Weak/external route config values should stay open instead of becoming guessed diagnostics.",
+        "Start in RouteConfigKernelEmitter for authored contribution, routeable component/fallback, child-route, validation, source-address, or field-provenance problems. Start in RouteConfigConvergenceProjectPass for winner selection, framework defaults, repeated-use identity, parent inheritance, openness, or effective consumer behavior.",
+        "Do not restore the old hybrid RouteConfig product or let route-context, recognizer, topology, completion, or API consumers reconstruct _create/_applyChildRouteConfig precedence.",
+        "Spend router validation codes only for statically closed values matching validation.ts: rtInvalidConfigProperty / AUR3554 for invalid property values and rtInvalidConfig / AUR3555 for null config objects. Weak or external values stay open.",
         "Route object vocabulary is validation authority too: unknown ordinary route-config keys spend rtUnknownConfigProperty / AUR3556, while redirect route objects only allow path and redirectTo and spend rtUnknownRedirectConfigProperty / AUR3557 for everything else.",
-        "Spend RouteConfigContext._configureChildRoutes authority for source-backed child route objects whose component is a lazy import and whose path property is absent: rcNoPathLazyImport / AUR3173 belongs here, not in route-tree materialization.",
-        "Spend RouteContext._resolveLazy invalid-import authority only for definitely invalid lazy-import fulfillments: rcInvalidLazyImport / AUR3175 is exact when a closed module has no resource definition, no partial custom-element-definition name, and no class/function export that a stronger resource-recognition pass might later identify.",
-        "String routeable component resolution consumes ResourceDefinitionIndex custom-element names, aliases, and dependency-scoped custom-element lookup. `router-contextual-string-routeable` keeps the parent component dependencies disambiguation canary alive, while `router-route-config-validation-errors` keeps the no-known-component AUR3552 canary alive.",
-        "The remaining string routeable frontier is full RouteConfigContext resource visibility: root-container registrations, imported view resources, inline templates, and no-context string/lazy-import guards such as AUR3551/AUR3553. If an imported routeable component source is present but invisible to the resource index, inspect shared static-evaluation side-effect import execution before adding router-local scanning.",
-        "RouteConfig rows now carry separate origin and value-shape dimensions. Use originKind to distinguish @route, Route.configure, class static defaults, and child-route sources; use valueKind to distinguish object/path/routeable/static-default/open shapes. Authoring navigation taste should expose origin-shaped values separately from static/dynamic value-shape readings instead of inferring policy from route existence.",
-        "Generated route-config/decorator source should route through router-owned source serializers such as `route-configuration-source.ts`; app-builder can select route-shell compositions, but the source syntax for `@route(...)` and route object literals belongs with router semantics.",
-        "Preserve framework property paths such as `routes[0].path` and source ranges on validation issues; these are diagnostics and future repair anchors, not only pressure counts.",
-        "Keep route-config convergence separate from route-tree transition and route-recognizer state graph semantics.",
+        "Spend RouteConfigContext._configureChildRoutes authority for source-backed child route objects whose component is a lazy import and whose path property is absent: rcNoPathLazyImport / AUR3173 belongs in recognition, not route-tree materialization.",
+        "Spend RouteContext._resolveLazy invalid-import authority only for definitely invalid lazy-import fulfillments. If imported source is present but the resource is invisible, inspect shared project-evaluation publication and resource admission before adding router-local scanning.",
+        "String routeable resolution consumes ResourceDefinitionIndex names, aliases, and dependency-scoped lookup. Keep unresolved strings referential/open instead of inventing component identities.",
+        "Origin kind and value kind belong to contributions. Stage, closure, normalized fields, and open fields belong to effective products and reach the public Routes row only through the contribution/effective join.",
+        "Keep route-config convergence separate from route-tree transition, route-context topology, and route-recognizer state graph semantics.",
         "Use framework.router route-config, routeable-component, route-context, and viewport-agent projections before changing product router behavior."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
           "symbolName": "RouteConfigKernelEmitter",
-          "line": 270,
-          "summary": "Route config kernel emitter."
+          "summary": "Route-config source contribution and validation emitter."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "Tracked app-world phase owner for contribution recognition, effective convergence, and topology ordering."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/router/route-configuration-source.ts",
           "symbolName": "routerRouteDecoratorSourceText",
-          "summary": "Product-free router source serializer for generated route decorator object-literal configs."
+          "summary": "Product-free router source serializer for generated route decorator configs."
         },
         {
           "kind": "lens",
           "lensId": "framework.router",
           "projection": "relationships",
           "summary": "Framework router relationship grounding lane."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Current recognition/convergence ownership contract."
         }
       ],
       "liveChecks": [
@@ -103,10 +113,17 @@
           "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
           "minLineCount": 250,
           "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigConvergenceFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "minLineCount": 450,
+          "minMethodCount": 8
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-07-11"
     },
     {
       "id": "frontier:route-recognizer-state-graph-builder",
@@ -562,6 +579,92 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "decision:route-config-contribution-effective-applied-split",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-config",
+        "provenance"
+      ],
+      "summary": "RouteConfig source contributions converge once into definition and per-use applied products.",
+      "rationale": "Aurelia first creates class-level RouteConfig metadata through RouteConfig._create, then clones or overlays it per child use through _applyChildRouteConfig. Authored occurrence, class definition, and applied use therefore have different identities, execution evidence, and closure rules; one hybrid product forced topology and API consumers to reconstruct framework precedence locally.",
+      "guidance": [
+        "RouteConfigContributionModel owns authored origin, value shape, execution evidence, exact source addresses, field state, and field provenance. It is evidence for convergence, not an effective route config.",
+        "RouteConfigModel means a framework-shaped effective product. Definition-stage identity is owned by the target custom-element identity; applied-stage identity is owned by the parent effective config plus the authored child use.",
+        "RouteConfigConvergenceProjectPass is the only owner of _create and _applyChildRouteConfig precedence, framework defaults, convention-derived path/id, parent transition/fallback inheritance, repeated-use cloning, and route-config openness. Topology, recognizer, route tree, completion, and API code consume its output without local reconstruction.",
+        "Only positively executed Route.configure calls may become winners. Same-module execution order selects the final call; cross-module calls without a proven global order and conditionally unproven calls remain named open evidence rather than using source-file order.",
+        "Instance getRouteConfig declarations preserve the pre-hook effective facts and open every field the runtime hook may override. Do not execute the hook or flatten the whole definition to unknown.",
+        "Recursive child application is finite in the static product graph: stop at the repeated authored contribution and publish router-route-config-recursive-application on children instead of silently omitting the recursion or constructing an infinite use tree.",
+        "The public Routes query remains one row per source contribution and joins effective fields through contribution-to-config links. Use effectiveUseCount, effectiveVariantCount, and effectiveFieldsStable when one source contribution influences multiple applied products.",
+        "Project evaluation must replace a graph-dependency placeholder when the same module is later evaluated as a root, retaining both origin rows. A source-result map entry with evaluation=null is not a completed evaluation and must not hide lazy route resource exports."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "aurelia/packages/router/src/route.ts",
+          "symbolName": "RouteConfig",
+          "summary": "Framework authority for RouteConfig._create, _applyChildRouteConfig, dynamic-hook application, and per-use cloning."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouteConfigContributionModel",
+          "summary": "Source contribution product vocabulary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "App-world phase owner that runs route contribution recognition before effective convergence and topology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
+          "symbolName": "RouteConfigRecognitionProjectPass",
+          "summary": "Source contribution recognition and execution-evidence publication."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationPass",
+          "summary": "One-result-per-module evaluation publication and origin retention."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/router/README.md",
+          "heading": "Responsibilities",
+          "summary": "Owning router contract for contribution, definition, and applied RouteConfig stages."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:semantic-conformance -- --id router-route-config-and-routeable-identity",
+          "summary": "RouteConfig source/effective/applied conformance pressure."
+        },
+        {
+          "kind": "script",
+          "command": "node packages/semantic-runtime/scripts/contract-project-evaluation-publication.mjs",
+          "summary": "Graph-placeholder replacement and dual-origin regression contract."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/model.ts",
+          "symbolName": "RouteConfigContributionModel"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigConvergenceFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-config-convergence.ts",
+          "minLineCount": 450,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-07-11",
+      "updatedAt": "2026-07-11"
     }
   ]
 }

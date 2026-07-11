@@ -227,20 +227,6 @@
       "rationale": "The route instruction and route-pattern substrate can close load=\"route: product-detail\" to the product-detail route and its productId parameter, but template completions inside params.bind fall back to binding-scope members instead of projecting route-parameter key candidates."
     },
     {
-      "assertionId": "router-route-config-and-routeable-identity/static-default-class-routeable-applies-route-get-config",
-      "status": "known-gap",
-      "failureBucket": "router-routeable-static-defaults-not-applied",
-      "firstObserved": "2026-07-09",
-      "rationale": "Aurelia resolves a class routeable through Route.getConfig, so static route metadata should supply the child route's id/path/title/fallback and nested route closure; semantic-runtime currently records the class routeable child with the custom-element resource name path and leaves a matching template load on the root residual endpoint."
-    },
-    {
-      "assertionId": "router-route-config-and-routeable-identity/lazy-import-routeable-resolves-resource-definition",
-      "status": "known-gap",
-      "failureBucket": "router-lazy-routeable-resource-resolution-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "A closed dynamic import routeable whose module exports a recognizable custom element should carry resolved resource handles through the promise routeable lane; semantic-runtime preserves the promise/source lane but drops the resolved custom-element identity."
-    },
-    {
       "assertionId": "router-routecontext-topology-lab/route-context-friendly-path-uses-resolved-custom-element-names",
       "status": "known-gap",
       "failureBucket": "router-routecontext-resolved-component-name-data-loss",

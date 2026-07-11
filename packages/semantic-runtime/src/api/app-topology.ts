@@ -49,8 +49,6 @@ import {
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import type {
   RouteConfigModel,
-  RouteConfigOriginKind,
-  RouteConfigValueKind,
 } from '../router/model.js';
 import { projectBindableTypeSurface } from './bindable-type-projection.js';
 import {
@@ -247,8 +245,8 @@ export interface SemanticApplicationRouteRow {
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly routeKind: string;
-  readonly originKind: RouteConfigOriginKind | `${RouteConfigOriginKind}`;
-  readonly valueKind: RouteConfigValueKind | `${RouteConfigValueKind}`;
+  readonly stage: string;
+  readonly closure: string;
   readonly componentName: string | null;
   readonly viewport: string | null;
   readonly childRouteCount: number;
@@ -1339,8 +1337,8 @@ function applicationRouteRow(
     id: routeConfig.id,
     paths: routeConfig.paths,
     routeKind: routeConfig.routeKind,
-    originKind: routeConfig.originKind,
-    valueKind: routeConfig.valueKind,
+    stage: routeConfig.stage,
+    closure: routeConfig.closure,
     componentName: routeConfig.component?.localName ?? null,
     viewport: routeConfig.viewport,
     childRouteCount: routeConfig.childRoutes.length,
