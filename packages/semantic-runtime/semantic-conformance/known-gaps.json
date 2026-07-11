@@ -218,20 +218,6 @@
       "failureBucket": "inline-multi-binding-segment-source-projection",
       "firstObserved": "2026-07-09",
       "rationale": "TemplateInlayHints ignores MultiBindingSegment target/raw-name sources and anchors every segment hint to the enclosing custom-attribute name, causing multiple unrelated hints to stack at one position."
-    },
-    {
-      "assertionId": "router-diagnostic-repair-projection/instruction-no-fallback-suggestion-survives-app-aggregation",
-      "status": "known-gap",
-      "failureBucket": "router-diagnostic-repair-projection-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "TemplateDiagnostics projects the AUR3401 router issue with missingInput and a fix-router-instruction suggestion, but the owning AppDiagnostics router row preserves only domain/code/source and drops the repair intent before IDE/custom diagnostic repair affordances are assembled."
-    },
-    {
-      "assertionId": "router-diagnostic-repair-projection/viewport-resolution-suggestion-survives-app-aggregation",
-      "status": "known-gap",
-      "failureBucket": "router-diagnostic-repair-projection-data-loss",
-      "firstObserved": "2026-07-09",
-      "rationale": "TemplateDiagnostics projects the AUR3174 router issue with missingInput and a fix-router-instruction suggestion, but the owning AppDiagnostics router row preserves only domain/code/source and drops the repair intent before IDE/custom diagnostic repair affordances are assembled."
     }
   ]
 }

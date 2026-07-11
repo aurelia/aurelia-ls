@@ -3192,6 +3192,9 @@ export interface SemanticRouterIssueRow {
   readonly frameworkErrorCode: string | null;
   readonly severity: RouterIssueSeverity;
   readonly message: string;
+  readonly missingInput: string | null;
+  readonly missingInputs: readonly string[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   readonly property: string | null;
   readonly expected: string | null;
   readonly actual: string | null;

@@ -13,6 +13,12 @@ caller must explicitly pass `editPlanState: "available"` after a planner has pro
 sets `applicationKind: "single-edit"`. This keeps diagnostic rows, repair intent, and mutating code actions as three
 separate stages. Do not use actionability to mean "an edit exists"; that belongs to edit-plan state and application kind.
 
+`fix-router-instruction` suggestions classify as `rewrite-router-instruction` /
+`router-instruction-rewrite`. An exact template instruction source makes that app-source repair `guided` and
+`ready-to-plan`, while `editPlanState: "not-available"` and `applicationKind: "none"` remain explicit until a router
+source-operation planner can prove validated edits. Do not collapse this state into manual inspection, and do not turn
+the suggestion into a code action by guessing a route, fallback, parameter value, or viewport declaration.
+
 `register-framework-capability` suggestions are first-class action pressure. They come from template-authored
 `framework.capability-demand` products when a known syntax/resource/value-converter/binding-behavior is used before the
 matching framework registration is admitted. The action domain is app source, but readiness remains

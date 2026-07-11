@@ -48,22 +48,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "instruction-no-fallback",
         "frameworkErrorCode": "AUR3401",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:instruction-no-fallback",
+        "missingInputs": [
+          "router:instruction-no-fallback"
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
           "applicationKind": "none",
-          "changeDomain": "inspection",
+          "changeDomain": "app-source",
           "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",

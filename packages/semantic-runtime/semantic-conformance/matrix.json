@@ -10587,6 +10587,84 @@
           ]
         },
         {
+          "id": "invalid-instruction-suggestion-survives-app-aggregation",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3400", "missingInput": "router:invalid-instruction", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load.bind=\"42\"", "token": "42" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "invalid-instruction", "frameworkErrorCode": "AUR3400", "missingInput": "router:invalid-instruction", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load.bind=\"42\"", "token": "42" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unexpected-segment-suggestion-survives-app-aggregation",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3500", "missingInput": "router:route-expression-unexpected-segment", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"(\"", "token": "(" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "route-expression-unexpected-segment", "frameworkErrorCode": "AUR3500", "missingInput": "router:route-expression-unexpected-segment", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"(\"", "token": "(" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "unfinished-expression-suggestion-survives-app-aggregation",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3501", "missingInput": "router:route-expression-not-done", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"known)\"", "token": "known)" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "route-expression-not-done", "frameworkErrorCode": "AUR3501", "missingInput": "router:route-expression-not-done", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"known)\"", "token": "known)" } }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "eager-path-generation-suggestion-survives-app-aggregation",
+          "fixture": "fixtures/pressure/router-eager-path-generation-errors",
+          "sourceFile": "src/router-eager-path-generation-errors-app.html",
+          "expectations": [
+            {
+              "name": "template diagnostics",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticKind": "router-framework-error", "frameworkErrorCode": "AUR3166", "missingInput": "router:eager-path-generation-failed", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load.bind=\"{ component: detailRoute, params: {} }\"", "token": "{ component: detailRoute, params: {} }" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "eager-path-generation-failed", "frameworkErrorCode": "AUR3166", "missingInput": "router:eager-path-generation-failed", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load.bind=\"{ component: detailRoute, params: {} }\"", "token": "{ component: detailRoute, params: {} }" } }
+              ]
+            }
+          ]
+        },
+        {
           "id": "viewport-resolution-suggestion-survives-app-aggregation",
           "fixture": "fixtures/pressure/router-viewport-resolution-errors",
           "sourceFile": "src/router-viewport-resolution-errors-app.html",
@@ -10603,6 +10681,38 @@
               "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
               "rows": [
                 { "fields": { "diagnosticDomain": "router", "diagnosticKind": "no-available-viewport-agent", "frameworkErrorCode": "AUR3174", "missingInput": "router:no-available-viewport-agent", "suggestion.suggestionKind": "fix-router-instruction", "suggestion.actionKind": "rewrite-expression", "suggestion.actionTarget.targetKind": "expression" }, "source": { "marker": "load=\"side-only\"", "token": "side-only" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "router-diagnostic-repair-selectivity",
+      "fixture": "fixtures/pressure/router-route-config-validation-errors",
+      "aureliaDomain": "router-composition",
+      "capability": "router-diagnostic-repair-projection",
+      "domainAxis": "diagnostics",
+      "coverageIntent": "regression-contract",
+      "assertionKind": "query-expectations",
+      "sourceFile": "src/router-route-config-validation-errors-app.ts",
+      "requirement": "Router repair projection does not turn TypeScript route-configuration failures into template-expression rewrite guidance.",
+      "cases": [
+        {
+          "id": "route-config-issue-does-not-invent-template-rewrite",
+          "expectations": [
+            {
+              "name": "router issues",
+              "query": { "kind": "router-issues", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "issueKind": "invalid-route-config-property", "frameworkErrorCode": "AUR3554", "missingInput": null, "suggestion": null }, "source": { "marker": "path: 42 as unknown as string", "token": "42 as unknown as string" } }
+              ]
+            },
+            {
+              "name": "app diagnostics",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                { "fields": { "diagnosticDomain": "router", "diagnosticKind": "invalid-route-config-property", "frameworkErrorCode": "AUR3554", "missingInput": null, "suggestion": null }, "source": { "marker": "path: 42 as unknown as string", "token": "42 as unknown as string" } }
               ]
             }
           ]

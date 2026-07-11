@@ -56,6 +56,7 @@ import {
   RuntimeObservationFrameworkErrorCode,
 } from '../observation/framework-error-code.js';
 import type { RouterIssueModel } from '../router/model.js';
+import { routerIssueDiagnosticRepairProjection } from './router-diagnostic-policy.js';
 import {
   FrameworkCapabilityAvailabilityState,
   FrameworkCapabilityDemandKind,
@@ -1168,29 +1169,21 @@ export function routerIssueDiagnostic(
   issue: RouterIssueModel,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
 ): SemanticTemplateCursorDiagnosticRow {
+  const repair = routerIssueDiagnosticRepairProjection(issue, source);
   return {
     diagnosticKind: 'router-framework-error',
     diagnosticAuthority: issue.frameworkErrorCode == null ? 'framework-runtime-behavior' : 'framework-error-code',
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
     summary: issue.message,
-    missingInput: `router:${issue.issueKind}`,
-    missingInputs: [`router:${issue.issueKind}`],
+    missingInput: repair?.missingInput ?? null,
+    missingInputs: repair?.missingInputs ?? [],
     source,
     selectedMemberName: null,
     ownerTypeDisplay: null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: null,
-    suggestion: {
-      suggestionKind: 'fix-router-instruction',
-      actionKind: 'rewrite-expression',
-      actionTarget: suggestionActionTarget('expression', source, null, issue.expected),
-      summary: 'Rewrite the router instruction to a route string, routeable component, or viewport instruction that the router can materialize.',
-      targetMemberName: null,
-      ownerTypeDisplay: null,
-      valueTypeDisplay: issue.expected,
-      valueTypeSource: null,
-    },
+    suggestion: repair?.suggestion ?? null,
   };
 }
 

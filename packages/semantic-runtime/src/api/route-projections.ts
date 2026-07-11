@@ -33,6 +33,7 @@ import {
   describeAddress,
   type SemanticSourceReference,
 } from './source-reference.js';
+import { routerIssueDiagnosticRepairProjection } from './router-diagnostic-policy.js';
 import type {
   SemanticRouteConfigComponentRow,
   SemanticRouteConfigReferenceRow,
@@ -1060,6 +1061,8 @@ function routerIssueRow(
   issue: RouterIssueModel,
   handles: boolean,
 ): SemanticRouterIssueRow {
+  const source = describeAddress(store, issue.sourceAddressHandle);
+  const repair = routerIssueDiagnosticRepairProjection(issue, source);
   return {
     projectKey: emission.project.projectKey,
     phase: issue.phase,
@@ -1068,6 +1071,9 @@ function routerIssueRow(
     frameworkErrorCode: issue.frameworkErrorCode,
     severity: issue.severity,
     message: issue.message,
+    missingInput: repair?.missingInput ?? null,
+    missingInputs: repair?.missingInputs ?? [],
+    suggestion: repair?.suggestion ?? null,
     property: issue.property,
     expected: issue.expected,
     actual: issue.actual,
@@ -1077,7 +1083,7 @@ function routerIssueRow(
     unexpectedExpressionKind: issue.unexpectedExpressionKind,
     routeConfig: routeConfigReferenceRow(store, issue.routeConfig),
     recognizedRoute: routeRecognizerReferenceRow(store, issue.recognizedRoute),
-    source: describeAddress(store, issue.sourceAddressHandle),
+    source,
     ...(handles ? {
       handles: {
         productHandle: issue.productHandle,

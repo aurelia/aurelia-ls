@@ -31,22 +31,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "instruction-no-fallback",
         "frameworkErrorCode": "AUR3401",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:instruction-no-fallback",
+        "missingInputs": [
+          "router:instruction-no-fallback"
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
           "applicationKind": "none",
-          "changeDomain": "inspection",
+          "changeDomain": "app-source",
           "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",
@@ -78,22 +80,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "invalid-instruction",
         "frameworkErrorCode": "AUR3400",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:invalid-instruction",
+        "missingInputs": [
+          "router:invalid-instruction"
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
           "applicationKind": "none",
-          "changeDomain": "inspection",
+          "changeDomain": "app-source",
           "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",
@@ -125,22 +129,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "route-expression-unexpected-segment",
         "frameworkErrorCode": "AUR3500",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:route-expression-unexpected-segment",
+        "missingInputs": [
+          "router:route-expression-unexpected-segment"
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
           "applicationKind": "none",
-          "changeDomain": "inspection",
+          "changeDomain": "app-source",
           "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",
@@ -172,22 +178,24 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "route-expression-not-done",
         "frameworkErrorCode": "AUR3501",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:route-expression-not-done",
+        "missingInputs": [
+          "router:route-expression-not-done"
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
           "applicationKind": "none",
-          "changeDomain": "inspection",
+          "changeDomain": "app-source",
           "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",
@@ -227,11 +235,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:1:router:instruction-no-fallback:framework-error-code:AUR3401:src/router-instruction-errors-app.html:14:27:no-missing-input",
+        "groupKey": "row:diagnostic:1:router:instruction-no-fallback:framework-error-code:AUR3401:src/router-instruction-errors-app.html:14:27:router:instruction-no-fallback",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "manual",
+            "actionability": "guided",
             "anomaly": null,
             "category": "project",
             "code": "AUR3401",
@@ -241,18 +249,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticKind": "instruction-no-fallback",
               "frameworkErrorCode": "AUR3401",
               "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
+              "missingInput": "router:instruction-no-fallback",
+              "missingInputs": [
+                "router:instruction-no-fallback"
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
+                "actionKind": "rewrite-router-instruction",
+                "actionability": "guided",
                 "applicationKind": "none",
-                "changeDomain": "inspection",
+                "changeDomain": "app-source",
                 "editPlanState": "not-available",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
+                "planKind": "router-instruction-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
               },
               "subject": null,
               "taxonomy": {
@@ -286,7 +296,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:1:router:instruction-no-fallback:framework-error-code:AUR3401:src/router-instruction-errors-app.html:14:27:no-missing-input"
+          "rowId": "diagnostic:1:router:instruction-no-fallback:framework-error-code:AUR3401:src/router-instruction-errors-app.html:14:27:router:instruction-no-fallback"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -294,11 +304,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:0:router:invalid-instruction:framework-error-code:AUR3400:src/router-instruction-errors-app.html:129:131:no-missing-input",
+        "groupKey": "row:diagnostic:0:router:invalid-instruction:framework-error-code:AUR3400:src/router-instruction-errors-app.html:129:131:router:invalid-instruction",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "manual",
+            "actionability": "guided",
             "anomaly": null,
             "category": "project",
             "code": "AUR3400",
@@ -308,18 +318,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticKind": "invalid-instruction",
               "frameworkErrorCode": "AUR3400",
               "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
+              "missingInput": "router:invalid-instruction",
+              "missingInputs": [
+                "router:invalid-instruction"
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
+                "actionKind": "rewrite-router-instruction",
+                "actionability": "guided",
                 "applicationKind": "none",
-                "changeDomain": "inspection",
+                "changeDomain": "app-source",
                 "editPlanState": "not-available",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
+                "planKind": "router-instruction-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
               },
               "subject": null,
               "taxonomy": {
@@ -353,7 +365,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:router:invalid-instruction:framework-error-code:AUR3400:src/router-instruction-errors-app.html:129:131:no-missing-input"
+          "rowId": "diagnostic:0:router:invalid-instruction:framework-error-code:AUR3400:src/router-instruction-errors-app.html:129:131:router:invalid-instruction"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -361,11 +373,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:2:router:route-expression-unexpected-segment:framework-error-code:AUR3500:src/router-instruction-errors-app.html:176:177:no-missing-input",
+        "groupKey": "row:diagnostic:2:router:route-expression-unexpected-segment:framework-error-code:AUR3500:src/router-instruction-errors-app.html:176:177:router:route-expression-unexpected-segment",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "manual",
+            "actionability": "guided",
             "anomaly": null,
             "category": "project",
             "code": "AUR3500",
@@ -375,18 +387,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticKind": "route-expression-unexpected-segment",
               "frameworkErrorCode": "AUR3500",
               "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
+              "missingInput": "router:route-expression-unexpected-segment",
+              "missingInputs": [
+                "router:route-expression-unexpected-segment"
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
+                "actionKind": "rewrite-router-instruction",
+                "actionability": "guided",
                 "applicationKind": "none",
-                "changeDomain": "inspection",
+                "changeDomain": "app-source",
                 "editPlanState": "not-available",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
+                "planKind": "router-instruction-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
               },
               "subject": null,
               "taxonomy": {
@@ -420,7 +434,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:2:router:route-expression-unexpected-segment:framework-error-code:AUR3500:src/router-instruction-errors-app.html:176:177:no-missing-input"
+          "rowId": "diagnostic:2:router:route-expression-unexpected-segment:framework-error-code:AUR3500:src/router-instruction-errors-app.html:176:177:router:route-expression-unexpected-segment"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -428,11 +442,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:3:router:route-expression-not-done:framework-error-code:AUR3501:src/router-instruction-errors-app.html:221:227:no-missing-input",
+        "groupKey": "row:diagnostic:3:router:route-expression-not-done:framework-error-code:AUR3501:src/router-instruction-errors-app.html:221:227:router:route-expression-not-done",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "manual",
+            "actionability": "guided",
             "anomaly": null,
             "category": "project",
             "code": "AUR3501",
@@ -442,18 +456,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticKind": "route-expression-not-done",
               "frameworkErrorCode": "AUR3501",
               "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
+              "missingInput": "router:route-expression-not-done",
+              "missingInputs": [
+                "router:route-expression-not-done"
+              ],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
+                "actionKind": "rewrite-router-instruction",
+                "actionability": "guided",
                 "applicationKind": "none",
-                "changeDomain": "inspection",
+                "changeDomain": "app-source",
                 "editPlanState": "not-available",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
+                "planKind": "router-instruction-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
               },
               "subject": null,
               "taxonomy": {
@@ -487,7 +503,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:3:router:route-expression-not-done:framework-error-code:AUR3501:src/router-instruction-errors-app.html:221:227:no-missing-input"
+          "rowId": "diagnostic:3:router:route-expression-not-done:framework-error-code:AUR3501:src/router-instruction-errors-app.html:221:227:router:route-expression-not-done"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -502,7 +518,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "diagnosticCount": 4,
     "diagnostics": [
       {
-        "actionability": "manual",
+        "actionability": "guided",
         "anomaly": null,
         "category": "project",
         "code": "AUR3400",
@@ -512,18 +528,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticKind": "invalid-instruction",
           "frameworkErrorCode": "AUR3400",
           "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
+          "missingInput": "router:invalid-instruction",
+          "missingInputs": [
+            "router:invalid-instruction"
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
+            "actionKind": "rewrite-router-instruction",
+            "actionability": "guided",
             "applicationKind": "none",
-            "changeDomain": "inspection",
+            "changeDomain": "app-source",
             "editPlanState": "not-available",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
+            "planKind": "router-instruction-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
           },
           "subject": null,
           "taxonomy": {
@@ -556,7 +574,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
       },
       {
-        "actionability": "manual",
+        "actionability": "guided",
         "anomaly": null,
         "category": "project",
         "code": "AUR3401",
@@ -566,18 +584,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticKind": "instruction-no-fallback",
           "frameworkErrorCode": "AUR3401",
           "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
+          "missingInput": "router:instruction-no-fallback",
+          "missingInputs": [
+            "router:instruction-no-fallback"
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
+            "actionKind": "rewrite-router-instruction",
+            "actionability": "guided",
             "applicationKind": "none",
-            "changeDomain": "inspection",
+            "changeDomain": "app-source",
             "editPlanState": "not-available",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
+            "planKind": "router-instruction-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
           },
           "subject": null,
           "taxonomy": {
@@ -610,7 +630,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
       },
       {
-        "actionability": "manual",
+        "actionability": "guided",
         "anomaly": null,
         "category": "project",
         "code": "AUR3500",
@@ -620,18 +640,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticKind": "route-expression-unexpected-segment",
           "frameworkErrorCode": "AUR3500",
           "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
+          "missingInput": "router:route-expression-unexpected-segment",
+          "missingInputs": [
+            "router:route-expression-unexpected-segment"
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
+            "actionKind": "rewrite-router-instruction",
+            "actionability": "guided",
             "applicationKind": "none",
-            "changeDomain": "inspection",
+            "changeDomain": "app-source",
             "editPlanState": "not-available",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
+            "planKind": "router-instruction-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
           },
           "subject": null,
           "taxonomy": {
@@ -664,7 +686,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
       },
       {
-        "actionability": "manual",
+        "actionability": "guided",
         "anomaly": null,
         "category": "project",
         "code": "AUR3501",
@@ -674,18 +696,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticKind": "route-expression-not-done",
           "frameworkErrorCode": "AUR3501",
           "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
+          "missingInput": "router:route-expression-not-done",
+          "missingInputs": [
+            "router:route-expression-not-done"
+          ],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
+            "actionKind": "rewrite-router-instruction",
+            "actionability": "guided",
             "applicationKind": "none",
-            "changeDomain": "inspection",
+            "changeDomain": "app-source",
             "editPlanState": "not-available",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
+            "planKind": "router-instruction-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
           },
           "subject": null,
           "taxonomy": {
@@ -728,7 +752,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "diagnosticCount": 4,
       "diagnostics": [
         {
-          "actionability": "manual",
+          "actionability": "guided",
           "anomaly": null,
           "category": "project",
           "code": "AUR3401",
@@ -738,18 +762,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticKind": "instruction-no-fallback",
             "frameworkErrorCode": "AUR3401",
             "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
+            "missingInput": "router:instruction-no-fallback",
+            "missingInputs": [
+              "router:instruction-no-fallback"
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
+              "actionKind": "rewrite-router-instruction",
+              "actionability": "guided",
               "applicationKind": "none",
-              "changeDomain": "inspection",
+              "changeDomain": "app-source",
               "editPlanState": "not-available",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
+              "planKind": "router-instruction-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
             },
             "subject": null,
             "taxonomy": {
@@ -782,7 +808,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
         },
         {
-          "actionability": "manual",
+          "actionability": "guided",
           "anomaly": null,
           "category": "project",
           "code": "AUR3400",
@@ -792,18 +818,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticKind": "invalid-instruction",
             "frameworkErrorCode": "AUR3400",
             "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
+            "missingInput": "router:invalid-instruction",
+            "missingInputs": [
+              "router:invalid-instruction"
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
+              "actionKind": "rewrite-router-instruction",
+              "actionability": "guided",
               "applicationKind": "none",
-              "changeDomain": "inspection",
+              "changeDomain": "app-source",
               "editPlanState": "not-available",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
+              "planKind": "router-instruction-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
             },
             "subject": null,
             "taxonomy": {
@@ -836,7 +864,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
         },
         {
-          "actionability": "manual",
+          "actionability": "guided",
           "anomaly": null,
           "category": "project",
           "code": "AUR3500",
@@ -846,18 +874,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticKind": "route-expression-unexpected-segment",
             "frameworkErrorCode": "AUR3500",
             "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
+            "missingInput": "router:route-expression-unexpected-segment",
+            "missingInputs": [
+              "router:route-expression-unexpected-segment"
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
+              "actionKind": "rewrite-router-instruction",
+              "actionability": "guided",
               "applicationKind": "none",
-              "changeDomain": "inspection",
+              "changeDomain": "app-source",
               "editPlanState": "not-available",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
+              "planKind": "router-instruction-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
             },
             "subject": null,
             "taxonomy": {
@@ -890,7 +920,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "uri": "fixtures://pressure/router-instruction-errors/src/router-instruction-errors-app.html"
         },
         {
-          "actionability": "manual",
+          "actionability": "guided",
           "anomaly": null,
           "category": "project",
           "code": "AUR3501",
@@ -900,18 +930,20 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticKind": "route-expression-not-done",
             "frameworkErrorCode": "AUR3501",
             "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
+            "missingInput": "router:route-expression-not-done",
+            "missingInputs": [
+              "router:route-expression-not-done"
+            ],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
+              "actionKind": "rewrite-router-instruction",
+              "actionability": "guided",
               "applicationKind": "none",
-              "changeDomain": "inspection",
+              "changeDomain": "app-source",
               "editPlanState": "not-available",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
+              "planKind": "router-instruction-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
             },
             "subject": null,
             "taxonomy": {

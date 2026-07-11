@@ -719,6 +719,7 @@ const failures = contracts.flatMap((contract) => contract.verification.effectRes
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => `${contract.fixture}: ${result.summary}`));
 const diagnosticActionProbe = readDiagnosticActionProbe();
+const routerDiagnosticActionProbe = readRouterDiagnosticActionProbe();
 if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
 }
@@ -736,6 +737,24 @@ if (diagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSourc
 }
 if (diagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.SourceEditPolicyOpen) {
   failures.push(`Expected framework capability registration readiness to stay ${DiagnosticActionPlanReadiness.SourceEditPolicyOpen}, observed ${diagnosticActionProbe.readiness}.`);
+}
+if (routerDiagnosticActionProbe.actionKind !== DiagnosticActionKind.RewriteRouterInstruction) {
+  failures.push(`Expected router instruction suggestions to classify as ${DiagnosticActionKind.RewriteRouterInstruction}, observed ${routerDiagnosticActionProbe.actionKind}.`);
+}
+if (routerDiagnosticActionProbe.planKind !== DiagnosticActionPlanKind.RouterInstructionRewrite) {
+  failures.push(`Expected router instruction suggestions to plan as ${DiagnosticActionPlanKind.RouterInstructionRewrite}, observed ${routerDiagnosticActionProbe.planKind}.`);
+}
+if (routerDiagnosticActionProbe.changeDomain !== DiagnosticActionChangeDomain.AppSource) {
+  failures.push(`Expected router instruction repair to belong to ${DiagnosticActionChangeDomain.AppSource}, observed ${routerDiagnosticActionProbe.changeDomain}.`);
+}
+if (routerDiagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.ReadyToPlan) {
+  failures.push(`Expected source-backed router instruction repair readiness to be ${DiagnosticActionPlanReadiness.ReadyToPlan}, observed ${routerDiagnosticActionProbe.readiness}.`);
+}
+if (routerDiagnosticActionProbe.actionability !== 'guided') {
+  failures.push(`Expected router instruction repair without an edit plan to remain guided, observed ${routerDiagnosticActionProbe.actionability}.`);
+}
+if (routerDiagnosticActionProbe.editPlanState !== 'not-available' || routerDiagnosticActionProbe.applicationKind !== 'none') {
+  failures.push(`Expected router instruction guidance to remain non-mutating without a validated edit plan, observed editPlanState=${routerDiagnosticActionProbe.editPlanState} applicationKind=${routerDiagnosticActionProbe.applicationKind}.`);
 }
 if (viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics !== 1) {
   failures.push(`Expected broad app diagnostics to include exactly one AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics}.`);
@@ -759,6 +778,7 @@ const summary = {
   })),
   mixedFormCursorProbe,
   diagnosticActionProbe,
+  routerDiagnosticActionProbe,
   viewFactoryProviderAppDiagnosticProbe,
 };
 
@@ -779,6 +799,17 @@ function readDiagnosticActionProbe() {
     actionKind: 'register-framework-capability',
     actionTarget: {
       targetKind: 'framework-capability',
+      source: {},
+    },
+  });
+}
+
+function readRouterDiagnosticActionProbe() {
+  return diagnosticRepairAffordanceForSuggestion({
+    suggestionKind: 'fix-router-instruction',
+    actionKind: 'rewrite-expression',
+    actionTarget: {
+      targetKind: 'expression',
       source: {},
     },
   });

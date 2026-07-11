@@ -1331,9 +1331,12 @@ Template diagnostics also project router issue rows whose authored source belong
 use `router-framework-error` so file-level and cursor-locus APIs can surface `load`/`href` expression parser,
 instruction creation, recognition, viewport-resolution, and eager path-generation failures without moving issue
 ownership out of the router domain. `AppDiagnostics` still reads the owning router issue lane and filters those
-template-projected copies to avoid double-counting. Cursor-info uses the same projection path and should prefer the
-exact expression/value span from parser or HTML value provenance over the broader attribute carrier when a router issue
-originates in a template value.
+template-projected copies to avoid double-counting. The shared router diagnostic policy attaches `missingInput` and
+`fix-router-instruction` repair intent to the owning `RouterIssues` row only when its source proves a template-authored
+instruction failure; `AppDiagnostics` preserves that repair facet. TypeScript route-config, redirect, and recognizer
+issues do not acquire template-expression guidance merely because they share the router issue product. Cursor-info uses
+the same projection path and should prefer the exact expression/value span from parser or HTML value provenance over
+the broader attribute carrier when a router issue originates in a template value.
 `RecognizedRoutes` exposes the next layer for closed static router-resource instruction paths. Rows carry the recognized
 path, residue presence, fulfilled parameter count, parameter-name groups, decoded parameter values, recognizer
 reference, causing `ViewportInstruction` / `ViewportInstructionTree`, route-context closure, redirect depth,

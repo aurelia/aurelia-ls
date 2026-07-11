@@ -19,6 +19,8 @@ export enum DiagnosticActionKind {
   RewriteBindingSource = 'rewrite-binding-source',
   /** Rewrite authored template syntax that the Aurelia parser or template compiler rejects. */
   RewriteTemplateSyntax = 'rewrite-template-syntax',
+  /** Repair a template-authored router instruction without claiming that a validated edit plan exists. */
+  RewriteRouterInstruction = 'rewrite-router-instruction',
   /** Align the source member/slot type with the value that the binding observer writes back. */
   AlignAssignmentType = 'align-assignment-type',
   /** Make a target-to-source binding source writable, or point the binding at a writable source. */
@@ -53,6 +55,8 @@ export enum DiagnosticActionPlanKind {
   TemplateExpressionRewrite = 'template-expression-rewrite',
   /** Rewrite authored template syntax rejected by Aurelia parser/compiler semantics. */
   TemplateSyntaxRewrite = 'template-syntax-rewrite',
+  /** Rewrite or retarget a template-authored router instruction. */
+  RouterInstructionRewrite = 'router-instruction-rewrite',
   /** Change a source member/slot type so observer writeback is TypeScript-assignable. */
   SourceAssignmentTypeAlignment = 'source-assignment-type-alignment',
   /** Change source mutability or choose a writable binding source for observer writeback. */
@@ -297,6 +301,8 @@ export function diagnosticActionKindForDiagnosticSuggestion(
     case 'fix-expression-syntax':
     case 'fix-template-syntax':
       return DiagnosticActionKind.RewriteTemplateSyntax;
+    case 'fix-router-instruction':
+      return DiagnosticActionKind.RewriteRouterInstruction;
     case 'declare-explicit-member':
     case 'declare-assignable-member':
       return DiagnosticActionKind.DeclareMissingMember;
@@ -362,6 +368,8 @@ export function diagnosticActionPlanKindForAction(
         : DiagnosticActionPlanKind.ManualInspection;
     case DiagnosticActionKind.RewriteTemplateSyntax:
       return DiagnosticActionPlanKind.TemplateSyntaxRewrite;
+    case DiagnosticActionKind.RewriteRouterInstruction:
+      return DiagnosticActionPlanKind.RouterInstructionRewrite;
     case DiagnosticActionKind.AlignAssignmentType:
       return DiagnosticActionPlanKind.SourceAssignmentTypeAlignment;
     case DiagnosticActionKind.MakeSourceWritable:
@@ -388,6 +396,7 @@ export function diagnosticActionChangeDomainForPlan(
     case DiagnosticActionPlanKind.TemplateScopeSlotTyping:
     case DiagnosticActionPlanKind.TemplateExpressionRewrite:
     case DiagnosticActionPlanKind.TemplateSyntaxRewrite:
+    case DiagnosticActionPlanKind.RouterInstructionRewrite:
     case DiagnosticActionPlanKind.SourceAssignmentTypeAlignment:
     case DiagnosticActionPlanKind.SourceWriteabilityAlignment:
     case DiagnosticActionPlanKind.FrameworkCapabilityRegistration:

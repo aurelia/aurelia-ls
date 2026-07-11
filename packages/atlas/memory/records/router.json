@@ -405,7 +405,7 @@
         "String-pattern route expressions may arrive from interpolation, template literals, evaluator-local methods, or direct binary `+` concatenation with binding-scope holes. Consume the shared EvaluationStringPatternValue lane and keep the authored static-prefix rule in the binding-source evaluator, not in router-specific AST shortcuts.",
         "Repeated state-backed href canaries should close through binding-source representative values, evaluator loose nullish equality, and recognizer matching when the static prefix survives. If exact per-item field correlation is needed later, model that as value-flow substrate pressure rather than href-specific lookup logic.",
         "Use `route-expression-parser.ts` when framework semantics branch on RouteExpression node kind. It exposes the expression tree, lowered viewport instructions, and source-backed parser failures for exprUnexpectedSegment / AUR3500 and exprNotDone / AUR3501; do not reparse route strings with ad hoc split logic.",
-        "Router issue products remain owned by the router lane even when their source is a template value. API template diagnostics and cursor-info may project `router-framework-error` rows for LSP loci, while AppDiagnostics de-duplicates those projected rows and reads the owning RouterIssues lane.",
+        "Router issue products remain owned by the router lane even when their source is a template value. API template diagnostics and cursor-info may project `router-framework-error` rows for LSP loci, while AppDiagnostics de-duplicates those projected rows and reads the owning RouterIssues lane. Both projections consume `routerIssueDiagnosticRepairProjection(...)`; only source-role-proven template instruction issues receive `fix-router-instruction` guidance, and the absence of an edit plan remains explicit.",
         "Route-instruction issue provenance should prefer the parser expression source or HTML attribute value address over the broader custom-attribute carrier. A broad carrier span is a fallback evidence address, not a rename/edit locus, once value provenance is available."
       ],
       "anchors": [
@@ -439,6 +439,12 @@
           "filePath": "packages/semantic-runtime/src/router/route-instruction-source.ts",
           "symbolName": "routerLoadAttributeSourceText",
           "summary": "Product-free source serializer for router load/href custom-attribute forms."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/router-diagnostic-policy.ts",
+          "symbolName": "routerIssueDiagnosticRepairProjection",
+          "summary": "Shared API repair projection for template-authored router instruction issue products."
         },
         {
           "kind": "lens",

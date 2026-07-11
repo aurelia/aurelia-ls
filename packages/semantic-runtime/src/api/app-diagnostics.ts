@@ -434,6 +434,9 @@ function routerAppDiagnosticRow(
     frameworkErrorCode: row.frameworkErrorCode,
     severity: row.severity,
     summary: row.message,
+    missingInput: row.missingInput,
+    missingInputs: row.missingInputs,
+    suggestion: row.suggestion,
     source: row.source,
     relatedQueryKind: 'router-issues' satisfies `${SemanticAppQueryKind}`,
   };

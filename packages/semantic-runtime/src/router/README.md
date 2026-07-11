@@ -196,9 +196,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `router-instruction-needs-route-context` seam.
 - Keep router issue ownership in router products even when the source span is a template value. API template diagnostics
   and cursor-info may project template-locus copies of router failures for LSP surfaces, but the owning rows remain
-  `RouterIssues` / router-domain `AppDiagnostics`. Route-instruction issue provenance should prefer the narrowest
-  expression or HTML attribute-value source address; the full custom-attribute carrier is fallback evidence, not the
-  edit locus, once a value span is available.
+  `RouterIssues` / router-domain `AppDiagnostics`. The API's shared router diagnostic policy derives guided instruction
+  repair from the owning issue plus template source role, so both projections spend one repair decision while
+  TypeScript route-configuration issues remain suggestion-free. Route-instruction issue provenance should prefer the
+  narrowest expression or HTML attribute-value source address; the full custom-attribute carrier is fallback evidence,
+  not the edit locus, once a value span is available.
 - Materialize object navigation instructions as the eager path-generation handoff owned by
   `RouteConfigContext._generateViewportInstruction(...)`. When a `load.bind`/internal `href.bind` object closes to a
   routeable component plus `params`, semantic-runtime asks the route-config context and recognizer endpoint graph to

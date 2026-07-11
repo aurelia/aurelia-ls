@@ -5,9 +5,9 @@
       {
         "id": "router-load-missing-route",
         "file": "src/router-instruction-errors-app.html",
-        "verdict": "wrong",
-        "reason": "The owning router diagnostic reaches the editor with the correct AUR3401 code, domain, related query, and authored `missing-route` span, but its repair affordance is generic manual inspection instead of preserving the router-specific `fix-router-instruction` intent already present in TemplateDiagnostics.",
-        "note": "NEW 2026-07-09. Projection canary for router diagnostic repair/actionability data loss. This is not a row-routing or span failure; it is the AppDiagnostics/LSP repair channel dropping existing guidance."
+        "verdict": "correct",
+        "reason": "The owning router diagnostic preserves the AUR3401 code, router domain, authored `missing-route` span, router-specific repair intent, exact target coverage, and guided app-source actionability without claiming that an edit plan exists.",
+        "note": "ADJUDICATED 2026-07-11. Repair guidance now survives RouterIssues through AppDiagnostics and the IDE adapter; the separate code-action probe keeps the non-mutating boundary explicit."
       }
     ],
     "codeAction": [
