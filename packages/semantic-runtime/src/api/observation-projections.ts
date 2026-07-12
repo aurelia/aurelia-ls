@@ -2,7 +2,9 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import {
   ObservationIssueKind,
+  ObservationIssueRelatedSourceKind,
   type ObservationIssue,
+  type ObservationIssueRelatedSource,
 } from '../observation/observation-issue.js';
 import type { ComputedObservationDefinition } from '../observation/computed-observation.js';
 import type {
@@ -330,16 +332,18 @@ function observationIssueRow(
     message: issue.message,
     subjectName: issue.subjectName,
     source: describeAddress(store, issue.sourceAddressHandle),
-    relatedSources: issue.relatedSourceAddressHandles
-      .map((addressHandle) => describeAddress(store, addressHandle))
-      .filter((source) => source != null),
+    relatedInformation: issue.relatedSources.map((related) => ({
+      relationKind: related.kind,
+      message: observationIssueRelatedSourceMessage(related),
+      source: describeAddress(store, related.addressHandle),
+    })),
     suggestion: observationIssueSuggestion(store, issue),
     ...(handles ? {
       handles: {
         productHandle: issue.productHandle,
         identityHandle: issue.identityHandle,
         sourceAddressHandle: issue.sourceAddressHandle,
-        relatedSourceAddressHandles: issue.relatedSourceAddressHandles,
+        relatedSourceAddressHandles: issue.relatedSources.map((related) => related.addressHandle),
       },
     } : {}),
   };
@@ -356,6 +360,21 @@ function observationIssueSeverity(
   }
 }
 
+function observationIssueRelatedSourceMessage(
+  related: ObservationIssueRelatedSource,
+): string {
+  switch (related.kind) {
+    case ObservationIssueRelatedSourceKind.SubjectDeclaration:
+      return related.displayName == null
+        ? 'The called method is declared here.'
+        : `Method '${related.displayName}' is declared here.`;
+    case ObservationIssueRelatedSourceKind.HiddenStateRead:
+      return related.displayName == null
+        ? 'This method-body state read is not observed through the template call.'
+        : `Method-body read '${related.displayName}' is not observed through the template call.`;
+  }
+}
+
 function observationIssueSuggestion(
   store: KernelStore,
   issue: ObservationIssue,
@@ -367,7 +386,12 @@ function observationIssueSuggestion(
         actionKind: 'configure-observer',
         actionTarget: {
           targetKind: 'observer-config',
-          source: describeAddress(store, issue.relatedSourceAddressHandles[0] ?? null),
+          source: describeAddress(
+            store,
+            issue.relatedSources.find((related) =>
+              related.kind === ObservationIssueRelatedSourceKind.SubjectDeclaration
+            )?.addressHandle ?? null,
+          ),
           memberName: issue.subjectName,
           typeDisplay: null,
         },

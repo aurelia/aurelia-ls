@@ -35,17 +35,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "i18n.translation-syntax"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "register-framework-capability",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "framework-capability-registration",
           "readiness": "source-edit-policy-open",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -84,17 +85,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "i18n.translation-syntax"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "register-framework-capability",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "framework-capability-registration",
           "readiness": "source-edit-policy-open",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -133,17 +135,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "state.binding-syntax"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "register-framework-capability",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "framework-capability-registration",
           "readiness": "source-edit-policy-open",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -204,17 +207,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "i18n.translation-syntax"
               ],
+              "phase": null,
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "register-framework-capability",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "framework-capability-registration",
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -273,17 +277,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "i18n.translation-syntax"
               ],
+              "phase": null,
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "register-framework-capability",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "framework-capability-registration",
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -342,17 +347,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "state.binding-syntax"
               ],
+              "phase": null,
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "register-framework-capability",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "framework-capability-registration",
                 "readiness": "source-edit-policy-open",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -414,17 +420,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "i18n.translation-syntax"
           ],
+          "phase": null,
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "register-framework-capability",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "framework-capability-registration",
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -470,17 +477,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "i18n.translation-syntax"
           ],
+          "phase": null,
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "register-framework-capability",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "framework-capability-registration",
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -526,17 +534,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "state.binding-syntax"
           ],
+          "phase": null,
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "register-framework-capability",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "framework-capability-registration",
             "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -592,17 +601,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "i18n.translation-syntax"
             ],
+            "phase": null,
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "register-framework-capability",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "framework-capability-registration",
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -648,17 +658,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "i18n.translation-syntax"
             ],
+            "phase": null,
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "register-framework-capability",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "framework-capability-registration",
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -704,17 +715,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "state.binding-syntax"
             ],
+            "phase": null,
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "register-framework-capability",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "framework-capability-registration",
               "readiness": "source-edit-policy-open",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

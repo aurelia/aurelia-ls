@@ -1219,10 +1219,13 @@ function summarizeDiagnosticData(data) {
     diagnosticAuthority: semanticRuntime.diagnosticAuthority ?? root.diagnosticAuthority ?? null,
     frameworkErrorCode: semanticRuntime.frameworkErrorCode ?? root.frameworkErrorCode ?? null,
     frameworkRawErrorAuthority: semanticRuntime.frameworkRawErrorAuthority ?? root.frameworkRawErrorAuthority ?? null,
+    phase: semanticRuntime.phase ?? root.phase ?? null,
     relatedQueryKind: semanticRuntime.relatedQueryKind ?? root.relatedQueryKind ?? null,
+    sourceRole: semanticRuntime.sourceRole ?? root.sourceRole ?? null,
     missingInput: semanticRuntime.missingInput ?? root.missingInput ?? null,
     missingInputs: normalizeSnapshotValue(semanticRuntime.missingInputs ?? root.missingInputs ?? []),
     subject: summarizeDiagnosticSubject(semanticRuntime.subject ?? root.subject ?? null),
+    relatedInformation: normalizeSnapshotValue(semanticRuntime.relatedInformation ?? root.relatedInformation ?? []),
     repairAffordance: normalizeSnapshotValue(semanticRuntime.repairAffordance ?? root.repairAffordance ?? null),
     taxonomy: {
       schema: taxonomyRoot.schema ?? null,

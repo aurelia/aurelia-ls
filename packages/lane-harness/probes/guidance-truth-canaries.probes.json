@@ -10,7 +10,7 @@
         "expectedOldTexts": [""],
         "verdict": "correct",
         "reason": "A missing root-scope template member can be repaired by adding an exact insertion to the owning view-model class; the action is edit-backed and safe as a single quick fix.",
-        "note": "Positive canary for declare-view-model-member. The snapshot should show one quickfix, repair editPlanState=available/applicationKind=single-edit, old-text validation for an insertion, and an in-memory diff adding titel!: unknown; to GuidanceTruthCanaryApp."
+        "note": "Positive canary for declare-view-model-member. The snapshot should show one quickfix with its source diagnostic evidence, a non-empty old-text-validated edit plan, and an in-memory diff adding titel!: unknown; to GuidanceTruthCanaryApp."
       },
       {
         "id": "unsupported-global-console",

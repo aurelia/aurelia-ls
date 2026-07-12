@@ -27,6 +27,59 @@ const codeActionText = "<template>${titel}</template>";
 const codeActionStart = codeActionText.indexOf("titel");
 const codeActionInsertionOffset = definitionText.lastIndexOf("\n}");
 
+function mockMissingMemberDiagnostic() {
+  const source = {
+    kind: "source-span-address",
+    label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
+    path: "file:///app/src/my-app.html",
+    start: codeActionStart,
+    end: codeActionStart + "titel".length,
+  };
+  return {
+    diagnosticKind: "missing-expression-member",
+    diagnosticAuthority: "semantic-authoring-policy",
+    frameworkErrorCode: null,
+    severity: "error",
+    summary: "Member 'titel' does not exist on MyApp.",
+    missingInput: "titel",
+    missingInputs: ["titel"],
+    source,
+    relatedInformation: [],
+    selectedMemberName: "titel",
+    ownerTypeDisplay: "MyApp",
+    ownerTypeShapeKind: "class",
+    ownerTypeOrigin: "typescript",
+    suggestion: {
+      suggestionKind: "declare-explicit-member",
+      actionKind: "declare-member",
+      actionTarget: null,
+      summary: "Declare member 'titel' on MyApp.",
+      targetMemberName: "titel",
+      ownerTypeDisplay: "MyApp",
+      valueTypeDisplay: "unknown",
+      valueTypeSource: null,
+    },
+    phase: "binding",
+    siteKind: "interpolation",
+    valueSiteKind: null,
+    template: {
+      compilationLane: "html",
+      source,
+    },
+  };
+}
+
+function mockMissingMemberRepair() {
+  return {
+    actionKind: "declare-missing-member",
+    planKind: "source-member-declaration",
+    changeDomain: "app-source",
+    readiness: "ready-to-plan",
+    targetSourceCoverage: "all",
+    actionability: "guided",
+  };
+}
+
 function snapshot(uri: string, text: string, version: number | null = null, languageId = uri.endsWith(".ts") ? "typescript" : "html") {
   return {
     uri: canonicalDocumentUri(uri).uri,
@@ -345,27 +398,8 @@ function createMockCodeActionContext(input: { actions?: unknown[] } = {}) {
     {
       title: "Declare member 'titel' on MyApp",
       kind: "quickfix",
-      diagnosticKind: "missing-expression-member",
-      suggestionKind: "declare-explicit-member",
-      actionKind: "declare-member",
-      diagnosticSource: {
-        kind: "source-span-address",
-        label: `src/my-app.html@${codeActionStart}..${codeActionStart + "titel".length}`,
-        path: "file:///app/src/my-app.html",
-        start: codeActionStart,
-        end: codeActionStart + "titel".length,
-      },
-      actionTarget: null,
-      repair: {
-        actionKind: "declare-missing-member",
-        planKind: "source-member-declaration",
-        changeDomain: "app-source",
-        readiness: "ready-to-plan",
-        targetSourceCoverage: "all",
-        actionability: "guided",
-        editPlanState: "available",
-        applicationKind: "single-edit",
-      },
+      diagnostics: [mockMissingMemberDiagnostic()],
+      repair: mockMissingMemberRepair(),
       edits: [
         {
           editKind: "declare-view-model-member",
@@ -630,9 +664,10 @@ describe("handleCodeAction", () => {
         semanticRuntime: expect.objectContaining({
           repairAffordance: expect.objectContaining({
             actionability: "guided",
-            editPlanState: "available",
-            applicationKind: "single-edit",
           }),
+          sourceDiagnostics: [expect.objectContaining({
+            diagnosticKind: "missing-expression-member",
+          })],
         }),
       }),
     }));
@@ -658,11 +693,8 @@ describe("handleCodeAction", () => {
       actions: [{
         title: "Declare member 'titel' on MyApp",
         kind: "quickfix",
-        diagnosticKind: "missing-expression-member",
-        suggestionKind: "declare-explicit-member",
-        actionKind: "declare-member",
-        diagnosticSource: null,
-        actionTarget: null,
+        diagnostics: [mockMissingMemberDiagnostic()],
+        repair: mockMissingMemberRepair(),
         edits: [
           {
             editKind: "declare-view-model-member",
@@ -699,11 +731,8 @@ describe("handleCodeAction", () => {
       actions: [{
         title: "Rewrite stale member",
         kind: "quickfix",
-        diagnosticKind: "missing-expression-member",
-        suggestionKind: "declare-explicit-member",
-        actionKind: "declare-member",
-        diagnosticSource: null,
-        actionTarget: null,
+        diagnostics: [mockMissingMemberDiagnostic()],
+        repair: mockMissingMemberRepair(),
         edits: [{
           editKind: "declare-view-model-member",
           source: {

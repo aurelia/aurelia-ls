@@ -379,6 +379,7 @@ function observationAppDiagnosticRow(
         source: row.source,
       },
     suggestion: row.suggestion,
+    relatedInformation: row.relatedInformation,
     relatedSourceAddressHandles: row.handles?.relatedSourceAddressHandles ?? [],
   });
 }

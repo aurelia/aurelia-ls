@@ -4,14 +4,13 @@ import type { ApplicationFileRole } from '../application/topology.js';
 import type { SourceFileRole } from '../kernel/address.js';
 import type { SemanticRuntimeSourceTextProvider } from '../kernel/source-text-provider.js';
 import type {
-  DiagnosticActionChangeDomain,
-  DiagnosticActionEvidenceKind,
-  DiagnosticActionKind,
-  DiagnosticActionPlanKind,
-  DiagnosticActionPlanReadiness,
-  DiagnosticActionRuntimeBoundaryKind,
-  DiagnosticActionRuntimeIntentKind,
   DiagnosticRepairAffordance,
+  DiagnosticSuggestion,
+  DiagnosticSuggestionActionKind,
+  DiagnosticSuggestionActionTarget,
+  DiagnosticSuggestionActionTargetKind,
+  DiagnosticSuggestionKind,
+  DiagnosticSuggestionValueTypeSource,
 } from '../diagnostic-action/action.js';
 import type {
   SemanticProjectAnalysisKind,
@@ -1965,7 +1964,7 @@ export interface SemanticObservationIssueRow {
   readonly message: string;
   readonly subjectName: string | null;
   readonly source: SemanticSourceReference | null;
-  readonly relatedSources: readonly SemanticSourceReference[];
+  readonly relatedInformation: readonly SemanticDiagnosticRelatedInformation[];
   readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
   readonly handles?: {
     readonly productHandle: ProductHandle;
@@ -2190,6 +2189,9 @@ export interface SemanticDiagnosticSubject {
 export interface SemanticDiagnosticRelatedInformation {
   readonly message: string;
   readonly source: SemanticSourceReference | null;
+  /** Semantic relationship to the owning diagnostic when the producer has a typed relation vocabulary. */
+  readonly relationKind?: string | null;
+  /** Diagnostic code carried by a related diagnostic, distinct from `relationKind`. */
   readonly code?: string | null;
   readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
 }
@@ -3638,78 +3640,22 @@ export type SemanticTemplateCursorDiagnosticAuthority =
   | 'framework-error-code';
 
 export type SemanticTemplateCursorSuggestionKind =
-  | 'use-callable-expression'
-  | 'register-resource'
-  | 'register-di-service'
-  | 'remove-duplicate-binding-behavior'
-  | 'guard-nullish-expression'
-  | 'avoid-observed-increment'
-  | 'resolve-runtime-boundary'
-  | 'use-repeatable-source'
-  | 'use-safe-destructuring-source'
-  | 'fix-expression-syntax'
-  | 'fix-template-syntax'
-  | 'register-framework-capability'
-  | 'fix-router-instruction'
-  | 'declare-explicit-member'
-  | 'declare-assignable-member'
-  | 'declare-scope-slot-type'
-  | 'replace-any-owner'
-  | 'align-assignment-type'
-  | 'make-source-writable'
-  | 'use-assignable-expression'
-  | 'make-method-trackable'
-  | 'configure-node-observer'
-  | 'inspect-owner-type';
+  DiagnosticSuggestionKind | `${DiagnosticSuggestionKind}`;
 
 export type SemanticTemplateCursorSuggestionActionKind =
-  | 'register-resource'
-  | 'register-service'
-  | 'declare-runtime-boundary'
-  | 'declare-member'
-  | 'declare-scope-slot'
-  | 'replace-owner-type'
-  | 'change-member-type'
-  | 'change-member-mutability'
-  | 'configure-observer'
-  | 'rewrite-expression'
-  | 'rewrite-template-syntax'
-  | 'register-framework-capability'
-  | 'inspect-owner-type';
+  DiagnosticSuggestionActionKind | `${DiagnosticSuggestionActionKind}`;
 
 export type SemanticTemplateCursorSuggestionValueTypeSource =
-  | 'selected-member'
-  | 'binding-target'
-  | 'assignment-target';
+  DiagnosticSuggestionValueTypeSource | `${DiagnosticSuggestionValueTypeSource}`;
 
 export type SemanticTemplateCursorSuggestionActionTargetKind =
-  | 'resource'
-  | 'service'
-  | 'runtime-boundary'
-  | 'observer-config'
-  | 'framework-capability'
-  | 'owner-type'
-  | 'scope-slot'
-  | 'expression'
-  | 'template-syntax';
+  DiagnosticSuggestionActionTargetKind | `${DiagnosticSuggestionActionTargetKind}`;
 
-export interface SemanticTemplateCursorSuggestionActionTargetRow {
-  readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
-  readonly source: SemanticSourceReference | null;
-  readonly memberName: string | null;
-  readonly typeDisplay: string | null;
-}
+export type SemanticTemplateCursorSuggestionActionTargetRow =
+  DiagnosticSuggestionActionTarget<SemanticSourceReference>;
 
-export interface SemanticTemplateCursorSuggestionRow {
-  readonly suggestionKind: SemanticTemplateCursorSuggestionKind;
-  readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
-  readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
-  readonly summary: string;
-  readonly targetMemberName: string | null;
-  readonly ownerTypeDisplay: string | null;
-  readonly valueTypeDisplay: string | null;
-  readonly valueTypeSource: SemanticTemplateCursorSuggestionValueTypeSource | null;
-}
+export type SemanticTemplateCursorSuggestionRow =
+  DiagnosticSuggestion<SemanticSourceReference>;
 
 export interface SemanticTemplateCursorDiagnosticRow {
   readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
@@ -3937,16 +3883,24 @@ export interface SemanticTemplateCodeActionEditRow {
   readonly newText: string;
 }
 
+export type SemanticTemplateCodeActionEdits = readonly [
+  SemanticTemplateCodeActionEditRow,
+  ...SemanticTemplateCodeActionEditRow[],
+];
+
+export type SemanticTemplateCodeActionDiagnostics = readonly [
+  SemanticTemplateDiagnosticRow,
+  ...SemanticTemplateDiagnosticRow[],
+];
+
 export interface SemanticTemplateCodeActionRow {
   readonly title: string;
   readonly kind: 'quickfix';
-  readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
-  readonly suggestionKind: SemanticTemplateCursorSuggestionKind;
-  readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
-  readonly diagnosticSource: SemanticSourceReference | null;
-  readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
+  /** Source diagnostic facts this plan addresses; equivalent-plan dedupe merges rather than discards this evidence. */
+  readonly diagnostics: SemanticTemplateCodeActionDiagnostics;
+  /** Diagnostic-stage repair classification. Plan availability is proven by the non-empty `edits` tuple below. */
   readonly repair: DiagnosticRepairAffordance;
-  readonly edits: readonly SemanticTemplateCodeActionEditRow[];
+  readonly edits: SemanticTemplateCodeActionEdits;
   readonly isPreferred: boolean;
 }
 

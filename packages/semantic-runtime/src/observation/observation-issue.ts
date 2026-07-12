@@ -37,6 +37,21 @@ export type ObservationIssueField =
   | 'subjectName'
   | 'relatedSources';
 
+export const enum ObservationIssueRelatedSourceKind {
+  /** Declaration of the method whose body is not observed through an ordinary template call. */
+  SubjectDeclaration = 'subject-declaration',
+  /** Method-body state read that will not be collected as a dependency of the template binding. */
+  HiddenStateRead = 'hidden-state-read',
+}
+
+export class ObservationIssueRelatedSource {
+  constructor(
+    readonly kind: ObservationIssueRelatedSourceKind,
+    readonly addressHandle: AddressHandle,
+    readonly displayName: string | null,
+  ) {}
+}
+
 /** Source-backed observation failure corresponding to an Aurelia runtime boundary. */
 export class ObservationIssue {
   constructor(
@@ -56,8 +71,8 @@ export class ObservationIssue {
     readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     /** Source address for the authored site that triggered the issue. */
     readonly sourceAddressHandle: AddressHandle | null,
-    /** Additional source addresses that explain the issue without taking over its primary diagnostic location. */
-    readonly relatedSourceAddressHandles: readonly AddressHandle[] = [],
+    /** Typed source evidence that explains the issue without taking over its primary diagnostic location. */
+    readonly relatedSources: readonly ObservationIssueRelatedSource[] = [],
     /** Issue-specific subject name, such as the called method, when repair planning needs a compact handle. */
     readonly subjectName: string | null = null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */

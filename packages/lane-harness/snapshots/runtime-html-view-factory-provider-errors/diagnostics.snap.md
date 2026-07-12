@@ -101,17 +101,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "runtime-controller:AUR0755"
         ],
+        "phase": "controller-activation",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -125,11 +126,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "range": {
         "end": {
           "character": 54,
-          "line": 12
+          "line": 15
         },
         "start": {
           "character": 33,
-          "line": 12
+          "line": 15
         }
       },
       "rangeText": "resolve(IViewFactory)",
@@ -154,7 +155,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:0:template:runtime-controller-framework-error:framework-error-code:AUR0755:src/runtime-html-view-factory-provider-errors-app.ts:336:357:runtime-controller:AUR0755",
+        "groupKey": "row:diagnostic:0:template:runtime-controller-framework-error:framework-error-code:AUR0755:src/runtime-html-view-factory-provider-errors-app.ts:514:535:runtime-controller:AUR0755",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -172,17 +173,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "runtime-controller:AUR0755"
               ],
+              "phase": "controller-activation",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -206,8 +208,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 357,
-              "start": 336
+              "end": 535,
+              "start": 514
             },
             "spanText": "resolve(IViewFactory)",
             "status": "primary",
@@ -215,7 +217,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:template:runtime-controller-framework-error:framework-error-code:AUR0755:src/runtime-html-view-factory-provider-errors-app.ts:336:357:runtime-controller:AUR0755"
+          "rowId": "diagnostic:0:template:runtime-controller-framework-error:framework-error-code:AUR0755:src/runtime-html-view-factory-provider-errors-app.ts:514:535:runtime-controller:AUR0755"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -244,17 +246,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "runtime-controller:AUR0755"
           ],
+          "phase": "controller-activation",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -278,8 +281,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 357,
-          "start": 336
+          "end": 535,
+          "start": 514
         },
         "spanText": "resolve(IViewFactory)",
         "status": "canonical",
@@ -310,17 +313,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "runtime-controller:AUR0755"
             ],
+            "phase": "controller-activation",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -344,8 +348,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 357,
-            "start": 336
+            "end": 535,
+            "start": 514
           },
           "spanText": "resolve(IViewFactory)",
           "status": "primary",

@@ -127,7 +127,10 @@ static type surfaces rather than hydrated runtime values.
   and the produced local slot target instead of only surfacing later `product.*` reads. Template method calls stay
   framework-shaped: undecorated source-method bodies are not proxy-observed by `astEvaluate`, so binding-owned observed
   dependencies should expose the called method and its receiver/argument reads, while only `@computed`/`@astTrack`
-  methods add method-declaration dependency rows. Direct collection-read owners such as `items.map(...)` can point back
+  methods add method-declaration dependency rows. The corresponding observation issue keeps declaration and hidden-read
+  sources as typed `subject-declaration` and `hidden-state-read` relations. API/AppDiagnostics projections preserve
+  those relation kinds and explanations; consumers must not recover their meaning from related-source array position.
+  Direct collection-read owners such as `items.map(...)` can point back
   to the `items` slot/member, while temporary
   call-result owners such as `items.map(...).join(...)` remain open instead of pretending the temporary array has a
   declaration source. Collection-read rows and callback-body descent intentionally use separate framework sets

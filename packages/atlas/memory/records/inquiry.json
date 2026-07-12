@@ -921,10 +921,12 @@
         "inquiry"
       ],
       "summary": "Diagnostic suggestions project repair affordance, while LSP CodeActions are only edit-backed plans that have proven a concrete source operation.",
-      "rationale": "Diagnostics can know what semantic object is under pressure without knowing how to safely mutate source. The mixed-form owner-type canary proved that treating every declare-member suggestion as a view-model insertion corrupts the repair target: the diagnostic pointed at an owner type, while the old code action edited the component class. The shared repair affordance keeps action kind, plan kind, change domain, readiness, target-source coverage, actionability, edit-plan state, and application kind visible to IDE/MCP consumers, but an edit-backed CodeAction must opt in only after a target-specific planner has produced validated edits. Framework-capability registration now follows that same rule: code actions spend source-plan TypeScript operations only when the demand, local package/import evidence, app-root configuration chain, imports, and .register(...) insertion point are all proven.",
+      "rationale": "Diagnostics can know what semantic object is under pressure without knowing how to safely mutate source. The mixed-form owner-type canary proved that treating every declare-member suggestion as a view-model insertion corrupts the repair target: the diagnostic pointed at an owner type, while the old code action edited the component class. The shared repair affordance keeps action kind, plan kind, change domain, readiness, target-source coverage, and actionability visible to IDE/MCP consumers, but deliberately carries no edit-plan state or application cardinality. An edit-backed CodeAction exists only after a target-specific planner has produced a non-empty set of validated edits, and it retains every source diagnostic addressed by an equivalent plan. Framework-capability registration follows that same rule: code actions spend source-plan TypeScript operations only when the demand, local package/import evidence, app-root configuration chain, imports, and .register(...) insertion point are all proven.",
       "guidance": [
         "Use diagnosticRepairAffordanceForSuggestion(...) for diagnostic actionability/readiness instead of rebuilding suggestion-to-guidance maps in LSP, VS Code, MCP, or contract scripts.",
-        "Keep diagnostic rows, repair affordance, and edit plans as separate stages. A diagnostic remains guided/manual/none; an emitted CodeAction proves editPlanState=available and applicationKind=single-edit.",
+        "Keep diagnostic rows, repair affordance, and edit plans as separate stages. A diagnostic remains guided or manual; an emitted CodeAction proves plan availability with its non-empty edit tuple. Do not put edit-plan state or synthetic single-edit/fix-all cardinality on the diagnostic-stage affordance.",
+        "Classify repair affordance from the closed suggestion actionKind vocabulary. suggestionKind may refine a plan family, but must not become a second dispatcher with a silent inspection default; resource registration, service registration, observer configuration, and true runtime-boundary declaration have different change domains.",
+        "Equivalent code-action plans must merge their non-empty source diagnostic sets rather than selecting one representative diagnostic. LSP CodeAction data should carry those semantic rows intact so later fields are not lost through another copied adapter contract.",
         "TemplateCodeActions should return only edit-backed quick fixes. Owner-type, scope-slot, syntax, runtime-policy, or substrate repairs stay as guided/manual diagnostic affordance until a dedicated planner exists.",
         "Framework-capability registration is edit-backed only when source-plan can map a closed framework registration admission to exact TypeScript import edits and a proven app-root .register(...) insertion before .app(...). Otherwise keep the diagnostic guidance and return no CodeAction.",
         "Scope existing .register(...) duplicate suppression to the target app-root receiver chain, not the whole source file; multiple app roots in one entrypoint can need independent capability admissions.",
@@ -933,7 +935,7 @@
         "StateDefaultConfiguration and AppTask admissions require project-specific state/lifecycle intent and should remain guidance-only unless a dedicated planner supplies those facts.",
         "Do not use actionability to mean an edit exists, and reserve any future autofix/fix-all vocabulary for batch or on-save-safe operations.",
         "Do not reintroduce a local suggestion.actionKind === declare-member shortcut for source edits. The planner must prove the target kind and exact source operation it edits.",
-        "When attaching LSP diagnostics to CodeActions, match the semantic diagnostic identity and exact source range so Problems-panel quick fixes preserve which diagnostic the edit resolves."
+        "When attaching LSP diagnostics to CodeActions, match every contributing semantic diagnostic by authority, kind, and exact source range so Problems-panel quick fixes preserve which diagnostics the edit resolves."
       ],
       "anchors": [
         {
@@ -953,6 +955,12 @@
           "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
           "symbolName": "registerFrameworkCapabilityCodeActionForDiagnostic",
           "summary": "Planner gate that routes framework capability diagnostics through demand evidence, source-plan admission source, and app-root configuration-chain source operations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/contracts.ts",
+          "symbolName": "SemanticTemplateCodeActionRow",
+          "summary": "Public edit-backed plan contract with non-empty source diagnostics and edit tuples."
         },
         {
           "kind": "source",
@@ -983,7 +991,7 @@
         }
       ],
       "createdAt": "2026-07-08",
-      "updatedAt": "2026-07-08"
+      "updatedAt": "2026-07-12"
     }
   ]
 }

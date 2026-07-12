@@ -33,17 +33,39 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "router-configuration-registration",
+        "relatedInformation": [
+          {
+            "message": "The first RouterConfiguration registration in this application container tree is here.",
+            "source": {
+              "anchor": {
+                "kind": "source-file-address",
+                "label": "src/main.ts",
+                "path": "src/main.ts",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-configuration-root-ownership"
+              },
+              "end": 2852,
+              "kind": "source-span-address",
+              "label": "src/main.ts@2787..2852",
+              "path": "src/main.ts",
+              "role": "range",
+              "sourceFileRole": "app-source",
+              "sourceWorkspaceKey": "router-configuration-root-ownership",
+              "start": 2787
+            }
+          }
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -171,17 +193,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "router-configuration-registration",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -247,17 +270,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "frameworkRawErrorAuthority": null,
                 "missingInput": null,
                 "missingInputs": [],
+                "phase": "resource-registration",
+                "relatedInformation": [],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
                   "actionability": "manual",
-                  "applicationKind": "none",
                   "changeDomain": "inspection",
-                  "editPlanState": "not-available",
                   "planKind": "manual-inspection",
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
+                "sourceRole": null,
                 "subject": null,
                 "taxonomy": {
                   "actionability": null,
@@ -320,17 +344,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "frameworkRawErrorAuthority": null,
                 "missingInput": null,
                 "missingInputs": [],
+                "phase": "resource-registration",
+                "relatedInformation": [],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
                   "actionability": "manual",
-                  "applicationKind": "none",
                   "changeDomain": "inspection",
-                  "editPlanState": "not-available",
                   "planKind": "manual-inspection",
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
+                "sourceRole": null,
                 "subject": null,
                 "taxonomy": {
                   "actionability": null,
@@ -393,17 +418,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
                 "frameworkRawErrorAuthority": null,
                 "missingInput": null,
                 "missingInputs": [],
+                "phase": "resource-registration",
+                "relatedInformation": [],
                 "relatedQueryKind": "resource-issues",
                 "repairAffordance": {
                   "actionKind": "inspect-type-surface",
                   "actionability": "manual",
-                  "applicationKind": "none",
                   "changeDomain": "inspection",
-                  "editPlanState": "not-available",
                   "planKind": "manual-inspection",
                   "readiness": "inspection-required",
                   "targetSourceCoverage": "not-applicable"
                 },
+                "sourceRole": null,
                 "subject": null,
                 "taxonomy": {
                   "actionability": null,
@@ -475,17 +501,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "resource-registration",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -543,17 +570,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "resource-registration",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -611,17 +639,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "resource-registration",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -679,17 +708,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "router-configuration-registration",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -757,17 +787,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "router-configuration-registration",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

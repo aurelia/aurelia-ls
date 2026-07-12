@@ -31,29 +31,32 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "diagnosticKind": "no-available-viewport-agent",
         "frameworkErrorCode": "AUR3174",
         "frameworkRawErrorAuthority": null,
-        "missingInput": null,
-        "missingInputs": [],
+        "missingInput": "router:no-available-viewport-agent",
+        "missingInputs": [
+          "router:no-available-viewport-agent"
+        ],
+        "phase": "route-tree-viewport-resolution",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
-          "actionKind": "inspect-type-surface",
-          "actionability": "manual",
-          "applicationKind": "none",
-          "changeDomain": "inspection",
-          "editPlanState": "not-available",
-          "planKind": "manual-inspection",
-          "readiness": "inspection-required",
-          "targetSourceCoverage": "not-applicable"
+          "actionKind": "rewrite-router-instruction",
+          "actionability": "guided",
+          "changeDomain": "app-source",
+          "planKind": "router-instruction-rewrite",
+          "readiness": "ready-to-plan",
+          "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
-          "actionability": "manual",
+          "actionability": "guided",
           "category": "project",
           "confidence": null,
           "impact": "blocking",
           "schema": "diagnostics-taxonomy/1"
         }
       },
-      "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'.",
+      "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'.",
       "range": {
         "end": {
           "character": 23,
@@ -86,11 +89,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "contextualCount": 0,
     "groups": [
       {
-        "groupKey": "row:diagnostic:0:router:no-available-viewport-agent:framework-error-code:AUR3174:src/router-viewport-resolution-errors-app.html:14:23:no-missing-input",
+        "groupKey": "row:diagnostic:0:router:no-available-viewport-agent:framework-error-code:AUR3174:src/router-viewport-resolution-errors-app.html:14:23:router:no-available-viewport-agent",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
-            "actionability": "manual",
+            "actionability": "guided",
             "anomaly": null,
             "category": "project",
             "code": "AUR3174",
@@ -100,19 +103,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "diagnosticKind": "no-available-viewport-agent",
               "frameworkErrorCode": "AUR3174",
               "frameworkRawErrorAuthority": null,
-              "missingInput": null,
-              "missingInputs": [],
+              "missingInput": "router:no-available-viewport-agent",
+              "missingInputs": [
+                "router:no-available-viewport-agent"
+              ],
+              "phase": "route-tree-viewport-resolution",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
-                "actionKind": "inspect-type-surface",
-                "actionability": "manual",
-                "applicationKind": "none",
-                "changeDomain": "inspection",
-                "editPlanState": "not-available",
-                "planKind": "manual-inspection",
-                "readiness": "inspection-required",
-                "targetSourceCoverage": "not-applicable"
+                "actionKind": "rewrite-router-instruction",
+                "actionability": "guided",
+                "changeDomain": "app-source",
+                "planKind": "router-instruction-rewrite",
+                "readiness": "ready-to-plan",
+                "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -128,10 +134,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               {
                 "code": "AUR3174",
                 "kind": "no-available-viewport-agent",
-                "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'."
+                "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'."
               }
             ],
-            "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'.",
+            "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'.",
             "related": [],
             "severity": "error",
             "source": "semantic-runtime:router",
@@ -145,7 +151,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:0:router:no-available-viewport-agent:framework-error-code:AUR3174:src/router-viewport-resolution-errors-app.html:14:23:no-missing-input"
+          "rowId": "diagnostic:0:router:no-available-viewport-agent:framework-error-code:AUR3174:src/router-viewport-resolution-errors-app.html:14:23:router:no-available-viewport-agent"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -160,7 +166,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
     "diagnosticCount": 1,
     "diagnostics": [
       {
-        "actionability": "manual",
+        "actionability": "guided",
         "anomaly": null,
         "category": "project",
         "code": "AUR3174",
@@ -170,19 +176,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "diagnosticKind": "no-available-viewport-agent",
           "frameworkErrorCode": "AUR3174",
           "frameworkRawErrorAuthority": null,
-          "missingInput": null,
-          "missingInputs": [],
+          "missingInput": "router:no-available-viewport-agent",
+          "missingInputs": [
+            "router:no-available-viewport-agent"
+          ],
+          "phase": "route-tree-viewport-resolution",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
-            "actionKind": "inspect-type-surface",
-            "actionability": "manual",
-            "applicationKind": "none",
-            "changeDomain": "inspection",
-            "editPlanState": "not-available",
-            "planKind": "manual-inspection",
-            "readiness": "inspection-required",
-            "targetSourceCoverage": "not-applicable"
+            "actionKind": "rewrite-router-instruction",
+            "actionability": "guided",
+            "changeDomain": "app-source",
+            "planKind": "router-instruction-rewrite",
+            "readiness": "ready-to-plan",
+            "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -198,10 +207,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           {
             "code": "AUR3174",
             "kind": "no-available-viewport-agent",
-            "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'."
+            "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'."
           }
         ],
-        "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'.",
+        "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'.",
         "related": [],
         "severity": "error",
         "source": "semantic-runtime:router",
@@ -224,7 +233,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "diagnosticCount": 1,
       "diagnostics": [
         {
-          "actionability": "manual",
+          "actionability": "guided",
           "anomaly": null,
           "category": "project",
           "code": "AUR3174",
@@ -234,19 +243,22 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "diagnosticKind": "no-available-viewport-agent",
             "frameworkErrorCode": "AUR3174",
             "frameworkRawErrorAuthority": null,
-            "missingInput": null,
-            "missingInputs": [],
+            "missingInput": "router:no-available-viewport-agent",
+            "missingInputs": [
+              "router:no-available-viewport-agent"
+            ],
+            "phase": "route-tree-viewport-resolution",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
-              "actionKind": "inspect-type-surface",
-              "actionability": "manual",
-              "applicationKind": "none",
-              "changeDomain": "inspection",
-              "editPlanState": "not-available",
-              "planKind": "manual-inspection",
-              "readiness": "inspection-required",
-              "targetSourceCoverage": "not-applicable"
+              "actionKind": "rewrite-router-instruction",
+              "actionability": "guided",
+              "changeDomain": "app-source",
+              "planKind": "router-instruction-rewrite",
+              "readiness": "ready-to-plan",
+              "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -262,10 +274,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             {
               "code": "AUR3174",
               "kind": "no-available-viewport-agent",
-              "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'."
+              "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'."
             }
           ],
-          "message": "Failed to resolve ViewportRequest(viewport:'side',component:'SideOnlyRoute') from RouteContext 'RouterViewportResolutionErrorsApp'.",
+          "message": "Failed to resolve ViewportRequest(viewport:'side',component:'side-only-route') from RouteContext 'router-viewport-resolution-errors-app'.",
           "related": [],
           "severity": "error",
           "source": "semantic-runtime:router",

@@ -97,6 +97,16 @@ describe("app diagnostic fact conservation", () => {
     expect(detailed?.handles?.identityHandle).toBe(owning?.handles?.identityHandle);
     expect(detailed?.handles?.sourceAddressHandle).toBe(owning?.handles?.sourceAddressHandle);
     expect(detailed?.handles?.relatedSourceAddressHandles).toEqual(owning?.handles?.relatedSourceAddressHandles);
+    expect(detailed?.relatedInformation).toEqual(owning?.relatedInformation);
+    expect(compact?.relatedInformation).toEqual(owning?.relatedInformation);
+    expect(owning?.relatedInformation.map((related) => related.relationKind)).toEqual([
+      "subject-declaration",
+      "hidden-state-read",
+    ]);
+    expect(owning?.relatedInformation.map((related) => related.message)).toEqual([
+      "Method 'ordinaryCounterLabel' is declared here.",
+      "Method-body read 'this.ordinaryCounter.value' is not observed through the template call.",
+    ]);
     expect(compact?.handles).toBeUndefined();
   });
 

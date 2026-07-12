@@ -58,19 +58,17 @@ assert.equal(answer.value.rows.length, 1, 'Expected one code action at the missi
 const action = answer.value.rows[0];
 assert.equal(action.title, "Declare member 'titel' on GuidanceTruthCanaryApp");
 assert.equal(action.kind, 'quickfix');
-assert.equal(action.diagnosticKind, 'missing-expression-member');
-assert.equal(action.suggestionKind, 'declare-explicit-member');
-assert.equal(action.actionKind, 'declare-member');
-assert.equal(action.diagnosticSource?.path?.replace(/\\/g, '/'), 'src/guidance-truth-canary-app.html');
-assert.equal(action.diagnosticSource?.start, titleTypoStart);
-assert.deepEqual(action.repair, diagnosticRepairAffordanceForSuggestion({
-  suggestionKind: action.suggestionKind,
-  actionKind: action.actionKind,
-  actionTarget: action.actionTarget,
-}, { editPlanState: 'available' }));
+assert.equal(action.diagnostics.length, 1, 'The edit plan should retain its source diagnostic evidence.');
+const actionDiagnostic = action.diagnostics[0];
+assert.equal(actionDiagnostic.diagnosticKind, 'missing-expression-member');
+assert.equal(actionDiagnostic.suggestion?.suggestionKind, 'declare-explicit-member');
+assert.equal(actionDiagnostic.suggestion?.actionKind, 'declare-member');
+assert.equal(actionDiagnostic.source?.path?.replace(/\\/g, '/'), 'src/guidance-truth-canary-app.html');
+assert.equal(actionDiagnostic.source?.start, titleTypoStart);
+assert.deepEqual(action.repair, diagnosticRepairAffordanceForSuggestion(actionDiagnostic.suggestion));
 assert.equal(action.repair.actionability, 'guided');
-assert.equal(action.repair.editPlanState, 'available');
-assert.equal(action.repair.applicationKind, 'single-edit');
+assert.equal('editPlanState' in action.repair, false, 'Repair affordance must not claim edit-plan availability.');
+assert.equal('applicationKind' in action.repair, false, 'The code-action row and non-empty edits carry application state.');
 assert.equal(action.isPreferred, true);
 assert.equal(action.edits.length, 1, 'Expected a single view-model insertion edit.');
 
@@ -133,9 +131,8 @@ assert.equal(routerRegistration.outcome, 'hit');
 assert.equal(routerRegistration.value.rows.length, 1, 'Expected one router registration code action.');
 const routerAction = routerRegistration.value.rows[0];
 assert.equal(routerAction.title, 'Register RouterConfiguration for router.default-resources');
-assert.equal(routerAction.repair.editPlanState, 'available');
-assert.equal(routerAction.repair.readiness, 'ready-to-plan');
-assert.equal(routerAction.repair.applicationKind, 'single-edit');
+assert.equal(routerAction.diagnostics.length, 1);
+assert.equal(routerAction.repair.readiness, 'source-edit-policy-open');
 assert.equal(routerAction.edits.length, 1, 'Router fixture already imports RouterConfiguration, so only the chain edit should remain.');
 assertFrameworkRegistrationEdit(routerAction.edits[0], unregisteredPluginMainPath, '', '.register(RouterConfiguration)\n  ');
 
@@ -158,9 +155,8 @@ assert.equal(shorthandRegistration.outcome, 'hit');
 assert.equal(shorthandRegistration.value.rows.length, 1, 'Expected one shorthand registration code action.');
 const shorthandAction = shorthandRegistration.value.rows[0];
 assert.equal(shorthandAction.title, 'Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax');
-assert.equal(shorthandAction.repair.editPlanState, 'available');
-assert.equal(shorthandAction.repair.readiness, 'ready-to-plan');
-assert.equal(shorthandAction.repair.applicationKind, 'single-edit');
+assert.equal(shorthandAction.diagnostics.length, 1);
+assert.equal(shorthandAction.repair.readiness, 'source-edit-policy-open');
 assert.equal(shorthandAction.edits.length, 2, 'Shorthand syntax should add an import and a register-chain edit.');
 assertFrameworkRegistrationEdit(
   shorthandAction.edits[0],

@@ -35,17 +35,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "runtime-renderer:AUR0820"
         ],
+        "phase": "render",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -106,17 +107,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "runtime-renderer:AUR0820"
               ],
+              "phase": "render",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -178,17 +180,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "runtime-renderer:AUR0820"
           ],
+          "phase": "render",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -244,17 +247,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "runtime-renderer:AUR0820"
             ],
+            "phase": "render",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

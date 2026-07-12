@@ -33,17 +33,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -80,17 +81,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -127,17 +129,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -174,17 +177,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -221,17 +225,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -268,17 +273,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -315,17 +321,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -362,17 +369,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "typescript-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -411,17 +419,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "runtime-controller:AUR0507"
         ],
+        "phase": "observer-setup",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -460,17 +469,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "runtime-controller:AUR0508"
         ],
+        "phase": "observer-setup",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -507,17 +517,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -554,17 +565,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -601,17 +613,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-metadata",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -648,17 +661,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-metadata",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -695,17 +709,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -742,17 +757,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "watch-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -789,17 +805,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "custom-element-definition",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -838,17 +855,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0717"
         ],
+        "phase": "compiled-template",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -885,17 +903,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "custom-element-definition",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -932,17 +951,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "bindable-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -979,17 +999,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "bindable-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1026,17 +1047,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "bindable-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1073,17 +1095,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "bindable-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1120,17 +1143,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "process-content-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1167,17 +1191,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "process-content-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1214,17 +1239,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "children-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1261,17 +1287,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "slotted-decorator",
+        "relatedInformation": [],
         "relatedQueryKind": "resource-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -1330,17 +1357,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1397,17 +1425,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1464,17 +1493,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1531,17 +1561,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1598,17 +1629,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1665,17 +1697,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1732,17 +1765,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1799,17 +1833,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "typescript-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1868,17 +1903,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "runtime-controller:AUR0507"
               ],
+              "phase": "observer-setup",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1937,17 +1973,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "runtime-controller:AUR0508"
               ],
+              "phase": "observer-setup",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2004,17 +2041,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2071,17 +2109,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2138,17 +2177,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-metadata",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2205,17 +2245,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-metadata",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2272,17 +2313,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2339,17 +2381,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "watch-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2406,17 +2449,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "custom-element-definition",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2475,17 +2519,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0717"
               ],
+              "phase": "compiled-template",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2542,17 +2587,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "custom-element-definition",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2609,17 +2655,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "bindable-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2676,17 +2723,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "bindable-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2743,17 +2791,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "bindable-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2810,17 +2859,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "bindable-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2877,17 +2927,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "process-content-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -2944,17 +2995,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "process-content-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -3011,17 +3063,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "children-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -3078,17 +3131,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "slotted-decorator",
+              "relatedInformation": [],
               "relatedQueryKind": "resource-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -3148,17 +3202,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3202,17 +3257,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3256,17 +3312,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3310,17 +3367,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3364,17 +3422,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3418,17 +3477,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3472,17 +3532,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3526,17 +3587,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "typescript-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3580,17 +3642,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3634,17 +3697,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3688,17 +3752,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "custom-element-definition",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3744,17 +3809,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0717"
           ],
+          "phase": "compiled-template",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3798,17 +3864,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "custom-element-definition",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3852,17 +3919,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "bindable-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3906,17 +3974,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "bindable-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -3960,17 +4029,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "bindable-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4014,17 +4084,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "bindable-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4070,17 +4141,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "runtime-controller:AUR0507"
           ],
+          "phase": "observer-setup",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4126,17 +4198,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "runtime-controller:AUR0508"
           ],
+          "phase": "observer-setup",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4180,17 +4253,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "process-content-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4234,17 +4308,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "process-content-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4288,17 +4363,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "children-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4342,17 +4418,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "slotted-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4396,17 +4473,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4450,17 +4528,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-decorator",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4504,17 +4583,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-metadata",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4558,17 +4638,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "watch-metadata",
+          "relatedInformation": [],
           "relatedQueryKind": "resource-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -4622,17 +4703,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4676,17 +4758,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4730,17 +4813,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4784,17 +4868,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4838,17 +4923,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4892,17 +4978,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -4946,17 +5033,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5000,17 +5088,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "typescript-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5056,17 +5145,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "runtime-controller:AUR0507"
             ],
+            "phase": "observer-setup",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5112,17 +5202,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "runtime-controller:AUR0508"
             ],
+            "phase": "observer-setup",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5166,17 +5257,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5220,17 +5312,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5274,17 +5367,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-metadata",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5328,17 +5422,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-metadata",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5382,17 +5477,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5436,17 +5532,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "watch-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5490,17 +5587,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "custom-element-definition",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5546,17 +5644,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0717"
             ],
+            "phase": "compiled-template",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5600,17 +5699,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "custom-element-definition",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5654,17 +5754,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "bindable-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5708,17 +5809,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "bindable-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5762,17 +5864,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "bindable-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5816,17 +5919,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "bindable-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5870,17 +5974,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "process-content-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5924,17 +6029,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "process-content-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -5978,17 +6084,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "children-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -6032,17 +6139,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "slotted-decorator",
+            "relatedInformation": [],
             "relatedQueryKind": "resource-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

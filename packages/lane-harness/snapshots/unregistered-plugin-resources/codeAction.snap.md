@@ -62,17 +62,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router.default-resources"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "register-framework-capability",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "framework-capability-registration",
           "readiness": "source-edit-policy-open",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -109,42 +110,103 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "command": null,
       "data": {
         "semanticRuntime": {
-          "actionKind": "register-framework-capability",
-          "actionTarget": {
-            "memberName": "router.default-resources",
-            "source": {
-              "anchor": {
-                "kind": "source-file-address",
-                "label": "src/unregistered-plugin-resources-app.html",
-                "path": "src/unregistered-plugin-resources-app.html",
-                "sourceFileRole": "template",
-                "sourceWorkspaceKey": "unregistered-plugin-resources"
-              },
-              "end": 21,
-              "kind": "source-span-address",
-              "label": "src/unregistered-plugin-resources-app.html@8..21",
-              "path": "src/unregistered-plugin-resources-app.html",
-              "role": "range",
-              "sourceFileRole": "template",
-              "sourceWorkspaceKey": "unregistered-plugin-resources",
-              "start": 8
-            },
-            "targetKind": "framework-capability",
-            "typeDisplay": "@aurelia/router"
-          },
-          "diagnosticKind": "framework-capability-not-registered",
           "queryKind": "template-code-actions",
           "repairAffordance": {
             "actionKind": "register-framework-capability",
             "actionability": "guided",
-            "applicationKind": "single-edit",
             "changeDomain": "app-source",
-            "editPlanState": "available",
             "planKind": "framework-capability-registration",
-            "readiness": "ready-to-plan",
+            "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "suggestionKind": "register-framework-capability"
+          "sourceDiagnostics": [
+            {
+              "diagnosticAuthority": "semantic-authoring-policy",
+              "diagnosticKind": "framework-capability-not-registered",
+              "frameworkErrorCode": null,
+              "missingInput": "router.default-resources",
+              "missingInputs": [
+                "router.default-resources"
+              ],
+              "ownerTypeDisplay": null,
+              "ownerTypeOrigin": null,
+              "ownerTypeShapeKind": null,
+              "phase": null,
+              "selectedMemberName": "load",
+              "severity": "error",
+              "siteKind": "attribute-name",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-plugin-resources-app.html",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources"
+                },
+                "end": 21,
+                "kind": "source-span-address",
+                "label": "src/unregistered-plugin-resources-app.html@8..21",
+                "path": "src/unregistered-plugin-resources-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-plugin-resources",
+                "start": 8
+              },
+              "suggestion": {
+                "actionKind": "register-framework-capability",
+                "actionTarget": {
+                  "memberName": "router.default-resources",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/unregistered-plugin-resources-app.html",
+                      "path": "src/unregistered-plugin-resources-app.html",
+                      "sourceFileRole": "template",
+                      "sourceWorkspaceKey": "unregistered-plugin-resources"
+                    },
+                    "end": 21,
+                    "kind": "source-span-address",
+                    "label": "src/unregistered-plugin-resources-app.html@8..21",
+                    "path": "src/unregistered-plugin-resources-app.html",
+                    "role": "range",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "unregistered-plugin-resources",
+                    "start": 8
+                  },
+                  "targetKind": "framework-capability",
+                  "typeDisplay": "@aurelia/router"
+                },
+                "ownerTypeDisplay": null,
+                "suggestionKind": "register-framework-capability",
+                "summary": "Register RouterConfiguration or DefaultResources from @aurelia/router with the app container. Availability evidence was found for @aurelia/router.",
+                "targetMemberName": "router.default-resources",
+                "valueTypeDisplay": "@aurelia/router",
+                "valueTypeSource": null
+              },
+              "summary": "Attribute \"load\" uses Aurelia router default resources, but that framework capability is not registered in this app world.",
+              "template": {
+                "compilationLane": "app-runtime",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/unregistered-plugin-resources-app.html",
+                    "path": "src/unregistered-plugin-resources-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "unregistered-plugin-resources"
+                  },
+                  "end": 356,
+                  "kind": "source-span-address",
+                  "label": "src/unregistered-plugin-resources-app.html@0..356",
+                  "path": "src/unregistered-plugin-resources-app.html",
+                  "role": "value",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-plugin-resources",
+                  "start": 0
+                }
+              },
+              "valueSiteKind": null
+            }
+          ]
         }
       },
       "diagnosticCount": 1,
@@ -190,7 +252,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "line": 16
             }
           },
-          "source": "changes",
+          "source": "documentChanges",
           "status": "ok"
         }
       ]

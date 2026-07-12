@@ -52,17 +52,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "expression-member-owner-type:index-signature-only"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "declare-missing-member",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "source-member-declaration",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": {
           "source": {
             "end": 497,

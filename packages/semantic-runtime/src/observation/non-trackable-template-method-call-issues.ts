@@ -29,6 +29,8 @@ import { readTrackableMethodDependency } from './trackable-method-dependency-rec
 import {
   ObservationIssueKind,
   ObservationIssuePhase,
+  ObservationIssueRelatedSource,
+  ObservationIssueRelatedSourceKind,
 } from './observation-issue.js';
 import {
   ObservationIssuePublication,
@@ -156,9 +158,19 @@ export class NonTrackableTemplateMethodCallIssueMaterializer {
       call.dependency.memberNameSpanEnd,
     );
     const relatedSources = [
-      call.dependency.observedMemberSourceAddressHandle,
-      ...call.bodyReads.map((read) => read.sourceAddressHandle),
-    ].filter((addressHandle): addressHandle is AddressHandle => addressHandle != null);
+      ...(call.dependency.observedMemberSourceAddressHandle == null
+        ? []
+        : [new ObservationIssueRelatedSource(
+          ObservationIssueRelatedSourceKind.SubjectDeclaration,
+          call.dependency.observedMemberSourceAddressHandle,
+          call.methodName,
+        )]),
+      ...call.bodyReads.map((read) => new ObservationIssueRelatedSource(
+        ObservationIssueRelatedSourceKind.HiddenStateRead,
+        read.sourceAddressHandle,
+        read.sourceName,
+      )),
+    ];
     const publication = this.publisher.publish(
       local,
       project.projectKey,

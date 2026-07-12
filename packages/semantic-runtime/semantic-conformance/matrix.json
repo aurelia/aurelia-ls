@@ -97,7 +97,7 @@
       "domainAxis": "diagnostics",
       "coverageIntent": "boundary-contract",
       "assertionKind": "query-expectations",
-      "requirement": "App diagnostics preserve the owning observation phase, subject identity, source, and repair intent while retaining an exact handle route at detailed projection.",
+      "requirement": "App diagnostics preserve the owning observation phase, subject identity, source, repair intent, and typed declaration/read explanations while retaining an exact handle route at detailed projection.",
       "sourceFile": "src/trackable-method-dependencies-app.html",
       "expectations": [
         {
@@ -113,6 +113,32 @@
                 "suggestion.actionKind": "configure-observer"
               },
               "source": { "marker": "${ordinaryCounterLabel()}", "token": "ordinaryCounterLabel" },
+              "count": 1
+            },
+            {
+              "rowPath": "value.rows[].relatedInformation",
+              "fields": {
+                "relationKind": "subject-declaration",
+                "message": "Method 'ordinaryCounterLabel' is declared here."
+              },
+              "source": {
+                "sourceFile": "src/trackable-method-dependencies-app.ts",
+                "marker": "ordinaryCounterLabel(): string",
+                "token": "ordinaryCounterLabel"
+              },
+              "count": 1
+            },
+            {
+              "rowPath": "value.rows[].relatedInformation",
+              "fields": {
+                "relationKind": "hidden-state-read",
+                "message": "Method-body read 'this.ordinaryCounter.value' is not observed through the template call."
+              },
+              "source": {
+                "sourceFile": "src/trackable-method-dependencies-app.ts",
+                "marker": "return this.ordinaryCounter.value",
+                "token": "this.ordinaryCounter.value"
+              },
               "count": 1
             }
           ]
@@ -132,6 +158,32 @@
                 "suggestion.actionKind": "configure-observer"
               },
               "source": { "marker": "${ordinaryCounterLabel()}", "token": "ordinaryCounterLabel" },
+              "count": 1
+            },
+            {
+              "rowPath": "value.rows[].relatedInformation",
+              "fields": {
+                "relationKind": "subject-declaration",
+                "message": "Method 'ordinaryCounterLabel' is declared here."
+              },
+              "source": {
+                "sourceFile": "src/trackable-method-dependencies-app.ts",
+                "marker": "ordinaryCounterLabel(): string",
+                "token": "ordinaryCounterLabel"
+              },
+              "count": 1
+            },
+            {
+              "rowPath": "value.rows[].relatedInformation",
+              "fields": {
+                "relationKind": "hidden-state-read",
+                "message": "Method-body read 'this.ordinaryCounter.value' is not observed through the template call."
+              },
+              "source": {
+                "sourceFile": "src/trackable-method-dependencies-app.ts",
+                "marker": "return this.ordinaryCounter.value",
+                "token": "this.ordinaryCounter.value"
+              },
               "count": 1
             }
           ]
@@ -6609,7 +6661,7 @@
       "coverageIntent": "regression-contract",
       "assertionKind": "query-expectations",
       "sourceFile": "src/guidance-truth-canary-app.html",
-      "requirement": "Template code actions distinguish safe edit plans from diagnostic-only suggestions and preserve exact edit provenance, oldText, and action affordance metadata.",
+      "requirement": "Template code actions preserve every source diagnostic behind an equivalent plan, keep diagnostic-stage repair classification distinct from plan existence, and expose a non-empty, oldText-validated edit tuple.",
       "cases": [
         {
           "id": "declare-member-action-row",
@@ -6626,15 +6678,16 @@
                   "fields": {
                     "title": "Declare member 'titel' on GuidanceTruthCanaryApp",
                     "kind": "quickfix",
-                    "diagnosticKind": "missing-expression-member",
-                    "suggestionKind": "declare-explicit-member",
-                    "actionKind": "declare-member",
+                    "diagnostics.0.diagnosticKind": "missing-expression-member",
+                    "diagnostics.0.suggestion.suggestionKind": "declare-explicit-member",
+                    "diagnostics.0.suggestion.actionKind": "declare-member",
+                    "repair.actionKind": "declare-missing-member",
+                    "repair.planKind": "source-member-declaration",
+                    "repair.readiness": "ready-to-plan",
                     "repair.actionability": "guided",
-                    "repair.editPlanState": "available",
-                    "repair.applicationKind": "single-edit",
                     "isPreferred": true
                   },
-                  "sourceField": "diagnosticSource",
+                  "sourceField": "diagnostics.0.source",
                   "source": { "marker": "${titel}", "token": "titel" }
                 }
               ]
@@ -6725,15 +6778,16 @@
                   "rowPath": "value.rows",
                   "fields": {
                     "title": "Register RouterConfiguration for router.default-resources",
-                    "diagnosticKind": "framework-capability-not-registered",
-                    "suggestionKind": "register-framework-capability",
-                    "actionKind": "register-framework-capability",
-                    "actionTarget.memberName": "router.default-resources",
-                    "actionTarget.typeDisplay": "@aurelia/router",
+                    "diagnostics.0.diagnosticKind": "framework-capability-not-registered",
+                    "diagnostics.0.suggestion.suggestionKind": "register-framework-capability",
+                    "diagnostics.0.suggestion.actionKind": "register-framework-capability",
+                    "diagnostics.0.suggestion.actionTarget.memberName": "router.default-resources",
+                    "diagnostics.0.suggestion.actionTarget.typeDisplay": "@aurelia/router",
                     "repair.planKind": "framework-capability-registration",
-                    "repair.editPlanState": "available"
+                    "repair.readiness": "source-edit-policy-open",
+                    "repair.actionability": "guided"
                   },
-                  "sourceField": "diagnosticSource",
+                  "sourceField": "diagnostics.0.source",
                   "source": { "marker": "load=\"orders\"", "token": "load=\"orders\"" }
                 },
                 {
@@ -6771,15 +6825,16 @@
                   "rowPath": "value.rows",
                   "fields": {
                     "title": "Register ShortHandBindingSyntax for runtime-html.short-hand-binding-syntax",
-                    "diagnosticKind": "framework-capability-not-registered",
-                    "suggestionKind": "register-framework-capability",
-                    "actionKind": "register-framework-capability",
-                    "actionTarget.memberName": "runtime-html.short-hand-binding-syntax",
-                    "actionTarget.typeDisplay": "@aurelia/runtime-html",
+                    "diagnostics.0.diagnosticKind": "framework-capability-not-registered",
+                    "diagnostics.0.suggestion.suggestionKind": "register-framework-capability",
+                    "diagnostics.0.suggestion.actionKind": "register-framework-capability",
+                    "diagnostics.0.suggestion.actionTarget.memberName": "runtime-html.short-hand-binding-syntax",
+                    "diagnostics.0.suggestion.actionTarget.typeDisplay": "@aurelia/runtime-html",
                     "repair.planKind": "framework-capability-registration",
-                    "repair.editPlanState": "available"
+                    "repair.readiness": "source-edit-policy-open",
+                    "repair.actionability": "guided"
                   },
-                  "sourceField": "diagnosticSource",
+                  "sourceField": "diagnostics.0.source",
                   "source": { "marker": ":value=\"value\"", "token": ":value=\"value\"" }
                 },
                 {

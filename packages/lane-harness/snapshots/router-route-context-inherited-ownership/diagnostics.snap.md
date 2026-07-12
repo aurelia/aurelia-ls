@@ -33,17 +33,59 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "route-context-parameter-read-ownership",
+        "relatedInformation": [
+          {
+            "message": "Routed component 'account-route' inherits this RouteContext parameter read.",
+            "source": {
+              "anchor": {
+                "kind": "source-file-address",
+                "label": "src/router-route-context-inherited-ownership-app.ts",
+                "path": "src/router-route-context-inherited-ownership-app.ts",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+              },
+              "end": 508,
+              "kind": "source-span-address",
+              "label": "src/router-route-context-inherited-ownership-app.ts@496..508",
+              "path": "src/router-route-context-inherited-ownership-app.ts",
+              "role": "range",
+              "sourceFileRole": "app-source",
+              "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+              "start": 496
+            }
+          },
+          {
+            "message": "Routed component 'project-route' inherits this RouteContext parameter read.",
+            "source": {
+              "anchor": {
+                "kind": "source-file-address",
+                "label": "src/router-route-context-inherited-ownership-app.ts",
+                "path": "src/router-route-context-inherited-ownership-app.ts",
+                "sourceFileRole": "app-source",
+                "sourceWorkspaceKey": "router-route-context-inherited-ownership"
+              },
+              "end": 608,
+              "kind": "source-span-address",
+              "label": "src/router-route-context-inherited-ownership-app.ts@596..608",
+              "path": "src/router-route-context-inherited-ownership-app.ts",
+              "role": "range",
+              "sourceFileRole": "app-source",
+              "sourceWorkspaceKey": "router-route-context-inherited-ownership",
+              "start": 596
+            }
+          }
+        ],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -137,17 +179,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "route-context-parameter-read-ownership",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -234,17 +277,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "route-context-parameter-read-ownership",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -325,17 +369,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "route-context-parameter-read-ownership",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

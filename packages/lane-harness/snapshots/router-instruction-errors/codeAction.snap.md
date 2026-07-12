@@ -52,17 +52,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router:instruction-no-fallback"
         ],
+        "phase": "route-recognition",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "rewrite-router-instruction",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "router-instruction-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",

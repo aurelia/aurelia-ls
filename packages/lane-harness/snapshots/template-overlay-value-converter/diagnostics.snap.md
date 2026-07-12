@@ -35,17 +35,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "typescript:TS2345"
         ],
+        "phase": "semantic",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": {
           "source": {
             "end": 94,
@@ -118,17 +119,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "typescript:TS2345"
               ],
+              "phase": "semantic",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": {
                 "source": {
                   "end": 94,
@@ -210,17 +212,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "typescript:TS2345"
           ],
+          "phase": "semantic",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": {
             "source": {
               "end": 94,
@@ -288,17 +291,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "typescript:TS2345"
             ],
+            "phase": "semantic",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": {
               "source": {
                 "end": 94,

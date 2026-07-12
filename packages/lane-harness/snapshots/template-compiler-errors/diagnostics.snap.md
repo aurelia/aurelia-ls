@@ -35,17 +35,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0723"
         ],
+        "phase": "binding-command-lowering",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -84,17 +85,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0720"
         ],
+        "phase": "attribute-classification",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -133,17 +135,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0721"
         ],
+        "phase": "attribute-classification",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -182,17 +185,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0706"
         ],
+        "phase": "compiled-template",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -231,17 +235,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0717"
         ],
+        "phase": "compiled-template",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -280,17 +285,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0707"
         ],
+        "phase": "binding-command-lowering",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -329,17 +335,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0704"
         ],
+        "phase": "compiled-template",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -352,15 +359,15 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "message": "Aurelia template compiler AUR0704 rejects this template syntax: Template compilation error: Invalid command \".trigger\" for <let>. Use .bind or remove the command.",
       "range": {
         "end": {
-          "character": 27,
+          "character": 17,
           "line": 6
         },
         "start": {
-          "character": 5,
+          "character": 10,
           "line": 6
         }
       },
-      "rangeText": "item.trigger=\"enabled\"",
+      "rangeText": "trigger",
       "relatedInformation": [],
       "severity": "error",
       "source": "aurelia"
@@ -378,17 +385,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0713"
         ],
+        "phase": "attribute-classification",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -427,17 +435,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "template-compiler:AUR0713"
         ],
+        "phase": "attribute-classification",
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "rewrite-template-syntax",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "template-syntax-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -498,17 +507,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0723"
               ],
+              "phase": "binding-command-lowering",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -567,17 +577,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0720"
               ],
+              "phase": "attribute-classification",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -636,17 +647,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0721"
               ],
+              "phase": "attribute-classification",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -705,17 +717,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0706"
               ],
+              "phase": "compiled-template",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -774,17 +787,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0717"
               ],
+              "phase": "compiled-template",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -843,17 +857,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0707"
               ],
+              "phase": "binding-command-lowering",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -894,7 +909,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "subject": null
       },
       {
-        "groupKey": "row:diagnostic:4:template:template-compiler-error:framework-error-code:AUR0704:src/template-compiler-errors-app.html:397:419:template-compiler:AUR0704",
+        "groupKey": "row:diagnostic:4:template:template-compiler-error:framework-error-code:AUR0704:src/template-compiler-errors-app.html:402:409:template-compiler:AUR0704",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -912,17 +927,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0704"
               ],
+              "phase": "compiled-template",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -946,16 +962,16 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "severity": "error",
             "source": "semantic-runtime:template",
             "span": {
-              "end": 419,
-              "start": 397
+              "end": 409,
+              "start": 402
             },
-            "spanText": "item.trigger=\"enabled\"",
+            "spanText": "trigger",
             "status": "primary",
             "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:4:template:template-compiler-error:framework-error-code:AUR0704:src/template-compiler-errors-app.html:397:419:template-compiler:AUR0704"
+          "rowId": "diagnostic:4:template:template-compiler-error:framework-error-code:AUR0704:src/template-compiler-errors-app.html:402:409:template-compiler:AUR0704"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -981,17 +997,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0713"
               ],
+              "phase": "attribute-classification",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1050,17 +1067,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "template-compiler:AUR0713"
               ],
+              "phase": "attribute-classification",
+              "relatedInformation": [],
               "relatedQueryKind": "template-diagnostics",
               "repairAffordance": {
                 "actionKind": "rewrite-template-syntax",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "template-syntax-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -1122,17 +1140,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0721"
           ],
+          "phase": "attribute-classification",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1178,17 +1197,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0706"
           ],
+          "phase": "compiled-template",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1234,17 +1254,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0717"
           ],
+          "phase": "compiled-template",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1290,17 +1311,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0707"
           ],
+          "phase": "binding-command-lowering",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1346,17 +1368,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0704"
           ],
+          "phase": "compiled-template",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1380,10 +1403,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
-          "end": 419,
-          "start": 397
+          "end": 409,
+          "start": 402
         },
-        "spanText": "item.trigger=\"enabled\"",
+        "spanText": "trigger",
         "status": "canonical",
         "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
       },
@@ -1402,17 +1425,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0713"
           ],
+          "phase": "attribute-classification",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1458,17 +1482,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0723"
           ],
+          "phase": "binding-command-lowering",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1514,17 +1539,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0713"
           ],
+          "phase": "attribute-classification",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1570,17 +1596,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "template-compiler:AUR0720"
           ],
+          "phase": "attribute-classification",
+          "relatedInformation": [],
           "relatedQueryKind": "template-diagnostics",
           "repairAffordance": {
             "actionKind": "rewrite-template-syntax",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "template-syntax-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -1636,17 +1663,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0723"
             ],
+            "phase": "binding-command-lowering",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1692,17 +1720,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0720"
             ],
+            "phase": "attribute-classification",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1748,17 +1777,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0721"
             ],
+            "phase": "attribute-classification",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1804,17 +1834,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0706"
             ],
+            "phase": "compiled-template",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1860,17 +1891,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0717"
             ],
+            "phase": "compiled-template",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1916,17 +1948,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0707"
             ],
+            "phase": "binding-command-lowering",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -1972,17 +2005,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0704"
             ],
+            "phase": "compiled-template",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -2006,10 +2040,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "severity": "error",
           "source": "semantic-runtime:template",
           "span": {
-            "end": 419,
-            "start": 397
+            "end": 409,
+            "start": 402
           },
-          "spanText": "item.trigger=\"enabled\"",
+          "spanText": "trigger",
           "status": "primary",
           "uri": "fixtures://pressure/template-compiler-errors/src/template-compiler-errors-app.html"
         },
@@ -2028,17 +2062,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0713"
             ],
+            "phase": "attribute-classification",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -2084,17 +2119,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "template-compiler:AUR0713"
             ],
+            "phase": "attribute-classification",
+            "relatedInformation": [],
             "relatedQueryKind": "template-diagnostics",
             "repairAffordance": {
               "actionKind": "rewrite-template-syntax",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "template-syntax-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -2160,303 +2196,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 6,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0711",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0711",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0711",
-        "missingInputs": [
-          "template-compiler:AUR0711"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\"..",
-      "range": {
-        "end": {
-          "character": 25,
-          "line": 2
-        },
-        "start": {
-          "character": 4,
-          "line": 2
-        }
-      },
-      "rangeText": "<bindable></bindable>",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0710",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0710",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0710",
-        "missingInputs": [
-          "template-compiler:AUR0710"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>..",
-      "range": {
-        "end": {
-          "character": 41,
-          "line": 4
-        },
-        "start": {
-          "character": 6,
-          "line": 4
-        }
-      },
-      "rangeText": "<bindable name=\"nested\"></bindable>",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0712",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0712",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0712",
-        "missingInputs": [
-          "template-compiler:AUR0712"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none)..",
-      "range": {
-        "end": {
-          "character": 38,
-          "line": 7
-        },
-        "start": {
-          "character": 4,
-          "line": 7
-        }
-      },
-      "rangeText": "<bindable name=\"title\"></bindable>",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0712",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0712",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0712",
-        "missingInputs": [
-          "template-compiler:AUR0712"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label..",
-      "range": {
-        "end": {
-          "character": 56,
-          "line": 8
-        },
-        "start": {
-          "character": 4,
-          "line": 8
-        }
-      },
-      "rangeText": "<bindable name=\"other\" attribute=\"label\"></bindable>",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0715",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0715",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0715",
-        "missingInputs": [
-          "template-compiler:AUR0715"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\"..",
-      "range": {
-        "end": {
-          "character": 32,
-          "line": 10
-        },
-        "start": {
-          "character": 12,
-          "line": 10
-        }
-      },
-      "rangeText": "as-custom-element=\"\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    },
-    {
-      "anomaly": null,
-      "code": "AUR0716",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0716",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0716",
-        "missingInputs": [
-          "template-compiler:AUR0716"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe..",
-      "range": {
-        "end": {
-          "character": 47,
-          "line": 14
-        },
-        "start": {
-          "character": 12,
-          "line": 14
-        }
-      },
-      "rangeText": "as-custom-element=\"duplicate-child\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
 }
@@ -2471,765 +2212,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:5:template:template-compiler-error:framework-error-code:AUR0711:src/local-bindable-probe.html:63:84:template-compiler:AUR0711",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0711",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0711",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0711",
-              "missingInputs": [
-                "template-compiler:AUR0711"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0711",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\".."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\"..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 84,
-              "start": 63
-            },
-            "spanText": "<bindable></bindable>",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:5:template:template-compiler-error:framework-error-code:AUR0711:src/local-bindable-probe.html:63:84:template-compiler:AUR0711"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0710:src/local-bindable-probe.html:101:136:template-compiler:AUR0710",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0710",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0710",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0710",
-              "missingInputs": [
-                "template-compiler:AUR0710"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0710",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 136,
-              "start": 101
-            },
-            "spanText": "<bindable name=\"nested\"></bindable>",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0710:src/local-bindable-probe.html:101:136:template-compiler:AUR0710"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:1:template:template-compiler-error:framework-error-code:AUR0712:src/local-bindable-probe.html:209:243:template-compiler:AUR0712",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0712",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0712",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0712",
-              "missingInputs": [
-                "template-compiler:AUR0712"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0712",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none).."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none)..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 243,
-              "start": 209
-            },
-            "spanText": "<bindable name=\"title\"></bindable>",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:1:template:template-compiler-error:framework-error-code:AUR0712:src/local-bindable-probe.html:209:243:template-compiler:AUR0712"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:2:template:template-compiler-error:framework-error-code:AUR0712:src/local-bindable-probe.html:248:300:template-compiler:AUR0712",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0712",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0712",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0712",
-              "missingInputs": [
-                "template-compiler:AUR0712"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0712",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 300,
-              "start": 248
-            },
-            "spanText": "<bindable name=\"other\" attribute=\"label\"></bindable>",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:2:template:template-compiler-error:framework-error-code:AUR0712:src/local-bindable-probe.html:248:300:template-compiler:AUR0712"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:3:template:template-compiler-error:framework-error-code:AUR0715:src/local-bindable-probe.html:327:347:template-compiler:AUR0715",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0715",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0715",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0715",
-              "missingInputs": [
-                "template-compiler:AUR0715"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0715",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\".."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\"..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 347,
-              "start": 327
-            },
-            "spanText": "as-custom-element=\"\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:3:template:template-compiler-error:framework-error-code:AUR0715:src/local-bindable-probe.html:327:347:template-compiler:AUR0715"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      },
-      {
-        "groupKey": "row:diagnostic:4:template:template-compiler-error:framework-error-code:AUR0716:src/local-bindable-probe.html:450:485:template-compiler:AUR0716",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0716",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0716",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0716",
-              "missingInputs": [
-                "template-compiler:AUR0716"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-bindable-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0716",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 485,
-              "start": 450
-            },
-            "spanText": "as-custom-element=\"duplicate-child\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:4:template:template-compiler-error:framework-error-code:AUR0716:src/local-bindable-probe.html:450:485:template-compiler:AUR0716"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 6,
-    "rawRowCount": 6
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 6,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0710",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0710",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0710",
-          "missingInputs": [
-            "template-compiler:AUR0710"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0710",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 136,
-          "start": 101
-        },
-        "spanText": "<bindable name=\"nested\"></bindable>",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0712",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0712",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0712",
-          "missingInputs": [
-            "template-compiler:AUR0712"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0712",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none).."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none)..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 243,
-          "start": 209
-        },
-        "spanText": "<bindable name=\"title\"></bindable>",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0712",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0712",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0712",
-          "missingInputs": [
-            "template-compiler:AUR0712"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0712",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 300,
-          "start": 248
-        },
-        "spanText": "<bindable name=\"other\" attribute=\"label\"></bindable>",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0715",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0715",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0715",
-          "missingInputs": [
-            "template-compiler:AUR0715"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0715",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\".."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\"..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 347,
-          "start": 327
-        },
-        "spanText": "as-custom-element=\"\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0716",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0716",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0716",
-          "missingInputs": [
-            "template-compiler:AUR0716"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0716",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 485,
-          "start": 450
-        },
-        "spanText": "as-custom-element=\"duplicate-child\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      },
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0711",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0711",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0711",
-          "missingInputs": [
-            "template-compiler:AUR0711"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-bindable-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0711",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\".."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\"..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 84,
-          "start": 63
-        },
-        "spanText": "<bindable></bindable>",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -3237,345 +2226,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 6,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0711",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0711",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0711",
-            "missingInputs": [
-              "template-compiler:AUR0711"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0711",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\".."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0711 rejects this template syntax: Template compilation error: the attribute 'property' is missing in <bindable> in local element \"bindable-child\"..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 84,
-            "start": 63
-          },
-          "spanText": "<bindable></bindable>",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0710",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0710",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0710",
-            "missingInputs": [
-              "template-compiler:AUR0710"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0710",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0710 rejects this template syntax: Template compilation error: bindable properties of local element \"bindable-child\" template needs to be defined directly under <template>..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 136,
-            "start": 101
-          },
-          "spanText": "<bindable name=\"nested\"></bindable>",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0712",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0712",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0712",
-            "missingInputs": [
-              "template-compiler:AUR0712"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0712",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none).."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: title, attribute: (none)..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 243,
-            "start": 209
-          },
-          "spanText": "<bindable name=\"title\"></bindable>",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0712",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0712",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0712",
-            "missingInputs": [
-              "template-compiler:AUR0712"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0712",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0712 rejects this template syntax: Template compilation error: Bindable property and attribute needs to be unique; found property: other, attribute: label..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 300,
-            "start": 248
-          },
-          "spanText": "<bindable name=\"other\" attribute=\"label\"></bindable>",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0715",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0715",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0715",
-            "missingInputs": [
-              "template-compiler:AUR0715"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0715",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\".."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0715 rejects this template syntax: Template compilation error: the value of \"as-custom-element\" attribute cannot be empty for local element in element \"local-bindable-probe\"..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 347,
-            "start": 327
-          },
-          "spanText": "as-custom-element=\"\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        },
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0716",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0716",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0716",
-            "missingInputs": [
-              "template-compiler:AUR0716"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-bindable-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0716",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0716 rejects this template syntax: Template compilation error: duplicate definition of the local template named \"duplicate-child\" in element local-bindable-probe..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 485,
-            "start": 450
-          },
-          "spanText": "as-custom-element=\"duplicate-child\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/local-bindable-probe.html"
@@ -3588,10 +2240,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 6,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 6,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -3610,58 +2262,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0709",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0709",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0709",
-        "missingInputs": [
-          "template-compiler:AUR0709"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\"..",
-      "range": {
-        "end": {
-          "character": 15,
-          "line": 4
-        },
-        "start": {
-          "character": 4,
-          "line": 2
-        }
-      },
-      "rangeText": "<template as-custom-element=\"nested-child\">\n      <p>Nested local child</p>\n    </template>",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/local-nested-probe.html"
 }
@@ -3676,140 +2278,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0709:src/local-nested-probe.html:23:114:template-compiler:AUR0709",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0709",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0709",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0709",
-              "missingInputs": [
-                "template-compiler:AUR0709"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-nested-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0709",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\".."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\"..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 114,
-              "start": 23
-            },
-            "spanText": "<template as-custom-element=\"nested-child\">\n      <p>Nested local child</p>\n    </template>",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-nested-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0709:src/local-nested-probe.html:23:114:template-compiler:AUR0709"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0709",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0709",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0709",
-          "missingInputs": [
-            "template-compiler:AUR0709"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-nested-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0709",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\".."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\"..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 114,
-          "start": 23
-        },
-        "spanText": "<template as-custom-element=\"nested-child\">\n      <p>Nested local child</p>\n    </template>",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-nested-probe.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -3817,65 +2292,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0709",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0709",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0709",
-            "missingInputs": [
-              "template-compiler:AUR0709"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-nested-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0709",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\".."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0709 rejects this template syntax: Template compilation error: local element template needs to be defined directly under root of element \"local-nested-probe\"..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 114,
-            "start": 23
-          },
-          "spanText": "<template as-custom-element=\"nested-child\">\n      <p>Nested local child</p>\n    </template>",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-nested-probe.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/local-nested-probe.html"
@@ -3888,10 +2306,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -3910,58 +2328,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0708",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0708",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0708",
-        "missingInputs": [
-          "template-compiler:AUR0708"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s)..",
-      "range": {
-        "end": {
-          "character": 0,
-          "line": 5
-        },
-        "start": {
-          "character": 0,
-          "line": 0
-        }
-      },
-      "rangeText": "<template>\n  <template as-custom-element=\"only-child\">\n    <p>Only local child</p>\n  </template>\n</template>\n",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/local-only-probe.html"
 }
@@ -3976,140 +2344,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0708:src/local-only-probe.html:0:109:template-compiler:AUR0708",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0708",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0708",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0708",
-              "missingInputs": [
-                "template-compiler:AUR0708"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-only-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0708",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s).."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s)..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 109,
-              "start": 0
-            },
-            "spanText": "<template>\n  <template as-custom-element=\"only-child\">\n    <p>Only local child</p>\n  </template>\n</template>\n",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-only-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0708:src/local-only-probe.html:0:109:template-compiler:AUR0708"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0708",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0708",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0708",
-          "missingInputs": [
-            "template-compiler:AUR0708"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-only-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0708",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s).."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s)..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 109,
-          "start": 0
-        },
-        "spanText": "<template>\n  <template as-custom-element=\"only-child\">\n    <p>Only local child</p>\n  </template>\n</template>\n",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-only-probe.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -4117,65 +2358,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0708",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0708",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0708",
-            "missingInputs": [
-              "template-compiler:AUR0708"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-only-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0708",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s).."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0708 rejects this template syntax: Template compilation error: the custom element \"local-only-probe\" does not have any content other than local template(s)..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 109,
-            "start": 0
-          },
-          "spanText": "<template>\n  <template as-custom-element=\"only-child\">\n    <p>Only local child</p>\n  </template>\n</template>\n",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-only-probe.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/local-only-probe.html"
@@ -4188,10 +2372,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -4210,58 +2394,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0701",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0701",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0701",
-        "missingInputs": [
-          "template-compiler:AUR0701"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template..",
-      "range": {
-        "end": {
-          "character": 46,
-          "line": 0
-        },
-        "start": {
-          "character": 10,
-          "line": 0
-        }
-      },
-      "rangeText": "as-custom-element=\"root-local-probe\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/local-root-probe.html"
 }
@@ -4276,140 +2410,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0701:src/local-root-probe.html:10:46:template-compiler:AUR0701",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0701",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0701",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0701",
-              "missingInputs": [
-                "template-compiler:AUR0701"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/local-root-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0701",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 46,
-              "start": 10
-            },
-            "spanText": "as-custom-element=\"root-local-probe\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/local-root-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0701:src/local-root-probe.html:10:46:template-compiler:AUR0701"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0701",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0701",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0701",
-          "missingInputs": [
-            "template-compiler:AUR0701"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/local-root-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0701",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 46,
-          "start": 10
-        },
-        "spanText": "as-custom-element=\"root-local-probe\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/local-root-probe.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -4417,65 +2424,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0701",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0701",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0701",
-            "missingInputs": [
-              "template-compiler:AUR0701"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/local-root-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0701",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0701 rejects this template syntax: Template compilation error in element \"local-root-probe\": the root <template> cannot be a local element template..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 46,
-            "start": 10
-          },
-          "spanText": "as-custom-element=\"root-local-probe\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/local-root-probe.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/local-root-probe.html"
@@ -4488,10 +2438,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -4510,58 +2460,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0702",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0702",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0702",
-        "missingInputs": [
-          "template-compiler:AUR0702"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
-      "range": {
-        "end": {
-          "character": 32,
-          "line": 0
-        },
-        "start": {
-          "character": 10,
-          "line": 0
-        }
-      },
-      "rangeText": "id=\"invalid-surrogate\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-invalid-attribute.html"
 }
@@ -4576,140 +2476,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0702:src/surrogate-invalid-attribute.html:10:32:template-compiler:AUR0702",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0702",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0702",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0702",
-              "missingInputs": [
-                "template-compiler:AUR0702"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/surrogate-invalid-attribute.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0702",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 32,
-              "start": 10
-            },
-            "spanText": "id=\"invalid-surrogate\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-invalid-attribute.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0702:src/surrogate-invalid-attribute.html:10:32:template-compiler:AUR0702"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0702",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0702",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0702",
-          "missingInputs": [
-            "template-compiler:AUR0702"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/surrogate-invalid-attribute.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0702",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 32,
-          "start": 10
-        },
-        "spanText": "id=\"invalid-surrogate\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-invalid-attribute.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -4717,65 +2490,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0702",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0702",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0702",
-            "missingInputs": [
-              "template-compiler:AUR0702"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/surrogate-invalid-attribute.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0702",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0702 rejects this template syntax: Template compilation error: attribute \"id\" is invalid on element surrogate..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 32,
-            "start": 10
-          },
-          "spanText": "id=\"invalid-surrogate\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-invalid-attribute.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-invalid-attribute.html"
@@ -4788,10 +2504,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```
@@ -4810,58 +2526,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 
 ```json
 {
-  "diagnosticCount": 1,
-  "diagnostics": [
-    {
-      "anomaly": null,
-      "code": "AUR0703",
-      "data": {
-        "diagnosticAuthority": "framework-error-code",
-        "diagnosticDomain": "template",
-        "diagnosticKind": "template-compiler-error",
-        "frameworkErrorCode": "AUR0703",
-        "frameworkRawErrorAuthority": null,
-        "missingInput": "template-compiler:AUR0703",
-        "missingInputs": [
-          "template-compiler:AUR0703"
-        ],
-        "relatedQueryKind": "template-diagnostics",
-        "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
-          "actionability": "guided",
-          "applicationKind": "none",
-          "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
-          "readiness": "ready-to-plan",
-          "targetSourceCoverage": "all"
-        },
-        "subject": null,
-        "taxonomy": {
-          "actionability": "guided",
-          "category": "template-syntax",
-          "confidence": null,
-          "impact": "blocking",
-          "schema": "diagnostics-taxonomy/1"
-        }
-      },
-      "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
-      "range": {
-        "end": {
-          "character": 27,
-          "line": 0
-        },
-        "start": {
-          "character": 10,
-          "line": 0
-        }
-      },
-      "rangeText": "if.bind=\"enabled\"",
-      "relatedInformation": [],
-      "severity": "error",
-      "source": "aurelia"
-    }
-  ],
+  "diagnosticCount": 0,
+  "diagnostics": [],
   "outcome": "published",
   "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-template-probe.html"
 }
@@ -4876,140 +2542,13 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "presentation": {
     "complete": true,
     "contextualCount": 0,
-    "groups": [
-      {
-        "groupKey": "row:diagnostic:0:template:template-compiler-error:framework-error-code:AUR0703:src/surrogate-template-probe.html:10:27:template-compiler:AUR0703",
-        "maxRawSeverity": "error",
-        "primary": {
-          "diagnostic": {
-            "actionability": "guided",
-            "anomaly": null,
-            "category": "template-syntax",
-            "code": "AUR0703",
-            "data": {
-              "diagnosticAuthority": "framework-error-code",
-              "diagnosticDomain": "template",
-              "diagnosticKind": "template-compiler-error",
-              "frameworkErrorCode": "AUR0703",
-              "frameworkRawErrorAuthority": null,
-              "missingInput": "template-compiler:AUR0703",
-              "missingInputs": [
-                "template-compiler:AUR0703"
-              ],
-              "relatedQueryKind": "template-diagnostics",
-              "repairAffordance": {
-                "actionKind": "rewrite-template-syntax",
-                "actionability": "guided",
-                "applicationKind": "none",
-                "changeDomain": "app-source",
-                "editPlanState": "not-available",
-                "planKind": "template-syntax-rewrite",
-                "readiness": "ready-to-plan",
-                "targetSourceCoverage": "all"
-              },
-              "subject": null,
-              "taxonomy": {
-                "actionability": null,
-                "category": null,
-                "confidence": null,
-                "impact": null,
-                "schema": null
-              }
-            },
-            "file": "src/surrogate-template-probe.html",
-            "impact": "blocking",
-            "issues": [
-              {
-                "code": "AUR0703",
-                "kind": "template-compiler-error",
-                "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate.."
-              }
-            ],
-            "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
-            "related": [],
-            "severity": "error",
-            "source": "semantic-runtime:template",
-            "span": {
-              "end": 27,
-              "start": 10
-            },
-            "spanText": "if.bind=\"enabled\"",
-            "status": "primary",
-            "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-template-probe.html"
-          },
-          "relation": null,
-          "role": "primary",
-          "rowId": "diagnostic:0:template:template-compiler-error:framework-error-code:AUR0703:src/surrogate-template-probe.html:10:27:template-compiler:AUR0703"
-        },
-        "primarySeverity": "error",
-        "rawRowCount": 1,
-        "related": [],
-        "subject": null
-      }
-    ],
-    "primaryCount": 1,
-    "rawRowCount": 1
+    "groups": [],
+    "primaryCount": 0,
+    "rawRowCount": 0
   },
   "raw": {
-    "diagnosticCount": 1,
-    "diagnostics": [
-      {
-        "actionability": "guided",
-        "anomaly": null,
-        "category": "template-syntax",
-        "code": "AUR0703",
-        "data": {
-          "diagnosticAuthority": "framework-error-code",
-          "diagnosticDomain": "template",
-          "diagnosticKind": "template-compiler-error",
-          "frameworkErrorCode": "AUR0703",
-          "frameworkRawErrorAuthority": null,
-          "missingInput": "template-compiler:AUR0703",
-          "missingInputs": [
-            "template-compiler:AUR0703"
-          ],
-          "relatedQueryKind": "template-diagnostics",
-          "repairAffordance": {
-            "actionKind": "rewrite-template-syntax",
-            "actionability": "guided",
-            "applicationKind": "none",
-            "changeDomain": "app-source",
-            "editPlanState": "not-available",
-            "planKind": "template-syntax-rewrite",
-            "readiness": "ready-to-plan",
-            "targetSourceCoverage": "all"
-          },
-          "subject": null,
-          "taxonomy": {
-            "actionability": null,
-            "category": null,
-            "confidence": null,
-            "impact": null,
-            "schema": null
-          }
-        },
-        "file": "src/surrogate-template-probe.html",
-        "impact": "blocking",
-        "issues": [
-          {
-            "code": "AUR0703",
-            "kind": "template-compiler-error",
-            "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate.."
-          }
-        ],
-        "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
-        "related": [],
-        "severity": "error",
-        "source": "semantic-runtime:template",
-        "span": {
-          "end": 27,
-          "start": 10
-        },
-        "spanText": "if.bind=\"enabled\"",
-        "status": "canonical",
-        "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-template-probe.html"
-      }
-    ]
+    "diagnosticCount": 0,
+    "diagnostics": []
   },
   "suppressed": {
     "diagnosticCount": 0,
@@ -5017,65 +2556,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   },
   "surfaces": {
     "lsp": {
-      "diagnosticCount": 1,
-      "diagnostics": [
-        {
-          "actionability": "guided",
-          "anomaly": null,
-          "category": "template-syntax",
-          "code": "AUR0703",
-          "data": {
-            "diagnosticAuthority": "framework-error-code",
-            "diagnosticDomain": "template",
-            "diagnosticKind": "template-compiler-error",
-            "frameworkErrorCode": "AUR0703",
-            "frameworkRawErrorAuthority": null,
-            "missingInput": "template-compiler:AUR0703",
-            "missingInputs": [
-              "template-compiler:AUR0703"
-            ],
-            "relatedQueryKind": "template-diagnostics",
-            "repairAffordance": {
-              "actionKind": "rewrite-template-syntax",
-              "actionability": "guided",
-              "applicationKind": "none",
-              "changeDomain": "app-source",
-              "editPlanState": "not-available",
-              "planKind": "template-syntax-rewrite",
-              "readiness": "ready-to-plan",
-              "targetSourceCoverage": "all"
-            },
-            "subject": null,
-            "taxonomy": {
-              "actionability": null,
-              "category": null,
-              "confidence": null,
-              "impact": null,
-              "schema": null
-            }
-          },
-          "file": "src/surrogate-template-probe.html",
-          "impact": "blocking",
-          "issues": [
-            {
-              "code": "AUR0703",
-              "kind": "template-compiler-error",
-              "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate.."
-            }
-          ],
-          "message": "Aurelia template compiler AUR0703 rejects this template syntax: Template compilation error: template controller \"if\" is invalid on element surrogate..",
-          "related": [],
-          "severity": "error",
-          "source": "semantic-runtime:template",
-          "span": {
-            "end": 27,
-            "start": 10
-          },
-          "spanText": "if.bind=\"enabled\"",
-          "status": "primary",
-          "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-template-probe.html"
-        }
-      ]
+      "diagnosticCount": 0,
+      "diagnostics": []
     }
   },
   "uri": "fixtures://pressure/template-compiler-errors/src/surrogate-template-probe.html"
@@ -5088,10 +2570,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 {
   "comparisonKey": "domain/kind/code/severity/text/message",
   "countsMatch": true,
-  "customLspSurfaceCount": 1,
+  "customLspSurfaceCount": 0,
   "customOnly": [],
   "lspOnly": [],
-  "lspPublishCount": 1,
+  "lspPublishCount": 0,
   "suppressedCount": 0
 }
 ```

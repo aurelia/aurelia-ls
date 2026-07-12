@@ -67,6 +67,7 @@ import {
   type SemanticTemplateCompilationRow,
   type SemanticTemplateCompletionResult,
   SemanticTemplateCodeActionEditKind,
+  type SemanticTemplateCodeActionEdits,
   type SemanticTemplateCodeActionEditRow,
   type SemanticTemplateCodeActionRow,
   type SemanticTemplateCodeActionsResult,
@@ -1435,12 +1436,8 @@ function declareViewModelMemberCodeActionForDiagnostic(
   return {
     title: `Declare member '${memberName}' on ${resource.compilation.definition.target.localName ?? resource.compilation.definition.name}`,
     kind: 'quickfix',
-    diagnosticKind: diagnostic.diagnosticKind,
-    suggestionKind: suggestion.suggestionKind,
-    actionKind: suggestion.actionKind,
-    diagnosticSource: semanticExactSourceReference(diagnostic.source),
-    actionTarget: suggestion.actionTarget,
-    repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
+    diagnostics: [diagnostic],
+    repair: diagnosticRepairAffordanceForSuggestion(suggestion),
     edits: [edit],
     isPreferred: true,
   };
@@ -1477,7 +1474,7 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
     return null;
   }
   const edits = frameworkRegistrationAdmissionEdits(store, emission, resource, admission);
-  if (edits.length === 0) {
+  if (edits == null) {
     return null;
   }
   const registrationLabel = admission.registrationExpressions
@@ -1488,12 +1485,8 @@ function registerFrameworkCapabilityCodeActionForDiagnostic(
   return {
     title: `Register ${registrationLabel} for ${demand.requiredCapability}`,
     kind: 'quickfix',
-    diagnosticKind: diagnostic.diagnosticKind,
-    suggestionKind: suggestion.suggestionKind,
-    actionKind: suggestion.actionKind,
-    diagnosticSource: semanticExactSourceReference(diagnostic.source),
-    actionTarget: suggestion.actionTarget,
-    repair: diagnosticRepairAffordanceForSuggestion(suggestion, { editPlanState: 'available' }),
+    diagnostics: [diagnostic],
+    repair: diagnosticRepairAffordanceForSuggestion(suggestion),
     edits,
     isPreferred: true,
   };
@@ -1533,15 +1526,15 @@ function frameworkRegistrationAdmissionEdits(
   emission: AureliaAppWorldProjectEmission,
   resource: TemplateResourceEmission,
   admission: AureliaFrameworkRegistrationAdmissionSource,
-): readonly SemanticTemplateCodeActionEditRow[] {
+): SemanticTemplateCodeActionEdits | null {
   const appStep = appRootStepForTemplateResource(emission, resource, ConfigurationStepKind.AureliaApp);
   const appSource = semanticExactSourceReference(describeAddress(store, appStep?.sourceAddressHandle ?? null));
   if (appSource?.path == null || appSource.start == null || appSource.end == null) {
-    return [];
+    return null;
   }
   const sourceFile = emission.typeSystem.readProgramSourceFileByPath(appSource.path);
   if (sourceFile == null) {
-    return [];
+    return null;
   }
   const importEdits = planTypeScriptImportSourceOperations(sourceFile, admission.entrypointImports);
   const registerEdit = planAureliaRegisterChainSourceOperation(sourceFile, {
@@ -1550,12 +1543,19 @@ function frameworkRegistrationAdmissionEdits(
     registrationExpressions: admission.registrationExpressions,
   });
   if (registerEdit == null) {
-    return [];
+    return null;
   }
-  return [
+  return nonEmptyTemplateCodeActionEdits([
     ...importEdits,
     registerEdit,
-  ].map(frameworkRegistrationAdmissionCodeActionEdit);
+  ].map(frameworkRegistrationAdmissionCodeActionEdit));
+}
+
+function nonEmptyTemplateCodeActionEdits(
+  edits: readonly SemanticTemplateCodeActionEditRow[],
+): SemanticTemplateCodeActionEdits | null {
+  const first = edits[0];
+  return first == null ? null : [first, ...edits.slice(1)];
 }
 
 function frameworkRegistrationAdmissionCodeActionEdit(
@@ -1765,23 +1765,86 @@ function lineIndentAt(text: string, offset: number): string {
 function uniqueTemplateCodeActionRows(
   rows: readonly SemanticTemplateCodeActionRow[],
 ): readonly SemanticTemplateCodeActionRow[] {
-  const seen = new Set<string>();
+  const indexes = new Map<string, number>();
   const unique: SemanticTemplateCodeActionRow[] = [];
   for (const row of rows) {
-    const key = [
-      row.title,
-      row.diagnosticSource?.path ?? '',
-      row.diagnosticSource?.start ?? '',
-      row.diagnosticSource?.end ?? '',
-      row.edits.map((edit) => `${edit.source?.path ?? ''}:${edit.source?.start ?? ''}:${edit.newText}`).join('|'),
-    ].join(':');
+    const key = templateCodeActionPlanKey(row);
+    const existingIndex = indexes.get(key);
+    if (existingIndex != null) {
+      const existing = unique[existingIndex]!;
+      unique[existingIndex] = {
+        ...existing,
+        diagnostics: uniqueTemplateCodeActionDiagnostics([
+          ...existing.diagnostics,
+          ...row.diagnostics,
+        ]),
+        isPreferred: existing.isPreferred && row.isPreferred,
+      };
+      continue;
+    }
+    indexes.set(key, unique.length);
+    unique.push(row);
+  }
+  return unique;
+}
+
+function templateCodeActionPlanKey(
+  row: SemanticTemplateCodeActionRow,
+): string {
+  return JSON.stringify([
+    row.title,
+    row.kind,
+    row.repair.actionKind,
+    row.repair.planKind,
+    row.repair.changeDomain,
+    row.repair.readiness,
+    row.repair.targetSourceCoverage,
+    row.edits.map((edit) => ({
+      editKind: edit.editKind,
+      path: edit.source?.path ?? null,
+      start: edit.source?.start ?? null,
+      end: edit.source?.end ?? null,
+      oldText: edit.oldText,
+      newText: edit.newText,
+    })),
+  ]);
+}
+
+function uniqueTemplateCodeActionDiagnostics(
+  diagnostics: readonly SemanticTemplateDiagnosticRow[],
+): [SemanticTemplateDiagnosticRow, ...SemanticTemplateDiagnosticRow[]] {
+  const seen = new Set<string>();
+  const unique: SemanticTemplateDiagnosticRow[] = [];
+  for (const diagnostic of diagnostics) {
+    const key = templateCodeActionDiagnosticKey(diagnostic);
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
-    unique.push(row);
+    unique.push(diagnostic);
   }
-  return unique;
+  return [unique[0]!, ...unique.slice(1)];
+}
+
+function templateCodeActionDiagnosticKey(
+  diagnostic: SemanticTemplateDiagnosticRow,
+): string {
+  const productHandle = diagnostic.handles?.semanticProductHandle;
+  if (productHandle != null) {
+    return `product:${productHandle}`;
+  }
+  return JSON.stringify([
+    diagnostic.diagnosticAuthority,
+    diagnostic.diagnosticKind,
+    diagnostic.frameworkErrorCode,
+    diagnostic.source?.path ?? null,
+    diagnostic.source?.start ?? null,
+    diagnostic.source?.end ?? null,
+    diagnostic.subject?.subjectKind ?? null,
+    diagnostic.subject?.subjectName ?? null,
+    diagnostic.suggestion?.suggestionKind ?? null,
+    diagnostic.suggestion?.actionKind ?? null,
+  ]);
 }
 
 function templateRenameUnavailable(

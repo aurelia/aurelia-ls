@@ -62,17 +62,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "expression-member:selected-member-missing"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "declare-missing-member",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "source-member-declaration",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": {
           "source": {
             "end": 11,
@@ -121,42 +122,124 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "command": null,
       "data": {
         "semanticRuntime": {
-          "actionKind": "declare-member",
-          "actionTarget": {
-            "memberName": "titel",
-            "source": {
-              "anchor": {
-                "kind": "source-file-address",
-                "label": "src/guidance-truth-canary-app.html",
-                "path": "src/guidance-truth-canary-app.html",
-                "sourceFileRole": "template",
-                "sourceWorkspaceKey": "guidance-truth-canaries"
-              },
-              "end": 11,
-              "kind": "source-span-address",
-              "label": "src/guidance-truth-canary-app.html@6..11",
-              "path": "src/guidance-truth-canary-app.html",
-              "role": "name",
-              "sourceFileRole": "template",
-              "sourceWorkspaceKey": "guidance-truth-canaries",
-              "start": 6
-            },
-            "targetKind": "expression",
-            "typeDisplay": null
-          },
-          "diagnosticKind": "missing-expression-member",
           "queryKind": "template-code-actions",
           "repairAffordance": {
             "actionKind": "declare-missing-member",
             "actionability": "guided",
-            "applicationKind": "single-edit",
             "changeDomain": "app-source",
-            "editPlanState": "available",
             "planKind": "source-member-declaration",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "suggestionKind": "declare-explicit-member"
+          "sourceDiagnostics": [
+            {
+              "diagnosticAuthority": "semantic-authoring-policy",
+              "diagnosticKind": "missing-expression-member",
+              "frameworkErrorCode": null,
+              "missingInput": "expression-member:selected-member-missing",
+              "missingInputs": [
+                "expression-member:selected-member-missing"
+              ],
+              "ownerTypeDisplay": null,
+              "ownerTypeOrigin": null,
+              "ownerTypeShapeKind": null,
+              "phase": null,
+              "selectedMemberName": "titel",
+              "severity": "error",
+              "siteKind": "expression",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/guidance-truth-canary-app.html",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries"
+                },
+                "end": 11,
+                "kind": "source-span-address",
+                "label": "src/guidance-truth-canary-app.html@6..11",
+                "path": "src/guidance-truth-canary-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "guidance-truth-canaries",
+                "start": 6
+              },
+              "subject": {
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/guidance-truth-canary-app.html",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries"
+                  },
+                  "end": 11,
+                  "kind": "source-span-address",
+                  "label": "src/guidance-truth-canary-app.html@6..11",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "role": "name",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries",
+                  "start": 6
+                },
+                "subjectKind": "template-expression",
+                "subjectName": null
+              },
+              "suggestion": {
+                "actionKind": "declare-member",
+                "actionTarget": {
+                  "memberName": "titel",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/guidance-truth-canary-app.html",
+                      "path": "src/guidance-truth-canary-app.html",
+                      "sourceFileRole": "template",
+                      "sourceWorkspaceKey": "guidance-truth-canaries"
+                    },
+                    "end": 11,
+                    "kind": "source-span-address",
+                    "label": "src/guidance-truth-canary-app.html@6..11",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "role": "name",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries",
+                    "start": 6
+                  },
+                  "targetKind": "expression",
+                  "typeDisplay": null
+                },
+                "ownerTypeDisplay": null,
+                "suggestionKind": "declare-explicit-member",
+                "summary": "Declare this member on the binding context or fix the expression name.",
+                "targetMemberName": "titel",
+                "valueTypeDisplay": null,
+                "valueTypeSource": null
+              },
+              "summary": "Template expression root \"titel\" is not available on the current binding scope.",
+              "template": {
+                "compilationLane": "app-runtime",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/guidance-truth-canary-app.html",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries"
+                  },
+                  "end": 173,
+                  "kind": "source-span-address",
+                  "label": "src/guidance-truth-canary-app.html@0..173",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "role": "value",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries",
+                  "start": 0
+                }
+              },
+              "valueSiteKind": "text-interpolation"
+            }
+          ]
         }
       },
       "diagnosticCount": 1,
@@ -195,11 +278,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "range": {
             "end": {
               "character": 43,
-              "line": 1
+              "line": 5
             },
             "start": {
               "character": 43,
-              "line": 1
+              "line": 5
             }
           },
           "source": "documentChanges",
@@ -222,7 +305,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
 diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
 --- a/src/guidance-truth-canary-app.ts
 +++ b/src/guidance-truth-canary-app.ts
-@@ -1,3 +1,4 @@
+@@ -1,7 +1,8 @@
+ import { customElement } from '@aurelia/runtime-html';
+ import template from './guidance-truth-canary-app.html';
+
+ @customElement({ name: 'guidance-truth-canary-app', template })
  export class GuidanceTruthCanaryApp {
    readonly title = 'Guidance truth canary';
 +  titel!: unknown;
@@ -276,17 +363,18 @@ diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
         "missingInputs": [
           "expression-global:not-admitted"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
-          "actionKind": "rewrite-template-syntax",
+          "actionKind": "rewrite-expression",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
-          "planKind": "template-syntax-rewrite",
+          "planKind": "template-expression-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": {
           "source": {
             "end": 52,
@@ -405,17 +493,18 @@ _No in-memory diff._
         "missingInputs": [
           "expression-member:selected-member-missing"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "declare-missing-member",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "source-member-declaration",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": {
           "source": {
             "end": 170,
@@ -464,42 +553,124 @@ _No in-memory diff._
       "command": null,
       "data": {
         "semanticRuntime": {
-          "actionKind": "declare-member",
-          "actionTarget": {
-            "memberName": "$ghostLocal",
-            "source": {
-              "anchor": {
-                "kind": "source-file-address",
-                "label": "src/guidance-truth-canary-app.html",
-                "path": "src/guidance-truth-canary-app.html",
-                "sourceFileRole": "template",
-                "sourceWorkspaceKey": "guidance-truth-canaries"
-              },
-              "end": 170,
-              "kind": "source-span-address",
-              "label": "src/guidance-truth-canary-app.html@159..170",
-              "path": "src/guidance-truth-canary-app.html",
-              "role": "name",
-              "sourceFileRole": "template",
-              "sourceWorkspaceKey": "guidance-truth-canaries",
-              "start": 159
-            },
-            "targetKind": "expression",
-            "typeDisplay": null
-          },
-          "diagnosticKind": "missing-expression-member",
           "queryKind": "template-code-actions",
           "repairAffordance": {
             "actionKind": "declare-missing-member",
             "actionability": "guided",
-            "applicationKind": "single-edit",
             "changeDomain": "app-source",
-            "editPlanState": "available",
             "planKind": "source-member-declaration",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
-          "suggestionKind": "declare-explicit-member"
+          "sourceDiagnostics": [
+            {
+              "diagnosticAuthority": "semantic-authoring-policy",
+              "diagnosticKind": "missing-expression-member",
+              "frameworkErrorCode": null,
+              "missingInput": "expression-member:selected-member-missing",
+              "missingInputs": [
+                "expression-member:selected-member-missing"
+              ],
+              "ownerTypeDisplay": null,
+              "ownerTypeOrigin": null,
+              "ownerTypeShapeKind": null,
+              "phase": null,
+              "selectedMemberName": "$ghostLocal",
+              "severity": "error",
+              "siteKind": "expression",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/guidance-truth-canary-app.html",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries"
+                },
+                "end": 170,
+                "kind": "source-span-address",
+                "label": "src/guidance-truth-canary-app.html@159..170",
+                "path": "src/guidance-truth-canary-app.html",
+                "role": "name",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "guidance-truth-canaries",
+                "start": 159
+              },
+              "subject": {
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/guidance-truth-canary-app.html",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries"
+                  },
+                  "end": 170,
+                  "kind": "source-span-address",
+                  "label": "src/guidance-truth-canary-app.html@159..170",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "role": "name",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries",
+                  "start": 159
+                },
+                "subjectKind": "template-expression",
+                "subjectName": null
+              },
+              "suggestion": {
+                "actionKind": "declare-member",
+                "actionTarget": {
+                  "memberName": "$ghostLocal",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/guidance-truth-canary-app.html",
+                      "path": "src/guidance-truth-canary-app.html",
+                      "sourceFileRole": "template",
+                      "sourceWorkspaceKey": "guidance-truth-canaries"
+                    },
+                    "end": 170,
+                    "kind": "source-span-address",
+                    "label": "src/guidance-truth-canary-app.html@159..170",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "role": "name",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries",
+                    "start": 159
+                  },
+                  "targetKind": "expression",
+                  "typeDisplay": null
+                },
+                "ownerTypeDisplay": null,
+                "suggestionKind": "declare-explicit-member",
+                "summary": "Declare this member on the binding context or fix the expression name.",
+                "targetMemberName": "$ghostLocal",
+                "valueTypeDisplay": null,
+                "valueTypeSource": null
+              },
+              "summary": "Template expression root \"$ghostLocal\" is not available on the current binding scope.",
+              "template": {
+                "compilationLane": "app-runtime",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/guidance-truth-canary-app.html",
+                    "path": "src/guidance-truth-canary-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "guidance-truth-canaries"
+                  },
+                  "end": 173,
+                  "kind": "source-span-address",
+                  "label": "src/guidance-truth-canary-app.html@0..173",
+                  "path": "src/guidance-truth-canary-app.html",
+                  "role": "value",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "guidance-truth-canaries",
+                  "start": 0
+                }
+              },
+              "valueSiteKind": "binding-command-value"
+            }
+          ]
         }
       },
       "diagnosticCount": 1,
@@ -538,11 +709,11 @@ _No in-memory diff._
           "range": {
             "end": {
               "character": 43,
-              "line": 1
+              "line": 5
             },
             "start": {
               "character": 43,
-              "line": 1
+              "line": 5
             }
           },
           "source": "documentChanges",
@@ -565,7 +736,11 @@ _No in-memory diff._
 diff --git a/src/guidance-truth-canary-app.ts b/src/guidance-truth-canary-app.ts
 --- a/src/guidance-truth-canary-app.ts
 +++ b/src/guidance-truth-canary-app.ts
-@@ -1,3 +1,4 @@
+@@ -1,7 +1,8 @@
+ import { customElement } from '@aurelia/runtime-html';
+ import template from './guidance-truth-canary-app.html';
+
+ @customElement({ name: 'guidance-truth-canary-app', template })
  export class GuidanceTruthCanaryApp {
    readonly title = 'Guidance truth canary';
 +  $ghostLocal!: unknown;

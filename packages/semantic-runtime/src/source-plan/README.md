@@ -56,6 +56,9 @@ they are missing.
 IDE code actions should spend this planner when they need import/configuration
 chain edits instead of reformatting TypeScript inside the LSP adapter or a
 diagnostic lane.
+The source-operation rows are plan ingredients, not diagnostic affordances. A public code-action row proves plan
+availability by carrying a non-empty edit tuple; a diagnostic-stage repair classification must not claim plan state or
+collapse a multi-edit import/configuration change into a synthetic `single-edit` label.
 `configuredAureliaEntrypointFile(...)` spends the same import lane for the
 default Aurelia import, the root component import, and framework/plugin
 configuration imports; entrypoint imports and registration expressions may also

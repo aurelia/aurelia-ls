@@ -62,17 +62,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "runtime-html.short-hand-binding-syntax"
         ],
+        "phase": null,
+        "relatedInformation": [],
         "relatedQueryKind": "template-diagnostics",
         "repairAffordance": {
           "actionKind": "register-framework-capability",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "framework-capability-registration",
           "readiness": "source-edit-policy-open",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -109,42 +110,103 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       "command": null,
       "data": {
         "semanticRuntime": {
-          "actionKind": "register-framework-capability",
-          "actionTarget": {
-            "memberName": "runtime-html.short-hand-binding-syntax",
-            "source": {
-              "anchor": {
-                "kind": "source-file-address",
-                "label": "src/unregistered-shorthand-syntax-app.html",
-                "path": "src/unregistered-shorthand-syntax-app.html",
-                "sourceFileRole": "template",
-                "sourceWorkspaceKey": "unregistered-shorthand-syntax"
-              },
-              "end": 21,
-              "kind": "source-span-address",
-              "label": "src/unregistered-shorthand-syntax-app.html@7..21",
-              "path": "src/unregistered-shorthand-syntax-app.html",
-              "role": "range",
-              "sourceFileRole": "template",
-              "sourceWorkspaceKey": "unregistered-shorthand-syntax",
-              "start": 7
-            },
-            "targetKind": "framework-capability",
-            "typeDisplay": "@aurelia/runtime-html"
-          },
-          "diagnosticKind": "framework-capability-not-registered",
           "queryKind": "template-code-actions",
           "repairAffordance": {
             "actionKind": "register-framework-capability",
             "actionability": "guided",
-            "applicationKind": "single-edit",
             "changeDomain": "app-source",
-            "editPlanState": "available",
             "planKind": "framework-capability-registration",
-            "readiness": "ready-to-plan",
+            "readiness": "source-edit-policy-open",
             "targetSourceCoverage": "all"
           },
-          "suggestionKind": "register-framework-capability"
+          "sourceDiagnostics": [
+            {
+              "diagnosticAuthority": "semantic-authoring-policy",
+              "diagnosticKind": "framework-capability-not-registered",
+              "frameworkErrorCode": null,
+              "missingInput": "runtime-html.short-hand-binding-syntax",
+              "missingInputs": [
+                "runtime-html.short-hand-binding-syntax"
+              ],
+              "ownerTypeDisplay": null,
+              "ownerTypeOrigin": null,
+              "ownerTypeShapeKind": null,
+              "phase": null,
+              "selectedMemberName": ":value",
+              "severity": "error",
+              "siteKind": "attribute-name",
+              "source": {
+                "anchor": {
+                  "kind": "source-file-address",
+                  "label": "src/unregistered-shorthand-syntax-app.html",
+                  "path": "src/unregistered-shorthand-syntax-app.html",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-shorthand-syntax"
+                },
+                "end": 21,
+                "kind": "source-span-address",
+                "label": "src/unregistered-shorthand-syntax-app.html@7..21",
+                "path": "src/unregistered-shorthand-syntax-app.html",
+                "role": "range",
+                "sourceFileRole": "template",
+                "sourceWorkspaceKey": "unregistered-shorthand-syntax",
+                "start": 7
+              },
+              "suggestion": {
+                "actionKind": "register-framework-capability",
+                "actionTarget": {
+                  "memberName": "runtime-html.short-hand-binding-syntax",
+                  "source": {
+                    "anchor": {
+                      "kind": "source-file-address",
+                      "label": "src/unregistered-shorthand-syntax-app.html",
+                      "path": "src/unregistered-shorthand-syntax-app.html",
+                      "sourceFileRole": "template",
+                      "sourceWorkspaceKey": "unregistered-shorthand-syntax"
+                    },
+                    "end": 21,
+                    "kind": "source-span-address",
+                    "label": "src/unregistered-shorthand-syntax-app.html@7..21",
+                    "path": "src/unregistered-shorthand-syntax-app.html",
+                    "role": "range",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "unregistered-shorthand-syntax",
+                    "start": 7
+                  },
+                  "targetKind": "framework-capability",
+                  "typeDisplay": "@aurelia/runtime-html"
+                },
+                "ownerTypeDisplay": null,
+                "suggestionKind": "register-framework-capability",
+                "summary": "Register ShortHandBindingSyntax from @aurelia/runtime-html with the app container. Availability evidence was found for @aurelia/runtime-html.",
+                "targetMemberName": "runtime-html.short-hand-binding-syntax",
+                "valueTypeDisplay": "@aurelia/runtime-html",
+                "valueTypeSource": null
+              },
+              "summary": "Attribute \":value\" uses Aurelia shorthand binding syntax, but that framework capability is not registered in this app world.",
+              "template": {
+                "compilationLane": "app-runtime",
+                "source": {
+                  "anchor": {
+                    "kind": "source-file-address",
+                    "label": "src/unregistered-shorthand-syntax-app.html",
+                    "path": "src/unregistered-shorthand-syntax-app.html",
+                    "sourceFileRole": "template",
+                    "sourceWorkspaceKey": "unregistered-shorthand-syntax"
+                  },
+                  "end": 65,
+                  "kind": "source-span-address",
+                  "label": "src/unregistered-shorthand-syntax-app.html@0..65",
+                  "path": "src/unregistered-shorthand-syntax-app.html",
+                  "role": "value",
+                  "sourceFileRole": "template",
+                  "sourceWorkspaceKey": "unregistered-shorthand-syntax",
+                  "start": 0
+                }
+              },
+              "valueSiteKind": null
+            }
+          ]
         }
       },
       "diagnosticCount": 1,
@@ -191,7 +253,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "line": 0
             }
           },
-          "source": "changes",
+          "source": "documentChanges",
           "status": "ok"
         },
         {
@@ -208,7 +270,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "line": 5
             }
           },
-          "source": "changes",
+          "source": "documentChanges",
           "status": "ok"
         }
       ]

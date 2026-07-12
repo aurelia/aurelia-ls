@@ -750,8 +750,8 @@ if (routerDiagnosticActionProbe.readiness !== DiagnosticActionPlanReadiness.Read
 if (routerDiagnosticActionProbe.actionability !== 'guided') {
   failures.push(`Expected router instruction repair without an edit plan to remain guided, observed ${routerDiagnosticActionProbe.actionability}.`);
 }
-if (routerDiagnosticActionProbe.editPlanState !== 'not-available' || routerDiagnosticActionProbe.applicationKind !== 'none') {
-  failures.push(`Expected router instruction guidance to remain non-mutating without a validated edit plan, observed editPlanState=${routerDiagnosticActionProbe.editPlanState} applicationKind=${routerDiagnosticActionProbe.applicationKind}.`);
+if ('editPlanState' in routerDiagnosticActionProbe || 'applicationKind' in routerDiagnosticActionProbe) {
+  failures.push('Expected router diagnostic guidance to remain plan-neutral; edit availability belongs to a non-empty code-action edit plan.');
 }
 if (viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics !== 1) {
   failures.push(`Expected broad app diagnostics to include exactly one AUR0755 row, observed ${viewFactoryProviderAppDiagnosticProbe.broadAur0755Diagnostics}.`);

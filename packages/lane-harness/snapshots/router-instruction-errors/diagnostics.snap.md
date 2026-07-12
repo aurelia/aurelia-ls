@@ -35,17 +35,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router:instruction-no-fallback"
         ],
+        "phase": "route-recognition",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "rewrite-router-instruction",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "router-instruction-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -84,17 +85,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router:invalid-instruction"
         ],
+        "phase": "typed-navigation-instruction-creation",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "rewrite-router-instruction",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "router-instruction-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -133,17 +135,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router:route-expression-unexpected-segment"
         ],
+        "phase": "route-expression-parsing",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "rewrite-router-instruction",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "router-instruction-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -182,17 +185,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "missingInputs": [
           "router:route-expression-not-done"
         ],
+        "phase": "route-expression-parsing",
+        "relatedInformation": [],
         "relatedQueryKind": "router-issues",
         "repairAffordance": {
           "actionKind": "rewrite-router-instruction",
           "actionability": "guided",
-          "applicationKind": "none",
           "changeDomain": "app-source",
-          "editPlanState": "not-available",
           "planKind": "router-instruction-rewrite",
           "readiness": "ready-to-plan",
           "targetSourceCoverage": "all"
         },
+        "sourceRole": "template",
         "subject": null,
         "taxonomy": {
           "actionability": "guided",
@@ -253,17 +257,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "router:instruction-no-fallback"
               ],
+              "phase": "route-recognition",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "rewrite-router-instruction",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "router-instruction-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -322,17 +327,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "router:invalid-instruction"
               ],
+              "phase": "typed-navigation-instruction-creation",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "rewrite-router-instruction",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "router-instruction-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -391,17 +397,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "router:route-expression-unexpected-segment"
               ],
+              "phase": "route-expression-parsing",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "rewrite-router-instruction",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "router-instruction-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -460,17 +467,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "missingInputs": [
                 "router:route-expression-not-done"
               ],
+              "phase": "route-expression-parsing",
+              "relatedInformation": [],
               "relatedQueryKind": "router-issues",
               "repairAffordance": {
                 "actionKind": "rewrite-router-instruction",
                 "actionability": "guided",
-                "applicationKind": "none",
                 "changeDomain": "app-source",
-                "editPlanState": "not-available",
                 "planKind": "router-instruction-rewrite",
                 "readiness": "ready-to-plan",
                 "targetSourceCoverage": "all"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -532,17 +540,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "router:invalid-instruction"
           ],
+          "phase": "typed-navigation-instruction-creation",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "rewrite-router-instruction",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "router-instruction-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -588,17 +597,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "router:instruction-no-fallback"
           ],
+          "phase": "route-recognition",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "rewrite-router-instruction",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "router-instruction-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -644,17 +654,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "router:route-expression-unexpected-segment"
           ],
+          "phase": "route-expression-parsing",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "rewrite-router-instruction",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "router-instruction-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -700,17 +711,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "missingInputs": [
             "router:route-expression-not-done"
           ],
+          "phase": "route-expression-parsing",
+          "relatedInformation": [],
           "relatedQueryKind": "router-issues",
           "repairAffordance": {
             "actionKind": "rewrite-router-instruction",
             "actionability": "guided",
-            "applicationKind": "none",
             "changeDomain": "app-source",
-            "editPlanState": "not-available",
             "planKind": "router-instruction-rewrite",
             "readiness": "ready-to-plan",
             "targetSourceCoverage": "all"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -766,17 +778,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "router:instruction-no-fallback"
             ],
+            "phase": "route-recognition",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "rewrite-router-instruction",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "router-instruction-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -822,17 +835,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "router:invalid-instruction"
             ],
+            "phase": "typed-navigation-instruction-creation",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "rewrite-router-instruction",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "router-instruction-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -878,17 +892,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "router:route-expression-unexpected-segment"
             ],
+            "phase": "route-expression-parsing",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "rewrite-router-instruction",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "router-instruction-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
@@ -934,17 +949,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "missingInputs": [
               "router:route-expression-not-done"
             ],
+            "phase": "route-expression-parsing",
+            "relatedInformation": [],
             "relatedQueryKind": "router-issues",
             "repairAffordance": {
               "actionKind": "rewrite-router-instruction",
               "actionability": "guided",
-              "applicationKind": "none",
               "changeDomain": "app-source",
-              "editPlanState": "not-available",
               "planKind": "router-instruction-rewrite",
               "readiness": "ready-to-plan",
               "targetSourceCoverage": "all"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,

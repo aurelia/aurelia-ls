@@ -10,6 +10,7 @@ import {
   canonicalDocumentUri,
   guessLanguage,
   mapSemanticRuntimeAppDiagnostics,
+  mapSemanticRuntimeTemplateCodeActions,
   mapSemanticRuntimeTemplateDefinition,
   mapSemanticRuntimeTemplateHover,
   spanToRange,
@@ -106,10 +107,32 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
             subjectName: "beta",
             source: null,
           },
-          relatedInformation: [],
+          relatedInformation: [{
+            relationKind: "subject-declaration",
+            code: null,
+            message: "The member is declared here.",
+            source: {
+              kind: "source-span-address",
+              label: "src/component.html@0..5",
+              path: doc.uri,
+              start: 0,
+              end: 5,
+              role: "name",
+            },
+          }],
           suggestion: null,
           sourceRole: "template",
           relatedQueryKind: "template-diagnostics",
+          handles: {
+            productHandle: 1,
+            identityHandle: 2,
+            ownerIdentityHandle: null,
+            sourceAddressHandle: 3,
+            relatedSourceAddressHandles: [4],
+            overlayOriginKey: null,
+            overlayFileName: null,
+            overlaySegmentLabel: null,
+          },
         }],
       },
     } as never, doc);
@@ -129,6 +152,14 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         diagnosticKind: "missing-expression-member",
         missingInputs: ["expression-member:selected-member-missing"],
         subject: { subjectName: "beta" },
+        relatedInformation: [{
+          relationKind: "subject-declaration",
+          message: "The member is declared here.",
+        }],
+        handles: {
+          productHandle: 1,
+          relatedSourceAddressHandles: [4],
+        },
       },
       [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
         diagnostics: {
@@ -142,6 +173,9 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         },
       },
     });
+    expect(mapped[0]?.relatedInformation).toEqual([
+      expect.objectContaining({ message: "The member is declared here." }),
+    ]);
   });
 
   test("uses TypeScript codes for template overlay diagnostics without losing runtime identity", () => {
@@ -193,6 +227,83 @@ describe("mapSemanticRuntimeAppDiagnostics", () => {
         missingInput: "typescript:TS2345",
       },
     });
+  });
+});
+
+describe("mapSemanticRuntimeTemplateCodeActions", () => {
+  test("attaches every LSP diagnostic contributing to one semantic edit plan", () => {
+    const doc = TextDocument.create(
+      "file:///C:/projects/app/src/component.html",
+      "html",
+      7,
+      "alpha\nbeta\ngamma",
+    );
+    const source = {
+      kind: "source-span-address",
+      label: "src/component.html@6..10",
+      path: doc.uri,
+      start: 6,
+      end: 10,
+      role: "expression",
+    };
+    const semanticDiagnostic = {
+      diagnosticKind: "missing-expression-member",
+      diagnosticAuthority: "semantic-authoring-policy",
+      source,
+    };
+    const checkerDiagnostic = {
+      diagnosticKind: "template-expression-typescript-diagnostic",
+      diagnosticAuthority: "typescript",
+      source,
+    };
+    const range = {
+      start: { line: 1, character: 0 },
+      end: { line: 1, character: 4 },
+    };
+    const diagnostics = [
+      {
+        range,
+        message: "Missing member",
+        data: { semanticRuntime: semanticDiagnostic },
+      },
+      {
+        range,
+        message: "TS2339: Missing member",
+        data: { semanticRuntime: checkerDiagnostic },
+      },
+    ];
+
+    const actions = mapSemanticRuntimeTemplateCodeActions({
+      value: {
+        rows: [{
+          title: "Declare member",
+          kind: "quickfix",
+          diagnostics: [semanticDiagnostic, checkerDiagnostic],
+          repair: {
+            actionKind: "declare-missing-member",
+            planKind: "source-member-declaration",
+            changeDomain: "app-source",
+            readiness: "ready-to-plan",
+            targetSourceCoverage: "all",
+            actionability: "guided",
+          },
+          edits: [{
+            editKind: "declare-view-model-member",
+            source: { ...source, start: 0, end: 0 },
+            oldText: "",
+            newText: "declared",
+          }],
+          isPreferred: true,
+        }],
+      },
+    } as never, () => null, {
+      workspaceRoot: null,
+      originDocument: doc,
+      diagnostics,
+    });
+
+    expect(actions).toHaveLength(1);
+    expect(actions?.[0]?.diagnostics).toEqual(diagnostics);
   });
 });
 

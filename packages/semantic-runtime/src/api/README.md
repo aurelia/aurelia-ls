@@ -606,10 +606,11 @@ owning compiler world resolves to an app-root `.app(...)` chain with local packa
 registration edits are planned through `source-plan`: imports are updated with TypeScript AST spans, and
 `.register(...)` is inserted before the proven app-root call. Other diagnostic suggestions remain structured repair
 intent until a future planner can prove their source operation; clients should not treat every suggestion row as an
-automatic fix. Code-action rows carry a `repair` affordance with `editPlanState: "available"` and
-`applicationKind: "single-edit"`; diagnostic payloads expose the same affordance without that edit-backed state. The
-split is intentional: a diagnostic may be `guided` while one returned quick fix carries a concrete single-edit plan,
-because the edit planner has crossed the stricter source operation boundary.
+automatic fix. Code-action rows retain a non-empty set of source diagnostics, carry the same diagnostic-stage `repair`
+affordance, and prove plan availability with a non-empty tuple of exact edits. Equivalent-plan deduplication merges the
+source diagnostic evidence instead of choosing one representative diagnostic. The split is intentional: a diagnostic
+may be guided or `source-edit-policy-open` while one returned quick fix carries a concrete multi-edit plan, because the
+source planner has crossed the stricter authored-operation boundary for that app context.
 `TemplateInlayHints` is the IDE-shaped template hint projection. Rows are source-file filterable and currently expose
 implicit binding-mode resolution: authored default `.bind` command intent, the resolved runtime binding mode, a
 display-friendly mode label, and exact authored insertion source. The row's primary `source` is the attribute-name span

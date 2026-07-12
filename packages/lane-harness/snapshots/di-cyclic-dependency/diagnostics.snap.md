@@ -33,17 +33,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "frameworkRawErrorAuthority": null,
         "missingInput": null,
         "missingInputs": [],
+        "phase": "dependency-cycle-analysis",
+        "relatedInformation": [],
         "relatedQueryKind": "di-issues",
         "repairAffordance": {
           "actionKind": "inspect-type-surface",
           "actionability": "manual",
-          "applicationKind": "none",
           "changeDomain": "inspection",
-          "editPlanState": "not-available",
           "planKind": "manual-inspection",
           "readiness": "inspection-required",
           "targetSourceCoverage": "not-applicable"
         },
+        "sourceRole": "app-source",
         "subject": null,
         "taxonomy": {
           "actionability": "manual",
@@ -102,17 +103,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
               "frameworkRawErrorAuthority": null,
               "missingInput": null,
               "missingInputs": [],
+              "phase": "dependency-cycle-analysis",
+              "relatedInformation": [],
               "relatedQueryKind": "di-issues",
               "repairAffordance": {
                 "actionKind": "inspect-type-surface",
                 "actionability": "manual",
-                "applicationKind": "none",
                 "changeDomain": "inspection",
-                "editPlanState": "not-available",
                 "planKind": "manual-inspection",
                 "readiness": "inspection-required",
                 "targetSourceCoverage": "not-applicable"
               },
+              "sourceRole": null,
               "subject": null,
               "taxonomy": {
                 "actionability": null,
@@ -172,17 +174,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "frameworkRawErrorAuthority": null,
           "missingInput": null,
           "missingInputs": [],
+          "phase": "dependency-cycle-analysis",
+          "relatedInformation": [],
           "relatedQueryKind": "di-issues",
           "repairAffordance": {
             "actionKind": "inspect-type-surface",
             "actionability": "manual",
-            "applicationKind": "none",
             "changeDomain": "inspection",
-            "editPlanState": "not-available",
             "planKind": "manual-inspection",
             "readiness": "inspection-required",
             "targetSourceCoverage": "not-applicable"
           },
+          "sourceRole": null,
           "subject": null,
           "taxonomy": {
             "actionability": null,
@@ -236,17 +239,18 @@ This snapshot records observed language-server behavior. Operator verdicts live 
             "frameworkRawErrorAuthority": null,
             "missingInput": null,
             "missingInputs": [],
+            "phase": "dependency-cycle-analysis",
+            "relatedInformation": [],
             "relatedQueryKind": "di-issues",
             "repairAffordance": {
               "actionKind": "inspect-type-surface",
               "actionability": "manual",
-              "applicationKind": "none",
               "changeDomain": "inspection",
-              "editPlanState": "not-available",
               "planKind": "manual-inspection",
               "readiness": "inspection-required",
               "targetSourceCoverage": "not-applicable"
             },
+            "sourceRole": null,
             "subject": null,
             "taxonomy": {
               "actionability": null,
