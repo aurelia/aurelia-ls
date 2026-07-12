@@ -213,10 +213,17 @@ import type {
 } from '../template/runtime-binding.js';
 import type {
   RuntimeBindingBehaviorApplicationPhase,
+  RuntimeBindingBehaviorIssuePhase,
 } from '../template/runtime-binding-behavior.js';
 import type {
   RuntimeValueConverterApplicationPhase,
+  RuntimeValueConverterIssuePhase,
 } from '../template/runtime-value-converter.js';
+import type { RuntimeBindingIssuePhase } from '../template/runtime-binding-issue.js';
+import type { RuntimeBindingScopeIssuePhase } from '../template/runtime-binding-scope-issue.js';
+import type { RuntimeControllerIssuePhase } from '../template/runtime-controller-issue.js';
+import type { RuntimeRendererIssuePhase } from '../template/runtime-renderer-issue.js';
+import type { TemplateCompilerIssuePhase } from '../template/compiler-issue.js';
 import type {
   RuntimeControllerCreationKind,
   RuntimeControllerLifecycleStage,
@@ -2125,9 +2132,29 @@ export type SemanticAppDiagnosticDomain =
   | 'router'
   | 'route-recognizer';
 
+/** Closed lifecycle phases projected through template diagnostics. */
+export type SemanticTemplateDiagnosticPhase =
+  | TypeSystemDiagnosticPhase
+  | TemplateCompilerIssuePhase
+  | `${TemplateCompilerIssuePhase}`
+  | RuntimeControllerIssuePhase
+  | `${RuntimeControllerIssuePhase}`
+  | RuntimeRendererIssuePhase
+  | `${RuntimeRendererIssuePhase}`
+  | RuntimeBindingIssuePhase
+  | `${RuntimeBindingIssuePhase}`
+  | RuntimeBindingBehaviorIssuePhase
+  | `${RuntimeBindingBehaviorIssuePhase}`
+  | RuntimeValueConverterIssuePhase
+  | `${RuntimeValueConverterIssuePhase}`
+  | RuntimeBindingScopeIssuePhase
+  | `${RuntimeBindingScopeIssuePhase}`
+  | RouterIssuePhase
+  | `${RouterIssuePhase}`;
+
 /** Domain-local diagnostic lifecycle phase; interpret together with `diagnosticDomain`. */
 export type SemanticAppDiagnosticPhase =
-  | TypeSystemDiagnosticPhase
+  | SemanticTemplateDiagnosticPhase
   | EvaluationIssuePhase
   | `${EvaluationIssuePhase}`
   | ConfigurationIssuePhase
@@ -2145,9 +2172,7 @@ export type SemanticAppDiagnosticPhase =
   | FetchClientIssuePhase
   | `${FetchClientIssuePhase}`
   | DialogIssuePhase
-  | `${DialogIssuePhase}`
-  | RouterIssuePhase
-  | `${RouterIssuePhase}`;
+  | `${DialogIssuePhase}`;
 
 export type SemanticDiagnosticSubjectKind =
   | 'template-member-access'
@@ -2197,6 +2222,10 @@ export interface SemanticAppDiagnosticRow {
     readonly relatedSourceAddressHandles: readonly AddressHandle[];
     readonly templateSourceAddressHandle: AddressHandle | null;
     readonly resourceDefinitionProductHandle: ProductHandle | null;
+    /** Generated-overlay origin facts; null together for diagnostics produced directly from authored products. */
+    readonly overlayOriginKey: string | null;
+    readonly overlayFileName: string | null;
+    readonly overlaySegmentLabel: string | null;
   };
 }
 
@@ -3700,6 +3729,7 @@ export interface SemanticTemplateCursorDiagnosticRow {
 }
 
 export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDiagnosticRow {
+  readonly phase: SemanticTemplateDiagnosticPhase | null;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
   readonly subject?: SemanticDiagnosticSubject | null;
@@ -3710,6 +3740,8 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
   readonly handles?: {
     readonly sourceAddressHandle: AddressHandle | null;
     readonly semanticProductHandle: ProductHandle | null;
+    readonly semanticIdentityHandle: IdentityHandle | null;
+    /** Generated-overlay origin facts; null together for diagnostics produced directly from authored products. */
     readonly overlayOriginKey: string | null;
     readonly overlayFileName: string | null;
     readonly overlaySegmentLabel: string | null;

@@ -723,9 +723,6 @@ const routerDiagnosticActionProbe = readRouterDiagnosticActionProbe();
 if (mixedFormCursorProbe.assignmentDiagnostics !== 1) {
   failures.push(`Expected mixed-form fulfillmentMethod cursor to surface exactly one binding assignment diagnostic, observed ${mixedFormCursorProbe.assignmentDiagnostics}.`);
 }
-if (mixedFormCursorProbe.overlayAssignmentDiagnostics !== 0) {
-  failures.push(`Expected mixed-form fulfillmentMethod cursor to suppress assignment-shaped overlay diagnostics when data-flow owns the span, observed ${mixedFormCursorProbe.overlayAssignmentDiagnostics}.`);
-}
 if (diagnosticActionProbe.actionKind !== DiagnosticActionKind.RegisterFrameworkCapability) {
   failures.push(`Expected register-framework-capability suggestions to classify as ${DiagnosticActionKind.RegisterFrameworkCapability}, observed ${diagnosticActionProbe.actionKind}.`);
 }

@@ -6203,9 +6203,58 @@
                   "fields": {
                     "diagnosticKind": "template-expression-typescript-diagnostic",
                     "missingInput": "typescript:TS18046",
+                    "phase": "semantic",
                     "source.role": "typescript-overlay:semantic"
                   },
                   "source": { "marker": "${unknownItem.label}", "token": "unknownItem" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "missing-member-checker-agreement",
+          "expectations": [
+            {
+              "name": "template diagnostics retain both facts",
+              "query": { "kind": "template-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "rows": [
+                {
+                  "fields": {
+                    "diagnosticKind": "missing-expression-member",
+                    "diagnosticAuthority": "semantic-authoring-policy",
+                    "selectedMemberName": "missingLabel"
+                  },
+                  "source": { "marker": "${item.missingLabel}", "token": "missingLabel" }
+                },
+                {
+                  "fields": {
+                    "diagnosticKind": "template-expression-typescript-diagnostic",
+                    "diagnosticAuthority": "typescript",
+                    "missingInput": "typescript:TS2339",
+                    "phase": "semantic"
+                  },
+                  "source": { "marker": "${item.missingLabel}", "token": "missingLabel" }
+                }
+              ]
+            },
+            {
+              "name": "app diagnostics present agreement once",
+              "query": { "kind": "app-diagnostics", "options": { "detail": "full", "page": { "size": 100 } } },
+              "equals": {
+                "value.presentation.rawRowCount": 9,
+                "value.presentation.primaryCount": 6,
+                "value.presentation.contextualCount": 3
+              },
+              "rows": [
+                {
+                  "rowPath": "value.presentation.groups",
+                  "fields": {
+                    "rawRowCount": 2,
+                    "related.0.role": "contextual",
+                    "related.0.relation": "checker-evidence"
+                  },
+                  "count": 2
                 }
               ]
             }
@@ -6222,6 +6271,7 @@
                   "fields": {
                     "diagnosticKind": "template-expression-typescript-diagnostic",
                     "missingInput": "typescript:TS18047",
+                    "phase": "semantic",
                     "source.role": "typescript-overlay:semantic",
                     "suggestion.actionKind": "rewrite-expression"
                   },
@@ -6242,6 +6292,7 @@
                   "fields": {
                     "diagnosticKind": "template-expression-typescript-diagnostic",
                     "missingInput": "typescript:TS2345",
+                    "phase": "semantic",
                     "source.role": "typescript-overlay:semantic"
                   },
                   "source": { "marker": "submit('not-an-item')", "token": "'not-an-item'" }
@@ -6261,6 +6312,7 @@
                   "fields": {
                     "diagnosticKind": "template-expression-typescript-diagnostic",
                     "missingInput": "typescript:TS2554",
+                    "phase": "semantic",
                     "source.role": "typescript-overlay:semantic"
                   },
                   "source": { "marker": "submit(selectedItem, selectedItem)", "token": "selectedItem", "occurrence": 2 }

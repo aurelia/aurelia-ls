@@ -2501,7 +2501,7 @@
         "observation"
       ],
       "summary": "Template overlays are usable but not complete; the remaining hardening is integration work across semantic products, checker overlays, diagnostics, provenance, rename readiness, and split-brain guards.",
-      "rationale": "Generated TypeScript overlays now have a Program-owned source path, expression support matrix, prelude inventory, template-controller scope replay, explicit overlay diagnostics, and authored-source segment mapping. The open frontier is not to make overlays locally cleverer. It is to ensure overlays spend the same semantic-runtime products as diagnostics, binding/data-flow, observer value channels, i18n CustomExpression owners, evaluation/value-source readers, and future LSP edit plans. The risk is split-brain: TypeScript may accept generated overlay code while Aurelia binding/writeback semantics reject it, a semantic diagnostic may already own the same authored span, or a future rename may see only a generated segment without the non-overlay Aurelia reference family.",
+      "rationale": "Generated TypeScript overlays now have a Program-owned source path, expression support matrix, prelude inventory, template-controller scope replay, explicit overlay diagnostics, and authored-source segment mapping. The open frontier is not to make overlays locally cleverer. It is to ensure overlays spend the same semantic-runtime products as diagnostics, binding/data-flow, observer value channels, i18n CustomExpression owners, evaluation/value-source readers, and future LSP edit plans. The risk is split-brain: TypeScript may accept generated overlay code while Aurelia binding/writeback semantics reject it, a semantic diagnostic may already own the same authored span, or a future rename may see only a generated segment without the non-overlay Aurelia reference family. Raw diagnostic facts now remain complete through template/app projection; exact semantic/checker agreement is a presentation relation, not a producer-deletion rule.",
       "guidance": [
         "Start here when asking whether overlays are complete for diagnostics, typechecking, rename, MCP, or LSP readiness.",
         "Template overlays consume source-value facts indirectly through materialized BindingScope slots and bound-controller/runtime-composition products. Do not make generated TypeScript call RuntimeBindingSourceValueEvaluator locally; fix the upstream binding-flow/source-value path if a slot or value fact is missing.",
@@ -2527,7 +2527,9 @@
         "CustomExpression should route through owner-specific products, currently i18n TranslationBinding, before generic overlay unsupported-syntax handling changes.",
         "From-view, two-way, checked/select/class/style, getter-only computed targets, nullish writeback, and other direction-sensitive channels must be checked against binding data-flow and observer products, not only generated TypeScript assignability.",
         "Runtime-assignment overlay locals should consume the scope-materialized source-local type. The target bindable member may supply an indexed-access expression only when the source-local type still equals the target member type; value-converter `fromView` results and other converted writeback locals should emit their own stable type expression or remain explicit pressure.",
-        "Overlay diagnostics should map checker rows back through exact generated segments and suppress or join rows already owned by semantic diagnostics on the same authored span. Missing-member rows suppress TS2339/TS2551, and binding data-flow source-assignment rows suppress assignment-shaped TS2322/TS2588 so semantic-runtime product diagnostics keep the actionable repair target. Cursor diagnostics must project binding-assignment rows before overlay rows so cursor-time answers spend the same agreement policy as file/app diagnostics.",
+        "Overlay diagnostics must map checker rows back through exact generated segments and retain admitted raw rows even when semantic diagnostics own the same authored relationship. Producer-time agreement suppression deletes checker code, message, phase, and origin and must not return.",
+        "For exact missing-member or assignment agreement, AppDiagnostics.presentation keeps the Aurelia-aware semantic row primary and relates the TypeScript row as contextual checker-evidence. LSP drains diagnostic pages before presenting one primary; MCP/AOT/raw consumers retain both facts.",
+        "Detailed template and app diagnostic rows preserve the owning semantic product, materialized identity, source address, lifecycle phase, and overlay origin key/file/segment. Recover these from existing product envelopes and overlay segments rather than reconstructing provenance in adapters.",
         "At the LSP/custom diagnostics boundary, template overlay TypeScript diagnostics should use the concrete `TS####` from `missingInput: \"typescript:TS####\"` as the visible diagnostic `code` while preserving Aurelia/template ownership and `template-expression-typescript-diagnostic` identity in diagnostic data.",
         "Repeat overlay prelude projection should preserve weak app types: `any` may stay `any`, but `unknown` repeat sources should produce unknown locals and public TS18046 diagnostics instead of silently degrading to `any`.",
         "Keep repeat unknown slot preservation shared below overlays: TypeChecker iterator projection should use the common checker-union helper and materialize unknown locals so semantic cursor diagnostics expose no-members rather than missing-slot-type.",
@@ -2713,6 +2715,29 @@
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/template-overlay-type-errors",
           "summary": "Pressure fixture for public overlay diagnostics and cursor diagnostic rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "templateDiagnosticOriginFields",
+          "summary": "Shared template-diagnostic projection of product, identity, source, phase, and overlay origin facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/diagnostic-presentation.ts",
+          "symbolName": "appDiagnosticPresentation",
+          "summary": "Answer-local grouping that preserves raw rows while presenting exact checker agreement contextually."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-diagnostics.ts",
+          "symbolName": "templateAppDiagnosticRow",
+          "summary": "Template-to-app diagnostic projection that conserves template origin facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/test/app-diagnostic-fact-conservation.test.ts",
+          "summary": "Executable product/identity/source/origin and semantic/checker agreement conservation witnesses."
         }
       ],
       "liveChecks": [
@@ -2787,10 +2812,20 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
           "symbolName": "RuntimeBindingDataFlowMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/template-completion.ts",
+          "symbolName": "templateDiagnosticOriginFields"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/diagnostic-presentation.ts",
+          "symbolName": "appDiagnosticPresentation"
         }
       ],
       "createdAt": "2026-05-23",
-      "updatedAt": "2026-07-08"
+      "updatedAt": "2026-07-12"
     }
   ]
 }

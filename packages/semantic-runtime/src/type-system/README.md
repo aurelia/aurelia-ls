@@ -358,11 +358,12 @@ projection is intentionally policy-filtered: the overlay source is generated Typ
 implicit-any diagnostics are substrate pressure unless the overlay can prove they came from an authored expression
 relationship. Public rows currently admit semantic TypeScript codes such as missing member, nullish access,
 type/argument mismatch, and readonly assignment, and carry `missingInput: "typescript:TS####"` plus a structured
-`inspect-owner-type` action target over the authored expression span. Missing-member overlay rows are suppressed when
-the semantic template diagnostic lane already owns the same authored span, so TypeScript becomes checker evidence
-rather than a duplicate issue. Binding assignment overlay rows follow the same rule: if data-flow already owns
-assignment strictness or runtime no-op for the authored span, suppress assignment-shaped TS2322/TS2588 and keep the
-semantic-runtime product diagnostic as the actionable surface. The public fixture currently keeps argument mismatch,
+`inspect-owner-type` action target over the authored expression span. Raw diagnostic answers retain missing-member and
+assignment-shaped overlay rows even when semantic template or data-flow diagnostics own the same relationship. The app
+presentation projector, not the producer, then keeps the semantic-runtime product diagnostic as the actionable primary
+and relates exact TS2339/TS2551 or TS2322/TS2588 agreement as `checker-evidence`. Detailed overlay rows preserve their
+semantic phase, semantic product/identity/source handles, origin key, generated file, and segment label so downstream consumers
+can choose a different policy without reconstructing or losing the checker fact. The public fixture currently keeps argument mismatch,
 arity mismatch, and nullish access
 rows as TypeScript-native overlay evidence, preserves TS18046 for unknown repeat locals instead of weakening them to
 `any`, and the value-converter fixture adds converter argument mismatch over the same policy. The matching repeat
@@ -374,11 +375,10 @@ that type; when no target type exists, it emits `unknown`, not `any`. `contract:
 contract-visible by checking generated overlay text for accidental `undefined as any` holes.
 Template cursor-info participates in that same public projection when a caller opts into
 `diagnosticProjection: "type-projection"`. Cursor-info does not run a separate hover checker; it filters mapped overlay
-diagnostic rows to the active authored cursor span and reuses the same duplicate-suppression and TypeScript-code
-admission policy as template diagnostics. Cursor-time binding assignment rows are collected before overlay rows for the
-same span, so TS2322/TS2588 stays suppressed there too. This keeps cursor-time explanations aligned with file/app
-diagnostics while still allowing cheaper `available-products` cursor reads when TypeChecker overlay diagnostics are not
-needed.
+diagnostic rows to the active authored cursor span and reuses the same TypeScript-code admission policy as template
+diagnostics. Cursor answers therefore retain the same raw facts as file/app diagnostics; consumers that need one
+user-facing issue should spend the app diagnostic presentation instead of depending on producer order. Cheaper
+`available-products` cursor reads remain available when TypeChecker overlay diagnostics are not needed.
 Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
 different AST identity from the Program epoch. Prefer `TypeSystemProject.readProgramSourceFileByPath(...)` or

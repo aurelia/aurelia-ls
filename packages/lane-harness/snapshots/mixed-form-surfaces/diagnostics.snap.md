@@ -140,7 +140,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "label",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/app.html",
+          "message": "TS2339: Property 'label' does not exist on type 'string'.",
+          "range": {
+            "end": {
+              "character": 24,
+              "line": 11
+            },
+            "start": {
+              "character": 19,
+              "line": 11
+            }
+          },
+          "rangeText": "label",
+          "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
+        }
+      ],
       "severity": "information",
       "source": "aurelia"
     }
@@ -158,7 +176,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "presentation": {
     "complete": true,
-    "contextualCount": 0,
+    "contextualCount": 1,
     "groups": [
       {
         "groupKey": "row:diagnostic:0:template:weak-expression-member-owner:semantic-authoring-policy:no-framework-code:src/app.html:491:497:expression-member-owner-type:index-signature-only",
@@ -250,8 +268,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:1:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/app.html:522:527:expression-member:selected-member-missing",
-        "maxRawSeverity": "info",
+        "groupKey": "checker-agreement:missing-member:template-member-access:src/app.html:512:527:diagnostic:1:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/app.html:522:527:expression-member:selected-member-missing",
+        "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
             "actionability": "manual",
@@ -326,8 +344,82 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "rowId": "diagnostic:1:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/app.html:522:527:expression-member:selected-member-missing"
         },
         "primarySeverity": "info",
-        "rawRowCount": 1,
-        "related": [],
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "manual",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "TS2339",
+              "data": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "applicationKind": "none",
+                  "changeDomain": "inspection",
+                  "editPlanState": "not-available",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "subject": {
+                  "source": {
+                    "end": 527,
+                    "kind": "source-span-address",
+                    "label": "src/app.html@512..527",
+                    "path": "src/app.html",
+                    "role": "template-member-access",
+                    "start": 512
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "taxonomy": {
+                  "actionability": null,
+                  "category": null,
+                  "confidence": null,
+                  "impact": null,
+                  "schema": null
+                }
+              },
+              "file": "src/app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "TS2339",
+                  "kind": "template-expression-typescript-diagnostic",
+                  "message": "TS2339: Property 'label' does not exist on type 'string'."
+                }
+              ],
+              "message": "TS2339: Property 'label' does not exist on type 'string'.",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 527,
+                "start": 522
+              },
+              "spanText": "label",
+              "status": "contextual",
+              "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
+            },
+            "relation": "checker-evidence",
+            "role": "contextual",
+            "rowId": "diagnostic:2:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/app.html:522:527:typescript:TS2339"
+          }
+        ],
         "subject": {
           "source": null,
           "span": {
@@ -340,10 +432,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ],
     "primaryCount": 2,
-    "rawRowCount": 2
+    "rawRowCount": 3
   },
   "raw": {
-    "diagnosticCount": 2,
+    "diagnosticCount": 3,
     "diagnostics": [
       {
         "actionability": "guided",
@@ -472,6 +564,74 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "message": "Member \"label\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
         "related": [],
         "severity": "info",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 527,
+          "start": 522
+        },
+        "spanText": "label",
+        "status": "canonical",
+        "uri": "fixtures://pressure/mixed-form-surfaces/src/app.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS2339",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS2339",
+          "missingInputs": [
+            "typescript:TS2339"
+          ],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "subject": {
+            "source": {
+              "end": 527,
+              "kind": "source-span-address",
+              "label": "src/app.html@512..527",
+              "path": "src/app.html",
+              "role": "template-member-access",
+              "start": 512
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS2339",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS2339: Property 'label' does not exist on type 'string'."
+          }
+        ],
+        "message": "TS2339: Property 'label' does not exist on type 'string'.",
+        "related": [],
+        "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
           "end": 527,

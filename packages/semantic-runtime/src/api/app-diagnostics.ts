@@ -326,6 +326,7 @@ function appDiagnosticHandles(
   handles: OwnedIssueDiagnosticRow['handles'],
   ownerIdentityHandle: AppDiagnosticHandles['ownerIdentityHandle'],
   relatedSourceAddressHandles: AppDiagnosticHandles['relatedSourceAddressHandles'],
+  overlayOrigin: Pick<AppDiagnosticHandles, 'overlayOriginKey' | 'overlayFileName' | 'overlaySegmentLabel'> | null = null,
 ): { readonly handles?: AppDiagnosticHandles } {
   if (handles == null) {
     return {};
@@ -339,6 +340,9 @@ function appDiagnosticHandles(
       relatedSourceAddressHandles,
       templateSourceAddressHandle: null,
       resourceDefinitionProductHandle: null,
+      overlayOriginKey: overlayOrigin?.overlayOriginKey ?? null,
+      overlayFileName: overlayOrigin?.overlayFileName ?? null,
+      overlaySegmentLabel: overlayOrigin?.overlaySegmentLabel ?? null,
     },
   };
 }
@@ -386,7 +390,7 @@ function templateAppDiagnosticRow(
   return {
     projectKey,
     diagnosticDomain: 'template',
-    phase: null,
+    phase: row.phase,
     diagnosticKind: row.diagnosticKind,
     diagnosticAuthority: row.diagnosticAuthority,
     frameworkErrorCode: row.frameworkErrorCode,
@@ -406,11 +410,16 @@ function templateAppDiagnosticRow(
         ? undefined
         : {
           productHandle: row.handles.semanticProductHandle,
-          identityHandle: null,
+          identityHandle: row.handles.semanticIdentityHandle,
           sourceAddressHandle: row.handles.sourceAddressHandle,
         },
       null,
       [],
+      {
+        overlayOriginKey: row.handles?.overlayOriginKey ?? null,
+        overlayFileName: row.handles?.overlayFileName ?? null,
+        overlaySegmentLabel: row.handles?.overlaySegmentLabel ?? null,
+      },
     ),
   };
 }

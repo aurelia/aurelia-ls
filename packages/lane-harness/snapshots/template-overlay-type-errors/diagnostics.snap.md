@@ -79,7 +79,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingLabel",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/template-overlay-type-errors-app.html",
+          "message": "TS2339: Property 'missingLabel' does not exist on type 'OverlayItem'.",
+          "range": {
+            "end": {
+              "character": 25,
+              "line": 3
+            },
+            "start": {
+              "character": 13,
+              "line": 3
+            }
+          },
+          "rangeText": "missingLabel",
+          "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+        }
+      ],
       "severity": "warning",
       "source": "aurelia"
     },
@@ -219,7 +237,25 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       "rangeText": "missingStatus",
-      "relatedInformation": [],
+      "relatedInformation": [
+        {
+          "anomaly": null,
+          "file": "src/template-overlay-type-errors-app.html",
+          "message": "TS2339: Property 'missingStatus' does not exist on type 'OverlayItem'.",
+          "range": {
+            "end": {
+              "character": 32,
+              "line": 11
+            },
+            "start": {
+              "character": 19,
+              "line": 11
+            }
+          },
+          "rangeText": "missingStatus",
+          "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+        }
+      ],
       "severity": "warning",
       "source": "aurelia"
     },
@@ -420,11 +456,11 @@ This snapshot records observed language-server behavior. Operator verdicts live 
   "outcome": "result",
   "presentation": {
     "complete": true,
-    "contextualCount": 1,
+    "contextualCount": 3,
     "groups": [
       {
-        "groupKey": "row:diagnostic:6:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:67:79:expression-member:selected-member-missing",
-        "maxRawSeverity": "warning",
+        "groupKey": "checker-agreement:missing-member:template-member-access:src/template-overlay-type-errors-app.html:62:79:diagnostic:7:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:67:79:expression-member:selected-member-missing",
+        "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
             "actionability": "guided",
@@ -496,11 +532,85 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:6:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:67:79:expression-member:selected-member-missing"
+          "rowId": "diagnostic:7:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:67:79:expression-member:selected-member-missing"
         },
         "primarySeverity": "warning",
-        "rawRowCount": 1,
-        "related": [],
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "manual",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "TS2339",
+              "data": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "applicationKind": "none",
+                  "changeDomain": "inspection",
+                  "editPlanState": "not-available",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "subject": {
+                  "source": {
+                    "end": 79,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@62..79",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 62
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "taxonomy": {
+                  "actionability": null,
+                  "category": null,
+                  "confidence": null,
+                  "impact": null,
+                  "schema": null
+                }
+              },
+              "file": "src/template-overlay-type-errors-app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "TS2339",
+                  "kind": "template-expression-typescript-diagnostic",
+                  "message": "TS2339: Property 'missingLabel' does not exist on type 'OverlayItem'."
+                }
+              ],
+              "message": "TS2339: Property 'missingLabel' does not exist on type 'OverlayItem'.",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 79,
+                "start": 67
+              },
+              "spanText": "missingLabel",
+              "status": "contextual",
+              "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+            },
+            "relation": "checker-evidence",
+            "role": "contextual",
+            "rowId": "diagnostic:8:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:67:79:typescript:TS2339"
+          }
+        ],
         "subject": {
           "source": null,
           "span": {
@@ -675,8 +785,8 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:2:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:241:254:expression-member:selected-member-missing",
-        "maxRawSeverity": "warning",
+        "groupKey": "checker-agreement:missing-member:template-member-access:src/template-overlay-type-errors-app.html:228:254:diagnostic:2:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:241:254:expression-member:selected-member-missing",
+        "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
             "actionability": "guided",
@@ -751,8 +861,82 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           "rowId": "diagnostic:2:template:missing-expression-member:semantic-authoring-policy:no-framework-code:src/template-overlay-type-errors-app.html:241:254:expression-member:selected-member-missing"
         },
         "primarySeverity": "warning",
-        "rawRowCount": 1,
-        "related": [],
+        "rawRowCount": 2,
+        "related": [
+          {
+            "diagnostic": {
+              "actionability": "manual",
+              "anomaly": null,
+              "category": "template-syntax",
+              "code": "TS2339",
+              "data": {
+                "diagnosticAuthority": "typescript",
+                "diagnosticDomain": "template",
+                "diagnosticKind": "template-expression-typescript-diagnostic",
+                "frameworkErrorCode": null,
+                "frameworkRawErrorAuthority": null,
+                "missingInput": "typescript:TS2339",
+                "missingInputs": [
+                  "typescript:TS2339"
+                ],
+                "relatedQueryKind": "template-diagnostics",
+                "repairAffordance": {
+                  "actionKind": "inspect-type-surface",
+                  "actionability": "manual",
+                  "applicationKind": "none",
+                  "changeDomain": "inspection",
+                  "editPlanState": "not-available",
+                  "planKind": "manual-inspection",
+                  "readiness": "inspection-required",
+                  "targetSourceCoverage": "all"
+                },
+                "subject": {
+                  "source": {
+                    "end": 254,
+                    "kind": "source-span-address",
+                    "label": "src/template-overlay-type-errors-app.html@228..254",
+                    "path": "src/template-overlay-type-errors-app.html",
+                    "role": "template-member-access",
+                    "start": 228
+                  },
+                  "span": null,
+                  "subjectKind": "template-member-access",
+                  "uri": null
+                },
+                "taxonomy": {
+                  "actionability": null,
+                  "category": null,
+                  "confidence": null,
+                  "impact": null,
+                  "schema": null
+                }
+              },
+              "file": "src/template-overlay-type-errors-app.html",
+              "impact": "blocking",
+              "issues": [
+                {
+                  "code": "TS2339",
+                  "kind": "template-expression-typescript-diagnostic",
+                  "message": "TS2339: Property 'missingStatus' does not exist on type 'OverlayItem'."
+                }
+              ],
+              "message": "TS2339: Property 'missingStatus' does not exist on type 'OverlayItem'.",
+              "related": [],
+              "severity": "error",
+              "source": "semantic-runtime:template",
+              "span": {
+                "end": 254,
+                "start": 241
+              },
+              "spanText": "missingStatus",
+              "status": "contextual",
+              "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+            },
+            "relation": "checker-evidence",
+            "role": "contextual",
+            "rowId": "diagnostic:3:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:241:254:typescript:TS2339"
+          }
+        ],
         "subject": {
           "source": null,
           "span": {
@@ -764,7 +948,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:3:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:277:286:typescript:TS18047",
+        "groupKey": "row:diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:277:286:typescript:TS18047",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -837,7 +1021,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:3:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:277:286:typescript:TS18047"
+          "rowId": "diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:277:286:typescript:TS18047"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -853,7 +1037,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:431:444:typescript:TS2345",
+        "groupKey": "row:diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:431:444:typescript:TS2345",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -926,7 +1110,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:4:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:431:444:typescript:TS2345"
+          "rowId": "diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:431:444:typescript:TS2345"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -942,7 +1126,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         }
       },
       {
-        "groupKey": "row:diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:540:552:typescript:TS2554",
+        "groupKey": "row:diagnostic:6:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:540:552:typescript:TS2554",
         "maxRawSeverity": "error",
         "primary": {
           "diagnostic": {
@@ -1015,7 +1199,7 @@ This snapshot records observed language-server behavior. Operator verdicts live 
           },
           "relation": null,
           "role": "primary",
-          "rowId": "diagnostic:5:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:540:552:typescript:TS2554"
+          "rowId": "diagnostic:6:template:template-expression-typescript-diagnostic:typescript:no-framework-code:src/template-overlay-type-errors-app.html:540:552:typescript:TS2554"
         },
         "primarySeverity": "error",
         "rawRowCount": 1,
@@ -1032,10 +1216,10 @@ This snapshot records observed language-server behavior. Operator verdicts live 
       }
     ],
     "primaryCount": 6,
-    "rawRowCount": 7
+    "rawRowCount": 9
   },
   "raw": {
-    "diagnosticCount": 7,
+    "diagnosticCount": 9,
     "diagnostics": [
       {
         "actionability": "manual",
@@ -1232,6 +1416,74 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "message": "Member \"missingStatus\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
         "related": [],
         "severity": "warning",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 254,
+          "start": 241
+        },
+        "spanText": "missingStatus",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS2339",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS2339",
+          "missingInputs": [
+            "typescript:TS2339"
+          ],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "subject": {
+            "source": {
+              "end": 254,
+              "kind": "source-span-address",
+              "label": "src/template-overlay-type-errors-app.html@228..254",
+              "path": "src/template-overlay-type-errors-app.html",
+              "role": "template-member-access",
+              "start": 228
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/template-overlay-type-errors-app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS2339",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS2339: Property 'missingStatus' does not exist on type 'OverlayItem'."
+          }
+        ],
+        "message": "TS2339: Property 'missingStatus' does not exist on type 'OverlayItem'.",
+        "related": [],
+        "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
           "end": 254,
@@ -1504,6 +1756,74 @@ This snapshot records observed language-server behavior. Operator verdicts live 
         "message": "Member \"missingLabel\" is not projected on the owner type, so semantic tooling cannot validate or navigate it.",
         "related": [],
         "severity": "warning",
+        "source": "semantic-runtime:template",
+        "span": {
+          "end": 79,
+          "start": 67
+        },
+        "spanText": "missingLabel",
+        "status": "canonical",
+        "uri": "fixtures://pressure/template-overlay-type-errors/src/template-overlay-type-errors-app.html"
+      },
+      {
+        "actionability": "manual",
+        "anomaly": null,
+        "category": "template-syntax",
+        "code": "TS2339",
+        "data": {
+          "diagnosticAuthority": "typescript",
+          "diagnosticDomain": "template",
+          "diagnosticKind": "template-expression-typescript-diagnostic",
+          "frameworkErrorCode": null,
+          "frameworkRawErrorAuthority": null,
+          "missingInput": "typescript:TS2339",
+          "missingInputs": [
+            "typescript:TS2339"
+          ],
+          "relatedQueryKind": "template-diagnostics",
+          "repairAffordance": {
+            "actionKind": "inspect-type-surface",
+            "actionability": "manual",
+            "applicationKind": "none",
+            "changeDomain": "inspection",
+            "editPlanState": "not-available",
+            "planKind": "manual-inspection",
+            "readiness": "inspection-required",
+            "targetSourceCoverage": "all"
+          },
+          "subject": {
+            "source": {
+              "end": 79,
+              "kind": "source-span-address",
+              "label": "src/template-overlay-type-errors-app.html@62..79",
+              "path": "src/template-overlay-type-errors-app.html",
+              "role": "template-member-access",
+              "start": 62
+            },
+            "span": null,
+            "subjectKind": "template-member-access",
+            "uri": null
+          },
+          "taxonomy": {
+            "actionability": null,
+            "category": null,
+            "confidence": null,
+            "impact": null,
+            "schema": null
+          }
+        },
+        "file": "src/template-overlay-type-errors-app.html",
+        "impact": "blocking",
+        "issues": [
+          {
+            "code": "TS2339",
+            "kind": "template-expression-typescript-diagnostic",
+            "message": "TS2339: Property 'missingLabel' does not exist on type 'OverlayItem'."
+          }
+        ],
+        "message": "TS2339: Property 'missingLabel' does not exist on type 'OverlayItem'.",
+        "related": [],
+        "severity": "error",
         "source": "semantic-runtime:template",
         "span": {
           "end": 79,

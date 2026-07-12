@@ -692,8 +692,8 @@ if (!generatedStateConditionBoundaryOverlay.hasOrdinaryChildStateBoundaryDiagnos
 if (generatedStateConditionBoundaryOverlay.stateBoundChildType !== 'string') {
   failures.push(`Expected child binding that also uses & state to infer selectedTask.title as string, observed ${generatedStateConditionBoundaryOverlay.stateBoundChildType ?? 'missing'}.`);
 }
-if (publicTemplateOverlayDiagnostics.overlayRows !== 4) {
-  failures.push(`Expected public template diagnostics to surface only the non-duplicated TypeScript overlay row, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
+if (publicTemplateOverlayDiagnostics.overlayRows !== 6) {
+  failures.push(`Expected public template diagnostics to retain all six admitted TypeScript overlay facts, observed ${publicTemplateOverlayDiagnostics.overlayRows}.`);
 }
 if (
   !publicTemplateOverlayDiagnostics.hasArgumentMismatch
@@ -703,8 +703,8 @@ if (
 ) {
   failures.push('Expected public template overlay diagnostics to keep TypeScript-native argument, arity, nullish, and unknown-repeat rows that semantic missing-member diagnostics do not already own.');
 }
-if (publicTemplateOverlayDiagnostics.hasRepeatMissingLabel || publicTemplateOverlayDiagnostics.hasNarrowedMissingStatus) {
-  failures.push('Expected public template overlay diagnostics to suppress missing-member rows already owned by semantic template diagnostics on the same authored span.');
+if (!publicTemplateOverlayDiagnostics.hasRepeatMissingLabel || !publicTemplateOverlayDiagnostics.hasNarrowedMissingStatus) {
+  failures.push('Expected public template diagnostics to retain missing-member checker evidence even when semantic diagnostics own presentation and repair for the same authored span.');
 }
 if (
   !publicTemplateOverlayCursorDiagnostics.hasArgumentMismatch

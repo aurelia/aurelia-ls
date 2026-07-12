@@ -116,6 +116,7 @@ import type {
   SemanticTemplateCursorDiagnosticRow,
   SemanticTemplateCompletionCandidateRow,
   SemanticTemplateDiagnosticRow,
+  SemanticTemplateDiagnosticPhase,
   SemanticTemplateDiagnosticsResult,
   SemanticTemplateCursorDefinitionRow,
   SemanticTemplateCursorHtmlRow,
@@ -218,7 +219,25 @@ interface TemplateDiagnosticsScanContext {
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
   readonly sourceTextCache: AuthoredSourceTextCache;
   readonly seenRows: Set<string>;
-  readonly semanticAgreementRows: Set<string>;
+}
+
+interface TemplateDiagnosticOrigin {
+  readonly phase: SemanticTemplateDiagnosticPhase | null;
+  readonly semanticProductHandle: ProductHandle | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly overlayOriginKey?: string | null;
+  readonly overlayFileName?: string | null;
+  readonly overlaySegmentLabel?: string | null;
+}
+
+type TemplateDiagnosticOriginFields = Pick<SemanticTemplateDiagnosticRow, 'phase'> & {
+  readonly handles?: NonNullable<SemanticTemplateDiagnosticRow['handles']>;
+};
+
+interface ExpressionMemberDiagnosticSite {
+  readonly span: ExpressionMemberAccessSpan;
+  readonly semanticProductHandle: ProductHandle;
+  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 export function readSemanticTemplateCompletions(
@@ -721,10 +740,6 @@ function templateOverlayTypeDiagnosticRows(
       return [];
     }
     const row = templateOverlayDiagnosticRow(store, selection.selection, diagnostic, source, context.includeHandles);
-    const agreementKey = templateOverlayDiagnosticAgreementKey(diagnostic, source);
-    if (agreementKey != null && context.semanticAgreementRows.has(agreementKey)) {
-      return [];
-    }
     const key = templateDiagnosticRowKey(row, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -790,6 +805,30 @@ function templateOverlayOriginKey(
   return `template-type-system-overlay:${resource.compilation.localKey}`;
 }
 
+function templateDiagnosticOriginFields(
+  store: KernelStore,
+  includeHandles: boolean,
+  origin: TemplateDiagnosticOrigin,
+): TemplateDiagnosticOriginFields {
+  return {
+    phase: origin.phase,
+    ...(includeHandles
+      ? {
+        handles: {
+          sourceAddressHandle: origin.sourceAddressHandle,
+          semanticProductHandle: origin.semanticProductHandle,
+          semanticIdentityHandle: origin.semanticProductHandle == null
+            ? null
+            : store.readProduct(origin.semanticProductHandle)?.identityHandle ?? null,
+          overlayOriginKey: origin.overlayOriginKey ?? null,
+          overlayFileName: origin.overlayFileName ?? null,
+          overlaySegmentLabel: origin.overlaySegmentLabel ?? null,
+        },
+      }
+      : {}),
+  };
+}
+
 function templateOverlayDiagnosticRow(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
@@ -820,15 +859,14 @@ function templateOverlayDiagnosticRow(
       compilationLane: selection.lane,
       source: describeAddress(store, selection.sourceAddressHandle),
     },
-    ...(includeHandles ? {
-      handles: {
-        sourceAddressHandle: diagnostic.authoredSource?.sourceAddressHandle ?? null,
-        semanticProductHandle: diagnostic.semanticProductHandle,
-        overlayOriginKey: diagnostic.overlayOriginKey,
-        overlayFileName: diagnostic.overlayFileName,
-        overlaySegmentLabel: diagnostic.segment?.label ?? null,
-      },
-    } : {}),
+    ...templateDiagnosticOriginFields(store, includeHandles, {
+      phase: diagnostic.diagnostic.phase,
+      sourceAddressHandle: diagnostic.authoredSource?.sourceAddressHandle ?? null,
+      semanticProductHandle: diagnostic.semanticProductHandle,
+      overlayOriginKey: diagnostic.overlayOriginKey,
+      overlayFileName: diagnostic.overlayFileName,
+      overlaySegmentLabel: diagnostic.segment?.label ?? null,
+    }),
   };
 }
 
@@ -994,7 +1032,6 @@ function templateDiagnosticsScanContext(
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
     sourceTextCache: new AuthoredSourceTextCache(workspaceRootDir, emission.project.sourceTextProvider),
     seenRows: new Set(),
-    semanticAgreementRows: new Set(),
   };
 }
 
@@ -1020,17 +1057,18 @@ function templateDiagnosticRowsForSelection(
   if (source == null) {
     return [];
   }
-  return expressionMemberDiagnosticSpans(selection.resource)
-    .flatMap((span) => templateDiagnosticRowsForMemberSpan(store, selection, source, span, context));
+  return expressionMemberDiagnosticSites(selection.resource)
+    .flatMap((site) => templateDiagnosticRowsForMemberSite(store, selection, source, site, context));
 }
 
-function templateDiagnosticRowsForMemberSpan(
+function templateDiagnosticRowsForMemberSite(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
   source: AuthoredSourceText,
-  span: ExpressionMemberAccessSpan,
+  site: ExpressionMemberDiagnosticSite,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
+  const span = site.span;
   const offset = span.nameSpan.start + Math.floor((span.nameSpan.end - span.nameSpan.start) / 2);
   if (offset < 0 || offset > source.text.length) {
     return [];
@@ -1049,29 +1087,32 @@ function templateDiagnosticRowsForMemberSpan(
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
-    templateDiagnosticRowForDiagnostic(diagnostic, cursorInfo, source.sourcePath, span, context)
+    templateDiagnosticRowForDiagnostic(store, diagnostic, cursorInfo, source.sourcePath, site, context)
   );
 }
 
 function templateDiagnosticRowForDiagnostic(
+  store: KernelStore,
   diagnostic: SemanticTemplateCursorDiagnosticRow,
   cursorInfo: SemanticTemplateCursorInfoResult,
   filePath: string,
-  span: ExpressionMemberAccessSpan,
+  site: ExpressionMemberDiagnosticSite,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
+  const span = site.span;
   const source = sourceReferenceForSpan(filePath, span.nameSpan);
   const key = templateDiagnosticRowKey(diagnostic, source);
   if (context.seenRows.has(key)) {
     return [];
   }
   context.seenRows.add(key);
-  const agreementKey = semanticTemplateDiagnosticAgreementKey(diagnostic, source);
-  if (agreementKey != null) {
-    context.semanticAgreementRows.add(agreementKey);
-  }
   return [{
     ...diagnostic,
+    ...templateDiagnosticOriginFields(store, context.includeHandles, {
+      phase: null,
+      semanticProductHandle: site.semanticProductHandle,
+      sourceAddressHandle: site.sourceAddressHandle,
+    }),
     source,
     subject: diagnosticSubjectForSpan(
       filePath,
@@ -1083,47 +1124,6 @@ function templateDiagnosticRowForDiagnostic(
     valueSiteKind: cursorInfo.valueSite?.siteKind ?? null,
     template: cursorInfo.template,
   }];
-}
-
-function semanticTemplateDiagnosticAgreementKey(
-  diagnostic: SemanticTemplateCursorDiagnosticRow,
-  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-): string | null {
-  switch (diagnostic.diagnosticKind) {
-    case 'missing-expression-member':
-      return templateTypeRelationshipAgreementKey(source, 'missing-member');
-    case 'binding-source-assignment-strictness':
-    case 'binding-source-assignment-framework-managed':
-    case 'binding-source-assignment-runtime-noop':
-      return templateTypeRelationshipAgreementKey(source, 'binding-assignment');
-    default:
-      return null;
-  }
-}
-
-function templateOverlayDiagnosticAgreementKey(
-  diagnostic: TypeSystemOverlayDiagnostic,
-  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-): string | null {
-  switch (diagnostic.diagnostic.code) {
-    case 2339:
-    case 2551:
-      return templateTypeRelationshipAgreementKey(source, 'missing-member');
-    case 2322:
-    case 2588:
-      return templateTypeRelationshipAgreementKey(source, 'binding-assignment');
-    default:
-      return null;
-  }
-}
-
-function templateTypeRelationshipAgreementKey(
-  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-  kind: string,
-): string | null {
-  return source.path == null || source.start == null || source.end == null
-    ? null
-    : [source.path, source.start, source.end, kind].join(':');
 }
 
 function templateDiagnosticRowKey(
@@ -1178,6 +1178,11 @@ function bindingDataFlowDiagnosticRowsForSelection(
       context.seenRows.add(key);
       return [{
         ...diagnostic,
+        ...templateDiagnosticOriginFields(store, context.includeHandles, {
+          phase: null,
+          semanticProductHandle: dataFlow.productHandle,
+          sourceAddressHandle: dataFlow.sourceAddressHandle,
+        }),
         siteKind: TemplateCompletionSiteKind.Expression,
         valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
         subject,
@@ -1210,6 +1215,11 @@ function runtimeObservedDependencyRootDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: null,
+        semanticProductHandle: candidate.dependency.productHandle,
+        sourceAddressHandle: candidate.dependency.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: valueSiteKindForObservedDependency(store, candidate.dependency),
       subject: templateExpressionDiagnosticSubject(selection.resource, candidate.dependency.expressionProductHandle, source),
@@ -1303,6 +1313,11 @@ function targetAccessDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: null,
+        semanticProductHandle: targetAccess.productHandle,
+        sourceAddressHandle: targetAccess.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1340,6 +1355,11 @@ function expressionParseDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: null,
+        semanticProductHandle: parse.productHandle,
+        sourceAddressHandle: parse.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: parse.site.siteKind,
       template: {
@@ -1379,6 +1399,11 @@ function templateCompilerIssueDiagnosticRowsForSelection(
     return [{
       ...diagnostic,
       ...(relatedInformation.length === 0 ? {} : { relatedInformation }),
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1412,6 +1437,11 @@ function frameworkCapabilityDemandDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: null,
+        semanticProductHandle: demand.productHandle,
+        sourceAddressHandle: demand.sourceAddressHandle,
+      }),
       siteKind: templateCompletionSiteKindForFrameworkCapabilityDemand(demand),
       valueSiteKind: null,
       template: {
@@ -1441,6 +1471,11 @@ function runtimeControllerIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1470,6 +1505,11 @@ function runtimeRendererIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1503,6 +1543,11 @@ function runtimeBindingIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1532,6 +1577,11 @@ function runtimeBindingBehaviorIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1561,6 +1611,11 @@ function runtimeValueConverterIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1590,6 +1645,11 @@ function runtimeBindingScopeIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.Expression,
       valueSiteKind: TemplateValueSiteKind.TemplateControllerValue,
       template: {
@@ -1628,6 +1688,11 @@ function routerIssueDiagnosticRowsForSelection(
     context.seenRows.add(key);
     return [{
       ...diagnostic,
+      ...templateDiagnosticOriginFields(store, context.includeHandles, {
+        phase: issue.phase,
+        semanticProductHandle: issue.productHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      }),
       siteKind: TemplateCompletionSiteKind.AttributeValue,
       valueSiteKind: null,
       template: {
@@ -1844,10 +1909,10 @@ function templateSelectionSourceAddressHandle(
   return templateSourceSpan(store, resource)?.handle ?? null;
 }
 
-function expressionMemberDiagnosticSpans(
+function expressionMemberDiagnosticSites(
   resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly ExpressionMemberAccessSpan[] {
-  const spans: ExpressionMemberAccessSpan[] = [];
+): readonly ExpressionMemberDiagnosticSite[] {
+  const sites: ExpressionMemberDiagnosticSite[] = [];
   const seen = new Set<string>();
   for (const parse of templateExpressionParsesForResource(resource)) {
     for (const span of ExpressionParseResultInspector.memberAccessSpans(parse.result)) {
@@ -1856,14 +1921,18 @@ function expressionMemberDiagnosticSpans(
         continue;
       }
       seen.add(key);
-      spans.push(span);
+      sites.push({
+        span,
+        semanticProductHandle: parse.productHandle,
+        sourceAddressHandle: parse.sourceAddressHandle,
+      });
     }
   }
-  return spans.sort((left, right) =>
-    left.nameSpan.start - right.nameSpan.start
-    || left.nameSpan.end - right.nameSpan.end
-    || left.subjectSpan.start - right.subjectSpan.start
-    || left.subjectSpan.end - right.subjectSpan.end
+  return sites.sort((left, right) =>
+    left.span.nameSpan.start - right.span.nameSpan.start
+    || left.span.nameSpan.end - right.span.nameSpan.end
+    || left.span.subjectSpan.start - right.span.subjectSpan.start
+    || left.span.subjectSpan.end - right.span.subjectSpan.end
   );
 }
 

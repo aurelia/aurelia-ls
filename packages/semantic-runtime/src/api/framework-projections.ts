@@ -114,6 +114,9 @@ export function readFrameworkCapabilityDemandDiagnosticRows(
               relatedSourceAddressHandles: [],
               templateSourceAddressHandle: demand.templateSourceAddressHandle,
               resourceDefinitionProductHandle: demand.resourceDefinitionProductHandle,
+              overlayOriginKey: null,
+              overlayFileName: null,
+              overlaySegmentLabel: null,
             },
           }
           : {}),

@@ -903,18 +903,18 @@ structured action target. Nullish overlay rows point at guarding or narrowing th
 rows currently use inspection until a more precise semantic repair policy owns the code. Do not expose every checker
 diagnostic from the generated file: syntax errors,
 missing synthetic names, and implicit-any fallout are usually overlay/substrate pressure, not user-authored template
-truth. If the semantic template diagnostic lane already owns a missing-member diagnostic for the same authored span,
-the overlay suppresses the equivalent TS2339/TS2551 row; TypeScript-native rows such as argument mismatch remain public
-checker evidence. Binding data-flow assignment diagnostics also suppress assignment-shaped TS2322/TS2588 rows on the
-same authored span, because the data-flow row owns source-write capability, value-channel semantics, and repair target
-selection. Unknown-owner rows such as TS18046 also remain public when the overlay preserves a weak app type
+truth. Raw template diagnostics preserve admitted TS2339/TS2551 and TS2322/TS2588 rows even when semantic member or
+binding data-flow diagnostics own the same authored relationship. `AppDiagnostics.presentation` keeps the semantic row
+primary because it owns Aurelia source-write capability, value-channel semantics, and repair selection, then attaches
+the exact overlay agreement as contextual `checker-evidence`. Producer-time deletion is forbidden here: detailed rows
+retain the expression/diagnostic product, identity, source address, overlay origin key, generated file, segment label, and phase.
+TypeScript-native rows such as argument mismatch remain primary checker evidence. Unknown-owner rows such as TS18046 also remain public when the overlay preserves a weak app type
 instead of erasing it to `any`; that is a product-time diagnostic, not framework-runtime emulation. The admitted code
 policy currently proves argument mismatch, arity mismatch, nullish access, and unknown repeat locals in the public
 fixture, plus value-converter argument mismatch in the value-converter fixture. Keep it narrow until ancestor scope
 aliases and event target/currentTarget refinements have first-class overlay semantics.
-Cursor diagnostics spend the same policy: binding-assignment diagnostics for the active authored span are collected
-before overlay rows so cursor-time answers do not re-expose assignment-shaped TS2322/TS2588 after data-flow has already
-claimed the repair target.
+Cursor diagnostics spend the same admission policy and retain the same raw facts. User-facing de-duplication belongs to
+the shared app presentation algebra, not cursor collection order.
 
 Repeat `unknown` sources are preserved below the overlay too. Scope construction projects an explicit `unknown` repeat
 local so cursor/member diagnostics can say the owner has no projected members, while reserving

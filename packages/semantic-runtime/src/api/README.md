@@ -943,11 +943,14 @@ missing-member, nullish access, type/argument mismatch, and readonly-assignment-
 `missingInput: "typescript:TS####"` plus a structured action target. Nullish overlay diagnostics use
 `guard-nullish-expression` because the authored repair is usually a guard, optional chain, or earlier narrowing step;
 other admitted checker rows stay on `inspect-owner-type` until the diagnostic policy can prove a more specific repair.
-When a semantic-runtime diagnostic already owns
-the same authored missing-member span, the overlay row is suppressed as duplicate checker evidence rather than surfaced
-as a second user issue; TypeScript-native rows such as argument mismatches, arity mismatches, nullish access, and
-unknown-owner access remain public. Template overlay rows share the same TypeScript diagnostic severity mapping as
-ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
+Raw template and app diagnostic tables retain admitted checker rows even when a semantic-runtime diagnostic owns the
+same authored relationship. Detailed rows preserve the overlay lifecycle phase, semantic product, identity and source
+address, origin key, generated file, and mapped segment label. `AppDiagnostics.presentation` is the answer-local user-facing
+join: exact missing-member or assignment agreement keeps the Aurelia-aware semantic row primary and attaches the
+TypeScript row as contextual `checker-evidence`. This avoids duplicate editor diagnostics without deleting independent
+facts needed by MCP, AOT, explanation, or future policy consumers. TypeScript-native rows such as argument mismatch,
+arity mismatch, nullish access, and unknown-owner access remain primary. Template overlay rows share the same TypeScript
+diagnostic severity mapping as ordinary TypeScript diagnostic rows so unified diagnostic answers do not drift by lane.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
 query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair

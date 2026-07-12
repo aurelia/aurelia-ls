@@ -14,6 +14,8 @@ interface PresentationInputRow {
   readonly row: SemanticAppDiagnosticRow;
 }
 
+type TemplateTypeRelationship = 'missing-member' | 'binding-assignment';
+
 const severityRank: Record<SemanticTemplateCursorDiagnosticSeverity, number> = {
   error: 3,
   warning: 2,
@@ -103,6 +105,47 @@ export function appDiagnosticPresentation(
       groups.push(group);
       consumed.add(missingMember.index);
       for (const row of related) {
+        consumed.add(row.index);
+      }
+    }
+  }
+
+  for (const [groupKey, groupRows] of groupedRows) {
+    for (const semanticRow of groupRows) {
+      const relationship = semanticTemplateTypeRelationship(semanticRow.row);
+      if (relationship == null) {
+        continue;
+      }
+      const checkerEvidence = groupRows.filter((candidate) =>
+        !consumed.has(candidate.index)
+        && checkerTemplateTypeRelationship(candidate.row) === relationship
+        && sameDiagnosticSource(semanticRow.row, candidate.row)
+      );
+      if (checkerEvidence.length === 0) {
+        continue;
+      }
+
+      const existingGroupIndex = groups.findIndex((group) =>
+        group.primary.rowIndex === semanticRow.index
+        || group.related.some((related) => related.rowIndex === semanticRow.index)
+      );
+      if (existingGroupIndex < 0) {
+        groups.push(presentationGroup(
+          `checker-agreement:${relationship}:${groupKey}:${semanticRow.rowId}`,
+          semanticRow.row.subject ?? null,
+          semanticRow,
+          checkerEvidence,
+          'checker-evidence',
+        ));
+      } else {
+        groups[existingGroupIndex] = appendPresentationRows(
+          groups[existingGroupIndex]!,
+          checkerEvidence,
+          'checker-evidence',
+        );
+      }
+      consumed.add(semanticRow.index);
+      for (const row of checkerEvidence) {
         consumed.add(row.index);
       }
     }
@@ -204,6 +247,25 @@ function presentationGroup(
   };
 }
 
+function appendPresentationRows(
+  group: SemanticDiagnosticPresentationGroup,
+  inputs: readonly PresentationInputRow[],
+  relation: SemanticDiagnosticPresentationRelation,
+): SemanticDiagnosticPresentationGroup {
+  return {
+    ...group,
+    related: [
+      ...group.related,
+      ...inputs.map((input) => presentationRow(input, 'contextual', relation)),
+    ],
+    rawRowCount: group.rawRowCount + inputs.length,
+    maxRawSeverity: maxSeverity([
+      group.maxRawSeverity,
+      ...inputs.map((input) => input.row.severity),
+    ]),
+  };
+}
+
 function presentationRow(
   input: PresentationInputRow,
   role: SemanticDiagnosticPresentationRole,
@@ -257,6 +319,43 @@ function isTemplateMissingMemberAssignmentDiagnostic(
       'binding-source-assignment:owner-member-not-projected',
       'binding-source-assignment:source-member-declaration-missing',
     ]);
+}
+
+function semanticTemplateTypeRelationship(
+  row: SemanticAppDiagnosticRow,
+): TemplateTypeRelationship | null {
+  if (row.diagnosticDomain !== 'template') {
+    return null;
+  }
+  switch (row.diagnosticKind) {
+    case 'missing-expression-member':
+      return 'missing-member';
+    case 'binding-source-assignment-strictness':
+    case 'binding-source-assignment-framework-managed':
+    case 'binding-source-assignment-runtime-noop':
+      return 'binding-assignment';
+    default:
+      return null;
+  }
+}
+
+function checkerTemplateTypeRelationship(
+  row: SemanticAppDiagnosticRow,
+): TemplateTypeRelationship | null {
+  if (
+    row.diagnosticDomain !== 'template'
+    || row.diagnosticAuthority !== 'typescript'
+    || row.diagnosticKind !== 'template-expression-typescript-diagnostic'
+  ) {
+    return null;
+  }
+  if (hasAnyMissingInput(row, ['typescript:TS2339', 'typescript:TS2551'])) {
+    return 'missing-member';
+  }
+  if (hasAnyMissingInput(row, ['typescript:TS2322', 'typescript:TS2588'])) {
+    return 'binding-assignment';
+  }
+  return null;
 }
 
 function hasAnyMissingInput(
